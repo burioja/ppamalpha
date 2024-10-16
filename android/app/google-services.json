@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "771680864025",
+    "project_id": "ppamproto",
+    "storage_bucket": "ppamproto.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:771680864025:android:e38417d3b273a5d8dfe788",
+        "android_client_info": {
+          "package_name": "com.asyl.ppamproto"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "771680864025-amfge2j78n8uloi9v78re77dfn0idisa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.asyl.ppamproto",
+            "certificate_hash": "890a93d124a2b213e61360c9e815f1d763754aa0"
+          }
+        },
+        {
+          "client_id": "771680864025-vpf96rj7pr3od2ciuqn48rokrm5ebrsk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBD9KY9tIpr8C28J7X7ZHFM7Ju43MHgwGI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "771680864025-vpf96rj7pr3od2ciuqn48rokrm5ebrsk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "771680864025-j4ss7p0u2c8g1sqbqpqpdrhr3oeab0gu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.asyl.ppamproto"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
