@@ -5,6 +5,7 @@ import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'service/firebase_service.dart';
 import 'dart:ui';
 
 void main() async {
@@ -20,8 +21,12 @@ void main() async {
     // 초기화 실패 시 오류 화면 표시, 여기서는 단순히 에러 로그만 표시
   }
 
+
   // Firebase 언어 설정
   setFirebaseLocale();
+
+  FirebaseService firebaseService = FirebaseService();
+  await firebaseService.uploadWorkplaces(); // 앱 시작 시 데이터 업로드
 
   runApp(const MyApp());
 }

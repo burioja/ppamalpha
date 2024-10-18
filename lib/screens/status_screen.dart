@@ -1,98 +1,99 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class StatusScreen extends StatefulWidget {
-  const StatusScreen({super.key});
+  const StatusScreen({Key? key}) : super(key: key);
 
   @override
   _StatusScreenState createState() => _StatusScreenState();
 }
 
 class _StatusScreenState extends State<StatusScreen> {
-  List<List<String>> _dataGroups = [];
-  List<Color> _groupColors = [];
-  int _currentGroupIndex = 0;
-  int _currentContentIndex = 3; // 각 그룹의 마지막 인덱스
-  final double _sensitivity = 50.0;
-  Offset _dragStartOffset = Offset.zero;
+  List<String> _groupData = []; // 3번째 그룹의 데이터
+  bool _isLoading = true; // 로딩 상태
 
   @override
   void initState() {
     super.initState();
-    _fetchWorkplaces();
+    _fetchUserWorkplaceData();
   }
 
-  // Firebase Firestore에서 동적으로 workplace 데이터 가져오기
-  void _fetchWorkplaces() async {
+  Future<void> _fetchUserWorkplaceData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
 
-    final userId = 'user-id'; // 실제로는 로그인한 사용자 ID를 가져와야 함
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
-
-    final workplaces = List<String>.from(snapshot['workPlaces'] ?? []);
-
-    setState(() {
-      _dataGroups = workplaces.map((workplace) => [workplace]).toList();
-      _groupColors = List<Color>.generate(
-        _dataGroups.length,
-            (_) => Color((Random().nextDouble() * 0xFFFFFF).toInt()).withOpacity(1.0),
-      );
-      _currentContentIndex = _dataGroups[_currentGroupIndex].length - 1;
-    });
-  }
-
-  void _onDragStart(DragStartDetails details) {
-    _dragStartOffset = details.localPosition;
-  }
-
-  void _handleHorizontalDrag(DragEndDetails details) {
-    double dragDistance = _dragStartOffset.dx - details.velocity.pixelsPerSecond.dx;
-
-    setState(() {
-      if (dragDistance > _sensitivity && _currentContentIndex < _dataGroups[_currentGroupIndex].length - 1) {
-        _currentContentIndex++;
-      } else if (dragDistance < -_sensitivity && _currentContentIndex > 0) {
-        _currentContentIndex--;
+      if (user == null) {
+        print("사용자가 로그인되어 있지 않습니다.");
+        return;
       }
-    });
-  }
 
-  void _handleVerticalDrag(DragEndDetails details) {
-    double dragDistance = _dragStartOffset.dy - details.velocity.pixelsPerSecond.dy;
+      final userId = user.email;
+      final userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: userId)
+          .get();
 
-    setState(() {
-      if (dragDistance > _sensitivity) {
-        _currentGroupIndex = (_currentGroupIndex + 1) % _dataGroups.length;
-      } else if (dragDistance < -_sensitivity) {
-        _currentGroupIndex = (_currentGroupIndex - 1 + _dataGroups.length) % _dataGroups.length;
+      if (userSnapshot.docs.isEmpty) {
+        print("사용자를 찾을 수 없습니다.");
+        return;
       }
-      _currentContentIndex = _dataGroups[_currentGroupIndex].length - 1;
-    });
+
+      // 사용자 워크플레이스 ID 가져오기
+      final workplaceId = userSnapshot.docs.first.data()['workplaceinput'] ?? '';
+      final workplaceSnapshot = await FirebaseFirestore.instance
+          .collection('workplaces')
+          .doc(workplaceId)
+          .get();
+
+      if (!workplaceSnapshot.exists) {
+        print("해당 워크플레이스가 존재하지 않습니다.");
+        return;
+      }
+
+      // 워크플레이스 데이터에서 그룹 정보를 가져오기
+      final workplaceData = workplaceSnapshot.data();
+      if (workplaceData == null || !workplaceData.containsKey('groupdata3')) {
+        print("워크플레이스 데이터가 없습니다.");
+        return;
+      }
+
+      // 3번째 그룹 데이터 가져오기
+      _groupData = List<String>.from(workplaceData['groupdata3'] ?? []);
+    } catch (e) {
+      print("데이터를 가져오는 중 오류 발생: $e");
+    } finally {
+      setState(() {
+        _isLoading = false; // 로딩 완료
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragStart: _onDragStart,
-      onHorizontalDragEnd: _handleHorizontalDrag,
-      onVerticalDragStart: _onDragStart,
-      onVerticalDragEnd: _handleVerticalDrag,
-      child: _dataGroups.isEmpty
-          ? const Center(child: CircularProgressIndicator()) // 데이터 로딩 중
-          : Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _groupColors[_currentGroupIndex],
-          border: Border.all(color: Colors.black, width: 2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          _dataGroups[_currentGroupIndex][_currentContentIndex],
-          style: const TextStyle(color: Colors.white, fontSize: 24),
+    return Scaffold(
+      appBar: AppBar(title: const Text("Status Screen")),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _groupData.isEmpty
+          ? const Center(child: Text("데이터가 없습니다."))
+          : SingleChildScrollView(
+        scrollDirection: Axis.horizontal, // 수평 스크롤 설정
+        child: Row(
+          children: _groupData.map((item) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8), // 항목 간격
+              padding: const EdgeInsets.all(16), // 패딩 추가
+              decoration: BoxDecoration(
+                color: Colors.blue, // 배경 색상
+                borderRadius: BorderRadius.circular(8), // 테두리 둥글게
+              ),
+              child: Text(
+                item,
+                style: const TextStyle(color: Colors.white, fontSize: 24),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
