@@ -34,9 +34,9 @@ class UserContainer extends StatelessWidget {
           // 상태 컨테이너 (가운데 고정)
           Center(
             child: SizedBox(
-              width: 250, // 상태 컨테이너의 너비를 줄임
+              width: 235, // 상태 컨테이너의 너비를 줄임
               height: 70, // 상태 컨테이너의 높이 고정
-              child: const StatusScreen(), // 상태 컨테이너
+              child: StatusScreen(), // 상태 컨테이너
             ),
           ),
 
@@ -44,11 +44,11 @@ class UserContainer extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8.0), // 오른쪽 여백
             child: SizedBox(
-              width: 100, // 고정된 너비 설정
+              width: 80, // 고정된 너비 설정
               child: Align(
                 alignment: Alignment.centerRight,
                 child: const Text(
-                  '₩ 1,000,000', // 소지금 텍스트
+                  '₩ 900,000', // 소지금 텍스트
                   style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),

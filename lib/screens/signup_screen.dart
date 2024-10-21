@@ -15,7 +15,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
-  final List<TextEditingController> _workplaceControllers = [TextEditingController()];
+  final List<TextEditingController> _workplaceinputControllers = [TextEditingController()];
+  final List<TextEditingController> _workplaceaddControllers = [TextEditingController()];
 
   // 이메일 인증 및 핸드폰 인증 여부
   final bool _emailVerified = false;
@@ -52,7 +53,13 @@ class _SignupScreenState extends State<SignupScreen> {
         'email': _emailController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
-        'workPlaces': _workplaceControllers.map((controller) => controller.text).toList(),
+        'workPlaces': List.generate(
+          _workplaceinputControllers.length,
+              (index) => {
+            'workplaceinput': _workplaceinputControllers[index].text,
+            'workplaceadd': _workplaceaddControllers[index].text,
+          },
+        ),
       });
 
       // 회원가입 성공 처리
@@ -124,34 +131,44 @@ class _SignupScreenState extends State<SignupScreen> {
                 decoration: const InputDecoration(labelText: '주소'),
               ),
 
-              // 6. 일터 입력 창 (추가/삭제 버튼)
+              // 6. 일터 입력 창 (추가/삭제 버튼) - workplaceinput과 workplaceadd 함께 입력
               Column(
-                children: _workplaceControllers.map((controller) {
+                children: List.generate(_workplaceinputControllers.length, (index) {
                   return Row(
                     children: [
+                      // workplaceinput 입력 필드
                       Expanded(
                         child: TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(labelText: '일터'),
+                          controller: _workplaceinputControllers[index],
+                          decoration: const InputDecoration(labelText: '일터 입력'),
+                        ),
+                      ),
+                      // workplaceadd 입력 필드
+                      Expanded(
+                        child: TextField(
+                          controller: _workplaceaddControllers[index],
+                          decoration: const InputDecoration(labelText: '일터 추가'),
                         ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete),
                         onPressed: () {
                           setState(() {
-                            _workplaceControllers.remove(controller);
+                            _workplaceinputControllers.removeAt(index);
+                            _workplaceaddControllers.removeAt(index);
                           });
                         },
                       ),
                     ],
                   );
-                }).toList(),
+                }),
               ),
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () {
                   setState(() {
-                    _workplaceControllers.add(TextEditingController());
+                    _workplaceinputControllers.add(TextEditingController());
+                    _workplaceaddControllers.add(TextEditingController());
                   });
                 },
               ),

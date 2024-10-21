@@ -7,6 +7,8 @@ import 'screens/signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'service/firebase_service.dart';
 import 'dart:ui';
+import 'package:provider/provider.dart'; // Provider 패키지 추가
+import 'provider/workplace_provider.dart'; // WorkplaceProvider 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +22,6 @@ void main() async {
     print('Firebase 초기화 에러: $e');
     // 초기화 실패 시 오류 화면 표시, 여기서는 단순히 에러 로그만 표시
   }
-
 
   // Firebase 언어 설정
   setFirebaseLocale();
@@ -41,18 +42,23 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Firebase 로그인',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+    return MultiProvider( // MultiProvider로 변경
+      providers: [
+        ChangeNotifierProvider(create: (_) => WorkplaceProvider()), // WorkplaceProvider 추가
+      ],
+      child: MaterialApp(
+        title: 'Firebase 로그인',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        // 로그인 상태에 따라 첫 화면 결정
+        home: AuthWrapper(),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/main': (context) => const MainScreen(),
+          '/signup': (context) => const SignupScreen(),
+        },
       ),
-      // 로그인 상태에 따라 첫 화면 결정
-      home: AuthWrapper(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/main': (context) => const MainScreen(),
-        '/signup': (context) => const SignupScreen(),
-      },
     );
   }
 }
