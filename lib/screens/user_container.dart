@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'status_screen.dart'; // 상태 컨테이너 참조
+import 'package:provider/provider.dart';
+import '../provider/workplace_provider.dart'; // Provider 경로 추가
 
 class UserContainer extends StatelessWidget {
   const UserContainer({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // WorkplaceProvider에서 workplaceInput 값을 가져옴
+    final workplaceInput = Provider.of<WorkplaceProvider>(context).workplaceInput;
+
     return Container(
       height: 90,
       color: Colors.blue,
@@ -36,7 +40,20 @@ class UserContainer extends StatelessWidget {
             child: SizedBox(
               width: 235, // 상태 컨테이너의 너비를 줄임
               height: 70, // 상태 컨테이너의 높이 고정
-              child: StatusScreen(), // 상태 컨테이너
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                ),
+                child: Center(
+                  child: Text(
+                    workplaceInput ?? '상태가 없습니다.', // workplaceInput 값을 표시
+                    style: const TextStyle(color: Colors.black, fontSize: 16),
+                  ),
+                ),
+              ),
             ),
           ),
 

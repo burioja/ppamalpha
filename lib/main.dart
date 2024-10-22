@@ -29,7 +29,12 @@ void main() async {
   FirebaseService firebaseService = FirebaseService();
   await firebaseService.uploadWorkplaces(); // 앱 시작 시 데이터 업로드
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => WorkplaceProvider(), // WorkplaceProvider 초기화
+      child: const MyApp(),
+    ),
+  );
 }
 
 void setFirebaseLocale() {
