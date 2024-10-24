@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:math';
 import 'package:provider/provider.dart';
-import '../provider/workplace_provider.dart'; // Provider 경로
+import '../provider/statusProvider.dart'; // 프로바이더 import
 
 class StatusScreen extends StatefulWidget {
   @override
@@ -10,17 +11,16 @@ class StatusScreen extends StatefulWidget {
 }
 
 class _StatusScreenState extends State<StatusScreen> {
-  List<String> statusList = []; // 상태 목록
-  int currentIndex = 0; // 현재 표시되는 인덱스
-  int groupIndex = 0; // 현재 group의 인덱스 (상하 스크롤)
+  List<List<String>> workplaceDataList = []; // 직장 정보 목록 (그룹화)
+  List<Color> colors = []; // 고정 색상 목록
   String? userEmail; // 로그인한 사용자의 이메일
-  Color? backgroundColor; // 배경 색상
-  bool isMultipleWorkplaces = false; // 여러 개의 workplace 여부
+  late PageController _verticalPageController;
 
   @override
   void initState() {
     super.initState();
     fetchUserEmail(); // 사용자 이메일 가져오기
+    _verticalPageController = PageController(); // 세로 페이지 컨트롤러 초기화
   }
 
   Future<void> fetchUserEmail() async {
@@ -32,7 +32,7 @@ class _StatusScreenState extends State<StatusScreen> {
       fetchWorkplaceData(); // 데이터 불러오기
     } else {
       setState(() {
-        statusList = ['로그인 정보가 없습니다.']; // 에러 메시지
+        workplaceDataList = [['로그인 정보가 없습니다.']]; // 에러 메시지
       });
     }
   }
@@ -48,75 +48,84 @@ class _StatusScreenState extends State<StatusScreen> {
 
     if (userQuery.docs.isEmpty) {
       setState(() {
-        statusList = ['사용자 문서가 존재하지 않습니다.']; // 에러 메시지
+        workplaceDataList = [['사용자 문서가 존재하지 않습니다.']]; // 에러 메시지
       });
       return;
     }
 
     DocumentSnapshot userDoc = userQuery.docs.first;
+    Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
 
-    // workplaceinput과 workplaces 배열 불러오기
-    List<Map<String, dynamic>>? workplaceArray = userDoc.data()?.containsKey('workplaces') == true
-        ? userDoc['workplaces'] as List<Map<String, dynamic>>
-        : null;
-
-    String? workplaceInput = userDoc.data()?.containsKey('workplaceinput') == true
-        ? userDoc['workplaceinput'] as String?
-        : null;
-
-    String? workplaceAdd = userDoc.data()?.containsKey('workplaceadd') == true
-        ? userDoc['workplaceadd'] as String?
-        : null;
-
-    // workplaceinput이 없을 경우
-    if (workplaceArray == null || workplaceArray.isEmpty) {
+    if (userData == null) {
       setState(() {
-        statusList = ['customer']; // 표시할 텍스트
+        workplaceDataList = [['사용자 문서에 데이터가 없습니다.']];
       });
       return;
     }
 
-    // workplaceinput이 있을 경우
-    if (workplaceArray.isNotEmpty) {
-      setState(() {
-        isMultipleWorkplaces = workplaceArray.length > 1; // 여러 개의 workplace 여부 체크
-        statusList = []; // 상태 리스트 초기화
-        backgroundColor = generateRandomColor(); // 랜덤 배경색 설정
+    // workplaceinput과 workplaceadd 배열 불러오기
+    List<Map<String, dynamic>>? workplaceArray = List<Map<String, dynamic>>.from(userData['workPlaces'] ?? []);
 
-        for (var workplace in workplaceArray) {
-          String workplaceId = workplace['workplaceinput'] ?? '';
-          String workplaceInfo = '${workplaceId} ${workplace['workplaceadd'] ?? ''}';
-          // workplaces에서 ID에 해당하는 데이터 조회
-          fetchWorkplaceDetails(workplaceId, workplaceInfo);
-        }
+    // workplaceinput이 없을 경우
+    if (workplaceArray.isEmpty) {
+      setState(() {
+        workplaceDataList = [['사용자의 직장 정보가 없습니다.']]; // 에러 메시지
       });
+      return;
     }
+
+    // 직장 정보를 리스트에 추가
+    for (var workplace in workplaceArray) {
+      String workplaceId = workplace['workplaceinput'] ?? '';
+      String workplaceAdd = workplace['workplaceadd'] ?? '';
+
+      if (workplaceId.isNotEmpty) {
+        // workplaceinput을 표시할 정보로 저장
+        String workplaceInfo = '$workplaceId${workplaceAdd.isNotEmpty ? ' ($workplaceAdd)' : ''}';
+
+        // 각 직장에 대한 데이터(가로 스크롤 아이템)를 가져오기
+        List<String> groupData = await fetchGroupData(workplaceId);
+
+        // workplaceinput을 추가
+        groupData.add(workplaceInfo);
+
+        workplaceDataList.add(groupData.isNotEmpty ? groupData : [workplaceInfo]); // 그룹 데이터 추가
+        colors.add(getRandomColor()); // 고정 색상 추가
+      }
+    }
+
+    // 결과 목록을 업데이트
+    setState(() {
+      Provider.of<StatusProvider>(context, listen: false).setWorkplaceDataList(workplaceDataList);
+    });
   }
 
-  Future<void> fetchWorkplaceDetails(String workplaceId, String workplaceInfo) async {
-    // workplaces 컬렉션에서 문서 ID가 workplaceId와 일치하는 항목 가져오기
-    DocumentSnapshot workplaceDoc = await FirebaseFirestore.instance
+  Future<List<String>> fetchGroupData(String workplaceId) async {
+    List<String> groupData = [];
+
+    // workplaces 컬렉션에서 id 필드가 workplaceId와 일치하는 문서 가져오기
+    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
         .collection('workplaces')
-        .doc(workplaceId) // 문서 ID로 접근
+        .where('id', isEqualTo: workplaceId) // 'id' 필드와 비교
         .get();
 
-    if (workplaceDoc.exists) {
-      String groupData1 = workplaceDoc['groupdata1'] ?? '';
-      String groupData2 = workplaceDoc['groupdata2'] ?? '';
-      String groupData3 = workplaceDoc['groupdata3'] ?? '';
-
-      setState(() {
-        statusList.add('$groupData1 - $groupData2 - $groupData3 - $workplaceInfo');
-        // 각 workplace에 대한 정보를 추가
-      });
+    // 문서가 존재할 경우 데이터를 groupData에 추가
+    for (var doc in querySnapshot.docs) {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      // groupdata1, groupdata2, groupdata3을 추가
+      if (data['groupdata1'] != null) groupData.add(data['groupdata1']);
+      if (data['groupdata2'] != null) groupData.add(data['groupdata2']);
+      if (data['groupdata3'] != null) groupData.add(data['groupdata3']);
     }
+
+    return groupData;
   }
 
   // 랜덤 색상 생성
-  Color generateRandomColor() {
+  Color getRandomColor() {
     Random random = Random();
     return Color.fromARGB(
-      255, // 불투명
+      255,
       random.nextInt(256),
       random.nextInt(256),
       random.nextInt(256),
@@ -125,53 +134,80 @@ class _StatusScreenState extends State<StatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Provider에서 workplaceInput 값 가져오기
-    String? workplaceInput = Provider.of<WorkplaceProvider>(context).workplaceInput;
+    return Scaffold(
+      backgroundColor: Colors.transparent, // 배경 색상
+      body: workplaceDataList.isNotEmpty
+          ? PageView.builder(
+        controller: _verticalPageController,
+        scrollDirection: Axis.vertical, // 세로 스크롤 설정
+        itemCount: workplaceDataList.length,
+        physics: BouncingScrollPhysics(), // 세로 스크롤의 물리적 효과
+        itemBuilder: (context, verticalIndex) {
+          // 세로 스크롤할 때마다 해당 인덱스에 맞는 색상 적용
+          Color backgroundColor = colors[verticalIndex % colors.length];
 
-    return Container(
-      color: backgroundColor ?? Colors.white, // 배경 색상
-      child: Center(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // 좌우 스크롤
-            IconButton(
-              icon: Icon(Icons.arrow_back),
-              onPressed: () {
-                setState(() {
-                  if (currentIndex > 0) {
-                    currentIndex--; // 이전 인덱스로 이동
-                  }
-                });
-              },
+          return Container(
+            decoration: BoxDecoration(
+              color: backgroundColor, // 배경색 적용
+              borderRadius: BorderRadius.circular(15), // 둥근 모서리 반경 설정
             ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.black),
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.white,
+            child: Center(
+              child: Container(
+                height: 100,
+                width: MediaQuery.of(context).size.width * 1.0, // 화면 너비의 100%로 설정
+                decoration: BoxDecoration(
+                  color: Colors.transparent, // 배경색을 투명하게 설정
+                  borderRadius: BorderRadius.circular(15), // 둥근 모서리 반경 설정
+                ),
+                child: PageView.builder(
+                  scrollDirection: Axis.horizontal, // 가로 스크롤 설정
+                  itemCount: workplaceDataList[verticalIndex].length, // 현재 그룹의 아이템 수
+                  physics: BouncingScrollPhysics(), // 가로 스크롤의 물리적 효과
+                  controller: PageController(
+                    initialPage: (workplaceDataList[verticalIndex].length > 0)
+                        ? workplaceDataList[verticalIndex].length - 1 // 마지막 페이지로 설정
+                        : 0, // 데이터가 없을 경우 0으로 설정
+                    viewportFraction: 1.0, // 뷰포트 비율 설정
+                  ),
+                  itemBuilder: (context, horizontalIndex) {
+                    // 현재 그룹의 데이터가 존재하는지 확인
+                    if (horizontalIndex >= workplaceDataList[verticalIndex].length) {
+                      return Container(); // 아이템이 없으면 빈 컨테이너 반환
+                    }
+
+                    // 현재 그룹의 데이터 표시
+                    String currentItem = workplaceDataList[verticalIndex][horizontalIndex];
+
+                    // 현재 아이템을 프로바이더에 설정
+                    Provider.of<StatusProvider>(context, listen: false).setCurrentItem(currentItem);
+
+                    return Container(
+                      alignment: Alignment.center, // 항상 중앙에 오도록 설정
+                      decoration: BoxDecoration(
+                        color: Colors.transparent, // 배경색을 투명하게 설정
+                        borderRadius: BorderRadius.circular(15), // 둥근 모서리 반경 설정
+                      ),
+                      child: Text(
+                        currentItem, // 현재 그룹의 데이터 표시
+                        style: TextStyle(color: Colors.white, fontSize: 18), // 텍스트 스타일
+                      ),
+                    );
+                  },
+                ),
               ),
-              child: Text(
-                isMultipleWorkplaces && statusList.isNotEmpty
-                    ? statusList[currentIndex]
-                    : statusList.isNotEmpty ? statusList[0] : 'customer',
-                style: TextStyle(fontSize: 16),
-              ),
             ),
-            IconButton(
-              icon: Icon(Icons.arrow_forward),
-              onPressed: () {
-                setState(() {
-                  if (currentIndex < statusList.length - 1) {
-                    currentIndex++; // 다음 인덱스로 이동
-                  }
-                });
-              },
-            ),
-          ],
+          );
+        },
+      )
+          : Center(
+        child: Text(
+          '정보가 없습니다.', // 정보가 없을 때 메시지
+          style: TextStyle(fontSize: 16),
         ),
       ),
     );
   }
+
+
+
 }

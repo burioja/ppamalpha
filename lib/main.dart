@@ -8,7 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'service/firebase_service.dart';
 import 'dart:ui';
 import 'package:provider/provider.dart'; // Provider 패키지 추가
-import 'provider/workplace_provider.dart'; // WorkplaceProvider 추가
+import 'provider/statusProvider.dart'; // WorkplaceProvider 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +31,7 @@ void main() async {
 
   runApp(
     ChangeNotifierProvider(
-      create: (context) => WorkplaceProvider(), // WorkplaceProvider 초기화
+      create: (context) => StatusProvider(), // StatusProvider 인스턴스 생성
       child: const MyApp(),
     ),
   );
@@ -47,25 +47,29 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider( // MultiProvider로 변경
-      providers: [
-        ChangeNotifierProvider(create: (_) => WorkplaceProvider()), // WorkplaceProvider 추가
-      ],
-      child: MaterialApp(
-        title: 'Firebase 로그인',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        // 로그인 상태에 따라 첫 화면 결정
-        home: AuthWrapper(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/main': (context) => const MainScreen(),
-          '/signup': (context) => const SignupScreen(),
+    return MaterialApp(
+      scrollBehavior: MaterialScrollBehavior().copyWith(
+        dragDevices: {
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.touch,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.unknown,
         },
       ),
+      title: 'Firebase 로그인',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      // 로그인 상태에 따라 첫 화면 결정
+      home: AuthWrapper(),
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/main': (context) => const MainScreen(),
+        '/signup': (context) => const SignupScreen(),
+      },
     );
   }
+
 }
 
 // 사용자 로그인 상태에 따라 화면 전환
