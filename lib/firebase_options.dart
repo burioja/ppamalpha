@@ -27,10 +27,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -44,42 +41,47 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBoDXRMpfjJiczH8Wj64OSsB1zaHcVw2o4',
-    appId: '1:771680864025:web:7114e4cd6643271bdfe788',
-    messagingSenderId: '771680864025',
-    projectId: 'ppamproto',
-    authDomain: 'ppamproto.firebaseapp.com',
-    storageBucket: 'ppamproto.appspot.com',
+    apiKey: 'AIzaSyC_e2AeyXkjp4VW3-NbVmZG-V7VONNMqvY',
+    appId: '1:714872165171:web:1b07188ea5236f196e2446',
+    messagingSenderId: '714872165171',
+    projectId: 'ppamproto-439623',
+    authDomain: 'ppamproto-439623.firebaseapp.com',
+    storageBucket: 'ppamproto-439623.appspot.com',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBD9KY9tIpr8C28J7X7ZHFM7Ju43MHgwGI',
-    appId: '1:771680864025:android:e38417d3b273a5d8dfe788',
-    messagingSenderId: '771680864025',
-    projectId: 'ppamproto',
-    storageBucket: 'ppamproto.appspot.com',
+    apiKey: 'AIzaSyAR4ldU7EJWPCCZNGHuBwmgINXYYNmaWOI',
+    appId: '1:714872165171:android:30cf62e04b46beba6e2446',
+    messagingSenderId: '714872165171',
+    projectId: 'ppamproto-439623',
+    storageBucket: 'ppamproto-439623.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDpHMvONQYwNNHzFWiWg8PFBoSKsv1NcDo',
-    appId: '1:771680864025:ios:50ddecd0850fbee9dfe788',
-    messagingSenderId: '771680864025',
-    projectId: 'ppamproto',
-    storageBucket: 'ppamproto.appspot.com',
-    androidClientId: '771680864025-amfge2j78n8uloi9v78re77dfn0idisa.apps.googleusercontent.com',
-    iosClientId: '771680864025-j4ss7p0u2c8g1sqbqpqpdrhr3oeab0gu.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBAY5HhVy99EDq-EwXrv_YiCROjzxZjQbc',
+    appId: '1:714872165171:ios:34b77a19d6ada3e36e2446',
+    messagingSenderId: '714872165171',
+    projectId: 'ppamproto-439623',
+    storageBucket: 'ppamproto-439623.appspot.com',
     iosBundleId: 'com.asyl.ppamproto',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDpHMvONQYwNNHzFWiWg8PFBoSKsv1NcDo',
-    appId: '1:771680864025:ios:50ddecd0850fbee9dfe788',
-    messagingSenderId: '771680864025',
-    projectId: 'ppamproto',
-    storageBucket: 'ppamproto.appspot.com',
-    androidClientId: '771680864025-amfge2j78n8uloi9v78re77dfn0idisa.apps.googleusercontent.com',
-    iosClientId: '771680864025-j4ss7p0u2c8g1sqbqpqpdrhr3oeab0gu.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBAY5HhVy99EDq-EwXrv_YiCROjzxZjQbc',
+    appId: '1:714872165171:ios:34b77a19d6ada3e36e2446',
+    messagingSenderId: '714872165171',
+    projectId: 'ppamproto-439623',
+    storageBucket: 'ppamproto-439623.appspot.com',
     iosBundleId: 'com.asyl.ppamproto',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyC_e2AeyXkjp4VW3-NbVmZG-V7VONNMqvY',
+    appId: '1:714872165171:web:f590ded080391c596e2446',
+    messagingSenderId: '714872165171',
+    projectId: 'ppamproto-439623',
+    authDomain: 'ppamproto-439623.firebaseapp.com',
+    storageBucket: 'ppamproto-439623.appspot.com',
   );
 
 }

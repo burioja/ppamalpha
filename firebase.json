@@ -1,1 +1,39 @@
-{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"hosting":{"public":"public","ignore":["firebase.json","**/.*","**/node_modules/**"]},"storage":{"rules":"storage.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"ppamproto","appId":"1:771680864025:android:e38417d3b273a5d8dfe788","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"ppamproto","configurations":{"android":"1:771680864025:android:e38417d3b273a5d8dfe788","ios":"1:771680864025:ios:50ddecd0850fbee9dfe788","macos":"1:771680864025:ios:50ddecd0850fbee9dfe788","web":"1:771680864025:web:7114e4cd6643271bdfe788"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ppamproto-439623",
+          "appId": "1:714872165171:android:30cf62e04b46beba6e2446",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ppamproto-439623",
+          "configurations": {
+            "android": "1:714872165171:android:30cf62e04b46beba6e2446",
+            "ios": "1:714872165171:ios:34b77a19d6ada3e36e2446",
+            "macos": "1:714872165171:ios:34b77a19d6ada3e36e2446",
+            "web": "1:714872165171:web:1b07188ea5236f196e2446"
+          }
+        }
+      }
+    }
+  }
+}
