@@ -16,7 +16,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 2; // 기본적으로 Map 화면을 선택
 
-  final List<Widget> _widgetOptions = const [
+  final List<Widget> _widgetOptions =  [
     CommunityScreen(),
     ShopScreen(),
     MapScreen(),
