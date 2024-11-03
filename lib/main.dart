@@ -5,10 +5,9 @@ import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'service/firebase_service.dart';
+import 'services/firebase_service.dart';
 import 'dart:ui';
-import 'package:provider/provider.dart'; // Provider 패키지 추가
-import 'provider/statusProvider.dart'; // WorkplaceProvider 추가
+// Provider 패키지 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,11 +28,8 @@ void main() async {
   FirebaseService firebaseService = FirebaseService();
   await firebaseService.uploadWorkplaces(); // 앱 시작 시 데이터 업로드
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => StatusProvider(), // StatusProvider 인스턴스 생성
-      child: const MyApp(),
-    ),
+  runApp(const MyApp(),
+
   );
 }
 
@@ -48,7 +44,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      scrollBehavior: MaterialScrollBehavior().copyWith(
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
         dragDevices: {
           PointerDeviceKind.mouse,
           PointerDeviceKind.touch,
@@ -61,7 +57,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       // 로그인 상태에 따라 첫 화면 결정
-      home: AuthWrapper(),
+      home: const AuthWrapper(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/main': (context) => const MainScreen(),
@@ -74,6 +70,8 @@ class MyApp extends StatelessWidget {
 
 // 사용자 로그인 상태에 따라 화면 전환
 class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(

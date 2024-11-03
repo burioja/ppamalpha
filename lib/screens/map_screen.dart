@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+
   @override
   _MapScreenState createState() => _MapScreenState();
 }
@@ -9,7 +11,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
 
-  final LatLng _initialPosition = LatLng(37.7749, -122.4194); // 초기 위치 설정 (샌프란시스코)
+  final LatLng _initialPosition = const LatLng(37.7749, -122.4194); // 초기 위치 설정 (샌프란시스코)
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
@@ -19,7 +21,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Google Map Example'),
+        title: const Text('Google Map Example'),
       ),
       body: GoogleMap(
         onMapCreated: _onMapCreated,

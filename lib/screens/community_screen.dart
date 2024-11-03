@@ -96,8 +96,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
             MaterialPageRoute(builder: (context) => WritePostScreen(category: _menuItems[_selectedMenuIndex])), // 선택한 카테고리 전달
           );
         },
-        child: const Icon(Icons.add),
         tooltip: 'Write Post',
+        child: const Icon(Icons.add),
       ),
     );
   }

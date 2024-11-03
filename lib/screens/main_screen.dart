@@ -17,11 +17,11 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 2; // 기본적으로 Map 화면을 선택
 
   final List<Widget> _widgetOptions =  [
-    CommunityScreen(),
-    ShopScreen(),
-    MapScreen(),
-    StoreScreen(),
-    WalletScreen(),
+    const CommunityScreen(),
+    const ShopScreen(),
+    const MapScreen(),
+    const StoreScreen(),
+    const WalletScreen(),
   ];
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
