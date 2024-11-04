@@ -7,7 +7,6 @@ import 'screens/signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/firebase_service.dart';
 import 'dart:ui';
-// Provider 패키지 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
