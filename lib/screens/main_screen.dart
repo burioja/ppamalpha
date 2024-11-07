@@ -4,7 +4,7 @@ import 'community_screen.dart';
 import 'shop_screen.dart';
 import 'store_screen.dart';
 import 'wallet_screen.dart';
-import 'user_container.dart'; // 사용자 컨테이너 임포트
+import '../widgets/user_container.dart'; // 사용자 컨테이너 임포트
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
