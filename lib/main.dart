@@ -1,4 +1,6 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
@@ -6,6 +8,7 @@ import 'screens/main_screen.dart';
 import 'screens/signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/firebase_service.dart';
+import 'providers/status_provider.dart'; // StatusProvider 임포트
 import 'dart:ui';
 
 void main() async {
@@ -27,8 +30,13 @@ void main() async {
   FirebaseService firebaseService = FirebaseService();
   await firebaseService.uploadWorkplaces(); // 앱 시작 시 데이터 업로드
 
-  runApp(const MyApp(),
-
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => StatusProvider()), // StatusProvider 등록
+      ],
+      child: const MyApp(),
+    ),
   );
 }
 
@@ -55,8 +63,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      // 로그인 상태에 따라 첫 화면 결정
-      home: const AuthWrapper(),
+      home: const AuthWrapper(), // 로그인 상태에 따라 첫 화면 결정
       routes: {
         '/login': (context) => const LoginScreen(),
         '/main': (context) => const MainScreen(),
@@ -64,7 +71,6 @@ class MyApp extends StatelessWidget {
       },
     );
   }
-
 }
 
 // 사용자 로그인 상태에 따라 화면 전환
@@ -77,13 +83,10 @@ class AuthWrapper extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // 로딩 화면 표시
           return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasData) {
-          // 사용자가 로그인되어 있으면 메인 화면으로
           return const MainScreen();
         } else {
-          // 로그인이 안 되어 있으면 로그인 화면으로
           return const LoginScreen();
         }
       },

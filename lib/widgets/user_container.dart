@@ -1,5 +1,7 @@
 // lib/widgets/user_container.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/status_provider.dart';
 import 'user_status_widget.dart'; // fetchUserWorkplaces 함수 임포트
 
 class UserContainer extends StatelessWidget {
@@ -8,23 +10,23 @@ class UserContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 90, // 원래 높이로 복원
+      height: 90,
       color: Colors.blue,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 위치 표시 부분 (좌측에 고정)
+          // 위치 표시 부분
           const Padding(
-            padding: EdgeInsets.only(left: 8.0), // 왼쪽 여백
+            padding: EdgeInsets.only(left: 8.0),
             child: SizedBox(
-              width: 80, // 고정된 너비 설정
+              width: 80,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center, // 가운데 정렬
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.location_on, color: Colors.white),
-                  SizedBox(height: 4), // 아이콘과 텍스트 사이 간격
+                  SizedBox(height: 4),
                   Text(
-                    '삼성동', // 위치 텍스트
+                    '삼성동',
                     style: TextStyle(color: Colors.white, fontSize: 18),
                   ),
                 ],
@@ -32,11 +34,11 @@ class UserContainer extends StatelessWidget {
             ),
           ),
 
-          // 상태 컨테이너 (가운데 고정, 좌우 스크롤 및 세로 스크롤)
+          // 상태 컨테이너 (좌우 및 세로 스크롤)
           Center(
             child: SizedBox(
-              width: 185, // 상태 컨테이너의 너비를 원래 크기로 복원
-              height: 50, // 상태 컨테이너의 높이 고정
+              width: 185,
+              height: 50,
               child: FutureBuilder<List<List<WorkplaceData>>>(
                 future: fetchUserWorkplaces(),
                 builder: (context, snapshot) {
@@ -47,22 +49,31 @@ class UserContainer extends StatelessWidget {
                   } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return const Text('데이터가 없습니다.', style: TextStyle(color: Colors.white));
                   } else {
-                    // 세로 PageView를 사용하여 그룹 간 이동
                     return PageView.builder(
-                      scrollDirection: Axis.vertical, // 세로 스크롤
+                      scrollDirection: Axis.vertical,
                       itemCount: snapshot.data!.length,
+                      onPageChanged: (verticalIndex) {
+                        final group = snapshot.data![verticalIndex];
+                        // 세로 스크롤 시 첫 번째 가로 요소로 텍스트 업데이트
+                        Provider.of<StatusProvider>(context, listen: false)
+                            .setCurrentText(group[0].data[3]);
+                      },
                       itemBuilder: (context, verticalIndex) {
                         final group = snapshot.data![verticalIndex];
-
-                        // 가로 PageView의 컨트롤러를 생성하고 초기 페이지를 3으로 설정
                         final pageController = PageController(initialPage: 3);
 
                         return PageView.builder(
-                          controller: pageController, // 초기 페이지 설정을 위해 PageController 사용
-                          scrollDirection: Axis.horizontal, // 가로 스크롤
-                          itemCount: group[0].data.length, // 각 그룹 내 항목 개수 (4개: groupdata1, groupdata2, groupdata3, workplaceinput+workplaceadd)
+                          controller: pageController,
+                          scrollDirection: Axis.horizontal,
+                          itemCount: group[0].data.length,
+                          onPageChanged: (horizontalIndex) {
+                            // 가로 스크롤 시 Provider에 선택된 텍스트 전달
+                            String currentText = group[0].data[horizontalIndex];
+                            Provider.of<StatusProvider>(context, listen: false)
+                                .setCurrentText(currentText);
+                          },
                           itemBuilder: (context, horizontalIndex) {
-                            WorkplaceData workplaceData = group[0]; // 그룹 색상과 정보
+                            WorkplaceData workplaceData = group[0];
                             return Container(
                               padding: const EdgeInsets.all(8.0),
                               decoration: BoxDecoration(
@@ -71,7 +82,7 @@ class UserContainer extends StatelessWidget {
                               ),
                               child: Center(
                                 child: Text(
-                                  workplaceData.data[horizontalIndex], // 가로 스크롤 시 하나씩만 표시
+                                  workplaceData.data[horizontalIndex],
                                   style: const TextStyle(color: Colors.white, fontSize: 14),
                                   textAlign: TextAlign.center,
                                 ),
@@ -87,15 +98,15 @@ class UserContainer extends StatelessWidget {
             ),
           ),
 
-          // 소지금 표시 부분 (우측에 고정)
+          // 소지금 표시 부분
           const Padding(
-            padding: EdgeInsets.only(right: 8.0), // 오른쪽 여백
+            padding: EdgeInsets.only(right: 8.0),
             child: SizedBox(
-              width: 80, // 고정된 너비 설정
+              width: 80,
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  '₩ 900,000', // 소지금 텍스트
+                  '₩ 900,000',
                   style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
