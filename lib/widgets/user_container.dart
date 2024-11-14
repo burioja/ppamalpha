@@ -5,7 +5,6 @@ import 'package:geolocator/geolocator.dart';
 import '../providers/status_provider.dart';
 import 'user_status_widget.dart';
 import 'package:geocoding/geocoding.dart'; // geocoding 패키지 추가
-import '../services/location_service.dart';
 
 class UserContainer extends StatefulWidget {
   const UserContainer({super.key});
