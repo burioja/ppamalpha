@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // 이메일 입력 창
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '이메일',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -79,9 +79,20 @@ class _LoginScreenState extends State<LoginScreen> {
             // 비밀번호 입력 창
             TextField(
               controller: _passwordController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '비밀번호',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                ),
               ),
               obscureText: true,
             ),
