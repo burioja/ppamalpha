@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import '../providers/status_provider.dart';
 import 'user_status_widget.dart';
+import 'package:geocoding/geocoding.dart'; // geocoding 패키지 추가
+import '../services/location_service.dart';
 
 class UserContainer extends StatefulWidget {
   const UserContainer({super.key});
@@ -25,7 +27,6 @@ class _UserContainerState extends State<UserContainer> {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // 위치 서비스 활성화 여부 확인
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       setState(() {
@@ -34,7 +35,6 @@ class _UserContainerState extends State<UserContainer> {
       return;
     }
 
-    // 위치 권한 상태 확인
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -53,11 +53,24 @@ class _UserContainerState extends State<UserContainer> {
       return;
     }
 
-    // 현재 위치 가져오기
     Position position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentLocation = '위도: ${position.latitude}, 경도: ${position.longitude}';
-    });
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks.first;
+        setState(() {
+          _currentLocation = "${place.country}, ${place.locality}\n${place.subLocality} ${place.street}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _currentLocation = '주소 변환 오류';
+      });
+    }
   }
 
   @override
@@ -78,10 +91,14 @@ class _UserContainerState extends State<UserContainer> {
                 children: [
                   const Icon(Icons.location_on, color: Colors.white),
                   const SizedBox(height: 4),
-                  Text(
-                    _currentLocation,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    textAlign: TextAlign.center,
+                  FittedBox(
+                    fit: BoxFit.scaleDown, // 텍스트 크기를 박스 크기에 맞게 조정
+                    child: Text(
+                      _currentLocation,
+                      textAlign: TextAlign.center,  // 중앙 정렬
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      overflow: TextOverflow.ellipsis, // 너무 길 경우 말줄임표
+                    ),
                   ),
                 ],
               ),
