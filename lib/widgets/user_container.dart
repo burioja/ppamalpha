@@ -29,9 +29,11 @@ class _UserContainerState extends State<UserContainer> {
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() {
-        _currentLocation = '위치 서비스 비활성화';
-      });
+      if (mounted) {
+        setState(() {
+          _currentLocation = '위치 서비스 비활성화';
+        });
+      }
       return;
     }
 
@@ -39,22 +41,27 @@ class _UserContainerState extends State<UserContainer> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        setState(() {
-          _currentLocation = '위치 권한 거부됨';
-        });
+        if (mounted) {
+          setState(() {
+            _currentLocation = '위치 권한 거부됨';
+          });
+        }
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _currentLocation = '위치 권한이 영구적으로 거부됨';
-      });
+      if (mounted) {
+        setState(() {
+          _currentLocation = '위치 권한이 영구적으로 거부됨';
+        });
+      }
       return;
     }
 
     Position position = await Geolocator.getCurrentPosition();
     try {
+      // localeIdentifier 파라미터 제거
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
@@ -62,14 +69,18 @@ class _UserContainerState extends State<UserContainer> {
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
-        setState(() {
-          _currentLocation = "${place.country}, ${place.locality}\n${place.subLocality} ${place.street}";
-        });
+        if (mounted) {
+          setState(() {
+            _currentLocation = "${place.subLocality}";
+          });
+        }
       }
     } catch (e) {
-      setState(() {
-        _currentLocation = '주소 변환 오류';
-      });
+      if (mounted) {
+        setState(() {
+          _currentLocation = '주소 변환 오류';
+        });
+      }
     }
   }
 
