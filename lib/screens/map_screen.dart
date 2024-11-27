@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/location_service.dart'; // 위치 서비스 사용
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -12,7 +12,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
-  LatLng _currentPosition = const LatLng(37.7749, -122.4194); // 기본 위치: 샌프란시스코
+  LatLng? _currentPosition; // null로 시작
 
   @override
   void initState() {
@@ -30,10 +30,12 @@ class _MapScreenState extends State<MapScreen> {
         if (mapController != null) {
           mapController.animateCamera(
             CameraUpdate.newCameraPosition(
-              CameraPosition(target: _currentPosition, zoom: 15.0),
+              CameraPosition(target: _currentPosition!, zoom: 15.0),
             ),
           );
         }
+      } else {
+        print('현재 위치를 가져올 수 없습니다.');
       }
     } catch (e) {
       print('초기 위치 설정 오류: $e');
@@ -42,16 +44,25 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
+    if (_currentPosition != null) {
+      mapController.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _currentPosition!, zoom: 15.0),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GoogleMap(
+      body: _currentPosition == null
+          ? const Center(child: CircularProgressIndicator()) // 로딩 중
+          : GoogleMap(
         onMapCreated: _onMapCreated,
         initialCameraPosition: CameraPosition(
-          target: _currentPosition,
-          zoom: 10.0,
+          target: _currentPosition!, // 현재 위치로 초기화
+          zoom: 15.0,
         ),
         myLocationEnabled: true,
         myLocationButtonEnabled: true,
