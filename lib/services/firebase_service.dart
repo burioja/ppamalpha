@@ -5,7 +5,7 @@ import 'package:flutter/services.dart' show rootBundle; // 경로 수정
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // JSON 파일을 읽어 Firebase에 업로드하는 함수
+  // JSON 파일을 읽어 Firebase에 업로드f하는 함수
   Future<void> uploadWorkplaces() async {
     try {
       // JSON 파일 읽기

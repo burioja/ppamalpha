@@ -1,10 +1,9 @@
 // lib/widgets/user_container.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
 import '../providers/status_provider.dart';
 import 'user_status_widget.dart';
-import 'package:geocoding/geocoding.dart'; // geocoding 패키지 추가
+import '../services/location_service.dart';
 
 class UserContainer extends StatefulWidget {
   const UserContainer({super.key});
@@ -19,65 +18,22 @@ class _UserContainerState extends State<UserContainer> {
   @override
   void initState() {
     super.initState();
-    _determinePosition();
+    _loadCurrentAddress();
   }
 
-  Future<void> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        setState(() {
-          _currentLocation = '위치 서비스 비활성화';
-        });
-      }
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (mounted) {
-          setState(() {
-            _currentLocation = '위치 권한 거부됨';
-          });
-        }
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      if (mounted) {
-        setState(() {
-          _currentLocation = '위치 권한이 영구적으로 거부됨';
-        });
-      }
-      return;
-    }
-
-    Position position = await Geolocator.getCurrentPosition();
+  Future<void> _loadCurrentAddress() async {
     try {
-      // localeIdentifier 파라미터 제거
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks.first;
-        if (mounted) {
-          setState(() {
-            _currentLocation = "${place.subLocality}";
-          });
-        }
+      String address = await LocationService.getCurrentAddress();
+      if (mounted) {
+        setState(() {
+          _currentLocation = address;
+        });
       }
     } catch (e) {
+      print('주소 가져오기 오류: $e');
       if (mounted) {
         setState(() {
-          _currentLocation = '주소 변환 오류';
+          _currentLocation = '주소를 가져올 수 없습니다.';
         });
       }
     }
@@ -102,12 +58,12 @@ class _UserContainerState extends State<UserContainer> {
                   const Icon(Icons.location_on, color: Colors.white),
                   const SizedBox(height: 4),
                   FittedBox(
-                    fit: BoxFit.scaleDown, // 텍스트 크기를 박스 크기에 맞게 조정
+                    fit: BoxFit.scaleDown,
                     child: Text(
                       _currentLocation,
-                      textAlign: TextAlign.center,  // 중앙 정렬
+                      textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
-                      overflow: TextOverflow.ellipsis, // 너무 길 경우 말줄임표
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

@@ -62,15 +62,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 labelText: '이메일',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
               ),
             ),
@@ -83,15 +83,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 labelText: '비밀번호',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
                 ),
               ),
               obscureText: true,
