@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
-import '../services/location_service.dart'; // 위치 서비스 사용
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -12,7 +12,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
-  LatLng? _currentPosition; // null로 시작
+  LatLng? _currentPosition;
 
   @override
   void initState() {
@@ -27,18 +27,16 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _currentPosition = LatLng(position.latitude, position.longitude);
         });
-        if (mapController != null) {
-          mapController.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(target: _currentPosition!, zoom: 15.0),
-            ),
-          );
-        }
       } else {
-        print('현재 위치를 가져올 수 없습니다.');
+        setState(() {
+          _currentPosition = const LatLng(37.5665, 126.9780); // 기본 위치
+        });
       }
     } catch (e) {
       print('초기 위치 설정 오류: $e');
+      setState(() {
+        _currentPosition = const LatLng(37.5665, 126.9780); // 오류 시 기본 위치
+      });
     }
   }
 
@@ -57,11 +55,11 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _currentPosition == null
-          ? const Center(child: CircularProgressIndicator()) // 로딩 중
+          ? const Center(child: Text("현재 위치를 불러오는 중입니다...")) // 로딩 메시지
           : GoogleMap(
         onMapCreated: _onMapCreated,
         initialCameraPosition: CameraPosition(
-          target: _currentPosition!, // 현재 위치로 초기화
+          target: _currentPosition!,
           zoom: 15.0,
         ),
         myLocationEnabled: true,
