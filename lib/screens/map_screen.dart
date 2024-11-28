@@ -21,6 +21,7 @@ class _MapScreenState extends State<MapScreen> {
 
   final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg";
   bool _isSearchVisible = false; // 검색창 표시 여부
+  List<String> _suggestions = []; // 자동완성 리스트
 
   @override
   void initState() {
@@ -87,7 +88,8 @@ class _MapScreenState extends State<MapScreen> {
             markerId: const MarkerId("search_marker"),
             position: newPosition,
             infoWindow: InfoWindow(title: query),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueBlue),
           );
         });
 
@@ -106,7 +108,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _applyMapStyle() async {
     try {
-      String mapStyle = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
+      String mapStyle = await DefaultAssetBundle.of(context).loadString(
+          'assets/map_style.json');
       mapController.setMapStyle(mapStyle);
     } catch (e) {
       print('맵 스타일 적용 오류: $e');
@@ -147,9 +150,9 @@ class _MapScreenState extends State<MapScreen> {
               if (_searchMarker != null) _searchMarker!,
             },
           ),
+          // 검색창과 돋보기 버튼
           Positioned(
             top: 20,
-            left: 10,
             right: 10,
             child: Row(
               children: [
@@ -157,7 +160,9 @@ class _MapScreenState extends State<MapScreen> {
                   duration: const Duration(milliseconds: 300),
                   alignment: Alignment.centerRight,
                   transform: Matrix4.translationValues(
-                      _isSearchVisible ? 0 : MediaQuery.of(context).size.width, 0, 0),
+                      _isSearchVisible ? 0 : MediaQuery.of(context).size.width,
+                      0,
+                      0),
                   height: 40,
                   child: Visibility(
                     visible: _isSearchVisible,
@@ -173,35 +178,69 @@ class _MapScreenState extends State<MapScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
+                        onChanged: (value) async {
+                          final suggestions =
+                          await _getPlaceSuggestions(value);
+                          setState(() {
+                            _suggestions = suggestions;
+                          });
+                        },
                         onSubmitted: (value) {
                           _searchLocation(value);
                           setState(() {
                             _isSearchVisible = false;
+                            _suggestions.clear();
                           });
                         },
                       ),
                     ),
                   ),
                 ),
-                const Spacer(),
-                // 돋보기 버튼 수정
+                const SizedBox(width: 10),
                 FloatingActionButton(
                   onPressed: () {
                     setState(() {
                       _isSearchVisible = !_isSearchVisible;
                     });
                   },
-                  mini: true, // 크기 축소
-                  backgroundColor: Colors.blue, // 스타일 맞춤
+                  mini: true,
+                  backgroundColor: Colors.blue,
                   child: const Icon(Icons.search),
                 ),
               ],
             ),
           ),
-          // 플로팅 버튼 추가
+          // 자동완성 리스트 표시
+          if (_suggestions.isNotEmpty)
+            Positioned(
+              top: 70, // 검색창 바로 아래에 위치
+              left: 10,
+              right: 10,
+              child: Material(
+                elevation: 4.0,
+                borderRadius: BorderRadius.circular(10),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _suggestions.length,
+                  itemBuilder: (context, index) {
+                    return ListTile(
+                      title: Text(_suggestions[index]),
+                      onTap: () {
+                        _searchLocation(_suggestions[index]);
+                        setState(() {
+                          _isSearchVisible = false;
+                          _suggestions.clear();
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          // 현재 위치 버튼
           Positioned(
-            top: 80, // 검색창 아래 위치
-            right: 10, // 오른쪽 정렬
+            top: 80,
+            right: 10,
             child: FloatingActionButton(
               onPressed: () {
                 if (_currentPosition != null) {
@@ -212,8 +251,8 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 }
               },
-              mini: true, // 크기 축소
-              backgroundColor: Colors.blue, // 스타일 맞춤
+              mini: true,
+              backgroundColor: Colors.blue,
               child: const Icon(Icons.my_location),
             ),
           ),
@@ -221,4 +260,4 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
-  }
+}
