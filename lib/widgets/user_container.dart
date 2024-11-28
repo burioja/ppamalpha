@@ -18,7 +18,7 @@ class _UserContainerState extends State<UserContainer> {
   @override
   void initState() {
     super.initState();
-    _loadCurrentAddress();
+    _loadCurrentAddress(); //구글지도 위도경도 보기
   }
 
   Future<void> _loadCurrentAddress() async {

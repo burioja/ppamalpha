@@ -29,13 +29,13 @@ class _MapScreenState extends State<MapScreen> {
         });
       } else {
         setState(() {
-          _currentPosition = const LatLng(37.5665, 126.9780); // 기본 위치
+          _currentPosition = const LatLng(37.495872, 127.025046); // 기본 위치
         });
       }
     } catch (e) {
       print('초기 위치 설정 오류: $e');
       setState(() {
-        _currentPosition = const LatLng(37.5665, 126.9780); // 오류 시 기본 위치
+        _currentPosition = const LatLng(37.492894, 127.012469); // 오류 시 기본 위치
       });
     }
   }

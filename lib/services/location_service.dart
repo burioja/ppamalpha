@@ -36,7 +36,7 @@ class LocationService {
       List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         final Placemark place = placemarks.first;
-        return place.locality ?? '주소 정보 없음'; // 동 단위 주소 반환
+        return place.subLocality ?? place.locality ?? '주소 정보 없음'; // 동 단위 주소 우선 반환
       }
       return '주소를 찾을 수 없습니다.';
     } catch (e) {
