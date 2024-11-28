@@ -22,11 +22,24 @@ class _MapScreenState extends State<MapScreen> {
   final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg";
   bool _isSearchVisible = false; // 검색창 표시 여부
   List<String> _suggestions = []; // 자동완성 리스트
+  String? _mapStyle; // 맵 스타일 저장
 
   @override
   void initState() {
     super.initState();
     _setInitialLocation();
+    _loadMapStyle(); // 맵 스타일 로드
+  }
+
+  Future<void> _loadMapStyle() async {
+    try {
+      final String style = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
+      setState(() {
+        _mapStyle = style;
+      });
+    } catch (e) {
+      print('맵 스타일 로드 오류: $e');
+    }
   }
 
   Future<void> _setInitialLocation() async {
@@ -106,29 +119,8 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _applyMapStyle() async {
-    try {
-      String mapStyle = await DefaultAssetBundle.of(context).loadString(
-          'assets/map_style.json');
-      mapController.setMapStyle(mapStyle);
-    } catch (e) {
-      print('맵 스타일 적용 오류: $e');
-    }
-  }
-
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
-
-    // 맵 스타일 적용
-    _applyMapStyle();
-
-    if (_currentPosition != null) {
-      mapController.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 15.0),
-        ),
-      );
-    }
   }
 
   @override
@@ -149,6 +141,7 @@ class _MapScreenState extends State<MapScreen> {
             markers: {
               if (_searchMarker != null) _searchMarker!,
             },
+            style: _mapStyle, // GoogleMap의 style 속성 사용
           ),
           // 검색창과 돋보기 버튼
           Positioned(
