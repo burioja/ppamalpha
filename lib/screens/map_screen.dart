@@ -42,12 +42,30 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
+
+    // JSON 스타일 적용
+    _applyMapStyle();
+
     if (_currentPosition != null) {
       mapController.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: _currentPosition!, zoom: 15.0),
         ),
       );
+    }
+  }
+
+  // 맵 스타일 적용 함수
+  Future<void> _applyMapStyle() async {
+    try {
+      // JSON 스타일 파일 로드
+      String mapStyle = await DefaultAssetBundle.of(context)
+          .loadString('assets/map_style.json');
+
+      // Google Map 스타일 적용
+      mapController.setMapStyle(mapStyle);
+    } catch (e) {
+      print('맵 스타일 적용 오류: $e');
     }
   }
 
