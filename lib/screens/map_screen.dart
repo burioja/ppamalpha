@@ -19,7 +19,8 @@ class _MapScreenState extends State<MapScreen> {
   Marker? _searchMarker;
   final TextEditingController _searchController = TextEditingController();
 
-  final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg"; // Google API 키
+  final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg";
+  bool _isSearchVisible = false; // 검색창 표시 여부
 
   @override
   void initState() {
@@ -103,7 +104,6 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 지도 스타일 적용 함수
   Future<void> _applyMapStyle() async {
     try {
       String mapStyle = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
@@ -116,7 +116,7 @@ class _MapScreenState extends State<MapScreen> {
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
 
-    // 지도 스타일 적용
+    // 맵 스타일 적용
     _applyMapStyle();
 
     if (_currentPosition != null) {
@@ -151,55 +151,45 @@ class _MapScreenState extends State<MapScreen> {
             top: 20,
             left: 10,
             right: 10,
-            child: Autocomplete<String>(
-              optionsBuilder: (TextEditingValue textEditingValue) async {
-                if (textEditingValue.text.isEmpty) {
-                  return const Iterable<String>.empty();
-                }
-                return await _getPlaceSuggestions(textEditingValue.text);
-              },
-              onSelected: (String suggestion) {
-                _searchController.text = suggestion;
-                _searchLocation(suggestion);
-              },
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: InputDecoration(
-                    hintText: '검색할 위치를 입력하세요',
-                    fillColor: Colors.white,
-                    filled: true,
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: () {
-                        _searchLocation(controller.text);
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: _isSearchVisible ? MediaQuery.of(context).size.width - 80 : 0,
+                  child: Visibility(
+                    visible: _isSearchVisible,
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: '검색할 위치를 입력하세요',
+                        fillColor: Colors.white,
+                        filled: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: () {
+                            _searchLocation(_searchController.text);
+                            setState(() {
+                              _isSearchVisible = false;
+                            });
+                          },
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
-              optionsViewBuilder: (context, onSelected, options) {
-                return Material(
-                  elevation: 4.0,
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: options.length,
-                    itemBuilder: (BuildContext context, int index) {
-                      final option = options.elementAt(index);
-                      return ListTile(
-                        title: Text(option),
-                        onTap: () {
-                          onSelected(option);
-                        },
-                      );
-                    },
-                  ),
-                );
-              },
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () {
+                    setState(() {
+                      _isSearchVisible = !_isSearchVisible;
+                    });
+                  },
+                ),
+              ],
             ),
           ),
         ],
