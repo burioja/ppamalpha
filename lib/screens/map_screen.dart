@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -13,6 +15,11 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
+
+  Marker? _searchMarker;
+  final TextEditingController _searchController = TextEditingController();
+
+  final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg"; // Google API 키
 
   @override
   void initState() {
@@ -29,21 +36,87 @@ class _MapScreenState extends State<MapScreen> {
         });
       } else {
         setState(() {
-          _currentPosition = const LatLng(37.495872, 127.025046); // 기본 위치
+          _currentPosition = const LatLng(37.495872, 127.025046);
         });
       }
     } catch (e) {
       print('초기 위치 설정 오류: $e');
       setState(() {
-        _currentPosition = const LatLng(37.492894, 127.012469); // 오류 시 기본 위치
+        _currentPosition = const LatLng(37.492894, 127.012469);
       });
+    }
+  }
+
+  Future<List<String>> _getPlaceSuggestions(String query) async {
+    final String url =
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$query&types=geocode&key=$_googleApiKey';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final predictions = data['predictions'] as List;
+        return predictions
+            .map((prediction) => prediction['description'] as String)
+            .toList();
+      } else {
+        print('Google Places API 오류: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Google Places API 호출 실패: $e');
+      return [];
+    }
+  }
+
+  Future<void> _searchLocation(String query) async {
+    try {
+      final String url =
+          'https://maps.googleapis.com/maps/api/geocode/json?address=$query&key=$_googleApiKey';
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final location = data['results'][0]['geometry']['location'];
+        final newPosition = LatLng(location['lat'], location['lng']);
+
+        setState(() {
+          _currentPosition = newPosition;
+          _searchMarker = Marker(
+            markerId: const MarkerId("search_marker"),
+            position: newPosition,
+            infoWindow: InfoWindow(title: query),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          );
+        });
+
+        mapController.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: newPosition, zoom: 15.0),
+          ),
+        );
+      } else {
+        print('주소 검색 오류: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('주소 검색 실패: $e');
+    }
+  }
+
+  // 지도 스타일 적용 함수
+  Future<void> _applyMapStyle() async {
+    try {
+      String mapStyle = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
+      mapController.setMapStyle(mapStyle);
+    } catch (e) {
+      print('맵 스타일 적용 오류: $e');
     }
   }
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
 
-    // JSON 스타일 적용
+    // 지도 스타일 적용
     _applyMapStyle();
 
     if (_currentPosition != null) {
@@ -55,33 +128,93 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 맵 스타일 적용 함수
-  Future<void> _applyMapStyle() async {
-    try {
-      // JSON 스타일 파일 로드
-      String mapStyle = await DefaultAssetBundle.of(context)
-          .loadString('assets/map_style.json');
-
-      // Google Map 스타일 적용
-      mapController.setMapStyle(mapStyle);
-    } catch (e) {
-      print('맵 스타일 적용 오류: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _currentPosition == null
-          ? const Center(child: Text("현재 위치를 불러오는 중입니다...")) // 로딩 메시지
-          : GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(
-          target: _currentPosition!,
-          zoom: 15.0,
-        ),
-        myLocationEnabled: true,
-        myLocationButtonEnabled: true,
+      body: Stack(
+        children: [
+          _currentPosition == null
+              ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
+              : GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition!,
+              zoom: 15.0,
+            ),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            markers: {
+              if (_searchMarker != null) _searchMarker!,
+            },
+          ),
+          Positioned(
+            top: 20,
+            left: 10,
+            right: 10,
+            child: Autocomplete<String>(
+              optionsBuilder: (TextEditingValue textEditingValue) async {
+                if (textEditingValue.text.isEmpty) {
+                  return const Iterable<String>.empty();
+                }
+                return await _getPlaceSuggestions(textEditingValue.text);
+              },
+              onSelected: (String suggestion) {
+                _searchController.text = suggestion;
+                _searchLocation(suggestion);
+              },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: '검색할 위치를 입력하세요',
+                    fillColor: Colors.white,
+                    filled: true,
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: () {
+                        _searchLocation(controller.text);
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                );
+              },
+              optionsViewBuilder: (context, onSelected, options) {
+                return Material(
+                  elevation: 4.0,
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: options.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final option = options.elementAt(index);
+                      return ListTile(
+                        title: Text(option),
+                        onTap: () {
+                          onSelected(option);
+                        },
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          if (_currentPosition != null) {
+            mapController.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(target: _currentPosition!, zoom: 15.0),
+              ),
+            );
+          }
+        },
+        child: const Icon(Icons.my_location),
       ),
     );
   }
