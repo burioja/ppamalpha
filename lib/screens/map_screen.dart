@@ -155,57 +155,70 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  width: _isSearchVisible ? MediaQuery.of(context).size.width - 80 : 0,
+                  alignment: Alignment.centerRight,
+                  transform: Matrix4.translationValues(
+                      _isSearchVisible ? 0 : MediaQuery.of(context).size.width, 0, 0),
+                  height: 40,
                   child: Visibility(
                     visible: _isSearchVisible,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: '검색할 위치를 입력하세요',
-                        fillColor: Colors.white,
-                        filled: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: MediaQuery.of(context).size.width - 80,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: '검색할 위치를 입력하세요',
+                          fillColor: Colors.white,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: () {
-                            _searchLocation(_searchController.text);
-                            setState(() {
-                              _isSearchVisible = false;
-                            });
-                          },
-                        ),
+                        onSubmitted: (value) {
+                          _searchLocation(value);
+                          setState(() {
+                            _isSearchVisible = false;
+                          });
+                        },
                       ),
                     ),
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.search),
+                // 돋보기 버튼 수정
+                FloatingActionButton(
                   onPressed: () {
                     setState(() {
                       _isSearchVisible = !_isSearchVisible;
                     });
                   },
+                  mini: true, // 크기 축소
+                  backgroundColor: Colors.blue, // 스타일 맞춤
+                  child: const Icon(Icons.search),
                 ),
               ],
             ),
           ),
+          // 플로팅 버튼 추가
+          Positioned(
+            top: 80, // 검색창 아래 위치
+            right: 10, // 오른쪽 정렬
+            child: FloatingActionButton(
+              onPressed: () {
+                if (_currentPosition != null) {
+                  mapController.animateCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(target: _currentPosition!, zoom: 15.0),
+                    ),
+                  );
+                }
+              },
+              mini: true, // 크기 축소
+              backgroundColor: Colors.blue, // 스타일 맞춤
+              child: const Icon(Icons.my_location),
+            ),
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          if (_currentPosition != null) {
-            mapController.animateCamera(
-              CameraUpdate.newCameraPosition(
-                CameraPosition(target: _currentPosition!, zoom: 15.0),
-              ),
-            );
-          }
-        },
-        child: const Icon(Icons.my_location),
       ),
     );
   }
-}
+  }
