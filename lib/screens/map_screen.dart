@@ -194,6 +194,12 @@ class _MapScreenState extends State<MapScreen> {
                   onPressed: () {
                     setState(() {
                       _isSearchVisible = !_isSearchVisible;
+
+                      // 검색창이 닫힐 때 텍스트와 자동완성 리스트 초기화
+                      if (!_isSearchVisible) {
+                        _searchController.clear();
+                        _suggestions.clear();
+                      }
                     });
                   },
                   mini: true,
