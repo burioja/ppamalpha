@@ -9,6 +9,8 @@ import 'services/firebase_service.dart';
 import 'package:provider/provider.dart';
 import 'providers/status_provider.dart';
 import 'dart:ui';
+import 'providers/user_provider.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +45,9 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider<StatusProvider>(
           create: (_) => StatusProvider(),
+        ),
+        ChangeNotifierProvider<UserProvider>(
+          create: (_) => UserProvider(),
         ),
       ],
       child: MaterialApp(

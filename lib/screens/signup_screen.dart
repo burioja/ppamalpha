@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -10,67 +11,47 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
-  final List<TextEditingController> _workplaceinputControllers = [TextEditingController()];
-  final List<TextEditingController> _workplaceaddControllers = [TextEditingController()];
-
-  // 이메일 인증 및 핸드폰 인증 여부
-  final bool _emailVerified = false;
-  final bool _phoneVerified = false;
-
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
-  void _verifyEmail() {
-    // 이메일 인증 처리 로직
-    // 이메일 인증 후 _emailVerified = true로 변경
-  }
-
-  void _verifyPhone() {
-    // 핸드폰 인증 처리 로직
-    // 핸드폰 인증 후 _phoneVerified = true로 변경
-  }
 
   void _signup() async {
     if (_passwordController.text != _confirmPasswordController.text) {
-      // 비밀번호 불일치 처리
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
+      );
       return;
     }
 
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
     try {
       // Firebase Auth로 계정 생성
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: userProvider.email.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Firestore에 사용자 정보 저장
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'email': _emailController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'workPlaces': List.generate(
-          _workplaceinputControllers.length,
-              (index) => {
-            'workplaceinput': _workplaceinputControllers[index].text,
-            'workplaceadd': _workplaceaddControllers[index].text,
-          },
-        ),
-      });
+      // Firebase와 상태 업데이트
+      await userProvider.updateUserData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원가입 성공!')),
+      );
 
-      // 회원가입 성공 처리
+      // 회원가입 성공 후 초기화
+      Navigator.pop(context);
     } catch (e) {
-      // 에러 처리
-      print(e);
+      print('회원가입 에러: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원가입 실패. 다시 시도해주세요.')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text("회원가입")),
       body: SingleChildScrollView(
@@ -79,19 +60,11 @@ class _SignupScreenState extends State<SignupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. 이메일 입력 창 + 인증 버튼
+              // 1. 이메일 입력 창
               TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: '이메일',
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.check),
-                    onPressed: _verifyEmail,  // 이메일 인증 처리
-                  ),
-                ),
+                decoration: const InputDecoration(labelText: '이메일'),
+                onChanged: (value) => userProvider.setEmail(value),
               ),
-              if (_emailVerified)
-                const Text("이메일 인증 완료", style: TextStyle(color: Colors.green)),
 
               // 2. 비밀번호 입력 창
               TextField(
@@ -106,57 +79,46 @@ class _SignupScreenState extends State<SignupScreen> {
                 obscureText: true,
                 decoration: const InputDecoration(labelText: '비밀번호 확인'),
               ),
-              if (_passwordController.text != _confirmPasswordController.text)
-                const Text("비밀번호가 일치하지 않습니다.", style: TextStyle(color: Colors.red)),
-              if (_passwordController.text == _confirmPasswordController.text && _passwordController.text.isNotEmpty)
-                const Text("비밀번호 일치", style: TextStyle(color: Colors.green)),
 
-              // 4. 핸드폰 번호 입력 창 + 인증 버튼
+              // 4. 핸드폰 번호 입력 창
               TextField(
-                controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: '핸드폰 번호',
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.check),
-                    onPressed: _verifyPhone,  // 핸드폰 인증 처리
-                  ),
-                ),
+                decoration: const InputDecoration(labelText: '핸드폰 번호'),
+                onChanged: (value) => userProvider.setPhoneNumber(value),
               ),
-              if (_phoneVerified)
-                const Text("핸드폰 인증 완료", style: TextStyle(color: Colors.green)),
 
               // 5. 주소 입력 창
               TextField(
-                controller: _addressController,
                 decoration: const InputDecoration(labelText: '주소'),
+                onChanged: (value) => userProvider.setAddress(value),
               ),
 
-              // 6. 일터 입력 창 (추가/삭제 버튼) - workplaceinput과 workplaceadd 함께 입력
+              // 6. 일터 입력
               Column(
-                children: List.generate(_workplaceinputControllers.length, (index) {
+                children: List.generate(userProvider.workPlaces.length, (index) {
                   return Row(
                     children: [
-                      // workplaceinput 입력 필드
                       Expanded(
                         child: TextField(
-                          controller: _workplaceinputControllers[index],
                           decoration: const InputDecoration(labelText: '일터 입력'),
+                          onChanged: (value) {
+                            userProvider.workPlaces[index]['workplaceinput'] = value;
+                            userProvider.notifyListeners();
+                          },
                         ),
                       ),
-                      // workplaceadd 입력 필드
                       Expanded(
                         child: TextField(
-                          controller: _workplaceaddControllers[index],
                           decoration: const InputDecoration(labelText: '일터 추가'),
+                          onChanged: (value) {
+                            userProvider.workPlaces[index]['workplaceadd'] = value;
+                            userProvider.notifyListeners();
+                          },
                         ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete),
                         onPressed: () {
-                          setState(() {
-                            _workplaceinputControllers.removeAt(index);
-                            _workplaceaddControllers.removeAt(index);
-                          });
+                          userProvider.removeWorkPlace(index);
                         },
                       ),
                     ],
@@ -166,10 +128,7 @@ class _SignupScreenState extends State<SignupScreen> {
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () {
-                  setState(() {
-                    _workplaceinputControllers.add(TextEditingController());
-                    _workplaceaddControllers.add(TextEditingController());
-                  });
+                  userProvider.addWorkPlace();
                 },
               ),
 
