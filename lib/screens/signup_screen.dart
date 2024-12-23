@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 
@@ -14,7 +15,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  void _signup() async {
+  // 회원가입 로직
+  Future<void> _signup() async {
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
@@ -25,21 +27,37 @@ class _SignupScreenState extends State<SignupScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     try {
-      // Firebase Auth로 계정 생성
+      // 1. Firebase Auth에 사용자 생성
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
         email: userProvider.email.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Firebase와 상태 업데이트
-      await userProvider.updateUserData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입 성공!')),
-      );
+      final User? user = userCredential.user;
 
-      // 회원가입 성공 후 초기화
-      Navigator.pop(context);
+      if (user != null) {
+        // 2. Firestore에 사용자 정보 저장
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'email': userProvider.email.trim(),
+          'phoneNumber': userProvider.phoneNumber.trim(),
+          'address': userProvider.address.trim(),
+          'workPlaces': userProvider.workPlaces,
+          'createdAt': Timestamp.now(), // 생성 시간 저장
+        });
+
+        // Firestore 저장 성공 후 상태 업데이트
+        userProvider.setEmail(userProvider.email.trim());
+        userProvider.setPhoneNumber(userProvider.phoneNumber.trim());
+        userProvider.setAddress(userProvider.address.trim());
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('회원가입 성공!')),
+        );
+
+        // 회원가입 완료 후 메인 화면으로 이동
+        Navigator.pushReplacementNamed(context, '/main');
+      }
     } catch (e) {
       print('회원가입 에러: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -60,39 +78,34 @@ class _SignupScreenState extends State<SignupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. 이메일 입력 창
+              // 이메일 입력
               TextField(
                 decoration: const InputDecoration(labelText: '이메일'),
-                onChanged: (value) => userProvider.setEmail(value),
+                onChanged: userProvider.setEmail,
               ),
-
-              // 2. 비밀번호 입력 창
+              // 비밀번호 입력
               TextField(
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: '비밀번호'),
               ),
-
-              // 3. 비밀번호 확인 창
+              // 비밀번호 확인
               TextField(
                 controller: _confirmPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: '비밀번호 확인'),
               ),
-
-              // 4. 핸드폰 번호 입력 창
+              // 핸드폰 번호 입력
               TextField(
                 decoration: const InputDecoration(labelText: '핸드폰 번호'),
-                onChanged: (value) => userProvider.setPhoneNumber(value),
+                onChanged: userProvider.setPhoneNumber,
               ),
-
-              // 5. 주소 입력 창
+              // 주소 입력
               TextField(
                 decoration: const InputDecoration(labelText: '주소'),
-                onChanged: (value) => userProvider.setAddress(value),
+                onChanged: userProvider.setAddress,
               ),
-
-              // 6. 일터 입력
+              // Workplace 입력
               Column(
                 children: List.generate(userProvider.workPlaces.length, (index) {
                   return Row(
@@ -101,8 +114,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: TextField(
                           decoration: const InputDecoration(labelText: '일터 입력'),
                           onChanged: (value) {
-                            userProvider.workPlaces[index]['workplaceinput'] = value;
-                            userProvider.notifyListeners();
+                            userProvider.updateWorkPlace(index, 'workplaceinput', value);
                           },
                         ),
                       ),
@@ -110,8 +122,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: TextField(
                           decoration: const InputDecoration(labelText: '일터 추가'),
                           onChanged: (value) {
-                            userProvider.workPlaces[index]['workplaceadd'] = value;
-                            userProvider.notifyListeners();
+                            userProvider.updateWorkPlace(index, 'workplaceadd', value);
                           },
                         ),
                       ),
@@ -127,11 +138,8 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.add),
-                onPressed: () {
-                  userProvider.addWorkPlace();
-                },
+                onPressed: userProvider.addWorkPlace,
               ),
-
               // 회원가입 버튼
               ElevatedButton(
                 onPressed: _signup,

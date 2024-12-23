@@ -33,8 +33,11 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplaces() async {
     DocumentSnapshot userDoc = userQuery.docs.first;
     List<dynamic>? workPlaces = userDoc['workPlaces'] as List<dynamic>?;
 
+    // 기본 customer 데이터
+    WorkplaceData customerData = WorkplaceData(['Customer'], Colors.grey.shade300);
+
     if (workPlaces == null || workPlaces.isEmpty) {
-      workplacesList.add([WorkplaceData(['Customer'], Colors.grey.shade300)]);
+      workplacesList.add([customerData]);
       return workplacesList;
     }
 
@@ -47,6 +50,9 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplaces() async {
         50 + random.nextInt(206),
       );
     }
+
+    // 기본 customer 그룹 추가
+    workplacesList.add([customerData]);
 
     for (var place in workPlaces) {
       String workplaceInput = place['workplaceinput'] ?? '';
