@@ -124,7 +124,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     },
                     controller: _addressController,
                     decoration: const InputDecoration(
-                      labelText: '주소',
+                      labelText: '주소sdf',
                       border: OutlineInputBorder(),
                     ),
                   ),
