@@ -29,9 +29,15 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setAddress(String address) {
-    _address = address;
-    notifyListeners();
+  void setAddress(String address) async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      await _firestore.collection('users').doc(user.uid).update({
+        'address': address,
+      });
+      _address = address;
+      notifyListeners();
+    }
   }
 
   void setWorkPlaces(List<Map<String, String>> workPlaces) {

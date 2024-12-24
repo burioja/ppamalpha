@@ -1,4 +1,3 @@
-// lib/services/location_service.dart
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
@@ -7,36 +6,30 @@ class LocationService {
   static Future<Position?> getCurrentPosition() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('위치 서비스가 비활성화되었습니다.');
-      }
+      if (!serviceEnabled) throw Exception('위치 서비스가 비활성화되었습니다.');
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('위치 권한이 거부되었습니다.');
-        }
+        if (permission == LocationPermission.denied) throw Exception('위치 권한이 거부되었습니다.');
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('위치 권한이 영구적으로 거부되었습니다.');
-      }
+      if (permission == LocationPermission.deniedForever) throw Exception('위치 권한이 영구적으로 거부되었습니다.');
 
       return await Geolocator.getCurrentPosition();
     } catch (e) {
       print('위치 가져오기 오류: $e');
-      return null; // 오류 시 null 반환
+      return null;
     }
   }
 
-  // 좌표를 주소로 변환 (동 단위)
+  // 좌표를 주소로 변환
   static Future<String> getAddressFromCoordinates(double latitude, double longitude) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         final Placemark place = placemarks.first;
-        return place.subLocality ?? place.locality ?? '주소 정보 없음'; // 동 단위 주소 우선 반환
+        return place.subLocality ?? place.locality ?? '주소 정보 없음';
       }
       return '주소를 찾을 수 없습니다.';
     } catch (e) {
@@ -45,7 +38,7 @@ class LocationService {
     }
   }
 
-  // 통합: 현재 위치를 주소로 변환 (동 단위)
+  // 통합: 현재 위치를 주소로 변환
   static Future<String> getCurrentAddress() async {
     try {
       Position? position = await getCurrentPosition();

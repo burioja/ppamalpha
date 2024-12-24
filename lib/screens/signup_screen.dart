@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/address_search_widget.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -14,6 +15,7 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _addressController = TextEditingController(); // 주소 입력용 컨트롤러
 
   // 회원가입 로직
   Future<void> _signup() async {
@@ -73,82 +75,109 @@ class _SignupScreenState extends State<SignupScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("회원가입")),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 이메일 입력
-              TextField(
-                decoration: const InputDecoration(labelText: '이메일'),
-                onChanged: userProvider.setEmail,
-              ),
-              // 비밀번호 입력
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '비밀번호'),
-              ),
-              // 비밀번호 확인
-              TextField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '비밀번호 확인'),
-              ),
-              // 핸드폰 번호 입력
-              TextField(
-                decoration: const InputDecoration(labelText: '핸드폰 번호'),
-                onChanged: userProvider.setPhoneNumber,
-              ),
-              // 주소 입력
-              TextField(
-                decoration: const InputDecoration(labelText: '주소'),
-                onChanged: userProvider.setAddress,
-              ),
-              // Workplace 입력
-              Column(
-                children: List.generate(userProvider.workPlaces.length, (index) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(labelText: '일터 입력'),
-                          onChanged: (value) {
-                            userProvider.updateWorkPlace(index, 'workplaceinput', value);
+        child: ConstrainedBox( // 추가된 코드
+          constraints: const BoxConstraints(
+            minHeight: 600, // 최소 높이를 설정하여 레이아웃 충돌 방지
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 이메일 입력
+                TextField(
+                  decoration: const InputDecoration(labelText: '이메일'),
+                  onChanged: userProvider.setEmail,
+                ),
+                const SizedBox(height: 10),
+
+                // 비밀번호 입력
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '비밀번호'),
+                ),
+                const SizedBox(height: 10),
+
+                // 비밀번호 확인
+                TextField(
+                  controller: _confirmPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '비밀번호 확인'),
+                ),
+                const SizedBox(height: 10),
+
+                // 핸드폰 번호 입력
+                TextField(
+                  decoration: const InputDecoration(labelText: '핸드폰 번호'),
+                  onChanged: userProvider.setPhoneNumber,
+                ),
+                const SizedBox(height: 10),
+
+                // 주소 입력
+                SizedBox(
+                  height: 60, // 높이를 명시적으로 설정
+                  child: AddressSearchWidget(
+                    onAddressSelected: (selectedAddress) {
+                      userProvider.setAddress(selectedAddress);
+                      _addressController.text = selectedAddress; // TextField에 반영
+                    },
+                    controller: _addressController,
+                    decoration: const InputDecoration(
+                      labelText: '주소',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 50),
+
+                // Workplace 입력
+                Column(
+                  children: List.generate(userProvider.workPlaces.length, (index) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(labelText: '일터 입력'),
+                            onChanged: (value) {
+                              userProvider.updateWorkPlace(index, 'workplaceinput', value);
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(labelText: '일터 추가'),
+                            onChanged: (value) {
+                              userProvider.updateWorkPlace(index, 'workplaceadd', value);
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            userProvider.removeWorkPlace(index);
                           },
                         ),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(labelText: '일터 추가'),
-                          onChanged: (value) {
-                            userProvider.updateWorkPlace(index, 'workplaceadd', value);
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          userProvider.removeWorkPlace(index);
-                        },
-                      ),
-                    ],
-                  );
-                }),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: userProvider.addWorkPlace,
-              ),
-              // 회원가입 버튼
-              ElevatedButton(
-                onPressed: _signup,
-                child: const Text("회원가입"),
-              ),
-            ],
+                      ],
+                    );
+                  }),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: userProvider.addWorkPlace,
+                ),
+                const SizedBox(height: 20),
+
+                // 회원가입 버튼
+                ElevatedButton(
+                  onPressed: _signup,
+                  child: const Text("회원가입"),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
+  }
