@@ -6,17 +6,37 @@ class UserProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 사용자 데이터
+  // 기존 변수
   String _email = '';
   String _phoneNumber = '';
   String _address = '';
   List<Map<String, String>> _workPlaces = [];
+
+  // 추가된 변수
+  String _nickname = '';
+  String _profileImageUrl = '';
+  String _birthDate = '';
+  String _gender = '';
+  List<String> _followers = [];
+  List<String> _following = [];
+  List<String> _connections = [];
+  double _balance = 0.0;
+  String _bankAccount = '';
 
   // Getter
   String get email => _email;
   String get phoneNumber => _phoneNumber;
   String get address => _address;
   List<Map<String, String>> get workPlaces => _workPlaces;
+  String get nickname => _nickname;
+  String get profileImageUrl => _profileImageUrl;
+  String get birthDate => _birthDate;
+  String get gender => _gender;
+  List<String> get followers => _followers;
+  List<String> get following => _following;
+  List<String> get connections => _connections;
+  double get balance => _balance;
+  String get bankAccount => _bankAccount;
 
   // Setter
   void setEmail(String email) {
@@ -42,6 +62,52 @@ class UserProvider with ChangeNotifier {
 
   void setWorkPlaces(List<Map<String, String>> workPlaces) {
     _workPlaces = workPlaces;
+    notifyListeners();
+  }
+
+  // 추가된 변수에 대한 Setter
+  void setNickname(String nickname) {
+    _nickname = nickname;
+    notifyListeners();
+  }
+
+  void setProfileImageUrl(String url) {
+    _profileImageUrl = url;
+    notifyListeners();
+  }
+
+  void setBirthDate(String birthDate) {
+    _birthDate = birthDate;
+    notifyListeners();
+  }
+
+  void setGender(String gender) {
+    _gender = gender;
+    notifyListeners();
+  }
+
+  void setFollowers(List<String> followers) {
+    _followers = followers;
+    notifyListeners();
+  }
+
+  void setFollowing(List<String> following) {
+    _following = following;
+    notifyListeners();
+  }
+
+  void setConnections(List<String> connections) {
+    _connections = connections;
+    notifyListeners();
+  }
+
+  void setBalance(double balance) {
+    _balance = balance;
+    notifyListeners();
+  }
+
+  void setBankAccount(String bankAccount) {
+    _bankAccount = bankAccount;
     notifyListeners();
   }
 
@@ -76,6 +142,18 @@ class UserProvider with ChangeNotifier {
           _phoneNumber = doc['phoneNumber'] ?? '';
           _address = doc['address'] ?? '';
           _workPlaces = List<Map<String, String>>.from(doc['workPlaces'] ?? []);
+
+          // 추가된 데이터 가져오기
+          _nickname = doc['nickname'] ?? '';
+          _profileImageUrl = doc['profileImageUrl'] ?? '';
+          _birthDate = doc['birthDate'] ?? '';
+          _gender = doc['gender'] ?? '';
+          _followers = List<String>.from(doc['followers'] ?? []);
+          _following = List<String>.from(doc['following'] ?? []);
+          _connections = List<String>.from(doc['connections'] ?? []);
+          _balance = doc['balance']?.toDouble() ?? 0.0;
+          _bankAccount = doc['bankAccount'] ?? '';
+
           notifyListeners();
         }
       }
@@ -94,6 +172,17 @@ class UserProvider with ChangeNotifier {
           'phoneNumber': _phoneNumber,
           'address': _address,
           'workPlaces': _workPlaces,
+
+          // 추가된 데이터 업데이트
+          'nickname': _nickname,
+          'profileImageUrl': _profileImageUrl,
+          'birthDate': _birthDate,
+          'gender': _gender,
+          'followers': _followers,
+          'following': _following,
+          'connections': _connections,
+          'balance': _balance,
+          'bankAccount': _bankAccount,
         });
 
         // FirebaseAuth 이메일 업데이트
