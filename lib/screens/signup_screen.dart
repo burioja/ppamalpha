@@ -13,9 +13,10 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
+  int _currentStep = 0; // 현재 Step 상태 변수 추가
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _addressController = TextEditingController(); // 주소 입력용 컨트롤러
+  final _addressController = TextEditingController();
 
   // 회원가입 로직
   Future<void> _signup() async {
@@ -29,26 +30,21 @@ class _SignupScreenState extends State<SignupScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     try {
-      // 1. Firebase Auth에 사용자 생성
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: userProvider.email.trim(),
         password: _passwordController.text.trim(),
       );
 
       final User? user = userCredential.user;
-
       if (user != null) {
-        // 2. Firestore에 사용자 정보 저장
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'email': userProvider.email.trim(),
           'phoneNumber': userProvider.phoneNumber.trim(),
           'address': userProvider.address.trim(),
           'workPlaces': userProvider.workPlaces,
-          'createdAt': Timestamp.now(), // 생성 시간 저장
+          'createdAt': Timestamp.now(),
         });
 
-        // Firestore 저장 성공 후 상태 업데이트
         userProvider.setEmail(userProvider.email.trim());
         userProvider.setPhoneNumber(userProvider.phoneNumber.trim());
         userProvider.setAddress(userProvider.address.trim());
@@ -57,7 +53,6 @@ class _SignupScreenState extends State<SignupScreen> {
           const SnackBar(content: Text('회원가입 성공!')),
         );
 
-        // 회원가입 완료 후 메인 화면으로 이동
         Navigator.pushReplacementNamed(context, '/main');
       }
     } catch (e) {
@@ -74,110 +69,127 @@ class _SignupScreenState extends State<SignupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text("회원가입")),
-      body: SingleChildScrollView(
-        child: ConstrainedBox( // 추가된 코드
-          constraints: const BoxConstraints(
-            minHeight: 600, // 최소 높이를 설정하여 레이아웃 충돌 방지
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 이메일 입력
-                TextField(
-                  decoration: const InputDecoration(labelText: '이메일'),
-                  onChanged: userProvider.setEmail,
-                ),
-                const SizedBox(height: 10),
-
-                // 비밀번호 입력
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '비밀번호'),
-                ),
-                const SizedBox(height: 10),
-
-                // 비밀번호 확인
-                TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '비밀번호 확인'),
-                ),
-                const SizedBox(height: 10),
-
-                // 핸드폰 번호 입력
-                TextField(
-                  decoration: const InputDecoration(labelText: '핸드폰 번호'),
-                  onChanged: userProvider.setPhoneNumber,
-                ),
-                const SizedBox(height: 10),
-
-                // 주소 입력
-                SizedBox(
-                  height: 60, // 높이를 명시적으로 설정
-                  child: AddressSearchWidget(
-                    onAddressSelected: (selectedAddress) {
-                      userProvider.setAddress(selectedAddress);
-                      _addressController.text = selectedAddress; // TextField에 반영
-                    },
-                    controller: _addressController,
-                    decoration: const InputDecoration(
-                      labelText: '주소sdf',
-                      border: OutlineInputBorder(),
+      body: Stepper(
+        type: StepperType.horizontal,
+        currentStep: _currentStep,
+        onStepContinue: () {
+          if (_currentStep < 2) {
+            setState(() {
+              _currentStep++;
+            });
+          } else {
+            _signup();
+          }
+        },
+        onStepCancel: () {
+          if (_currentStep > 0) {
+            setState(() {
+              _currentStep--;
+            });
+          }
+        },
+        steps: [
+          Step(
+            title: const Text("기본 정보"),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(labelText: '이메일'),
+                    onChanged: userProvider.setEmail,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '비밀번호'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '비밀번호 확인'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    decoration: const InputDecoration(labelText: '핸드폰 번호'),
+                    onChanged: userProvider.setPhoneNumber,
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 60,
+                    child: AddressSearchWidget(
+                      onAddressSelected: (selectedAddress) {
+                        userProvider.setAddress(selectedAddress);
+                        _addressController.text = selectedAddress;
+                      },
+                      controller: _addressController,
+                      decoration: const InputDecoration(
+                        labelText: '주소',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 50),
-
-                // Workplace 입력
-                Column(
-                  children: List.generate(userProvider.workPlaces.length, (index) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(labelText: '일터 입력'),
-                            onChanged: (value) {
-                              userProvider.updateWorkPlace(index, 'workplaceinput', value);
-                            },
-                          ),
+                  const SizedBox(height: 20),
+                  Column(
+                    children: [
+                      ...List.generate(
+                        userProvider.workPlaces.length,
+                            (index) => Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                decoration: const InputDecoration(labelText: '일터 입력'),
+                                onChanged: (value) {
+                                  userProvider.updateWorkPlace(index, 'workplaceinput', value);
+                                },
+                              ),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                decoration: const InputDecoration(labelText: '일터 추가'),
+                                onChanged: (value) {
+                                  userProvider.updateWorkPlace(index, 'workplaceadd', value);
+                                },
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () {
+                                userProvider.removeWorkPlace(index);
+                              },
+                            ),
+                          ],
                         ),
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(labelText: '일터 추가'),
-                            onChanged: (value) {
-                              userProvider.updateWorkPlace(index, 'workplaceadd', value);
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            userProvider.removeWorkPlace(index);
-                          },
-                        ),
-                      ],
-                    );
-                  }),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: userProvider.addWorkPlace,
-                ),
-                const SizedBox(height: 20),
-
-                // 회원가입 버튼
-                ElevatedButton(
-                  onPressed: _signup,
-                  child: const Text("회원가입"),
-                ),
-              ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: userProvider.addWorkPlace,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
+            isActive: _currentStep >= 0,
           ),
-        ),
+          Step(
+            title: const Text("추가 정보"),
+            content: const Center(
+              child: Text("추후 추가할 내용"),
+            ),
+            isActive: _currentStep >= 1,
+          ),
+          Step(
+            title: const Text("완료"),
+            content: const Center(
+              child: Text("회원가입 완료 단계"),
+            ),
+            isActive: _currentStep >= 2,
+          ),
+        ],
       ),
     );
   }
-  }
+}
