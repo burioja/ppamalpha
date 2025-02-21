@@ -352,15 +352,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 children: [
                   ..._renderCheckList(),
                   const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _buttonActive ? _signup : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _buttonActive ? Colors.blue : Colors
-                          .grey,
-                    ),
-                    child: const Text(
-                        "가입하기", style: TextStyle(color: Colors.white)),
-                  ),
+
                 ],
               ),
               isActive: _currentStep >= 2,
@@ -389,11 +381,23 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget renderContainer(bool checked, String text, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Row(
-        children: [
-          Checkbox(value: checked, onChanged: (_) => onTap()),
-          Text(text, style: const TextStyle(fontSize: 16)),
-        ],
+      child: Container(
+        padding: const EdgeInsets.only(top: 20.0, bottom: 20.0),
+        color: Colors.white,
+        child: Row(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: checked ? Colors.blue : Colors.grey, width: 2.0),
+                color: checked ? Colors.blue : Colors.white,
+              ),
+              child: Icon(Icons.check, color: checked ? Colors.white : Colors.grey, size: 18),
+            ),
+            const SizedBox(width: 15),
+            Text(text, style: const TextStyle(color: Colors.grey, fontSize: 18)),
+          ],
+        ),
       ),
     );
   }
