@@ -6,6 +6,7 @@ import '../providers/user_provider.dart';
 import '../widgets/address_search_widget.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
+import '../config/config.dart'; // 🔥 API 키 가져오기
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});

@@ -4,6 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import '../config/config.dart'; // 🔥 API 키 가져오기
+
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
