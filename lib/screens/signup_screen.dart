@@ -20,6 +20,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _addressController = TextEditingController();
+  final _nickName = TextEditingController();
   String _selectedCountryCode = "+82"; // 기본 국가 코드
   List<Map<String, String>> _countryCodes = [];
 
@@ -80,6 +81,7 @@ class _SignupScreenState extends State<SignupScreen> {
           'gender': _selectedGender,
           // 성별 저장
           'workPlaces': userProvider.workPlaces,
+          'nickName' : userProvider.nickName.trim(),
           'createdAt': Timestamp.now(),
 
         });
@@ -89,6 +91,8 @@ class _SignupScreenState extends State<SignupScreen> {
         userProvider.setAddress(userProvider.address.trim());
         userProvider.setBirthDate(userProvider.birthDate.trim());
         userProvider.setGender(userProvider.gender.trim());
+        userProvider.setNickName(userProvider.nickName.trim());
+
 
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -300,12 +304,17 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
+                      TextField(
+                        decoration: const InputDecoration(labelText: '닉네임'),
+                        onChanged: userProvider.setNickName,
+                      ),
                       Column(
                         children: List.generate(
                           userProvider.workPlaces.length,
                               (index) =>
                               Row(
                                 children: [
+
                                   Expanded(
                                     child: TextField(
                                       decoration: const InputDecoration(

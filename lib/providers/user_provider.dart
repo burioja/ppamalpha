@@ -13,7 +13,7 @@ class UserProvider with ChangeNotifier {
   List<Map<String, String>> _workPlaces = [];
 
   // 추가된 변수
-  String _nickname = '';
+  String _nickName = '';
   String _profileImageUrl = '';
   String _birthDate = '';
   String _gender = '';
@@ -28,7 +28,7 @@ class UserProvider with ChangeNotifier {
   String get phoneNumber => _phoneNumber;
   String get address => _address;
   List<Map<String, String>> get workPlaces => _workPlaces;
-  String get nickname => _nickname;
+  String get nickName => _nickName;
   String get profileImageUrl => _profileImageUrl;
   String get birthDate => _birthDate;
   String get gender => _gender;
@@ -49,6 +49,11 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void setNickName(String nickName) {
+    _nickName = nickName;
+    notifyListeners();
+  }
+
   void setAddress(String address) async {
     final user = _auth.currentUser;
     if (user != null) {
@@ -65,11 +70,7 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 추가된 변수에 대한 Setter
-  void setNickname(String nickname) {
-    _nickname = nickname;
-    notifyListeners();
-  }
+
 
   void setProfileImageUrl(String url) {
     _profileImageUrl = url;
@@ -144,7 +145,7 @@ class UserProvider with ChangeNotifier {
           _workPlaces = List<Map<String, String>>.from(doc['workPlaces'] ?? []);
 
           // 추가된 데이터 가져오기
-          _nickname = doc['nickname'] ?? '';
+          _nickName = doc['nickName'] ?? '';
           _profileImageUrl = doc['profileImageUrl'] ?? '';
           _birthDate = doc['birthDate'] ?? '';
           _gender = doc['gender'] ?? '';
@@ -172,9 +173,10 @@ class UserProvider with ChangeNotifier {
           'phoneNumber': _phoneNumber,
           'address': _address,
           'workPlaces': _workPlaces,
+          'nickName': _nickName,
 
           // 추가된 데이터 업데이트
-          'nickname': _nickname,
+
           'profileImageUrl': _profileImageUrl,
           'birthDate': _birthDate,
           'gender': _gender,
