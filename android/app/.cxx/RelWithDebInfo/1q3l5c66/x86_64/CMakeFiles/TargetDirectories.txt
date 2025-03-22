@@ -1,0 +1,2 @@
+/Users/e11/StudioProjects/ppamproto/android/app/.cxx/RelWithDebInfo/1q3l5c66/x86_64/CMakeFiles/edit_cache.dir
+/Users/e11/StudioProjects/ppamproto/android/app/.cxx/RelWithDebInfo/1q3l5c66/x86_64/CMakeFiles/rebuild_cache.dir
