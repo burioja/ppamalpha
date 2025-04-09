@@ -7,11 +7,11 @@ class AddressSearchWidget extends StatefulWidget {
   final InputDecoration? decoration;
 
   const AddressSearchWidget({
-    Key? key,
+    super.key,
     required this.onAddressSelected,
     required this.controller,
     this.decoration,
-  }) : super(key: key);
+  });
 
   @override
   _AddressSearchWidgetState createState() => _AddressSearchWidgetState();
