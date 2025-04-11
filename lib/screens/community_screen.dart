@@ -89,16 +89,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => WritePostScreen(category: _menuItems[_selectedMenuIndex])), // 선택한 카테고리 전달
-          );
-        },
-        tooltip: 'Write Post',
-        child: const Icon(Icons.add),
-      ),
+
     );
   }
 }

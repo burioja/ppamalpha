@@ -8,6 +8,7 @@ import 'wallet_screen.dart';
 import '../providers/status_provider.dart';
 import '../widgets/user_status_widget.dart';
 import '../services/location_service.dart';
+import 'write_post_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -213,12 +214,26 @@ class _MainScreenState extends State<MainScreen> {
         children: List.generate(_icons.length, (index) {
           final isSelected = index == _selectedIndex;
           final isStore = _labels[index] == 'Store';
+          final isCommunityWriteButton = _selectedIndex == 0 && index == 0;
 
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: GestureDetector(
-                onTap: () => _onItemTapped(index),
+                onTap: () {
+                  if (isCommunityWriteButton) {
+                    // ✨ 글쓰기 버튼 눌렸을 때
+                    // 기본 카테고리를 Threads로 고정하거나 상태 관리 필요
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WritePostScreen(category: 'Threads'),
+                      ),
+                    );
+                  } else {
+                    _onItemTapped(index);
+                  }
+                },
                 child: Container(
                   height: 60,
                   decoration: BoxDecoration(
@@ -231,10 +246,13 @@ class _MainScreenState extends State<MainScreen> {
                         : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(_icons[index], color: isSelected ? Colors.blue : Colors.grey),
+                        Icon(
+                          isCommunityWriteButton ? Icons.edit : _icons[index],
+                          color: isSelected ? Colors.blue : Colors.grey,
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                          _labels[index],
+                          isCommunityWriteButton ? "글쓰기" : _labels[index],
                           style: TextStyle(
                             fontSize: 12,
                             color: isSelected ? Colors.blue : Colors.grey,
