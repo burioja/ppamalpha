@@ -142,35 +142,38 @@ class _MainScreenState extends State<MainScreen> {
     return Container(
       height: 70,
       color: Colors.blue,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // 위치 표시
           SizedBox(
-            width: 80,
+            width: 75,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.location_on, color: Colors.white),
-                const SizedBox(height: 4),
+                const Icon(Icons.location_on, color: Colors.white, size: 20),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
                     _currentLocation,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
               ],
             ),
           ),
+
           const SizedBox(width: 8),
-          // 검색창
+
+          // 검색창 (가운데)
           Expanded(
             child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
@@ -180,23 +183,30 @@ class _MainScreenState extends State<MainScreen> {
                 decoration: const InputDecoration(
                   hintText: '검색',
                   border: InputBorder.none,
+                  isCollapsed: true,
                 ),
                 onSubmitted: (query) {
-                  // 선택된 스크린에 따라 검색 수행
                   print('$_selectedIndex 검색: $query');
                 },
+                style: const TextStyle(fontSize: 14),
               ),
             ),
           ),
+
           const SizedBox(width: 8),
-          // 소지금
+
+          // 소지금 표시
           const SizedBox(
-            width: 80,
+            width: 85,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Text(
-                '₩ 900,000',
-                style: TextStyle(color: Colors.white, fontSize: 18),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '₩ 900,000',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
               ),
             ),
           ),
@@ -204,6 +214,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
+
 
   Widget _buildCustomNavBar() {
     return Container(

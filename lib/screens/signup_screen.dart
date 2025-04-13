@@ -1,12 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/address_search_widget.dart';
-import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
-// 🔥 API 키 가져오기
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -21,15 +23,14 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _addressController = TextEditingController();
   final _nickName = TextEditingController();
-  String _selectedCountryCode = "+82"; // 기본 국가 코드
+  String _selectedCountryCode = "+82";
   List<Map<String, String>> _countryCodes = [];
-
-  // 생년월일 및 성별 변수
   String? _selectedYear;
   String? _selectedMonth;
   String? _selectedDay;
   String? _selectedGender;
   List<bool> _isChecked = List.generate(5, (_) => false);
+  File? _profileImage;
 
   bool get _buttonActive => _isChecked[1] && _isChecked[2] && _isChecked[3];
 
@@ -39,66 +40,69 @@ class _SignupScreenState extends State<SignupScreen> {
     _loadCountryCodes();
   }
 
-  // JSON에서 국가 코드 데이터 로드
   Future<void> _loadCountryCodes() async {
-    String jsonString = await rootBundle.loadString(
-        'assets/country_codes.json');
+    String jsonString = await rootBundle.loadString('assets/country_codes.json');
     List<dynamic> jsonResponse = json.decode(jsonString);
     setState(() {
-      _countryCodes = jsonResponse.map((item) =>
-      {
+      _countryCodes = jsonResponse.map((item) => {
         "code": item["code"].toString(),
         "name": item["name"].toString()
       }).toList();
     });
   }
 
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _profileImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<String?> _uploadProfileImage(String userId) async {
+    if (_profileImage == null) return null;
+    try {
+      final ref = FirebaseStorage.instance.ref().child('user_profiles').child('$userId.jpg');
+      await ref.putFile(_profileImage!);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('이미지 업로드 실패: $e');
+      return null;
+    }
+  }
+
   Future<void> _signup() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
       );
       return;
     }
-
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: userProvider.email.trim(),
         password: _passwordController.text.trim(),
       );
-
       final User? user = userCredential.user;
       if (user != null) {
+        final profileImageUrl = await _uploadProfileImage(user.uid);
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'email': userProvider.email.trim(),
           'phoneNumber': userProvider.phoneNumber.trim(),
           'address': userProvider.address.trim(),
           'birthDate': '$_selectedYear-$_selectedMonth-$_selectedDay',
-          // 생년월일 저장
           'gender': _selectedGender,
-          // 성별 저장
           'workPlaces': userProvider.workPlaces,
-          'nickName' : userProvider.nickName.trim(),
+          'nickName': userProvider.nickName.trim(),
+          'profileImageUrl': profileImageUrl,
           'createdAt': Timestamp.now(),
-
         });
-
-        userProvider.setEmail(userProvider.email.trim());
-        userProvider.setPhoneNumber(userProvider.phoneNumber.trim());
-        userProvider.setAddress(userProvider.address.trim());
-        userProvider.setBirthDate(userProvider.birthDate.trim());
-        userProvider.setGender(userProvider.gender.trim());
-        userProvider.setNickName(userProvider.nickName.trim());
-
-
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('회원가입 성공!')),
         );
-
         Navigator.pushReplacementNamed(context, '/main');
       }
     } catch (e) {
@@ -109,10 +113,8 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-
   void _updateCheckState(int index) {
     setState(() {
-      // 모두 동의 체크박스일 경우
       if (index == 0) {
         bool isAllChecked = !_isChecked.every((element) => element);
         _isChecked = List.generate(5, (index) => isAllChecked);
@@ -126,15 +128,11 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
-
     return Scaffold(
       appBar: AppBar(title: const Text("회원가입")),
       body: Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme
-              .of(context)
-              .colorScheme
-              .copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
             primary: const Color(0xFF4D4DFF),
             onPrimary: Colors.white,
             secondary: const Color(0xFF4D4DFF),
@@ -142,7 +140,6 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
         child: Stepper(
           type: StepperType.horizontal,
-          elevation: 10,
           currentStep: _currentStep,
           onStepContinue: () {
             if (_currentStep < 2) {
@@ -163,207 +160,69 @@ class _SignupScreenState extends State<SignupScreen> {
           steps: [
             Step(
               title: const Text("기본 정보"),
-              content: SizedBox(
-                height: 450,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        decoration: const InputDecoration(labelText: '이메일'),
-                        onChanged: userProvider.setEmail,
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: '비밀번호'),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _confirmPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: '비밀번호 확인'),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // 생년월일 선택
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                  labelText: "출생 연도"),
-                              value: _selectedYear,
-                              items: List.generate(100, (index) {
-                                int year = DateTime
-                                    .now()
-                                    .year - index;
-                                return DropdownMenuItem(value: year.toString(),
-                                    child: Text(year.toString()));
-                              }),
-                              onChanged: (value) =>
-                                  setState(() => _selectedYear = value),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(labelText: "월"),
-                              value: _selectedMonth,
-                              items: List.generate(12, (index) {
-                                String month = (index + 1).toString().padLeft(
-                                    2, '0');
-                                return DropdownMenuItem(
-                                    value: month, child: Text(month));
-                              }),
-                              onChanged: (value) =>
-                                  setState(() => _selectedMonth = value),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(labelText: "일"),
-                              value: _selectedDay,
-                              items: List.generate(31, (index) {
-                                String day = (index + 1).toString().padLeft(
-                                    2, '0');
-                                return DropdownMenuItem(
-                                    value: day, child: Text(day));
-                              }),
-                              onChanged: (value) =>
-                                  setState(() => _selectedDay = value),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // 성별 선택
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: "성별"),
-                        value: _selectedGender,
-                        items: const [
-                          DropdownMenuItem(value: "남성", child: Text("남성")),
-                          DropdownMenuItem(value: "여성", child: Text("여성")),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedGender = value),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // 기존 핸드폰 입력 (국가 코드 포함)
-                      Row(
-                        children: [
-                          DropdownButton<String>(
-                            value: _selectedCountryCode,
-                            onChanged: (newValue) => setState(() =>
-                            _selectedCountryCode = newValue!),
-                            items: _countryCodes.map<DropdownMenuItem<String>>((
-                                country) {
-                              return DropdownMenuItem(value: country["code"],
-                                  child: Text(country["name"]!));
-                            }).toList(),
-                          ),
-                          Expanded(
-                            child: TextField(
-                              decoration: InputDecoration(labelText: '전화번호',
-                                  prefixText: '$_selectedCountryCode '),
-                              onChanged: (value) => userProvider.setPhoneNumber(
-                                  "$_selectedCountryCode$value"),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 60,
-                        child: AddressSearchWidget(
-                          onAddressSelected: (selectedAddress) {
-                            userProvider.setAddress(selectedAddress);
-                            _addressController.text = selectedAddress;
-                          },
-                          controller: _addressController,
-                          decoration: const InputDecoration(
-                            labelText: '주소',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
+              content: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.grey.shade300,
+                      backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
+                      child: _profileImage == null
+                          ? const Icon(Icons.camera_alt, color: Colors.white)
+                          : null,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    decoration: const InputDecoration(labelText: '이메일'),
+                    onChanged: userProvider.setEmail,
+                  ),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '비밀번호'),
+                  ),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '비밀번호 확인'),
+                  ),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "성별"),
+                    value: _selectedGender,
+                    items: const [
+                      DropdownMenuItem(value: "남성", child: Text("남성")),
+                      DropdownMenuItem(value: "여성", child: Text("여성")),
+                    ],
+                    onChanged: (value) => setState(() => _selectedGender = value),
+                  ),
+                ],
               ),
               isActive: _currentStep >= 0,
             ),
             Step(
               title: const Text("추가 정보"),
-              content: SizedBox(
-                height: 250,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      TextField(
-                        decoration: const InputDecoration(labelText: '닉네임'),
-                        onChanged: userProvider.setNickName,
-                      ),
-                      Column(
-                        children: List.generate(
-                          userProvider.workPlaces.length,
-                              (index) =>
-                              Row(
-                                children: [
-
-                                  Expanded(
-                                    child: TextField(
-                                      decoration: const InputDecoration(
-                                          labelText: '일터 입력'),
-                                      onChanged: (value) {
-                                        userProvider.updateWorkPlace(
-                                            index, 'workplaceinput', value);
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      decoration: const InputDecoration(
-                                          labelText: '일터 추가'),
-                                      onChanged: (value) {
-                                        userProvider.updateWorkPlace(
-                                            index, 'workplaceadd', value);
-                                      },
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () {
-                                      userProvider.removeWorkPlace(index);
-                                    },
-                                  ),
-                                ],
-                              ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: userProvider.addWorkPlace,
-                      ),
-                    ],
-                  ),
-                ),
+              content: TextField(
+                decoration: const InputDecoration(labelText: '닉네임'),
+                onChanged: userProvider.setNickName,
               ),
               isActive: _currentStep >= 1,
             ),
             Step(
               title: const Text("약관 동의"),
               content: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ..._renderCheckList(),
-                  const SizedBox(height: 20),
-
-                ],
+                children: List.generate(5, (index) => renderContainer(
+                  _isChecked[index],
+                  [
+                    '모두 동의',
+                    '만 14세 이상입니다.(필수)',
+                    '개인정보처리방침(필수)',
+                    '서비스 이용 약관(필수)',
+                    '이벤트 및 할인 혜택 안내 동의(선택)',
+                  ][index],
+                      () => _updateCheckState(index),
+                )),
               ),
               isActive: _currentStep >= 2,
             ),
@@ -373,27 +232,11 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// ✅ 약관 리스트 생성
-  List<Widget> _renderCheckList() {
-    List<String> labels = [
-      '모두 동의',
-      '만 14세 이상입니다.(필수)',
-      '개인정보처리방침(필수)',
-      '서비스 이용 약관(필수)',
-      '이벤트 및 할인 혜택 안내 동의(선택)',
-    ];
-
-    return List.generate(5, (index) => renderContainer(
-        _isChecked[index], labels[index], () => _updateCheckState(index)));
-  }
-
-  /// ✅ 약관 개별 항목 UI 생성
   Widget renderContainer(bool checked, String text, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.only(top: 20.0, bottom: 20.0),
-        color: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Row(
           children: [
             Container(
@@ -405,7 +248,7 @@ class _SignupScreenState extends State<SignupScreen> {
               child: Icon(Icons.check, color: checked ? Colors.white : Colors.grey, size: 18),
             ),
             const SizedBox(width: 15),
-            Text(text, style: const TextStyle(color: Colors.grey, fontSize: 18)),
+            Text(text, style: const TextStyle(color: Colors.grey, fontSize: 16)),
           ],
         ),
       ),

@@ -33,8 +33,9 @@ dependencies:
 
 
   firebase_core: ^3.6.0  # Firebase 초기화를 위한 패키지
-  firebase_core_web: ^2.18.1
+  firebase_core_web: ^2.19.0
   firebase_auth: ^5.3.1   # Firebase 인증을 위한 패키지
+  firebase_storage: ^12.3.6
   cloud_firestore: ^5.4.4
   google_maps_flutter: ^2.9.0
   geolocator: ^12.0.0
