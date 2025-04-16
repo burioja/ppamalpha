@@ -9,6 +9,7 @@ import '../providers/status_provider.dart';
 import '../widgets/user_status_widget.dart';
 import '../services/location_service.dart';
 import 'write_post_screen.dart';
+import 'budget_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -144,35 +145,12 @@ class _MainScreenState extends State<MainScreen> {
       color: Colors.blue,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 위치 표시
-          SizedBox(
-            width: 75,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.location_on, color: Colors.white, size: 20),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    _currentLocation,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // 검색창 (가운데)
+          // 🔍 검색창 (왼쪽)
           Expanded(
+            flex: 2,
             child: Container(
-              height: 36,
+              height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -183,7 +161,7 @@ class _MainScreenState extends State<MainScreen> {
                 decoration: const InputDecoration(
                   hintText: '검색',
                   border: InputBorder.none,
-                  isCollapsed: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 10), // 세로 가운데 정렬
                 ),
                 onSubmitted: (query) {
                   print('$_selectedIndex 검색: $query');
@@ -193,21 +171,75 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
-          // 소지금 표시
-          const SizedBox(
-            width: 85,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '₩ 900,000',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+          // 📍 위치 + 💰 소지금 (오른쪽)
+          Expanded(
+            flex: 1,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 위치
+                GestureDetector(
+                  onTap: () {
+                    // Map 화면으로 이동
+                    setState(() => _selectedIndex = 1); // Map index
+                  },
+                  child: Container(
+                    height: 24,
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.white, size: 16),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _currentLocation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 6),
+
+                // 소지금
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const BudgetScreen()),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '₩ 900,000',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
