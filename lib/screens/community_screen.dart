@@ -26,6 +26,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void _onPageChanged(int index) {
     setState(() => _selectedMenuIndex = index);
   }
+// 댓글 토글 상태 관리
+  Map<String, bool> _commentBoxVisibility = {};
 
   Widget _buildPostList(String collectionName) {
     return StreamBuilder<QuerySnapshot>(
@@ -44,57 +46,84 @@ class _CommunityScreenState extends State<CommunityScreen> {
           itemCount: posts.length,
           itemBuilder: (context, index) {
             final post = posts[index];
+            final postId = post.id;
             final data = post.data() as Map<String, dynamic>;
-            final String? imageUrl = data.containsKey('profileImageUrl') ? data['profileImageUrl'] : null;
+            final String? imageUrl = data['profileImageUrl'];
             final String title = data['title'] ?? '';
             final String content = data['content'] ?? '';
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 이미지
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey.shade200,
-                        image: imageUrl != null && imageUrl.isNotEmpty
-                            ? DecorationImage(
-                          image: NetworkImage(imageUrl),
-                          fit: BoxFit.cover,
-                        )
-                            : null,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 게시물 본문
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white,
                     ),
-                    const SizedBox(width: 12),
-                    // 텍스트
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey.shade200,
+                            image: imageUrl != null && imageUrl.isNotEmpty
+                                ? DecorationImage(
+                              image: NetworkImage(imageUrl),
+                              fit: BoxFit.cover,
+                            )
+                                : null,
                           ),
-                          const SizedBox(height: 6),
-                          Container(height: 1, color: Colors.grey.shade300),
-                          const SizedBox(height: 6),
-                          Text(content, style: const TextStyle(fontSize: 14)),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(height: 6),
+                              Container(height: 1, color: Colors.grey.shade300),
+                              const SizedBox(height: 6),
+                              Text(content, style: const TextStyle(fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // 댓글 버튼
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _commentBoxVisibility[postId] =
+                          !(_commentBoxVisibility[postId] ?? false);
+                        });
+                      },
+                      icon: const Icon(Icons.comment, size: 16),
+                      label: const Text("댓글 달기"),
+                    ),
+                  ),
+
+                  // 댓글 입력창 & 목록
+                  if (_commentBoxVisibility[postId] == true)
+                    _buildCommentsSection(postId, collectionName),
+
+                  const SizedBox(height: 10),
+                ],
               ),
             );
           },
@@ -103,7 +132,72 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  @override
+  Widget _buildCommentsSection(String postId, String collectionName) {
+    final TextEditingController _commentController = TextEditingController();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 댓글 목록
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection(collectionName)
+              .doc(postId)
+              .collection('comments')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const SizedBox();
+            final comments = snapshot.data!.docs;
+            return Column(
+              children: comments.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return ListTile(
+                  title: Text(data['text'] ?? ''),
+                  subtitle: Text(data['author'] ?? '익명'),
+                );
+              }).toList(),
+            );
+          },
+        ),
+
+        // 댓글 입력창
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _commentController,
+                decoration: const InputDecoration(
+                  hintText: '댓글을 입력하세요',
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.send),
+              onPressed: () async {
+                final text = _commentController.text.trim();
+                if (text.isNotEmpty) {
+                  await FirebaseFirestore.instance
+                      .collection(collectionName)
+                      .doc(postId)
+                      .collection('comments')
+                      .add({
+                    'text': text,
+                    'author': '익명', // 필요 시 사용자 이름으로 교체
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+                  _commentController.clear();
+                }
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
@@ -163,4 +257,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ),
     );
   }
+
 }
+

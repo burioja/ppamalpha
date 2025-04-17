@@ -146,7 +146,6 @@ class _MainScreenState extends State<MainScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          // 🔍 검색창 (왼쪽)
           Expanded(
             flex: 2,
             child: Container(
@@ -156,35 +155,30 @@ class _MainScreenState extends State<MainScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: '검색',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10), // 세로 가운데 정렬
+              child: Center(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: '검색',
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                  ),
+                  onSubmitted: (query) {
+                    print('$_selectedIndex 검색: $query');
+                  },
+                  style: const TextStyle(fontSize: 14),
                 ),
-                onSubmitted: (query) {
-                  print('$_selectedIndex 검색: $query');
-                },
-                style: const TextStyle(fontSize: 14),
               ),
             ),
           ),
-
           const SizedBox(width: 10),
-
-          // 📍 위치 + 💰 소지금 (오른쪽)
           Expanded(
             flex: 1,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 위치
                 GestureDetector(
-                  onTap: () {
-                    // Map 화면으로 이동
-                    setState(() => _selectedIndex = 1); // Map index
-                  },
+                  onTap: () => setState(() => _selectedIndex = 1),
                   child: Container(
                     height: 24,
                     width: double.infinity,
@@ -211,16 +205,10 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
-                // 소지금
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const BudgetScreen()),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const BudgetScreen()));
                   },
                   child: Container(
                     width: double.infinity,
@@ -247,7 +235,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-
   Widget _buildCustomNavBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
@@ -265,13 +252,10 @@ class _MainScreenState extends State<MainScreen> {
               child: GestureDetector(
                 onTap: () {
                   if (isCommunityWriteButton) {
-                    // ✨ 글쓰기 버튼 눌렸을 때
-                    // 기본 카테고리를 Threads로 고정하거나 상태 관리 필요
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => WritePostScreen(category: 'Threads'),
-                      ),
+                        builder: (_) => WritePostScreen(category: 'Threads'),                      ),
                     );
                   } else {
                     _onItemTapped(index);
