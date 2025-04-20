@@ -26,7 +26,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void _onPageChanged(int index) {
     setState(() => _selectedMenuIndex = index);
   }
-// 댓글 토글 상태 관리
+
   Map<String, bool> _commentBoxVisibility = {};
 
   Widget _buildPostList(String collectionName) {
@@ -51,13 +51,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
             final String? imageUrl = data['profileImageUrl'];
             final String title = data['title'] ?? '';
             final String content = data['content'] ?? '';
+            final Map<String, dynamic> votes = data['votes'] ?? {};
+            final int totalVotes = votes.values.fold(0, (sum, val) => sum + (val as int));
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 게시물 본문
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -101,9 +102,31 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  if (collectionName == 'Votes' && votes.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        children: votes.entries.map((entry) {
+                          final percentage = totalVotes == 0 ? 0.0 : (entry.value / totalVotes);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${entry.key} (${(percentage * 100).toStringAsFixed(1)}%)'),
+                                const SizedBox(height: 4),
+                                LinearProgressIndicator(
+                                  value: percentage,
+                                  backgroundColor: Colors.grey.shade300,
+                                  color: Colors.blue,
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
 
-                  // 댓글 버튼
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
@@ -118,7 +141,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     ),
                   ),
 
-                  // 댓글 입력창 & 목록
                   if (_commentBoxVisibility[postId] == true)
                     _buildCommentsSection(postId, collectionName),
 
@@ -138,7 +160,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 댓글 목록
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(collectionName)
@@ -160,8 +181,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
             );
           },
         ),
-
-        // 댓글 입력창
         Row(
           children: [
             Expanded(
@@ -183,7 +202,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       .collection('comments')
                       .add({
                     'text': text,
-                    'author': '익명', // 필요 시 사용자 이름으로 교체
+                    'author': '익명',
                     'timestamp': FieldValue.serverTimestamp(),
                   });
                   _commentController.clear();
@@ -196,13 +215,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-
-    @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // 상단 메뉴
           Container(
             padding: const EdgeInsets.all(8),
             color: Colors.white,
@@ -216,13 +233,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        FittedBox( // 👉 자동 줄이기
+                        FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
                             _menuItems[index],
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
                               color: isSelected ? Colors.blue : Colors.black,
                             ),
                           ),
@@ -241,8 +259,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
               }),
             ),
           ),
-
-          // 좌우 드래그 가능한 페이지
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -257,6 +273,4 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ),
     );
   }
-
 }
-
