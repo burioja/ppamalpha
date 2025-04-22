@@ -27,7 +27,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     setState(() => _selectedMenuIndex = index);
   }
 
-  Map<String, bool> _commentBoxVisibility = {};
+  final Map<String, bool> _commentBoxVisibility = {};
 
   Widget _buildPostList(String collectionName) {
     return StreamBuilder<QuerySnapshot>(
@@ -155,7 +155,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Widget _buildCommentsSection(String postId, String collectionName) {
-    final TextEditingController _commentController = TextEditingController();
+    final TextEditingController commentController = TextEditingController();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,7 +185,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           children: [
             Expanded(
               child: TextField(
-                controller: _commentController,
+                controller: commentController,
                 decoration: const InputDecoration(
                   hintText: '댓글을 입력하세요',
                 ),
@@ -194,7 +194,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             IconButton(
               icon: const Icon(Icons.send),
               onPressed: () async {
-                final text = _commentController.text.trim();
+                final text = commentController.text.trim();
                 if (text.isNotEmpty) {
                   await FirebaseFirestore.instance
                       .collection(collectionName)
@@ -205,7 +205,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     'author': '익명',
                     'timestamp': FieldValue.serverTimestamp(),
                   });
-                  _commentController.clear();
+                  commentController.clear();
                 }
               },
             ),

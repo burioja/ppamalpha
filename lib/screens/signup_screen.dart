@@ -8,7 +8,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
-import '../widgets/address_search_widget.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -23,7 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _addressController = TextEditingController();
   final _nickName = TextEditingController();
-  String _selectedCountryCode = "+82";
+  final String _selectedCountryCode = "+82";
   List<Map<String, String>> _countryCodes = [];
   String? _selectedYear;
   String? _selectedMonth;
