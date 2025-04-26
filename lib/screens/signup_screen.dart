@@ -22,7 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _addressController = TextEditingController();
   final _nickName = TextEditingController();
-  final String _selectedCountryCode = "+82";
+  final String $$$E$_selectedCountryCode = "+82";
   List<Map<String, String>> _countryCodes = [];
   String? _selectedYear;
   String? _selectedMonth;
