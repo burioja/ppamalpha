@@ -10,6 +10,9 @@ import '../widgets/user_status_widget.dart';
 import '../services/location_service.dart';
 import 'write_post_screen.dart';
 import 'budget_screen.dart';
+import '../widgets/statusBar.dart';
+
+
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -156,18 +159,8 @@ class _MainScreenState extends State<MainScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Center(
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    hintText: '검색',
-                    border: InputBorder.none,
-                    isCollapsed: true,
-                  ),
-                  onSubmitted: (query) {
-                    print('$_selectedIndex 검색: $query');
-                  },
-                  style: const TextStyle(fontSize: 14),
-                ),
+                child: const StatusBar(),
+
               ),
             ),
           ),

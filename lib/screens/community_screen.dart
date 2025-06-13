@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../providers/search_provider.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -40,7 +42,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final posts = snapshot.data!.docs;
+        final searchQuery = Provider.of<SearchProvider>(context).query; // ✅ 추가됨
+
+        final posts = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final String title = data['title'] ?? '';
+          final String content = data['content'] ?? '';
+
+          // 🔧 수정됨: 검색어가 포함된 게시글만 반환
+          return searchQuery.isEmpty ||
+              title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              content.toLowerCase().contains(searchQuery.toLowerCase());
+        }).toList();
 
         return ListView.builder(
           itemCount: posts.length,

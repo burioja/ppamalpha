@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:ppamproto/providers/search_provider.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
@@ -49,6 +50,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<UserProvider>(
           create: (_) => UserProvider(),
         ),
+        ChangeNotifierProvider<SearchProvider>(
+          create: (_) => SearchProvider()
+        ),
+
       ],
       child: MaterialApp(
         scrollBehavior: const MaterialScrollBehavior().copyWith(
