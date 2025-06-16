@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'providers/status_provider.dart';
 import 'dart:ui';
 import 'providers/user_provider.dart';
+import 'providers/screen_provider.dart';
 
 
 void main() async {
@@ -52,6 +53,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<SearchProvider>(
           create: (_) => SearchProvider()
+        ),
+        ChangeNotifierProvider<ScreenProvider>(
+            create: (_) => ScreenProvider()
         ),
 
       ],

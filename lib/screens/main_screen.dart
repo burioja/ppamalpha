@@ -10,7 +10,10 @@ import '../widgets/user_status_widget.dart';
 import '../services/location_service.dart';
 import 'write_post_screen.dart';
 import 'budget_screen.dart';
-import '../widgets/statusBar.dart';
+import '../widgets/status_bar.dart';
+import '../providers/search_provider.dart';
+import '../widgets/mode_switcher.dart';
+
 
 
 
@@ -22,6 +25,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  bool _isWorkMode = true; // ✅ 이 줄을 추가해줘야 모든 에러가 사라져
+
   int _selectedIndex = 2;
   String _currentLocation = '위치 불러오는 중...';
   final TextEditingController _searchController = TextEditingController();
@@ -74,6 +79,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onItemTapped(int index) {
+    Provider.of<SearchProvider>(context, listen: false).setSelectedTabIndex(index); // 🔧 탭 변경 시 검색 상태에 반영
     setState(() {
       _selectedIndex = index;
     });
@@ -145,10 +151,20 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildTopBar() {
     return Container(
       height: 70,
-      color: Colors.blue,
+      color: _isWorkMode ? Colors.redAccent : Colors.blue, // 배경색도 모드에 따라 변경 가능
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
+          ModeSwitcher(
+            isWorkMode: _isWorkMode,
+            onToggle: () {
+              setState(() {
+                _isWorkMode = !_isWorkMode;
+              });
+            },
+          ),
+          const SizedBox(width: 8),
+
           Expanded(
             flex: 2,
             child: Container(
