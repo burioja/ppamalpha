@@ -15,38 +15,39 @@ class ModeSwitcher extends StatelessWidget {
     return GestureDetector(
       onTap: onToggle,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
         decoration: BoxDecoration(
-          color: isWorkMode ? const Color(0xFFFF6C6C) : const Color(0xFF5A68FF),
+          color: isWorkMode ? const Color(0xFFFF6666) : const Color(0xF4D4DFF),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
             Image.asset(
               isWorkMode
-                  ? 'assets/images/logo_work.png'
-                  : 'assets/images/logo_life.png',
+                  ? 'assets/images/logo_life.png'
+                  : 'assets/images/logo_work.png',
               width: 30,
               height: 30,
             ),
             const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,       // 🔧 세로축(상-하 방향) 중앙 정렬
               children: [
-                Text(
-                  'Life',
-                  style: TextStyle(
-                    color: isWorkMode ? Colors.grey[300] : Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
                 Text(
                   'Work',
                   style: TextStyle(
-                    color: isWorkMode ? Colors.white : Colors.grey[300],
+                    color: isWorkMode ?  Color(0xFFFF6666) : Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  'Life',
+                  style: TextStyle(
+                    color: isWorkMode ? Colors.white : Color(0xFF4D4DFF),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
               ],

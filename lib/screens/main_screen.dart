@@ -10,6 +10,8 @@ import '../widgets/user_status_widget.dart';
 import '../services/location_service.dart';
 import 'write_post_screen.dart';
 import 'budget_screen.dart';
+import 'search_screen.dart';
+
 import '../widgets/status_bar.dart';
 import '../providers/search_provider.dart';
 import '../widgets/mode_switcher.dart';
@@ -25,8 +27,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  bool _isWorkMode = true; // ✅ 이 줄을 추가해줘야 모든 에러가 사라져
-
+  bool _isWorkMode = true;
   int _selectedIndex = 2;
   String _currentLocation = '위치 불러오는 중...';
   final TextEditingController _searchController = TextEditingController();
@@ -150,11 +151,12 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildTopBar() {
     return Container(
-      height: 70,
-      color: _isWorkMode ? Colors.redAccent : Colors.blue, // 배경색도 모드에 따라 변경 가능
+      height: 50,
+      color: _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
+          // 🔁 ModeSwitcher
           ModeSwitcher(
             isWorkMode: _isWorkMode,
             onToggle: () {
@@ -163,81 +165,60 @@ class _MainScreenState extends State<MainScreen> {
               });
             },
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
+          // 📍 위치 (누르면 맵 화면으로 이동)
           Expanded(
-            flex: 2,
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: const StatusBar(),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _selectedIndex = 1); // 또는 맵 전용 스크린 이동
+              },
+              child: Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center, // ← 수평 가운데 정렬
+                  children: [
 
+                    const Icon(Icons.location_on, size: 16, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _currentLocation,
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            flex: 1,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _selectedIndex = 1),
-                  child: Container(
-                    height: 24,
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.white, size: 16),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            _currentLocation,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const BudgetScreen()));
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    height: 24,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '₩ 900,000',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+
+          // 💰 M 아이콘 (예산 화면 이동)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen()));
+            },
+            child: Image.asset(
+              'assets/images/icon_budget.png', // ← 실제 경로에 맞게 설정 필요
+              width: 22,
+              height: 22,
+              color: Colors.white,
             ),
+          ),
+          const SizedBox(width: 12),
+
+          // 🔍 검색 아이콘 (검색창 전환)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())); // TODO: 검색 스크린 구현
+            },
+            child: const Icon(Icons.search, size: 22, color: Colors.white),
           ),
         ],
       ),

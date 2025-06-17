@@ -25,7 +25,7 @@ class StatusBar extends StatelessWidget {
       child: AbsorbPointer( // 🔧 클릭만 감지하고 TextField는 읽기 모드
         absorbing: selectedIndex == 1, // 🔧 지도 탭일 땐 입력 방지
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           color: Colors.white,
           child: TextField(
             decoration: const InputDecoration(
