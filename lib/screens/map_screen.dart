@@ -6,7 +6,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({Key? key}) : super(key: key);
+
+  static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
   _MapScreenState createState() => _MapScreenState();
@@ -16,9 +18,8 @@ class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
   Marker? _searchMarker;
-  final TextEditingController _searchController = TextEditingController();
-  final String _googleApiKey = "YOUR_API_KEY_HERE"; // 🔑 실제 API 키로 교체 필요
-  bool _isSearchVisible = false;
+  final String _googleApiKey = "YOUR_API_KEY_HERE"; // 실제 키로 바꿔줘
+
   List<String> _suggestions = [];
   String? _mapStyle;
 
@@ -30,6 +31,14 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _setInitialLocation();
     _loadMapStyle();
+  }
+
+  void goToCurrentLocation() {
+    if (_currentPosition != null && mapController != null) {
+      mapController.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentPosition!, 15.0),
+      );
+    }
   }
 
   Future<void> _loadMapStyle() async {
@@ -194,26 +203,8 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
 
-dd
           // 현재 위치 버튼
-          Positioned(
-            top: 80,
-            right: 10,
-            child: FloatingActionButton(
-              onPressed: () {
-                if (_currentPosition != null) {
-                  mapController.animateCamera(
-                    CameraUpdate.newCameraPosition(
-                      CameraPosition(target: _currentPosition!, zoom: 15.0),
-                    ),
-                  );
-                }
-              },
-              mini: true,
-              backgroundColor: Colors.blue,
-              child: const Icon(Icons.my_location),
-            ),
-          ),
+
         ],
       ),
     );

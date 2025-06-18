@@ -34,7 +34,7 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplaces() async {
     List<dynamic>? workPlaces = userDoc['workPlaces'] as List<dynamic>?;
 
     // 기본 customer 데이터
-    WorkplaceData customerData = WorkplaceData(['Customer'], Colors.grey.shade300);
+    WorkplaceData customerData = WorkplaceData(['Customer'], Colors.transparent);
 
     if (workPlaces == null || workPlaces.isEmpty) {
       workplacesList.add([customerData]);

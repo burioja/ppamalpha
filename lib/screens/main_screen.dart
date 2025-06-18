@@ -11,8 +11,6 @@ import '../services/location_service.dart';
 import 'write_post_screen.dart';
 import 'budget_screen.dart';
 import 'search_screen.dart';
-
-import '../widgets/status_bar.dart';
 import '../providers/search_provider.dart';
 import '../widgets/mode_switcher.dart';
 
@@ -30,12 +28,11 @@ class _MainScreenState extends State<MainScreen> {
   bool _isWorkMode = true;
   int _selectedIndex = 2;
   String _currentLocation = '위치 불러오는 중...';
-  final TextEditingController _searchController = TextEditingController();
 
   final List<Widget> _widgetOptions = [
     const CommunityScreen(),
-    const MapScreen(),
-    const StoreScreen(),
+    MapScreen(key: MapScreen.mapKey), // ✅ 수정된 부분
+    const StoreScreen(),              // ✅ 쉼표 추가
     const ShopScreen(),
     const WalletScreen(),
   ];
@@ -226,37 +223,43 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildCustomNavBar() {
+    final Color accentColor = _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF);
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      color: Colors.white,
+      padding: const EdgeInsets.only(top: 5, bottom: 15, left: 8, right: 8),
+      color: Colors.transparent,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(_icons.length, (index) {
           final isSelected = index == _selectedIndex;
           final isStore = _labels[index] == 'Store';
           final isCommunityWriteButton = _selectedIndex == 0 && index == 0;
+          final isMapLocationButton = _selectedIndex == 1 && index == 1;
 
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 0),
               child: GestureDetector(
                 onTap: () {
                   if (isCommunityWriteButton) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => WritePostScreen(category: 'Threads'),                      ),
+                        builder: (_) => WritePostScreen(category: 'Threads'),
+                      ),
                     );
+                  } else if (isMapLocationButton) {
+                    final state = MapScreen.mapKey.currentState;
+                    if (state != null) {
+                      state.goToCurrentLocation();
+                    }
                   } else {
                     _onItemTapped(index);
                   }
                 },
                 child: Container(
                   height: 60,
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue.shade100 : Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+
                   child: Center(
                     child: isStore
                         ? _buildStoreCarousel()
@@ -264,15 +267,23 @@ class _MainScreenState extends State<MainScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isCommunityWriteButton ? Icons.edit : _icons[index],
-                          color: isSelected ? Colors.blue : Colors.grey,
+                          isCommunityWriteButton
+                              ? Icons.edit
+                              : isMapLocationButton
+                              ? Icons.my_location
+                              : _icons[index],
+                          color: isSelected ? accentColor : Colors.grey,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isCommunityWriteButton ? "글쓰기" : _labels[index],
+                          isCommunityWriteButton
+                              ? "글쓰기"
+                              : isMapLocationButton
+                              ? "내 위치"
+                              : _labels[index],
                           style: TextStyle(
                             fontSize: 12,
-                            color: isSelected ? Colors.blue : Colors.grey,
+                            color: isSelected ? accentColor : Colors.grey,
                           ),
                         ),
                       ],
