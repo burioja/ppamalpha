@@ -18,7 +18,7 @@ class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
   Marker? _searchMarker;
-  final String _googleApiKey = "YOUR_API_KEY_HERE"; // 실제 키로 바꿔줘
+  final String _googleApiKey = "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg"; 
 
   List<String> _suggestions = [];
   String? _mapStyle;
