@@ -12,6 +12,7 @@ import 'providers/status_provider.dart';
 import 'dart:ui';
 import 'providers/user_provider.dart';
 import 'providers/screen_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 void main() async {
@@ -21,6 +22,7 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
   } catch (e) {
     print('Firebase 초기화 에러: $e');
   }
