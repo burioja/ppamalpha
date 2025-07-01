@@ -109,41 +109,27 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             TextButton(
               onPressed: () {
-                print("📍 이 위치에 뿌리기: $_longPressedLatLng");
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PostPlaceScreen(), // 인자 없이!
+                  ),
+                );
+
                 setState(() {
                   _longPressedLatLng = null;
                 });
               },
-              child: const Text("이 위치에 뿌리기"),
+              child: const Text("이 주소에 뿌리기"),
             ),
             TextButton(
-              onPressed: () async {
-                if (_longPressedLatLng != null) {
-                  try {
-                    List<Placemark> placemarks = await placemarkFromCoordinates(
-                      _longPressedLatLng!.latitude,
-                      _longPressedLatLng!.longitude,
-                    );
-                    if (placemarks.isNotEmpty) {
-                      final placemark = placemarks.first;
-                      final address = "${placemark.locality ?? ''} ${placemark.street ?? ''}".trim();
-
-                      // 👉 PostPlaceScreen으로 주소 넘기기
-                      if (!mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PostPlaceScreen(
-                            latLng: _longPressedLatLng!,
-                            address: address,
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    print("역지오코딩 오류: $e");
-                  }
-                }
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PostPlaceScreen(), // 인자 없이!
+                  ),
+                );
 
                 setState(() {
                   _longPressedLatLng = null;

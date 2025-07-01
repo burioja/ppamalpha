@@ -1,33 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class PostPlaceScreen extends StatelessWidget {
-  final LatLng latLng;
-  final String address;
-
-  const PostPlaceScreen({
-    super.key,
-    required this.latLng,
-    required this.address,
-  });
+  const PostPlaceScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Address or GPS loc."),
+        backgroundColor: Colors.black87,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 📍 위치 정보 출력
-            Text("📌 위도: ${latLng.latitude}", style: const TextStyle(fontSize: 14)),
-            Text("📌 경도: ${latLng.longitude}", style: const TextStyle(fontSize: 14)),
-            Text("📍 주소: $address", style: const TextStyle(fontSize: 14)),
-            const Divider(height: 24, thickness: 1),
-
             // 상단 설정
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -37,31 +24,58 @@ class PostPlaceScreen extends StatelessWidget {
                 Text("Recent Template"),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
             // 포스트 선택 영역
             Container(
-              height: 100,
-              color: Colors.orange[100],
+              height: 120,
               alignment: Alignment.center,
-              child: const Text("Select Post Carousel"),
+              decoration: BoxDecoration(
+                color: Colors.orange[100],
+                border: Border.all(color: Colors.orange),
+              ),
+              child: const Text(
+                "Select Post Carousel",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
             ),
             const SizedBox(height: 16),
 
-            // 가격/수량
+            // 가격/수량/총액
             Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: () {}, child: const Text("Price"))),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text("Price"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.lightBlue[100],
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: ElevatedButton(onPressed: () {}, child: const Text("Amount"))),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text("Amount"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.lightBlue[100],
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: OutlinedButton(onPressed: () {}, child: const Text("Total price"))),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {},
+                    child: const Text("Total price"),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // 기능 선택
-            const Text("Function"),
+            // 기능(Function)
+            const Text("Function", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -71,10 +85,10 @@ class PostPlaceScreen extends StatelessWidget {
                 _purpleButton("Reply"),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // 타겟 설정
-            const Text("Target"),
+            // 타겟(Target)
+            const Text("Target", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -84,16 +98,17 @@ class PostPlaceScreen extends StatelessWidget {
                 _purpleButton("Age(max)"),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
 
             // PPAM 버튼
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  // TODO: 전송 처리
+                  // TODO: 실제 전송 로직
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[200],
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                 ),
                 child: const Text("PPAM!"),
               ),
@@ -104,10 +119,14 @@ class PostPlaceScreen extends StatelessWidget {
     );
   }
 
-  static Widget _purpleButton(String label) {
+  Widget _purpleButton(String label) {
     return ElevatedButton(
       onPressed: () {},
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.purple,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
       child: Text(label),
     );
   }
