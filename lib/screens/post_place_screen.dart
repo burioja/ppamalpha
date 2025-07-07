@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
 
-class PostPlaceScreen extends StatelessWidget {
+class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
+
+  @override
+  State<PostPlaceScreen> createState() => _PostPlaceScreenState();
+}
+
+class _PostPlaceScreenState extends State<PostPlaceScreen> {
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
+
+  int get _totalPrice {
+    final price = int.tryParse(_priceController.text) ?? 0;
+    final amount = int.tryParse(_amountController.text) ?? 0;
+    return price * amount;
+  }
+
+  final TextEditingController _periodController = TextEditingController();
+  String _periodUnit = 'Hour';
+  bool _usingSelected = false;
+  bool _replySelected = false;
+
+  String _gender = '상관없음';
+  final TextEditingController _ageMinController = TextEditingController();
+  final TextEditingController _ageMaxController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -45,29 +68,32 @@ class PostPlaceScreen extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    child: const Text("Price"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlue[100],
-                    ),
+                  child: TextField(
+                    controller: _priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Price"),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    child: const Text("Amount"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlue[100],
-                    ),
+                  child: TextField(
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Amount"),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    child: const Text("Total price"),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text("Total: $_totalPrice"),
                   ),
                 ),
               ],
@@ -77,12 +103,40 @@ class PostPlaceScreen extends StatelessWidget {
             // 기능(Function)
             const Text("Function", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _periodController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Period"),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: _periodUnit,
+                  items: const [
+                    DropdownMenuItem(value: 'Hour', child: Text('Hour')),
+                    DropdownMenuItem(value: 'Day', child: Text('Day')),
+                    DropdownMenuItem(value: 'Week', child: Text('Week')),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _periodUnit = value!);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
-                _purpleButton("Period"),
-                _purpleButton("Using"),
-                _purpleButton("Reply"),
+                _toggleButton("Using", _usingSelected, () {
+                  setState(() => _usingSelected = !_usingSelected);
+                }),
+                _toggleButton("Reply", _replySelected, () {
+                  setState(() => _replySelected = !_replySelected);
+                }),
               ],
             ),
             const SizedBox(height: 24),
@@ -90,12 +144,35 @@ class PostPlaceScreen extends StatelessWidget {
             // 타겟(Target)
             const Text("Target", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
+            DropdownButton<String>(
+              value: _gender,
+              items: const [
+                DropdownMenuItem(value: '남자', child: Text('남자')),
+                DropdownMenuItem(value: '여자', child: Text('여자')),
+                DropdownMenuItem(value: '상관없음', child: Text('상관없음')),
+              ],
+              onChanged: (value) {
+                setState(() => _gender = value!);
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                _purpleButton("Gender"),
-                _purpleButton("Age(min)"),
-                _purpleButton("Age(max)"),
+                Expanded(
+                  child: TextField(
+                    controller: _ageMinController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Age (min)"),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _ageMaxController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Age (max)"),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -104,7 +181,7 @@ class PostPlaceScreen extends StatelessWidget {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  // TODO: 실제 전송 로직
+                  // TODO: 전송 로직 넣기
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[200],
@@ -119,13 +196,12 @@ class PostPlaceScreen extends StatelessWidget {
     );
   }
 
-  Widget _purpleButton(String label) {
+  Widget _toggleButton(String label, bool selected, VoidCallback onPressed) {
     return ElevatedButton(
-      onPressed: () {},
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: selected ? Colors.purple : Colors.grey[300],
+        foregroundColor: selected ? Colors.white : Colors.black,
       ),
       child: Text(label),
     );
