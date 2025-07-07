@@ -29,12 +29,27 @@ class _MapScreenState extends State<MapScreen> {
 
   String? _mapStyle;
 
+  BitmapDescriptor? _customMarkerIcon;
+
   @override
   void initState() {
     super.initState();
     _setInitialLocation();
     _loadMapStyle();
+    _loadCustomMarker();
   }
+
+  Future<void> _loadCustomMarker() async {
+    final icon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(size: Size(48, 48)),
+      'assets/images/ppam_work.png',
+    );
+    setState(() {
+      _customMarkerIcon = icon;
+    });
+  }
+
+
 
   void goToCurrentLocation() {
     if (_currentPosition != null) {
@@ -80,11 +95,29 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _handleLongPress(LatLng position) async {
-    final screenCoord = await mapController.getScreenCoordinate(position);
-    setState(() {
-      _longPressedLatLng = position;
-      _popupScreenCoord = screenCoord;
-    });
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PostPlaceScreen(),
+      ),
+    );
+
+    if (result != null) {
+      // ✅ 입력값 받아서 마커 추가
+      final newMarker = Marker(
+        markerId: MarkerId(DateTime.now().toIso8601String()),
+        position: position,
+        infoWindow: InfoWindow(
+          title: 'PPAM Marker',
+          snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
+        ),
+        icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,  // ✅ 커스텀 마커 적용
+      );
+
+      setState(() {
+        _searchMarker = newMarker;
+      });
+    }
   }
 
   Widget _buildPopupWidget() {
@@ -123,17 +156,26 @@ class _MapScreenState extends State<MapScreen> {
               child: const Text("이 주소에 뿌리기"),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const PostPlaceScreen(), // 인자 없이!
-                  ),
+                  MaterialPageRoute(builder: (_) => const PostPlaceScreen()),
                 );
-
-                setState(() {
-                  _longPressedLatLng = null;
-                });
+                if (result != null) {
+                  final newMarker = Marker(
+                    markerId: MarkerId(DateTime.now().toIso8601String()),
+                    position: _longPressedLatLng!,
+                    infoWindow: InfoWindow(
+                      title: 'PPAM Marker',
+                      snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
+                    ),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+                  );
+                  setState(() {
+                    _searchMarker = newMarker;
+                    _longPressedLatLng = null;
+                  });
+                }
               },
               child: const Text("이 주소에 뿌리기"),
             ),

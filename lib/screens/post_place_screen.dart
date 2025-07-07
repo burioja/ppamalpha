@@ -181,7 +181,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  // TODO: 전송 로직 넣기
+                  Navigator.pop(context, {
+                    'price': _priceController.text,
+                    'amount': _amountController.text,
+                    'totalPrice': _totalPrice,
+                    'period': _periodController.text,
+                    'periodUnit': _periodUnit,
+                    'using': _usingSelected,
+                    'reply': _replySelected,
+                    'gender': _gender,
+                    'ageMin': _ageMinController.text,
+                    'ageMax': _ageMaxController.text,
+                  });
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[200],
@@ -206,4 +217,5 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       child: Text(label),
     );
   }
+
 }
