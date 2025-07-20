@@ -131,7 +131,7 @@ class _MainScreenState extends State<MainScreen> {
                       child: Center(
                         child: Text(
                           item.data[hIdx],
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
                           textAlign: TextAlign.center,
                         ),
                       ),

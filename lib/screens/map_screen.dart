@@ -4,12 +4,13 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:geocoding/geocoding.dart'; // 꼭 임포트해줘
-import 'post_place_screen.dart'; // ← 파일 위치에 맞게 경로 수정 필요
+import 'package:geocoding/geocoding.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'post_place_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({Key? key}) : super(key: key);
-
   static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
@@ -19,17 +20,13 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
-  Marker? _searchMarker;
-  final String _googleApiKey = "YOUR_API_KEY"; // ← 너의 키로 바꿔줘
-
+  final String _googleApiKey = "YOUR_API_KEY"; // 바꿔줘
   final GlobalKey mapWidgetKey = GlobalKey();
-
   LatLng? _longPressedLatLng;
-  ScreenCoordinate? _popupScreenCoord;
-
   String? _mapStyle;
-
   BitmapDescriptor? _customMarkerIcon;
+  final Set<Marker> _markers = {};
+  final userId = FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void initState() {
@@ -37,32 +34,12 @@ class _MapScreenState extends State<MapScreen> {
     _setInitialLocation();
     _loadMapStyle();
     _loadCustomMarker();
-  }
-
-  Future<void> _loadCustomMarker() async {
-    final icon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/images/ppam_work.png',
-    );
-    setState(() {
-      _customMarkerIcon = icon;
-    });
-  }
-
-
-
-  void goToCurrentLocation() {
-    if (_currentPosition != null) {
-      mapController.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentPosition!, 15.0),
-      );
-    }
+    _loadMarkersFromFirestore();
   }
 
   Future<void> _loadMapStyle() async {
     try {
-      final String style =
-      await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
+      final style = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
       setState(() {
         _mapStyle = style;
       });
@@ -79,43 +56,112 @@ class _MapScreenState extends State<MapScreen> {
             ? LatLng(position.latitude, position.longitude)
             : const LatLng(37.495872, 127.025046);
       });
-    } catch (e) {
-      print('초기 위치 설정 오류: $e');
-      setState(() {
-        _currentPosition = const LatLng(37.492894, 127.012469);
-      });
+    } catch (_) {
+      _currentPosition = const LatLng(37.492894, 127.012469);
+    }
+  }
+
+  Future<void> _loadCustomMarker() async {
+    final icon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(size: Size(48, 48)),
+      'assets/images/ppam_work.png',
+    );
+    setState(() {
+      _customMarkerIcon = icon;
+    });
+  }
+
+  void goToCurrentLocation() {
+    if (_currentPosition != null) {
+      mapController.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15.0));
     }
   }
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
-    if (_mapStyle != null) {
-      controller.setMapStyle(_mapStyle);
+    if (_mapStyle != null) controller.setMapStyle(_mapStyle);
+  }
+
+  /// ✅ Firestore에서 마커 불러오기
+  Future<void> _loadMarkersFromFirestore() async {
+    final snapshot = await FirebaseFirestore.instance.collection('markers').get();
+    final docs = snapshot.docs;
+
+    for (var doc in docs) {
+      final data = doc.data();
+      final LatLng pos = LatLng(data['lat'], data['lng']);
+      final marker = Marker(
+        markerId: MarkerId(doc.id),
+        position: pos,
+        icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+        infoWindow: InfoWindow(
+          title: data['title'],
+          snippet: 'Price: ${data['price']}, Amount: ${data['amount']}',
+        ),
+        onTap: () {
+          if (data['userId'] == userId) {
+            _removeMarker(doc.id);
+          }
+        },
+      );
+      setState(() {
+        _markers.add(marker);
+      });
     }
   }
 
-  Future<void> _handleLongPress(LatLng position) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const PostPlaceScreen(),
+  /// ✅ Firestore에 마커 저장
+  Future<void> _addMarkerToFirestore(LatLng position, Map<String, dynamic> result) async {
+    if (userId == null) return;
+    final doc = await FirebaseFirestore.instance.collection('markers').add({
+      'lat': position.latitude,
+      'lng': position.longitude,
+      'title': 'PPAM Marker',
+      'price': result['price'],
+      'amount': result['amount'],
+      'userId': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final marker = Marker(
+      markerId: MarkerId(doc.id),
+      position: position,
+      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+      infoWindow: InfoWindow(
+        title: 'PPAM Marker',
+        snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
       ),
+      onTap: () {
+        if (userId == FirebaseAuth.instance.currentUser?.uid) {
+          _removeMarker(doc.id);
+        }
+      },
     );
 
-    if (result != null) {
-      // ✅ 입력값 받아서 마커 추가
-      final newMarker = Marker(
-        markerId: MarkerId(DateTime.now().toIso8601String()),
-        position: position,
-        infoWindow: InfoWindow(
-          title: 'PPAM Marker',
-          snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
-        ),
-        icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,  // ✅ 커스텀 마커 적용
-      );
+    setState(() {
+      _markers.add(marker);
+    });
+  }
 
+  /// ✅ 마커 삭제 (Firestore + UI)
+  Future<void> _removeMarker(String markerId) async {
+    await FirebaseFirestore.instance.collection('markers').doc(markerId).delete();
+    setState(() {
+      _markers.removeWhere((m) => m.markerId.value == markerId);
+    });
+  }
+
+  /// ✅ 마커 추가
+  Future<void> _handleAddMarker() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PostPlaceScreen()),
+    );
+
+    if (result != null && _longPressedLatLng != null) {
+      await _addMarkerToFirestore(_longPressedLatLng!, result);
       setState(() {
-        _searchMarker = newMarker;
+        _longPressedLatLng = null;
       });
     }
   }
@@ -141,52 +187,15 @@ class _MapScreenState extends State<MapScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PostPlaceScreen(), // 인자 없이!
-                  ),
-                );
-
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-              },
+              onPressed: _handleAddMarker,
+              child: const Text("이 위치에 뿌리기"),
+            ),
+            TextButton(
+              onPressed: _handleAddMarker,
               child: const Text("이 주소에 뿌리기"),
             ),
             TextButton(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PostPlaceScreen()),
-                );
-                if (result != null) {
-                  final newMarker = Marker(
-                    markerId: MarkerId(DateTime.now().toIso8601String()),
-                    position: _longPressedLatLng!,
-                    infoWindow: InfoWindow(
-                      title: 'PPAM Marker',
-                      snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
-                    ),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                  );
-                  setState(() {
-                    _searchMarker = newMarker;
-                    _longPressedLatLng = null;
-                  });
-                }
-              },
-              child: const Text("이 주소에 뿌리기"),
-            ),
-            TextButton(
-              onPressed: () {
-                print("📍 주변 사업자에게 뿌리기");
-                // TODO: 주변 사업자 조회 기능 추가
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-              },
+              onPressed: _handleAddMarker,
               child: const Text("주변 사업자에게 뿌리기"),
             ),
             const Divider(height: 24),
@@ -204,7 +213,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -215,19 +223,20 @@ class _MapScreenState extends State<MapScreen> {
           GoogleMap(
             key: mapWidgetKey,
             onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(target: _currentPosition!, zoom: 15.0),
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition!,
+              zoom: 15.0,
+            ),
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
-            zoomGesturesEnabled: true,
-            scrollGesturesEnabled: true,
             onLongPress: (LatLng latLng) {
               setState(() {
                 _longPressedLatLng = latLng;
               });
             },
             markers: {
-              if (_searchMarker != null) _searchMarker!,
+              ..._markers,
               if (_longPressedLatLng != null)
                 Marker(
                   markerId: const MarkerId('long_press_marker'),
@@ -237,12 +246,8 @@ class _MapScreenState extends State<MapScreen> {
                 ),
             },
           ),
-
-          // 📍 팝업 위젯
           if (_longPressedLatLng != null)
-            Center(
-              child: _buildPopupWidget(), // 화면 정중앙에 고정
-            ),
+            Center(child: _buildPopupWidget()),
         ],
       ),
     );

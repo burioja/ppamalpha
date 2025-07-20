@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
@@ -26,6 +28,32 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final TextEditingController _ageMinController = TextEditingController();
   final TextEditingController _ageMaxController = TextEditingController();
 
+  List<Map<String, dynamic>> _receivedImages = [];
+  String? _selectedImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReceivedImages();
+  }
+
+  Future<void> _loadReceivedImages() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('wallet')
+        .where('source', isEqualTo: 'received')
+        .orderBy('receivedAt', descending: true)
+        .get();
+
+    setState(() {
+      _receivedImages = snapshot.docs.map((doc) => doc.data()).toList();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,7 +66,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 상단 설정
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
@@ -49,22 +76,44 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             ),
             const SizedBox(height: 12),
 
-            // 포스트 선택 영역
-            Container(
+            // 이미지 캐러셀
+            SizedBox(
               height: 120,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.orange[100],
-                border: Border.all(color: Colors.orange),
-              ),
-              child: const Text(
-                "Select Post Carousel",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              child: _receivedImages.isEmpty
+                  ? const Center(child: Text("받은 이미지가 없습니다."))
+                  : ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _receivedImages.length,
+                itemBuilder: (context, index) {
+                  final data = _receivedImages[index];
+                  final imageUrl = data['fileUrl'];
+                  final isSelected = _selectedImageUrl == imageUrl;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedImageUrl = imageUrl;
+                      });
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: isSelected ? Colors.blue : Colors.transparent,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(imageUrl, width: 100, fit: BoxFit.cover),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 16),
 
-            // 가격/수량/총액
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -100,7 +149,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             ),
             const SizedBox(height: 24),
 
-            // 기능(Function)
             const Text("Function", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
 
@@ -141,7 +189,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             ),
             const SizedBox(height: 24),
 
-            // 타겟(Target)
             const Text("Target", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButton<String>(
@@ -177,7 +224,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             ),
             const SizedBox(height: 32),
 
-            // PPAM 버튼
             Center(
               child: ElevatedButton(
                 onPressed: () {
@@ -192,6 +238,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                     'gender': _gender,
                     'ageMin': _ageMinController.text,
                     'ageMax': _ageMaxController.text,
+                    'imageUrl': _selectedImageUrl,
                   });
                 },
                 style: ElevatedButton.styleFrom(
@@ -217,5 +264,4 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       child: Text(label),
     );
   }
-
 }
