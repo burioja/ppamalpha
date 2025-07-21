@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../providers/wallet_provider.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
@@ -12,6 +12,16 @@ class PostPlaceScreen extends StatefulWidget {
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _periodController = TextEditingController();
+  final TextEditingController _ageMinController = TextEditingController();
+  final TextEditingController _ageMaxController = TextEditingController();
+
+  String _periodUnit = 'Hour';
+  bool _usingSelected = false;
+  bool _replySelected = false;
+  String _gender = '상관없음';
+
+  String? _selectedImageUrl;
 
   int get _totalPrice {
     final price = int.tryParse(_priceController.text) ?? 0;
@@ -19,43 +29,19 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     return price * amount;
   }
 
-  final TextEditingController _periodController = TextEditingController();
-  String _periodUnit = 'Hour';
-  bool _usingSelected = false;
-  bool _replySelected = false;
-
-  String _gender = '상관없음';
-  final TextEditingController _ageMinController = TextEditingController();
-  final TextEditingController _ageMaxController = TextEditingController();
-
-  List<Map<String, dynamic>> _receivedImages = [];
-  String? _selectedImageUrl;
-
   @override
   void initState() {
     super.initState();
-    _loadReceivedImages();
-  }
-
-  Future<void> _loadReceivedImages() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('wallet')
-        .where('source', isEqualTo: 'received')
-        .orderBy('receivedAt', descending: true)
-        .get();
-
-    setState(() {
-      _receivedImages = snapshot.docs.map((doc) => doc.data()).toList();
+    // ✅ 화면 진입 시 이미지 불러오기
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<WalletProvider>(context, listen: false).loadUploadedImages();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final uploadedImages = Provider.of<WalletProvider>(context).uploadedImages;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Address or GPS loc."),
@@ -76,16 +62,16 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             ),
             const SizedBox(height: 12),
 
-            // 이미지 캐러셀
+            // ✅ 이미지 캐러셀
             SizedBox(
               height: 120,
-              child: _receivedImages.isEmpty
-                  ? const Center(child: Text("받은 이미지가 없습니다."))
+              child: uploadedImages.isEmpty
+                  ? const Center(child: Text("업로드한 이미지가 없습니다."))
                   : ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _receivedImages.length,
+                itemCount: uploadedImages.length,
                 itemBuilder: (context, index) {
-                  final data = _receivedImages[index];
+                  final data = uploadedImages[index];
                   final imageUrl = data['fileUrl'];
                   final isSelected = _selectedImageUrl == imageUrl;
                   return GestureDetector(
