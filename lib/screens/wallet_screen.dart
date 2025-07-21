@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../providers/wallet_provider.dart';
+import 'package:provider/provider.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -16,12 +18,10 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   List<Map<String, dynamic>> _uploadedImages = [];
-  List<Map<String, dynamic>> _receivedImages = [];
 
   final picker = ImagePicker();
   final userId = FirebaseAuth.instance.currentUser?.uid;
 
-  /// ✅ 이미지 선택 및 업로드
   Future<void> _pickAndUploadImage(bool isUpload) async {
     final pickedFiles = await picker.pickMultiImage();
 
@@ -32,12 +32,10 @@ class _WalletScreenState extends State<WalletScreen> {
       String fileName = "${DateTime.now().millisecondsSinceEpoch}_${file.name}";
       String storagePath = "users/$userId/wallet/$fileName";
 
-      // Storage 업로드
       Reference ref = FirebaseStorage.instance.ref().child(storagePath);
       await ref.putFile(imageFile);
       String fileUrl = await ref.getDownloadURL();
 
-      // Firestore 저장
       final walletDoc = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -53,19 +51,37 @@ class _WalletScreenState extends State<WalletScreen> {
       });
     }
 
-    _loadWalletImages(); // 다시 불러오기
+    if (isUpload) {
+      _loadUploadedImages();
+    } else {
+      final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+      await walletProvider.loadReceivedImages();
+    }
   }
 
-  /// ✅ 이미지 삭제
+  Future<void> _loadUploadedImages() async {
+    if (userId == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('wallet')
+        .where('source', isEqualTo: 'upload')
+        .orderBy('receivedAt', descending: true)
+        .get();
+
+    setState(() {
+      _uploadedImages = snapshot.docs.map((doc) => doc.data()).toList();
+    });
+  }
+
   Future<void> _deleteImage(Map<String, dynamic> imageData, bool isUpload) async {
     try {
       if (userId == null) return;
 
-      // Storage 삭제
       final ref = FirebaseStorage.instance.refFromURL(imageData['fileUrl']);
       await ref.delete();
 
-      // Firestore 삭제
       final walletRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -79,8 +95,12 @@ class _WalletScreenState extends State<WalletScreen> {
         await doc.reference.delete();
       }
 
-      // UI 갱신
-      _loadWalletImages();
+      if (isUpload) {
+        _loadUploadedImages();
+      } else {
+        final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+        await walletProvider.loadReceivedImages();
+      }
     } catch (e) {
       print("삭제 오류: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +109,6 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  /// ✅ 삭제 확인 다이얼로그
   void _showDeleteDialog(Map<String, dynamic> imageData, bool isUpload) {
     showDialog(
       context: context,
@@ -115,26 +134,6 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  /// ✅ 이미지 불러오기
-  Future<void> _loadWalletImages() async {
-    if (userId == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('wallet')
-        .orderBy('receivedAt', descending: true)
-        .get();
-
-    final all = snapshot.docs.map((doc) => doc.data()).toList();
-
-    setState(() {
-      _uploadedImages = all.where((e) => e['source'] == 'upload').toList();
-      _receivedImages = all.where((e) => e['source'] == 'received').toList();
-    });
-  }
-
-  /// ✅ 캐러셀 표시
   Widget _buildImageCarousel(List<Map<String, dynamic>> images, bool isUpload) {
     if (images.isEmpty) {
       return const Center(child: Text("이미지가 없습니다."));
@@ -162,11 +161,19 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   void initState() {
     super.initState();
-    _loadWalletImages();
+    _loadUploadedImages();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+      walletProvider.loadReceivedImages();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final walletProvider = Provider.of<WalletProvider>(context);
+    final receivedImages = walletProvider.receivedImages;
+
     return Scaffold(
       appBar: AppBar(title: const Text("Wallet 화면")),
       body: Padding(
@@ -188,7 +195,7 @@ class _WalletScreenState extends State<WalletScreen> {
             const SizedBox(height: 20),
             const Text("내가 받은 그림", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            _buildImageCarousel(_receivedImages, false),
+            _buildImageCarousel(receivedImages, false),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(

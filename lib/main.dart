@@ -13,6 +13,8 @@ import 'dart:ui';
 import 'providers/user_provider.dart';
 import 'providers/screen_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'providers/wallet_provider.dart';
+
 
 
 void main() async {
@@ -60,6 +62,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<ScreenProvider>(
             create: (_) => ScreenProvider()
         ),
+        ChangeNotifierProvider(
+            create: (_) => WalletProvider()
+        ),
+
 
       ],
       child: MaterialApp(
