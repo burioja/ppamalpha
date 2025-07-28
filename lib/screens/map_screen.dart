@@ -107,13 +107,11 @@ class _MapScreenState extends State<MapScreen> {
           snippet: 'Price: ${data['price']}, Amount: ${data['amount']}',
         ),
         onTap: () {
-          // 마커 정보 표시 (탭)
-          _showMarkerInfo(data);
-        },
-        onLongPress: () {
-          // 마커 회수 확인 (롱프레스)
+          // 마커 상호작용 메뉴 표시
           if (data['userId'] == userId) {
-            _showRecoveryDialog(doc.id, data);
+            _showMarkerActionMenu(doc.id, data);
+          } else {
+            _showMarkerInfo(data);
           }
         },
       );
@@ -152,13 +150,11 @@ class _MapScreenState extends State<MapScreen> {
         snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
       ),
       onTap: () {
-        // 마커 정보 표시 (탭)
-        _showMarkerInfo(markerData);
-      },
-      onLongPress: () {
-        // 마커 회수 확인 (롱프레스)
+        // 마커 상호작용 메뉴 표시
         if (userId == FirebaseAuth.instance.currentUser?.uid) {
-          _showRecoveryDialog(doc.id, markerData);
+          _showMarkerActionMenu(doc.id, markerData);
+        } else {
+          _showMarkerInfo(markerData);
         }
       },
     );
@@ -166,6 +162,58 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _markers.add(marker);
     });
+  }
+
+  /// ✅ 마커 액션 메뉴 표시 (소유자용)
+  void _showMarkerActionMenu(String markerId, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(data['title'] ?? '전단지 메뉴'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('가격: ${data['price']}원'),
+              const SizedBox(height: 8),
+              Text('수량: ${data['amount']}개'),
+              const SizedBox(height: 16),
+              const Text(
+                '원하는 작업을 선택하세요:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showMarkerInfo(data);
+              },
+              child: const Text('정보 보기'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showRecoveryDialog(markerId, data);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('회수하기'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// ✅ 마커 정보 표시
@@ -182,15 +230,6 @@ class _MapScreenState extends State<MapScreen> {
               Text('가격: ${data['price']}원'),
               const SizedBox(height: 8),
               Text('수량: ${data['amount']}개'),
-              const SizedBox(height: 16),
-              const Text(
-                '롱프레스로 회수할 수 있습니다.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
             ],
           ),
           actions: [
