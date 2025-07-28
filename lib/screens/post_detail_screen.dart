@@ -43,7 +43,7 @@ class PostDetailScreen extends StatelessWidget {
                       radius: 24,
                       backgroundImage: (imageUrl != null && imageUrl.isNotEmpty)
                           ? NetworkImage(imageUrl)
-                          : const AssetImage('assets/default_profile.png') as ImageProvider,
+                          : const AssetImage('assets/images/default_profile.png') as ImageProvider,
                     ),
                     const SizedBox(width: 12),
                     Expanded(

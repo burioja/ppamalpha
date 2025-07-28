@@ -87,22 +87,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            TextButton(
-                              onPressed: () {
-                                // 이메일 찾기 구현
-                              },
-                              child: const Text(
-                                '이메일 찾기',
-                                style: TextStyle(color: Color(0xFF4D4DFF)),
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () {
+                                  // 이메일 찾기 구현
+                                },
+                                child: const Text(
+                                  '이메일 찾기',
+                                  style: TextStyle(color: Color(0xFF4D4DFF)),
+                                ),
                               ),
                             ),
-                            TextButton(
-                              onPressed: () {
-                                // 비밀번호 찾기 구현
-                              },
-                              child: const Text(
-                                '비밀번호 찾기',
-                                style: TextStyle(color: Color(0xFF4D4DFF)),
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () {
+                                  // 비밀번호 찾기 구현
+                                },
+                                child: const Text(
+                                  '비밀번호 찾기',
+                                  style: TextStyle(color: Color(0xFF4D4DFF)),
+                                ),
                               ),
                             ),
                           ],

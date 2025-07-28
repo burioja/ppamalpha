@@ -28,6 +28,8 @@ class _MainScreenState extends State<MainScreen> {
   bool _isWorkMode = true;
   int _selectedIndex = 2;
   String _currentLocation = '위치 불러오는 중...';
+  int _currentWorkplaceIndex = 0;
+  int _currentItemIndex = 0;
 
   final List<Widget> _widgetOptions = [
     const CommunityScreen(),
@@ -85,7 +87,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildStoreCarousel() {
     return FutureBuilder<List<List<WorkplaceData>>>(
-      future: fetchUserWorkplaces(),
+      future: fetchUserWorkplacesByMode(_isWorkMode ? 'work' : 'life'),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
@@ -98,45 +100,71 @@ class _MainScreenState extends State<MainScreen> {
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Text('데이터 없음', style: TextStyle(color: Colors.white));
         } else {
-          final group = snapshot.data!;
+          final workplaces = snapshot.data!;
+          
+          // 모든 플레이스를 하나의 리스트로 만들기
+          List<WorkplaceData> allWorkplaces = [];
+          for (var group in workplaces) {
+            allWorkplaces.addAll(group);
+          }
+          
+          print('로드된 플레이스 개수: ${allWorkplaces.length} (모드: ${_isWorkMode ? 'work' : 'life'})');
+          for (var workplace in allWorkplaces) {
+            print('플레이스: ${workplace.data.last} (ID: ${workplace.placeId})');
+          }
+          
+          if (allWorkplaces.isEmpty) {
+            allWorkplaces.add(WorkplaceData(['Customer'], Colors.grey.shade300));
+          }
+          
           return SizedBox(
             width: 185,
             height: 50,
             child: PageView.builder(
-              scrollDirection: Axis.vertical,
-              itemCount: group.length,
-              onPageChanged: (vIdx) {
+              scrollDirection: Axis.horizontal,
+              itemCount: allWorkplaces.length,
+              controller: PageController(initialPage: _currentItemIndex),
+              physics: const BouncingScrollPhysics(), // 드래그 감도 개선
+              onPageChanged: (index) {
+                setState(() {
+                  _currentWorkplaceIndex = 0;
+                  _currentItemIndex = index;
+                });
+                
+                final selectedWorkplace = allWorkplaces[index];
+                final workplaceName = selectedWorkplace.data.isNotEmpty 
+                    ? selectedWorkplace.data.last 
+                    : (_isWorkMode ? 'Customer' : '개인');
+                
+                print('선택된 플레이스: $workplaceName (모드: ${_isWorkMode ? 'work' : 'life'})');
+                
+                // StatusProvider 업데이트
                 Provider.of<StatusProvider>(context, listen: false)
-                    .setCurrentText(group[vIdx][0].data[3]);
+                    .setCurrentText(workplaceName);
               },
-              itemBuilder: (context, vIdx) {
-                final innerPage = PageController(initialPage: 3);
-                return PageView.builder(
-                  controller: innerPage,
-                  scrollDirection: Axis.horizontal,
-                  itemCount: group[vIdx][0].data.length,
-                  onPageChanged: (hIdx) {
-                    String currentText = group[vIdx][0].data[hIdx];
-                    Provider.of<StatusProvider>(context, listen: false)
-                        .setCurrentText(currentText);
-                  },
-                  itemBuilder: (context, hIdx) {
-                    final item = group[vIdx][0];
-                    return Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: item.color,
-                        borderRadius: BorderRadius.circular(8),
+              itemBuilder: (context, index) {
+                final workplace = allWorkplaces[index];
+                return Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: workplace.color,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      workplace.data.isNotEmpty 
+                          ? workplace.data.last 
+                          : 'Customer',
+                      style: TextStyle(
+                        color: workplace.color == Colors.grey.shade300 
+                            ? Colors.black 
+                            : Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
-                      child: Center(
-                        child: Text(
-                          item.data[hIdx],
-                          style: const TextStyle(color: Colors.grey, fontSize: 14),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  },
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 );
               },
             ),
@@ -159,6 +187,9 @@ class _MainScreenState extends State<MainScreen> {
             onToggle: () {
               setState(() {
                 _isWorkMode = !_isWorkMode;
+                // 모드 변경 시 플레이스 인덱스 리셋
+                _currentWorkplaceIndex = 0;
+                _currentItemIndex = 0;
               });
             },
           ),
