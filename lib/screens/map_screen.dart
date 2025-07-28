@@ -63,12 +63,20 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadCustomMarker() async {
     final icon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
+      const ImageConfiguration(size: Size(96, 96)), // 48 * 2 = 96으로 2배 크기
       'assets/images/ppam_work.png',
     );
     setState(() {
       _customMarkerIcon = icon;
     });
+  }
+
+  /// ✅ 마커 크기 조정 함수 (필요시 사용)
+  Future<BitmapDescriptor> _getCustomMarkerWithSize(double size) async {
+    return await BitmapDescriptor.fromAssetImage(
+      ImageConfiguration(size: Size(size, size)),
+      'assets/images/ppam_work.png',
+    );
   }
 
   void goToCurrentLocation() {
@@ -99,8 +107,13 @@ class _MapScreenState extends State<MapScreen> {
           snippet: 'Price: ${data['price']}, Amount: ${data['amount']}',
         ),
         onTap: () {
+          // 마커 정보 표시 (탭)
+          _showMarkerInfo(data);
+        },
+        onLongPress: () {
+          // 마커 회수 확인 (롱프레스)
           if (data['userId'] == userId) {
-            _removeMarker(doc.id);
+            _showRecoveryDialog(doc.id, data);
           }
         },
       );
@@ -123,6 +136,13 @@ class _MapScreenState extends State<MapScreen> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
+    final markerData = {
+      'title': 'PPAM Marker',
+      'price': result['price'],
+      'amount': result['amount'],
+      'userId': userId,
+    };
+
     final marker = Marker(
       markerId: MarkerId(doc.id),
       position: position,
@@ -132,8 +152,13 @@ class _MapScreenState extends State<MapScreen> {
         snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
       ),
       onTap: () {
+        // 마커 정보 표시 (탭)
+        _showMarkerInfo(markerData);
+      },
+      onLongPress: () {
+        // 마커 회수 확인 (롱프레스)
         if (userId == FirebaseAuth.instance.currentUser?.uid) {
-          _removeMarker(doc.id);
+          _showRecoveryDialog(doc.id, markerData);
         }
       },
     );
@@ -141,6 +166,91 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _markers.add(marker);
     });
+  }
+
+  /// ✅ 마커 정보 표시
+  void _showMarkerInfo(Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(data['title'] ?? '전단지 정보'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('가격: ${data['price']}원'),
+              const SizedBox(height: 8),
+              Text('수량: ${data['amount']}개'),
+              const SizedBox(height: 16),
+              const Text(
+                '롱프레스로 회수할 수 있습니다.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// ✅ 마커 회수 확인 다이얼로그
+  void _showRecoveryDialog(String markerId, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('전단지 회수'),
+          content: Text('${data['title'] ?? '전단지'}를 회수하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('아니오'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _removeMarker(markerId);
+                _showRecoverySuccessDialog();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('예'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// ✅ 회수 완료 다이얼로그
+  void _showRecoverySuccessDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('회수 완료'),
+          content: const Text('전단지가 성공적으로 회수되었습니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// ✅ 마커 삭제 (Firestore + UI)
