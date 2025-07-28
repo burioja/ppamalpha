@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:ppamproto/providers/search_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'dart:ui';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/signup_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'services/firebase_service.dart';
-import 'package:provider/provider.dart';
 import 'providers/status_provider.dart';
-import 'dart:ui';
 import 'providers/user_provider.dart';
+import 'providers/search_provider.dart';
 import 'providers/screen_provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'providers/wallet_provider.dart';
-
+import 'services/firebase_service.dart';
+import 'widgets/user_status_widget.dart';
 
 
 void main() async {
@@ -23,9 +23,7 @@ void main() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-
     );
-
   } catch (e) {
     print('Firebase 초기화 에러: $e');
   }
@@ -34,6 +32,9 @@ void main() async {
 
   FirebaseService firebaseService = FirebaseService();
   await firebaseService.uploadWorkplaces();
+
+  // 기본 개인 플레이스 생성
+  await createDefaultPersonalPlace();
 
   runApp(const MyApp());
 }
