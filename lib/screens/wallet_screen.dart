@@ -178,18 +178,31 @@ class WalletScreenState extends State<WalletScreen> {
   Future<void> _loadUploadedImages() async {
     if (userId == null) return;
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('wallet')
-        .where('source', isEqualTo: 'upload')
-        .orderBy('receivedAt', descending: true)
-        .get();
+    try {
+      debugPrint('업로드된 이미지 로딩 시작...');
+      
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('wallet')
+          .where('source', isEqualTo: 'upload')
+          .orderBy('receivedAt', descending: true)
+          .get();
 
-    if (mounted) {
-      setState(() {
-        _uploadedImages = snapshot.docs.map((doc) => doc.data()).toList();
-      });
+      debugPrint('Firestore에서 ${snapshot.docs.length}개의 이미지 데이터 로드됨');
+
+      if (mounted) {
+        setState(() {
+          _uploadedImages = snapshot.docs.map((doc) {
+            final data = doc.data();
+            debugPrint('이미지 데이터: ${data['fileName']} - ${data['fileUrl']}');
+            return data;
+          }).toList();
+        });
+        debugPrint('업로드된 이미지 목록 갱신 완료: ${_uploadedImages.length}개');
+      }
+    } catch (e) {
+      debugPrint('업로드된 이미지 로딩 오류: $e');
     }
   }
 
@@ -363,8 +376,19 @@ class WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildImageCarousel(List<Map<String, dynamic>> images, bool isUpload) {
+    debugPrint('캐러셀 빌드: ${images.length}개의 이미지, isUpload: $isUpload');
+    
     if (images.isEmpty) {
-      return const Center(child: Text("이미지가 없습니다."));
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text("이미지가 없습니다.", style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
     }
 
     return CarouselSlider(
@@ -375,11 +399,40 @@ class WalletScreenState extends State<WalletScreen> {
         viewportFraction: 0.5,
       ),
       items: images.map((data) {
+        debugPrint('캐러셀 아이템: ${data['fileName']} - ${data['fileUrl']}');
         return GestureDetector(
           onTap: () => _showDeleteDialog(data, isUpload),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(data['fileUrl'], fit: BoxFit.cover, width: 100),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 5),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                data['fileUrl'], 
+                fit: BoxFit.cover, 
+                width: 100,
+                height: 150,
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('이미지 로드 오류: $error');
+                  return Container(
+                    width: 100,
+                    height: 150,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.error, color: Colors.red),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 100,
+                    height: 150,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         );
       }).toList(),
