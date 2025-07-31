@@ -63,20 +63,12 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadCustomMarker() async {
     final icon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(96, 96)), // 48 * 2 = 96으로 2배 크기
+      const ImageConfiguration(size: Size(96, 96)), // 2배 크기로 고정
       'assets/images/ppam_work.png',
     );
     setState(() {
       _customMarkerIcon = icon;
     });
-  }
-
-  /// ✅ 마커 크기 조정 함수 (필요시 사용)
-  Future<BitmapDescriptor> _getCustomMarkerWithSize(double size) async {
-    return await BitmapDescriptor.fromAssetImage(
-      ImageConfiguration(size: Size(size, size)),
-      'assets/images/ppam_work.png',
-    );
   }
 
   void goToCurrentLocation() {
