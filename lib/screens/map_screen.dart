@@ -112,27 +112,32 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ✅ 간단한 클러스터링 함수
   void _updateClustering() {
-    if (_currentZoom < 12.0) {
-      // 줌이 멀면 클러스터링 적용
+    print('현재 줌 레벨: $_currentZoom, 마커 개수: ${_markerItems.length}');
+    
+    if (_currentZoom < 12.0 && _markerItems.length > 1) {
+      // 줌이 멀고 마커가 2개 이상이면 클러스터링 적용
       _createClusters();
     } else {
-      // 줌이 가까우면 개별 마커 표시
+      // 줌이 가까우거나 마커가 1개 이하면 개별 마커 표시
       _showIndividualMarkers();
     }
   }
 
   /// ✅ 클러스터 생성
   void _createClusters() {
-    if (_isClustered) return;
+    print('클러스터 생성 시작 - 마커 개수: ${_markerItems.length}');
     
     _clusteredMarkers.clear();
     final clusters = <String, List<MarkerItem>>{};
     
-    // 마커들을 그룹화 (간단한 그리드 기반)
+    // 마커들을 그룹화 (더 세밀한 그리드 기반)
     for (final item in _markerItems) {
-      final gridKey = '${(item.position.latitude * 100).round()}_${(item.position.longitude * 100).round()}';
+      // 더 작은 그리드로 분할하여 클러스터링 효과 향상
+      final gridKey = '${(item.position.latitude * 1000).round()}_${(item.position.longitude * 1000).round()}';
       clusters.putIfAbsent(gridKey, () => []).add(item);
     }
+    
+    print('생성된 클러스터 개수: ${clusters.length}');
     
     // 클러스터 마커 생성
     for (final cluster in clusters.values) {
@@ -144,17 +149,20 @@ class _MapScreenState extends State<MapScreen> {
         // 여러 마커는 클러스터로 표시
         final center = _calculateClusterCenter(cluster);
         _clusteredMarkers.add(_createClusterMarker(center, cluster.length));
+        print('클러스터 생성: ${cluster.length}개 마커');
       }
     }
     
     setState(() {
       _isClustered = true;
     });
+    
+    print('클러스터링 완료 - 표시될 마커 개수: ${_clusteredMarkers.length}');
   }
 
   /// ✅ 개별 마커 표시
   void _showIndividualMarkers() {
-    if (!_isClustered) return;
+    print('개별 마커 표시 - 마커 개수: ${_markerItems.length}');
     
     _clusteredMarkers.clear();
     for (final item in _markerItems) {
@@ -164,6 +172,8 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isClustered = false;
     });
+    
+    print('개별 마커 표시 완료 - 표시될 마커 개수: ${_clusteredMarkers.length}');
   }
 
   /// ✅ 클러스터 중심점 계산
@@ -204,7 +214,7 @@ class _MapScreenState extends State<MapScreen> {
     return Marker(
       markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
       position: position,
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
       infoWindow: InfoWindow(
         title: '클러스터',
         snippet: '$count개의 마커',
@@ -220,6 +230,8 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadMarkersFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('markers').get();
     final docs = snapshot.docs;
+
+    print('Firestore에서 ${docs.length}개의 마커 데이터 로드');
 
     _markerItems.clear();
     _markers.clear();
@@ -241,6 +253,8 @@ class _MapScreenState extends State<MapScreen> {
       
       _markerItems.add(markerItem);
     }
+    
+    print('마커 아이템 생성 완료: ${_markerItems.length}개');
     
     // 클러스터링 적용
     _updateClustering();
