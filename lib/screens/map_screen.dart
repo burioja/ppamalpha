@@ -431,6 +431,10 @@ class _MapScreenState extends State<MapScreen> {
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
+            zoomGesturesEnabled: true,
+            scrollGesturesEnabled: true,
+            tiltGesturesEnabled: true,
+            rotateGesturesEnabled: true,
             onLongPress: (LatLng latLng) {
               setState(() {
                 _longPressedLatLng = latLng;
