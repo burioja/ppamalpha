@@ -153,7 +153,10 @@ class WalletScreenState extends State<WalletScreen> {
 
       if (mounted) {
         if (isUpload) {
-          _loadUploadedImages();
+          await _loadUploadedImages();
+          // WalletProvider도 업데이트
+          final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+          await walletProvider.loadUploadedImages();
         } else {
           final walletProvider = Provider.of<WalletProvider>(context, listen: false);
           await walletProvider.loadReceivedImages();
@@ -203,6 +206,36 @@ class WalletScreenState extends State<WalletScreen> {
       }
     } catch (e) {
       debugPrint('업로드된 이미지 로딩 오류: $e');
+      // 인덱스 오류 시 단순 쿼리로 폴백
+      try {
+        debugPrint('폴백 쿼리로 재시도...');
+        final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('wallet')
+            .where('source', isEqualTo: 'upload')
+            .get();
+
+        debugPrint('폴백 쿼리로 ${snapshot.docs.length}개의 이미지 데이터 로드됨');
+
+        if (mounted) {
+          setState(() {
+            _uploadedImages = snapshot.docs.map((doc) {
+              final data = doc.data();
+              debugPrint('폴백 이미지 데이터: ${data['fileName']} - ${data['fileUrl']}');
+              return data;
+            }).toList();
+          });
+          debugPrint('폴백으로 업로드된 이미지 목록 갱신 완료: ${_uploadedImages.length}개');
+        }
+      } catch (fallbackError) {
+        debugPrint('폴백 쿼리도 실패: $fallbackError');
+        if (mounted) {
+          setState(() {
+            _uploadedImages = [];
+          });
+        }
+      }
     }
   }
 
@@ -228,7 +261,10 @@ class WalletScreenState extends State<WalletScreen> {
 
       if (mounted) {
         if (isUpload) {
-          _loadUploadedImages();
+          await _loadUploadedImages();
+          // WalletProvider도 업데이트
+          final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+          await walletProvider.loadUploadedImages();
         } else {
           final walletProvider = Provider.of<WalletProvider>(context, listen: false);
           await walletProvider.loadReceivedImages();
