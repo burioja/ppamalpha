@@ -8,17 +8,17 @@ import 'package:http/http.dart' as http;
 import 'package:geocoding/geocoding.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_maps_cluster_manager/google_maps_cluster_manager.dart';
 import 'post_place_screen.dart';
 
-/// ✅ 마커 아이템 클래스 (클러스터링용)
-class MarkerItem extends ClusterItem {
+/// ✅ 마커 아이템 클래스
+class MarkerItem {
   final String id;
   final String title;
   final String price;
   final String amount;
   final String userId;
   final Map<String, dynamic> data;
+  final LatLng position;
 
   MarkerItem({
     required this.id,
@@ -27,8 +27,8 @@ class MarkerItem extends ClusterItem {
     required this.amount,
     required this.userId,
     required this.data,
-    required LatLng position,
-  }) : super(position);
+    required this.position,
+  });
 }
 
 class MapScreen extends StatefulWidget {
@@ -50,9 +50,9 @@ class _MapScreenState extends State<MapScreen> {
   final Set<Marker> _markers = {};
   final userId = FirebaseAuth.instance.currentUser?.uid;
   
-  // 클러스터링 관련 변수들
-  late ClusterManager<MarkerItem> _clusterManager;
+  // 마커 관련 변수들
   final List<MarkerItem> _markerItems = [];
+  double _currentZoom = 15.0;
 
   @override
   void initState() {
@@ -60,85 +60,7 @@ class _MapScreenState extends State<MapScreen> {
     _setInitialLocation();
     _loadMapStyle();
     _loadCustomMarker();
-    _initializeClusterManager();
     _loadMarkersFromFirestore();
-  }
-
-  /// ✅ 클러스터 매니저 초기화
-  void _initializeClusterManager() {
-    _clusterManager = ClusterManager<MarkerItem>(
-      _markerItems, 
-      _updateMarkers,
-      markerBuilder: _getMarkerFromClusterItem,
-      clusterItemBuilder: _getClusterBitmap,
-      levels: [1, 4.25, 6.75, 8.25, 11.5, 14.5, 16.0, 16.5, 20.0],
-      extraPercent: 0.25,
-      minZoom: 0,
-      maxZoom: 19,
-    );
-  }
-
-  /// ✅ 마커 업데이트 콜백
-  void _updateMarkers(Set<Marker> markers) {
-    setState(() {
-      _markers.clear();
-      _markers.addAll(markers);
-    });
-  }
-
-  /// ✅ 클러스터 매니저용 마커 생성 함수
-  Future<Marker> _getMarkerFromClusterItem(MarkerItem item) async {
-    return Marker(
-      markerId: MarkerId(item.id),
-      position: item.position,
-      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
-      infoWindow: InfoWindow(
-        title: item.title,
-        snippet: 'Price: ${item.price}원, Amount: ${item.amount}개',
-      ),
-      onTap: () {
-        // 마커 상호작용 메뉴 표시
-        if (item.userId == userId) {
-          _showMarkerActionMenu(item.id, item.data);
-        } else {
-          _showMarkerInfo(item.data);
-        }
-      },
-    );
-  }
-
-  /// ✅ 클러스터 아이콘 생성 함수
-  Future<BitmapDescriptor> _getClusterBitmap(List<MarkerItem> cluster) async {
-    final size = 150;
-    final color = Colors.blue;
-    final pictureRecorder = ui.PictureRecorder();
-    final canvas = Canvas(pictureRecorder);
-    final paint = Paint()..color = color;
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    
-    canvas.drawCircle(Offset(size / 2, size / 2), size / 2, paint);
-    textPainter.text = TextSpan(
-      text: cluster.length.toString(),
-      style: TextStyle(
-        fontSize: size / 3,
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-      ),
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        size / 2 - textPainter.width / 2,
-        size / 2 - textPainter.height / 2,
-      ),
-    );
-    
-    final picture = pictureRecorder.endRecording();
-    final image = await picture.toImage(size, size);
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    
-    return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }
 
   Future<void> _loadMapStyle() async {
@@ -184,15 +106,15 @@ class _MapScreenState extends State<MapScreen> {
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
     if (_mapStyle != null) controller.setMapStyle(_mapStyle);
-    _clusterManager.setMapController(controller);
   }
 
-  /// ✅ Firestore에서 마커 불러오기 (클러스터링 지원)
+  /// ✅ Firestore에서 마커 불러오기
   Future<void> _loadMarkersFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('markers').get();
     final docs = snapshot.docs;
 
     _markerItems.clear();
+    _markers.clear();
     
     for (var doc in docs) {
       final data = doc.data();
@@ -209,13 +131,32 @@ class _MapScreenState extends State<MapScreen> {
       );
       
       _markerItems.add(markerItem);
+      
+      final marker = Marker(
+        markerId: MarkerId(doc.id),
+        position: pos,
+        icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+        infoWindow: InfoWindow(
+          title: data['title'],
+          snippet: 'Price: ${data['price']}, Amount: ${data['amount']}',
+        ),
+        onTap: () {
+          // 마커 상호작용 메뉴 표시
+          if (data['userId'] == userId) {
+            _showMarkerActionMenu(doc.id, data);
+          } else {
+            _showMarkerInfo(data);
+          }
+        },
+      );
+      
+      _markers.add(marker);
     }
     
-    // 클러스터 매니저에 마커 아이템들 추가
-    _clusterManager.setItems(_markerItems);
+    setState(() {});
   }
 
-  /// ✅ Firestore에 마커 저장 (클러스터링 지원)
+  /// ✅ Firestore에 마커 저장
   Future<void> _addMarkerToFirestore(LatLng position, Map<String, dynamic> result) async {
     if (userId == null) return;
     final doc = await FirebaseFirestore.instance.collection('markers').add({
@@ -241,14 +182,35 @@ class _MapScreenState extends State<MapScreen> {
       title: 'PPAM Marker',
       price: result['price']?.toString() ?? '0',
       amount: result['amount']?.toString() ?? '0',
-      userId: userId,
+      userId: userId ?? '',
       data: markerData,
       position: position,
     );
 
-    // 클러스터 매니저에 새 마커 추가
+    // 마커 추가
     _markerItems.add(markerItem);
-    _clusterManager.setItems(_markerItems);
+    
+    final marker = Marker(
+      markerId: MarkerId(doc.id),
+      position: position,
+      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+      infoWindow: InfoWindow(
+        title: 'PPAM Marker',
+        snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
+      ),
+      onTap: () {
+        // 마커 상호작용 메뉴 표시
+        if (userId == FirebaseAuth.instance.currentUser?.uid) {
+          _showMarkerActionMenu(doc.id, markerData);
+        } else {
+          _showMarkerInfo(markerData);
+        }
+      },
+    );
+
+    setState(() {
+      _markers.add(marker);
+    });
   }
 
   /// ✅ 마커 액션 메뉴 표시 (소유자용)
@@ -379,13 +341,15 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 마커 삭제 (Firestore + UI + 클러스터링)
+  /// ✅ 마커 삭제 (Firestore + UI)
   Future<void> _removeMarker(String markerId) async {
     await FirebaseFirestore.instance.collection('markers').doc(markerId).delete();
     
-    // 클러스터 매니저에서 마커 제거
+    // 마커 제거
     _markerItems.removeWhere((item) => item.id == markerId);
-    _clusterManager.setItems(_markerItems);
+    setState(() {
+      _markers.removeWhere((m) => m.markerId.value == markerId);
+    });
   }
 
   /// ✅ 마커 추가
@@ -482,8 +446,7 @@ class _MapScreenState extends State<MapScreen> {
                   infoWindow: const InfoWindow(title: "선택한 위치"),
                 ),
             },
-            onCameraMove: _clusterManager.onCameraMove,
-            onCameraIdle: _clusterManager.onCameraIdle,
+
           ),
           if (_longPressedLatLng != null)
             Center(child: _buildPopupWidget()),
