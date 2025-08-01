@@ -836,7 +836,7 @@ class _MapScreenState extends State<MapScreen> {
 
     if (result != null && pressedPosition != null) {
       // 마커 생성 시 기본 이미지 설정
-      final markerData = {
+      final markerData = <String, dynamic>{
         ...result,
         'imageUrl': result['imageUrl'] ?? 'assets/images/ppam_work.png',
       };
