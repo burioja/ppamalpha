@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
@@ -90,13 +92,51 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _loadCustomMarker() async {
-    final icon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(96, 96)), // 2배 크기로 고정
-      'assets/images/ppam_work.png',
-    );
-    setState(() {
-      _customMarkerIcon = icon;
-    });
+    try {
+      // 이미지 파일을 바이트로 로드
+      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
+      final Uint8List bytes = data.buffer.asUint8List();
+      
+      // 이미지를 코드로 디코드
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image image = frameInfo.image;
+      
+      // 원하는 크기로 리사이즈 (더 큰 크기)
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder);
+      
+      // 마커 크기를 200x200으로 설정
+      final Rect rect = Rect.fromLTWH(0, 0, 200, 200);
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        rect,
+        Paint(),
+      );
+      
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image resizedImage = await picture.toImage(200, 200);
+      final ByteData? resizedData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (resizedData != null) {
+        final icon = BitmapDescriptor.fromBytes(resizedData.buffer.asUint8List());
+        setState(() {
+          _customMarkerIcon = icon;
+        });
+        print('마커 크기 조정 완료: 200x200');
+      }
+    } catch (e) {
+      print('마커 크기 조정 오류: $e');
+      // 오류 시 기본 방법으로 폴백
+      final icon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(),
+        'assets/images/ppam_work.png',
+      );
+      setState(() {
+        _customMarkerIcon = icon;
+      });
+    }
   }
 
   void goToCurrentLocation() {
