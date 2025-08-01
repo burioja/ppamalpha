@@ -362,7 +362,7 @@ class _MapScreenState extends State<MapScreen> {
       'amount': result['amount'],
       'userId': userId,
       'imageUrl': result['imageUrl'],
-      'remainingAmount': result['amount'], // 초기 수량
+      'remainingAmount': int.tryParse(result['amount']?.toString() ?? '0') ?? 0, // 초기 수량
       'expiryDate': expiryDate,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -373,7 +373,7 @@ class _MapScreenState extends State<MapScreen> {
       'amount': result['amount'],
       'userId': userId,
       'imageUrl': result['imageUrl'],
-      'remainingAmount': result['amount'],
+      'remainingAmount': int.tryParse(result['amount']?.toString() ?? '0') ?? 0,
       'expiryDate': expiryDate,
     };
 
@@ -387,7 +387,7 @@ class _MapScreenState extends State<MapScreen> {
       data: markerData,
       position: position,
       imageUrl: result['imageUrl'],
-      remainingAmount: result['amount'],
+      remainingAmount: int.tryParse(result['amount']?.toString() ?? '0') ?? 0,
       expiryDate: expiryDate,
     );
 
@@ -821,16 +821,27 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ✅ 마커 추가
   Future<void> _handleAddMarker() async {
+    // 현재 길게 누른 위치 저장
+    final pressedPosition = _longPressedLatLng;
+    
+    // 팝업 창 닫기
+    setState(() {
+      _longPressedLatLng = null;
+    });
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PostPlaceScreen()),
     );
 
-    if (result != null && _longPressedLatLng != null) {
-      await _addMarkerToFirestore(_longPressedLatLng!, result);
-      setState(() {
-        _longPressedLatLng = null;
-      });
+    if (result != null && pressedPosition != null) {
+      // 마커 생성 시 기본 이미지 설정
+      final markerData = {
+        ...result,
+        'imageUrl': result['imageUrl'] ?? 'assets/images/ppam_work.png',
+      };
+      
+      await _addMarkerToFirestore(pressedPosition, markerData);
     }
   }
 
