@@ -53,6 +53,8 @@ class _MapScreenState extends State<MapScreen> {
   // 마커 관련 변수들
   final List<MarkerItem> _markerItems = [];
   double _currentZoom = 15.0;
+  final Set<Marker> _clusteredMarkers = {};
+  bool _isClustered = false;
 
   @override
   void initState() {
@@ -108,6 +110,112 @@ class _MapScreenState extends State<MapScreen> {
     if (_mapStyle != null) controller.setMapStyle(_mapStyle);
   }
 
+  /// ✅ 간단한 클러스터링 함수
+  void _updateClustering() {
+    if (_currentZoom < 12.0) {
+      // 줌이 멀면 클러스터링 적용
+      _createClusters();
+    } else {
+      // 줌이 가까우면 개별 마커 표시
+      _showIndividualMarkers();
+    }
+  }
+
+  /// ✅ 클러스터 생성
+  void _createClusters() {
+    if (_isClustered) return;
+    
+    _clusteredMarkers.clear();
+    final clusters = <String, List<MarkerItem>>{};
+    
+    // 마커들을 그룹화 (간단한 그리드 기반)
+    for (final item in _markerItems) {
+      final gridKey = '${(item.position.latitude * 100).round()}_${(item.position.longitude * 100).round()}';
+      clusters.putIfAbsent(gridKey, () => []).add(item);
+    }
+    
+    // 클러스터 마커 생성
+    for (final cluster in clusters.values) {
+      if (cluster.length == 1) {
+        // 단일 마커는 그대로 표시
+        final item = cluster.first;
+        _clusteredMarkers.add(_createMarker(item));
+      } else {
+        // 여러 마커는 클러스터로 표시
+        final center = _calculateClusterCenter(cluster);
+        _clusteredMarkers.add(_createClusterMarker(center, cluster.length));
+      }
+    }
+    
+    setState(() {
+      _isClustered = true;
+    });
+  }
+
+  /// ✅ 개별 마커 표시
+  void _showIndividualMarkers() {
+    if (!_isClustered) return;
+    
+    _clusteredMarkers.clear();
+    for (final item in _markerItems) {
+      _clusteredMarkers.add(_createMarker(item));
+    }
+    
+    setState(() {
+      _isClustered = false;
+    });
+  }
+
+  /// ✅ 클러스터 중심점 계산
+  LatLng _calculateClusterCenter(List<MarkerItem> cluster) {
+    double totalLat = 0;
+    double totalLng = 0;
+    
+    for (final item in cluster) {
+      totalLat += item.position.latitude;
+      totalLng += item.position.longitude;
+    }
+    
+    return LatLng(totalLat / cluster.length, totalLng / cluster.length);
+  }
+
+  /// ✅ 마커 생성
+  Marker _createMarker(MarkerItem item) {
+    return Marker(
+      markerId: MarkerId(item.id),
+      position: item.position,
+      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+      infoWindow: InfoWindow(
+        title: item.title,
+        snippet: 'Price: ${item.price}원, Amount: ${item.amount}개',
+      ),
+      onTap: () {
+        if (item.userId == userId) {
+          _showMarkerActionMenu(item.id, item.data);
+        } else {
+          _showMarkerInfo(item.data);
+        }
+      },
+    );
+  }
+
+  /// ✅ 클러스터 마커 생성
+  Marker _createClusterMarker(LatLng position, int count) {
+    return Marker(
+      markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
+      position: position,
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      infoWindow: InfoWindow(
+        title: '클러스터',
+        snippet: '$count개의 마커',
+      ),
+      onTap: () {
+        // 클러스터 탭시 줌 인
+        mapController.animateCamera(CameraUpdate.zoomIn());
+      },
+    );
+  }
+
   /// ✅ Firestore에서 마커 불러오기
   Future<void> _loadMarkersFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('markers').get();
@@ -115,6 +223,7 @@ class _MapScreenState extends State<MapScreen> {
 
     _markerItems.clear();
     _markers.clear();
+    _clusteredMarkers.clear();
     
     for (var doc in docs) {
       final data = doc.data();
@@ -131,29 +240,10 @@ class _MapScreenState extends State<MapScreen> {
       );
       
       _markerItems.add(markerItem);
-      
-      final marker = Marker(
-        markerId: MarkerId(doc.id),
-        position: pos,
-        icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
-        infoWindow: InfoWindow(
-          title: data['title'],
-          snippet: 'Price: ${data['price']}, Amount: ${data['amount']}',
-        ),
-        onTap: () {
-          // 마커 상호작용 메뉴 표시
-          if (data['userId'] == userId) {
-            _showMarkerActionMenu(doc.id, data);
-          } else {
-            _showMarkerInfo(data);
-          }
-        },
-      );
-      
-      _markers.add(marker);
     }
     
-    setState(() {});
+    // 클러스터링 적용
+    _updateClustering();
   }
 
   /// ✅ Firestore에 마커 저장
@@ -190,27 +280,8 @@ class _MapScreenState extends State<MapScreen> {
     // 마커 추가
     _markerItems.add(markerItem);
     
-    final marker = Marker(
-      markerId: MarkerId(doc.id),
-      position: position,
-      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
-      infoWindow: InfoWindow(
-        title: 'PPAM Marker',
-        snippet: 'Price: ${result['price']}, Amount: ${result['amount']}',
-      ),
-      onTap: () {
-        // 마커 상호작용 메뉴 표시
-        if (userId == FirebaseAuth.instance.currentUser?.uid) {
-          _showMarkerActionMenu(doc.id, markerData);
-        } else {
-          _showMarkerInfo(markerData);
-        }
-      },
-    );
-
-    setState(() {
-      _markers.add(marker);
-    });
+    // 클러스터링 업데이트
+    _updateClustering();
   }
 
   /// ✅ 마커 액션 메뉴 표시 (소유자용)
@@ -347,9 +418,9 @@ class _MapScreenState extends State<MapScreen> {
     
     // 마커 제거
     _markerItems.removeWhere((item) => item.id == markerId);
-    setState(() {
-      _markers.removeWhere((m) => m.markerId.value == markerId);
-    });
+    
+    // 클러스터링 업데이트
+    _updateClustering();
   }
 
   /// ✅ 마커 추가
@@ -441,7 +512,7 @@ class _MapScreenState extends State<MapScreen> {
               });
             },
             markers: {
-              ..._markers,
+              ..._clusteredMarkers,
               if (_longPressedLatLng != null)
                 Marker(
                   markerId: const MarkerId('long_press_marker'),
@@ -449,6 +520,12 @@ class _MapScreenState extends State<MapScreen> {
                   icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
                   infoWindow: const InfoWindow(title: "선택한 위치"),
                 ),
+            },
+            onCameraMove: (CameraPosition position) {
+              _currentZoom = position.zoom;
+            },
+            onCameraIdle: () {
+              _updateClustering();
             },
 
           ),
