@@ -106,17 +106,40 @@ class _MapScreenState extends State<MapScreen> {
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(recorder);
       
-      // 마커 크기를 200x200으로 설정
-      final Rect rect = Rect.fromLTWH(0, 0, 200, 200);
+      // 마커 크기를 200x200으로 설정하고 앵커 포인트 고려
+      final double targetSize = 200.0;
+      final Rect rect = Rect.fromLTWH(0, 0, targetSize, targetSize);
+      
+      // 이미지 비율 유지하면서 중앙 정렬
+      final double imageRatio = image.width / image.height;
+      final double targetRatio = targetSize / targetSize;
+      
+      double drawWidth = targetSize;
+      double drawHeight = targetSize;
+      double offsetX = 0;
+      double offsetY = 0;
+      
+      if (imageRatio > targetRatio) {
+        // 이미지가 더 넓음 - 높이에 맞춤
+        drawHeight = targetSize;
+        drawWidth = targetSize * imageRatio;
+        offsetX = (targetSize - drawWidth) / 2;
+      } else {
+        // 이미지가 더 높음 - 너비에 맞춤
+        drawWidth = targetSize;
+        drawHeight = targetSize / imageRatio;
+        offsetY = (targetSize - drawHeight) / 2;
+      }
+      
       canvas.drawImageRect(
         image,
         Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        rect,
+        Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
         Paint(),
       );
       
       final ui.Picture picture = recorder.endRecording();
-      final ui.Image resizedImage = await picture.toImage(200, 200);
+      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
       final ByteData? resizedData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
       
       if (resizedData != null) {
@@ -124,7 +147,7 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _customMarkerIcon = icon;
         });
-        print('마커 크기 조정 완료: 200x200');
+        print('마커 크기 조정 완료: ${targetSize.toInt()}x${targetSize.toInt()} (앵커 포인트 고려)');
       }
     } catch (e) {
       print('마커 크기 조정 오류: $e');
@@ -235,6 +258,7 @@ class _MapScreenState extends State<MapScreen> {
       markerId: MarkerId(item.id),
       position: item.position,
       icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
+      anchor: const Offset(0.5, 1.0), // 마커 하단 중앙에 앵커 설정
       infoWindow: InfoWindow(
         title: item.title,
         snippet: 'Price: ${item.price}원, Amount: ${item.amount}개',
@@ -255,6 +279,7 @@ class _MapScreenState extends State<MapScreen> {
       markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
       position: position,
       icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      anchor: const Offset(0.5, 1.0), // 마커 하단 중앙에 앵커 설정
       infoWindow: InfoWindow(
         title: '클러스터',
         snippet: '$count개의 마커',
