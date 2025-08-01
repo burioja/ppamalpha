@@ -44,7 +44,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Address or GPS loc."),
+        title: const Text("전단지 배포 설정"),
         backgroundColor: Colors.black87,
       ),
       body: SingleChildScrollView(
@@ -52,13 +52,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text("Post Set."),
-                Text("Img. Chk."),
-                Text("Recent Template"),
-              ],
+            const Text(
+              "이미지 선택",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
 
