@@ -350,7 +350,7 @@ class _MapScreenState extends State<MapScreen> {
     if (userId == null) return;
     
     // 만료 날짜 계산
-    final period = int.tryParse(result['period']?.toString() ?? '24');
+    final period = int.tryParse(result['period']?.toString() ?? '24') ?? 24;
     final periodUnit = result['periodUnit'] ?? 'Hour';
     final expiryDate = _calculateExpiryDate(period, periodUnit);
     
