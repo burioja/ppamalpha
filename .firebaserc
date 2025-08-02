@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "staging": "ppamproto-439623",
+    "default": "ppamproto-439623"
+  },
+  "targets": {},
+  "etags": {}
+}

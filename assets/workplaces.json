@@ -1,0 +1,25 @@
+{
+  "workplaces": [
+    { "id": "뺌햄버거", "groupdata1": "F&B(점포)", "groupdata2": "핸드푸드", "groupdata3": "Hamburger" },
+    { "id": "순대국밥", "groupdata1": "F&B(점포)", "groupdata2": "밀", "groupdata3": "국밥" },
+    { "id": "어쓸커피", "groupdata1": "F&B(점포)", "groupdata2": "음료", "groupdata3": "Café" },
+    { "id": "서부쌀롱", "groupdata1": "F&B(점포)", "groupdata2": "음료", "groupdata3": "Bar" },
+    { "id": "뺌햄버거(본사)", "groupdata1": "F&B(사무실)", "groupdata2": "핸드푸드", "groupdata3": "Hamburger" },
+    { "id": "송송피아노", "groupdata1": "Learning", "groupdata2": "예체능", "groupdata3": "피아노" },
+    { "id": "튀튀발레", "groupdata1": "Learning", "groupdata2": "예체능", "groupdata3": "발레" },
+    { "id": "공업수학", "groupdata1": "Learning", "groupdata2": "공부", "groupdata3": "수학" },
+    { "id": "키즈소아과", "groupdata1": "Medical", "groupdata2": "개인병원", "groupdata3": "소아과" },
+    { "id": "큰대학병원", "groupdata1": "Medical", "groupdata2": "대학병원", "groupdata3": "정형외과" },
+    { "id": "큰대학병원_약국", "groupdata1": "Medical", "groupdata2": "대학병원", "groupdata3": "약국" },
+    { "id": "평화누리경기북부특별자치도 디아트포레스트센터빌 아파트", "groupdata1": "생활", "groupdata2": "주거", "groupdata3": "아파트" },
+    { "id": "와르르맨션", "groupdata1": "생활", "groupdata2": "주거", "groupdata3": "빌라" },
+    { "id": "시그니엘 잠실", "groupdata1": "생활", "groupdata2": "숙박", "groupdata3": "호텔" },
+    { "id": "방이동 주민센터", "groupdata1": "생활", "groupdata2": "공공기관", "groupdata3": "주민센터" },
+    { "id": "우왁짐", "groupdata1": "문화", "groupdata2": "운동", "groupdata3": "짐" },
+    { "id": "땡땡마트", "groupdata1": "마트", "groupdata2": "마트", "groupdata3": "마트" },
+    { "id": "형지오피스텔전세사기피해자 모임", "groupdata1": "모임", "groupdata2": "운동", "groupdata3": "러닝" },
+    { "id": "ㅇㅇㅇ의원실", "groupdata1": "정치", "groupdata2": "ㅇㅇㅇ의원실", "groupdata3": "ㅇㅇㅇ의원실" },
+    { "id": "사랑의 교회", "groupdata1": "종교", "groupdata2": "기독교", "groupdata3": "기독교" },
+    { "id": "타이밍", "groupdata1": "성인", "groupdata2": "유흥업소", "groupdata3": "룸쌀롱" }
+  ]
+}

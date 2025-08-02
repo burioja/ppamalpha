@@ -1,0 +1,39 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ppamproto-439623",
+          "appId": "1:714872165171:android:30cf62e04b46beba6e2446",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ppamproto-439623",
+          "configurations": {
+            "android": "1:714872165171:android:30cf62e04b46beba6e2446",
+            "ios": "1:714872165171:ios:34b77a19d6ada3e36e2446",
+            "macos": "1:714872165171:ios:34b77a19d6ada3e36e2446",
+            "web": "1:714872165171:web:1b07188ea5236f196e2446"
+          }
+        }
+      }
+    }
+  }
+}
