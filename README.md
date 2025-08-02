@@ -1,131 +1,282 @@
-# ppamproto
+# 📄 뺌(BBAM) 앱 리뉴얼 v2 – Product Requirements Document (PRD)
 
-A new Flutter project.
+## 🧩 프로젝트 개요
 
-## Getting Started
+- **제품명**: 뺌(BBAM)
+- **목표**: 위치 기반으로 디지털 전단지를 “뿌리고”, 유저가 “줍는” 구조의 리워드형 광고 플랫폼
+- **핵심 컨셉**:  
+  - 광고주는 원하는 위치에 포스트(전단지)를 투하  
+  - 유저는 해당 위치에 도달하여 전단지를 줍고 현금 리워드를 획득  
+  - 전단지는 월렛에 저장되어 쿠폰처럼 사용 가능
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## 🎯 핵심 기능 정의
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### A. 🗺 맵 (포스트 뿌리기)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| 기능             | 설명 |
+|------------------|------|
+| 위치 설정         | 지도에서 핀으로 투하지점 지정 |
+| 타겟팅 설정       | 성별, 연령대(예: 20대 여성 등) |
+| 소멸 기한         | 기본 30일 내 소멸 (수정 가능) |
+| 리워드 설정       | 리워드 현금 금액 설정 |
+| 사용 조건         | 포스트 사용 방식 (예: 티켓/단순보기 등) |
+| 중복 수령 여부    | 1회 수령 제한 or 중복 허용 설정 |
+| 필터링 조건       | 유저가 원하는 포스트만 수거할 수 있도록 필터 제공 |
+| 콘텐츠 타입       | 이미지 / 텍스트 / 링크 / 사운드 (단독 or 조합 가능) |
+
+### B. 👛 월렛 (포스트 수집 및 관리)
+
+| 기능             | 설명 |
+|------------------|------|
+| 포스트 저장       | 수거한 포스트는 월렛에 저장됨 |
+| 소멸 기한 표시    | 각 포스트의 유효기간 명시 |
+| 리딤 기능         | 쿠폰, 티켓, 정보 활용 등으로 전환 |
+| 정렬 / 필터       | 사용여부, 날짜, 지역 등으로 정렬 가능 |
+
+---
+
+## 📱 사용자 흐름 (User Flow)
+
+### 광고주
+1. 가입 (사업자 or 개인 선택)
+2. 현금 충전 → 포스트 작성 → 타겟 설정 및 뿌리기
+3. 수거/리워드 결과 리포트 확인
+
+### 유저
+1. 앱 실행 → 맵에서 포스트 탐색
+2. GPS로 접근 → 포스트 줍기 → 리워드 획득
+3. 월렛 저장 → 포스트 사용 or 출금 신청
+
+---
+
+## 💸 과금 및 수익 구조
+
+- **광고비 구조**:
+  - 전체 광고비의 **80%는 리워드**, **20%는 플랫폼 수수료**
+- **프리미엄 포스트**:
+  - 업종/타겟별 단가 차등 적용, 상한 없음
+- **무료 포스트**:
+  - 유저가 **광고 시청** 후 일정 수량 제공
+
+---
+
+## 🧾 리워드 출금 시스템
+
+| 항목       | 설명 |
+|------------|------|
+| 리워드 단위 | 현금 지급 (포인트 아님) |
+| 충전 방식   | 신용카드, 가상계좌, 간편결제 (토스페이먼츠 추천) |
+| 출금 방식   | 계좌 출금 (본인 인증 필수, 주/월 정산 주기) |
+| 1회 수령한도| 10만 원 이하로 제한 |
+| 세금 고려   | 기타소득세 22% 원천징수 고려 필요<br>연간 125만 원 초과 시 고지 필요<br>“소득신고 책임은 사용자 본인에게 있음” 명시 |
+
+---
+
+## 🔒 보안 및 위치 인증
+
+| 항목            | 설명 |
+|-----------------|------|
+| 루팅/탈옥 탐지   | RootBeer(Android), JailMonkey(iOS) 사용 |
+| Mock GPS 방지   | Android 위치 API 및 iOS CoreLocation 적용 |
+| GPS 정밀도      | ±20m 이내 허용, 반복 수거 제한 |
+| 기기 고유값 제한 | UDID 기반 1일 수거 횟수 제한 |
+| 보조인증        | 통신사 기지국(CID) 활용 가능성 (비용 부담 큼) |
+
+---
+
+## ✅ 관리 기능 (Admin Panel)
+
+- 유저/포스트/리워드 관리
+- 수거 통계 리포트 대시보드
+- 부정 수거 탐지/차단 도구
+- 신고 처리 및 사용자 제한
+- 충전/출금 관리 로그
+
+---
+
+## 📌 향후 TODO
+
+- [ ] 와이어프레임 설계 (맵, 뿌리기, 월렛, 출금)
+- [ ] API 명세서 및 DB 스키마 구성
+- [ ] PG사 계약 및 결제 API 연동
+- [ ] 위치 보안 테스트 (모의 GPS/루팅 탐지)
+- [ ] 세무 고지 텍스트 및 약관 정비
+
+---
+
+## 🔍 참고/보완 필요사항
+
+- NICE or 홈택스 통한 사업자 인증 API 연동
+- 월렛 내 전단지 카테고리 UX
+- 광고주 리포트 (노출/수거/전환률) 제공 여부
+- 콘텐츠 업로드 제한 정책 (음란물, 사기 등)
+- 포스트 검수 프로세스 (자동/수동 여부)
 
 
-firebase 데이터 베이스 구조
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
 
-# 파이어베이스 데이터 구조
 
-문서의 맥락, 목표, 범위
+# 📦 “뺌(BBAM)” Flutter + Firebase 프로젝트 설계 문서
 
-├── 컬렉션
-│   └── {문서}
-│       ├── 필드
-│       ├── 배열
-│       ├── 서브컬렉션
-│       │           ├── 필드
-│       │           ├── 배열
+## ✅ 사용 기술 스택
 
-├── users
-│   └── {userId}
-│       ├── profile
-│       │   ├── nickname
+| 항목       | 기술 |
+|------------|------|
+| 프론트엔드 | Flutter + Dart |
+| 백엔드     | Firebase Cloud Functions |
+| DB         | Firestore (NoSQL) |
+| 인증       | Firebase Authentication |
+| 스토리지   | Firebase Storage |
+| 결제       | PG 연동 (예: TossPayments) |
+| 검색       | ✅ Meilisearch (고속 검색용) |
+| 위치정보   | Geolocator, Geoflutterfire |
 
-│       │   ├── adress
-│       │   ├── secondAdress
-│       │   ├── phoneNumber
-│       │   ├── email
-│       │   ├── profileImageUrl
-│       │   ├── account
-│       │   ├── gender
-│       │   ├── birth
-│       │   └── createdAt
-│       ├── location
-│       ├── wallet
-│       │       └── {fileId}
-│       │           ├── fileName
-│       │           ├── fileUrl: "https://..."
-│       │           ├── source: "map_marker" | "chat" | "event"
-│       │           ├── sourceId: (markerId, chatId 등)
-│       │           ├── receivedAt: (markerId, chatId 등)
-│       │           ├── description: (markerId, chatId 등)
-│       │           ├── createdAt
-│       │           └── metadata: { optional 정보 }
-│       ├── workplaces
-│       │         ├── workplaceadd
-│       │         ├── workplaceinput
-│       │         ├── jobTitle
-│       │         ├── role
-│       │         ├── permissions
-│       │         └── createdAt
+---
 
-│
-├── user_tracks (팔로잉)
-│   └── {userId} ← A 유저가 팔로잉하는 사람들
-│       └── following (subcollection)
-│           └── {targetUserId}
-│               ├── createdAt
-│               └── targetNickname (optional 캐시)
+## 🧭 주요 앱 페이지 구조
 
-├── user_connections (맞팔)
-│   └── {userId} ← B 유저와 A가 서로 팔로우하면 저장됨
-│       └── connections (subcollection)
-│           └── {mutualUserId}
-│               ├── createdAt
-│
-├── user_logs (사용자 활동 로그)
-│   └── {userId}
-│       └── logs (subcollection)
-│           └── {logId}
-│               ├── type: "post" | "comment" | "marker" | "vote" | ...
-│               ├── targetId: (해당 글/마커의 id)
-│               ├── timestamp
-│               └── metadata: { optional }
+| 페이지 | 설명 |
+|--------|------|
+| 🏠 홈(맵) | 포스트 줍기 / 위치 기반 전단지 탐색 |
+| 🧲 포스트 뿌리기 | 광고주용 작성 양식 및 조건 설정 |
+| 👛 전단지 월렛 | 수거한 포스트 보관함 |
+| 📤 리워드 출금 | 보상 현황 확인 및 출금 신청 |
+| 🔍 검색/필터 | 키워드 및 조건 기반 포스트 찾기 |
+| 👤 마이페이지 | 유저 정보 / 사업자 인증 |
+| 📊 광고주 대시보드 | 포스트 통계, 리포트 확인 |
+| 💳 충전/결제 | 광고비 충전 페이지 |
+| ⚙️ 관리자 (Web) | 신고 처리, 유저 관리 등 운영 도구
 
-├── posts (커뮤니티 글)
-│   └── {postId}
-│       ├── userId
-│       ├── content
-│       ├── imageUrls: []
-│       ├── category: "threads" | "recommend" | "vote"
-│       ├── createdAt
-│       ├── voteOptions (옵션형인 경우)
-│       ├── stats
-│       │   ├── commentCount
-│       │   ├── likeCount
-│       │   └── viewCount
-│       └── location (작성 위치 또는 지역태그)
+---
 
-├── comments
-│   └── {commentId}
-│       ├── postId
-│       ├── userId
-│       ├── content
-│       ├── createdAt
+## 📘 Firestore 데이터 구조 설계
 
-├── votes
-│   └── {voteId}
-│       ├── postId
-│       ├── userId
-│       ├── selectedOption
-│       ├── votedAt
+### `/users/{uid}`
+- 유저 프로필 및 보유 리워드 정보
+```json
+{
+  "name": "홍길동",
+  "role": "user", // or "advertiser"
+  "is_business_verified": true,
+  "wallet_balance": 12000,
+  "reward_history": [],
+  "collected_posts": []
+}
+```
 
-├── map_markers
-│   └── {markerId}
-│       ├── userId
-│       ├── markerImageUrl
-│       ├── position: { lat, lng }
-│       ├── description
-│       ├── filters: {
-│             ageRange: [min, max],
-│             gender: "male" | "female" | "all",
-│             jobTags: ["engineer", "student"]
-│         }
-│       ├── createdAt
-│       └── stats
-│           ├── viewCount
-│           └── likeCount
+### `/posts/{postId}`
+- 전단지 데이터
+```json
+{
+  "owner_id": "uid123",
+  "title": "무료 커피 쿠폰",
+  "content": {
+    "text": "스타벅스 매장 전용",
+    "image_url": "...",
+    "link": "...",
+    "audio_url": "..."
+  },
+  "type": "coupon",
+  "target_gender": "female",
+  "target_age_range": "20s",
+  "location": GeoPoint,
+  "is_active": true,
+  "expires_at": Timestamp,
+  "max_claims": 50,
+  "claimed_count": 12,
+  "reward_amount_per_user": 1000
+}
+```
+
+### `/transactions/{txId}`
+- 충전, 출금, 리워드 지급 이력
+
+### `/business_verification/{uid}`
+- 사업자 인증 결과 저장
+
+### `/claims/{claimId}`
+- 포스트 수거 이력 (리워드 지급 상태 포함)
+
+### `/reports/{reportId}`
+- 전단지 신고 내역
+
+---
+
+## 🔌 주요 Firebase API 목록
+
+| API 함수명 | 설명 |
+|-----------|------|
+| `createPost()` | 전단지 작성 및 등록 |
+| `claimPost()` | 위치 인증 후 수거 처리 |
+| `withdrawReward()` | 출금 요청 처리 |
+| `verifyBusiness()` | 사업자 등록 인증 |
+| `registerPayment()` | 충전 요청 및 결제 등록 |
+| `getNearbyPosts()` | 위치 기반 포스트 탐색 |
+| `filterPosts()` | 조건 기반 탐색 |
+| `adminGetStats()` | 관리자 통계 API
+
+---
+
+## 🔍 Meilisearch 적용 제안
+
+### ✅ 역할
+- Firestore의 느린 쿼리를 보완하여 고속 검색 수행
+- `title`, `tags`, `업종`, `성별`, `나이`, `위치` 등 조건 조합 필터링 가능
+
+### 🔧 적용 방식
+
+1. **배포 방식**
+   - Docker 기반 self-host 또는 VPS/클라우드 서버
+2. **데이터 연동**
+   - Firebase Function에서 post 등록/업데이트 시 Meilisearch에 동기화
+3. **Flutter 연동**
+   - `meilisearch` Dart 패키지 사용 → 조건 검색 결과 받아오기
+
+### ✅ 장점 vs Firestore
+
+| 기능 | Firestore | Meilisearch |
+|------|-----------|-------------|
+| 키워드 검색 | 제한적 | 빠르고 정확 |
+| 랭킹 정렬 | 수동 구현 | 자동 지원 |
+| 다중 필터 | 복잡하고 느림 | 조합 필터 쾌적 |
+| 유사어/부분검색 | 불가 | 가능 |
+| 추천 검색어 | 불가 | 가능 |
+
+---
+
+## 👥 역할 분담 전략 (2인 기준)
+
+| 담당자 | 역할 | 주요 작업 |
+|--------|------|-----------|
+| A (UI/UX) | Flutter 클라이언트, UX 설계 | 맵 화면, 월렛, 뿌리기 UI, 애니메이션, 상태관리 |
+| B (Firebase) | 백엔드 로직, DB 설계 | Firestore 구조, Functions, Meilisearch 연동, 인증, 결제 API |
+
+---
+
+## 📅 개발 단계 제안
+
+1. 맵/포스트 수거 UI + Firestore 구조 설계
+2. 인증 + 포스트 생성/수거 API
+3. 월렛 + 출금 UI + 출금 처리 로직
+4. 광고주 뿌리기 플로우 완성
+5. Meilisearch 연동 + 검색 필터 완성
+6. 관리자 기능 및 정산 로그 추가
+
+---
+
+## 🔐 추가 운영 고려 사항
+
+- GPS 위치 위조 방지 (루팅 탐지 + Mock 위치 차단)
+- 리워드 출금 1회 10만원 제한
+- 사업자 인증은 API 연동 또는 수동 검토
+- 세금: 연 125만원 초과 시 고지, 22% 기타소득세 적용 가능성
+
