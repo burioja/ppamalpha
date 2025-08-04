@@ -1,131 +1,217 @@
-// lib/widgets/user_status_widget.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 
 class WorkplaceData {
-  final List<String> data; // {groupdata1, groupdata2, groupdata3, workplaceinput + workplaceadd}
-  final Color color;       // ê·¸ë£¹ë³?ê³ ì • ?‰ìƒ
-  final String mode;       // work ?ëŠ” life
-  final String placeId;    // ?Œë ˆ?´ìŠ¤ ID
+  final List<String> data;
+  final Color color;
+  final String mode;
+  final String placeId;
 
-  WorkplaceData(this.data, this.color, {this.mode = 'work', this.placeId = ''});
+  WorkplaceData(this.data, this.color, {required this.mode, required this.placeId});
 }
 
-// ?œë¤ ?‰ìƒ ?ì„± ?¨ìˆ˜
-Color generateRandomColor() {
-  Random random = Random();
-  return Color.fromARGB(
-    255,
-    50 + random.nextInt(206),
-    50 + random.nextInt(206),
-    50 + random.nextInt(206),
-  );
+class UserStatusWidget extends StatefulWidget {
+  final String mode;
+  final Function(String) onWorkplaceSelected;
+
+  const UserStatusWidget({
+    super.key,
+    required this.mode,
+    required this.onWorkplaceSelected,
+  });
+
+  @override
+  State<UserStatusWidget> createState() => _UserStatusWidgetState();
 }
 
-// ëª¨ë“œë³??Œë ˆ?´ìŠ¤ ê°€?¸ì˜¤ê¸?
-Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
+class _UserStatusWidgetState extends State<UserStatusWidget> {
   List<List<WorkplaceData>> workplacesList = [];
+  int trackCount = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWorkplaces();
+    _loadTrackCount();
+  }
+
+  Future<void> _loadWorkplaces() async {
+    try {
+      final workplaces = await getWorkplaces(widget.mode);
+      setState(() {
+        workplacesList = workplaces;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('ì‘ì—…ì¥ ë¡œë“œ ì˜¤ë¥˜: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadTrackCount() async {
+    try {
+      final count = await getTrackCount(widget.mode);
+      setState(() {
+        trackCount = count;
+      });
+    } catch (e) {
+      debugPrint('íŠ¸ë™ ì¹´ìš´íŠ¸ ë¡œë“œ ì˜¤ë¥˜: $e');
+    }
+  }
+
+  Color generateRandomColor() {
+    final random = Random();
+    return Color.fromRGBO(
+      random.nextInt(256),
+      random.nextInt(256),
+      random.nextInt(256),
+      0.8,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        // íŠ¸ë™ ì¹´ìš´íŠ¸ í‘œì‹œ
+        Container(
+          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'íŠ¸ë™: $trackCountê°œ',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Icon(
+                widget.mode == 'work' ? Icons.work : Icons.home,
+                color: widget.mode == 'work' ? Colors.orange : Colors.blue,
+              ),
+            ],
+          ),
+        ),
+        
+        // ì‘ì—…ì¥ ëª©ë¡
+        Expanded(
+          child: ListView.builder(
+            itemCount: workplacesList.length,
+            itemBuilder: (context, index) {
+              final workplaces = workplacesList[index];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'ê·¸ë£¹ ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  ...workplaces.map((workplace) => _buildWorkplaceItem(workplace)),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkplaceItem(WorkplaceData workplace) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: workplace.color,
+          child: Text(
+            workplace.data.isNotEmpty ? workplace.data[0][0].toUpperCase() : '?',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Text(
+          workplace.data.isNotEmpty ? workplace.data[0] : 'Unknown',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          workplace.data.length > 1 ? workplace.data[1] : '',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+        onTap: () => widget.onWorkplaceSelected(workplace.placeId),
+        trailing: Icon(
+          widget.mode == 'work' ? Icons.work : Icons.home,
+          color: widget.mode == 'work' ? Colors.orange : Colors.blue,
+        ),
+      ),
+    );
+  }
+}
+
+// ì‘ì—…ì¥ ë°ì´í„° ê°€ì ¸ì˜¤ê¸°
+Future<List<List<WorkplaceData>>> getWorkplaces(String mode) async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      // ê¸°ë³¸ ê°œì¸ ?Œë ˆ?´ìŠ¤ ?œê³µ
-      if (mode == 'life') {
-        workplacesList.add([WorkplaceData(['ê°œì¸'], Colors.blue.shade300, mode: 'life', placeId: 'personal')]);
-      } else {
-        workplacesList.add([WorkplaceData(['Customer'], Colors.grey.shade300, mode: 'work')]);
-      }
-      return workplacesList;
-    }
+    if (user == null) return [];
 
-    // ê¸°ì¡´ ?°ì´??êµ¬ì¡°?€ ?ˆë¡œ??êµ¬ì¡° ëª¨ë‘ ?•ì¸
+    List<List<WorkplaceData>> workplacesList = [];
     List<WorkplaceData> modeWorkplaces = [];
 
-    // 1. ?ˆë¡œ??PRD êµ¬ì¡°?ì„œ ?¬ìš©???Œë ˆ?´ìŠ¤ ê°€?¸ì˜¤ê¸?(?Œë ˆ?´ìŠ¤ ?œë¸Œì»¬ë ‰??
+    // 1. ì‚¬ìš©ì í”„ë¡œí•„ì—ì„œ ì‘ì—…ì¥ ì •ë³´ ê°€ì ¸ì˜¤ê¸°
     try {
-      final userPlacesSnapshot = await FirebaseFirestore.instance
-          .collection('users')
+      DocumentSnapshot userProfileDoc = await FirebaseFirestore.instance
+          .collection('user_profiles')
           .doc(user.uid)
-          .collection('places')
-          .where('mode', isEqualTo: mode)
           .get();
 
-      // print ¹® Á¦°ÅµÊ
+      if (userProfileDoc.exists) {
+        final userData = userProfileDoc.data() as Map<String, dynamic>;
+        final places = userData['places'] as List<dynamic>? ?? [];
 
-      for (var placeDoc in userPlacesSnapshot.docs) {
-        final placeData = placeDoc.data();
-        final placeId = placeDoc.id;
-        final roleName = placeData['roleName'] ?? 'ì§ì›';
-        final workplaceAdd = placeData['workplaceAdd'] ?? '';
+        for (var place in places) {
+          final placeData = place as Map<String, dynamic>;
+          final placeMode = placeData['mode'] as String? ?? '';
+          final placeId = placeData['placeId'] as String? ?? '';
 
-        // ?Œë ˆ?´ìŠ¤ ?ì„¸ ?•ë³´ ê°€?¸ì˜¤ê¸?
-        final placeDetailDoc = await FirebaseFirestore.instance
-            .collection('places')
-            .doc(placeId)
-            .get();
-
-        if (placeDetailDoc.exists) {
-          final placeDetail = placeDetailDoc.data()!;
-          final placeName = placeDetail['name'] ?? placeId;
-          final displayName = workplaceAdd.isNotEmpty ? '$placeName $workplaceAdd' : placeName;
-
-          List<String> data = [roleName, displayName];
-          Color groupColor = generateRandomColor();
-
-          modeWorkplaces.add(WorkplaceData(data, groupColor, mode: mode, placeId: placeId));
-          print('?Œë ˆ?´ìŠ¤ ì¶”ê?: $placeName (??• : $roleName)');
-        }
-      }
-    } catch (e) {
-      // print ¹® Á¦°ÅµÊ
-    }
-
-    // 2. ?¸ë™???Œë ˆ?´ìŠ¤ ê°€?¸ì˜¤ê¸?(user_tracks?ì„œ ëª¨ë“œë³??„í„°ë§?
-    try {
-      final trackSnapshot = await FirebaseFirestore.instance
-          .collection('user_tracks')
-          .doc(user.uid)
-          .collection('following')
-          .get();
-
-      // print ¹® Á¦°ÅµÊ
-
-      for (var trackDoc in trackSnapshot.docs) {
-        final trackData = trackDoc.data();
-        final placeId = trackDoc.id;
-        final trackMode = trackData['mode'] ?? 'work';
-
-        // ?„ì¬ ëª¨ë“œ?€ ?¼ì¹˜?˜ëŠ” ?¸ë™???Œë ˆ?´ìŠ¤ë§?ì¶”ê?
-        if (trackMode == mode) {
-          // ?´ë? ?Œë ˆ?´ìŠ¤ ?œë¸Œì»¬ë ‰?˜ì— ?ˆëŠ”ì§€ ?•ì¸
-          bool alreadyAdded = modeWorkplaces.any((workplace) => workplace.placeId == placeId);
-          
-          if (!alreadyAdded) {
-            // ?Œë ˆ?´ìŠ¤ ?ì„¸ ?•ë³´ ê°€?¸ì˜¤ê¸?
-            final placeDetailDoc = await FirebaseFirestore.instance
+          if (placeMode == mode) {
+            DocumentSnapshot placeDetailDoc = await FirebaseFirestore.instance
                 .collection('places')
                 .doc(placeId)
                 .get();
 
             if (placeDetailDoc.exists) {
               final placeDetail = placeDetailDoc.data()!;
-              final placeName = placeDetail['name'] ?? placeId;
+              final placeDetailData = placeDetail as Map<String, dynamic>;
+              final placeName = placeDetailData['name'] ?? placeId;
 
-              List<String> data = ['?¸ë˜ì»?, placeName];
+              List<String> data = ['ê°œì¸', placeName];
               Color groupColor = generateRandomColor();
 
               modeWorkplaces.add(WorkplaceData(data, groupColor, mode: mode, placeId: placeId));
-              // print ¹® Á¦°ÅµÊ
             }
           }
         }
       }
     } catch (e) {
-      // print ¹® Á¦°ÅµÊ
+      debugPrint('í”„ë¡œí•„ ì‘ì—…ì¥ ë¡œë“œ ì˜¤ë¥˜: $e');
     }
 
-    // 3. ê¸°ì¡´ ?°ì´??êµ¬ì¡°?ì„œ???•ì¸ (?˜ìœ„ ?¸í™˜??
+    // 2. ê¸°ì¡´ ë°ì´í„° êµ¬ì¡°ì—ì„œ í™•ì¸ (í•˜ìœ„ í˜¸í™˜ì„±)
     if (modeWorkplaces.isEmpty) {
       try {
         QuerySnapshot userQuery = await FirebaseFirestore.instance
@@ -162,29 +248,28 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
           }
         }
       } catch (e) {
-        // print ¹® Á¦°ÅµÊ
+        debugPrint('ê¸°ì¡´ ì‘ì—…ì¥ ë¡œë“œ ì˜¤ë¥˜: $e');
       }
     }
 
     if (modeWorkplaces.isEmpty) {
-      // ê¸°ë³¸ ê°œì¸ ?Œë ˆ?´ìŠ¤ ?œê³µ
+      // ê¸°ë³¸ ê°œì¸ í”„ë¡œí•„ ì œê³µ
       if (mode == 'life') {
         modeWorkplaces.add(WorkplaceData(['ê°œì¸'], Colors.blue.shade300, mode: 'life', placeId: 'personal'));
       } else {
-        modeWorkplaces.add(WorkplaceData(['Customer'], Colors.grey.shade300, mode: 'work'));
+        modeWorkplaces.add(WorkplaceData(['Customer'], Colors.grey.shade300, mode: 'work', placeId: 'customer'));
       }
     }
 
-    // print ¹® Á¦°ÅµÊ
     workplacesList.add(modeWorkplaces);
     return workplacesList;
   } catch (e) {
-    // print ¹® Á¦°ÅµÊ
+    debugPrint('ì‘ì—…ì¥ ë¡œë“œ ì˜¤ë¥˜: $e');
     return [];
   }
 }
 
-// Track ?Œë ˆ?´ìŠ¤ ê°œìˆ˜ ê°€?¸ì˜¤ê¸?
+// Track í”„ë¡œí•„ ê°œìˆ˜ ê°€ì ¸ì˜¤ê¸°
 Future<int> getTrackCount(String mode) async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
@@ -196,80 +281,25 @@ Future<int> getTrackCount(String mode) async {
         .collection('following')
         .get();
 
-    // print ¹® Á¦°ÅµÊ
+    debugPrint('íŠ¸ë™ ë¬¸ì„œ ê°œìˆ˜: ${trackSnapshot.docs.length}');
     for (var doc in trackSnapshot.docs) {
-      print('Track ë¬¸ì„œ ID: ${doc.id}, ?°ì´?? ${doc.data()}');
+      debugPrint('Track ë¬¸ì„œ ID: ${doc.id}, ë°ì´í„°: ${doc.data()}');
     }
 
-    // ëª¨ë“  Track???Œë ˆ?´ìŠ¤ ê°œìˆ˜ ë°˜í™˜ (ëª¨ë“œ ?„í„°ë§??œê±°)
+    // ëª¨ë“  Trackì˜ í”„ë¡œí•„ ê°œìˆ˜ ë°˜í™˜ (ëª¨ë“œ êµ¬ë¶„ ì—†ì´)
     return trackSnapshot.docs.length;
   } catch (e) {
-    // print ¹® Á¦°ÅµÊ
+    debugPrint('íŠ¸ë™ ì¹´ìš´íŠ¸ ë¡œë“œ ì˜¤ë¥˜: $e');
     return 0;
   }
 }
 
-// ê¸°ë³¸ ê°œì¸ ?Œë ˆ?´ìŠ¤ ?ì„±
-Future<void> createDefaultPersonalPlace() async {
-  try {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    // ?´ë? ê°œì¸ ?Œë ˆ?´ìŠ¤ê°€ ?ˆëŠ”ì§€ ?•ì¸
-    final existingPersonalDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('places')
-        .doc('personal')
-        .get();
-
-    if (!existingPersonalDoc.exists) {
-      // ê°œì¸ ?Œë ˆ?´ìŠ¤ ?ì„±
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('places')
-          .doc('personal')
-          .set({
-        'mode': 'life',
-        'roleId': 'personal',
-        'roleName': 'ê°œì¸',
-        'joinedAt': FieldValue.serverTimestamp(),
-        'status': 'active',
-        'permissions': ['personal_schedule', 'personal_settings'],
-      });
-
-      // places ì»¬ë ‰?˜ì—??ê°œì¸ ?Œë ˆ?´ìŠ¤ ?ì„±
-      await FirebaseFirestore.instance
-          .collection('places')
-          .doc('personal')
-          .set({
-        'name': 'ê°œì¸',
-        'description': 'ê°œì¸ ?œë™ ê³µê°„',
-        'createdBy': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'originalData': {
-          'groupdata1': 'ê°œì¸',
-          'groupdata2': 'ê°œì¸',
-          'groupdata3': 'ê°œì¸',
-        },
-      });
-
-      // places/members?ë„ ì¶”ê?
-      await FirebaseFirestore.instance
-          .collection('places')
-          .doc('personal')
-          .collection('members')
-          .doc(user.uid)
-          .set({
-        'roleId': 'personal',
-        'joinedAt': FieldValue.serverTimestamp(),
-        'status': 'active',
-      });
-
-      // print ¹® Á¦°ÅµÊ
-    }
-  } catch (e) {
-    // print ¹® Á¦°ÅµÊ
-  }
-}
+Color generateRandomColor() {
+  final random = Random();
+  return Color.fromRGBO(
+    random.nextInt(256),
+    random.nextInt(256),
+    random.nextInt(256),
+    0.8,
+  );
+} 

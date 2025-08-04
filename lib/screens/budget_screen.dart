@@ -6,8 +6,14 @@ class BudgetScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('?�산 ?�면')),
-      body: const Center(child: Text('?�곳?� ?��?�?관???�면?�니??)),
+      appBar: AppBar(
+        title: const Text('예산 화면'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+      body: const Center(
+        child: Text('이곳은 예산 관리 화면입니다.'),
+      ),
     );
   }
 }
