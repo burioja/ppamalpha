@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
@@ -25,7 +25,7 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    print('Firebase 초기화 에러: $e');
+    // Firebase 초기???�러 처리
   }
 
   setFirebaseLocale();
@@ -33,7 +33,7 @@ void main() async {
   FirebaseService firebaseService = FirebaseService();
   await firebaseService.uploadWorkplaces();
 
-  // 기본 개인 플레이스 생성
+  // 기본 개인 ?�레?�스 ?�성
   await createDefaultPersonalPlace();
 
   runApp(const MyApp());
@@ -72,7 +72,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         scrollBehavior: const MaterialScrollBehavior().copyWith(
           dragDevices: {
-            // 다양한 입력 장치를 허용하여 웹에서도 마우스 스크롤이 가능합니다.
+            // ?�양???�력 ?�치�??�용?�여 ?�에?�도 마우???�크롤이 가?�합?�다.
             PointerDeviceKind.mouse,
             PointerDeviceKind.touch,
             PointerDeviceKind.stylus,

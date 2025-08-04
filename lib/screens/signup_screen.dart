@@ -67,7 +67,7 @@ class _SignupScreenState extends State<SignupScreen> {
       await ref.putFile(_profileImage!);
       return await ref.getDownloadURL();
     } catch (e) {
-      print('이미지 업로드 실패: $e');
+      // print �� ���ŵ�
       return null;
     }
   }
@@ -76,7 +76,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
+        const SnackBar(content: Text('비�?번호가 ?�치?��? ?�습?�다.')),
       );
       return;
     }
@@ -100,14 +100,14 @@ class _SignupScreenState extends State<SignupScreen> {
           'createdAt': Timestamp.now(),
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('회원가입 성공!')),
+          const SnackBar(content: Text('?�원가???�공!')),
         );
         Navigator.pushReplacementNamed(context, '/main');
       }
     } catch (e) {
-      print('회원가입 에러: $e');
+      // print �� ���ŵ�
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입 실패. 다시 시도해주세요.')),
+        const SnackBar(content: Text('?�원가???�패. ?�시 ?�도?�주?�요.')),
       );
     }
   }
@@ -128,7 +128,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
     return Scaffold(
-      appBar: AppBar(title: const Text("회원가입")),
+      appBar: AppBar(title: const Text("?�원가??)),
       body: Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
@@ -158,7 +158,7 @@ class _SignupScreenState extends State<SignupScreen> {
           },
           steps: [
             Step(
-              title: const Text("기본 정보"),
+              title: const Text("기본 ?�보"),
               content: Column(
                 children: [
                   GestureDetector(
@@ -174,25 +174,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 10),
                   TextField(
-                    decoration: const InputDecoration(labelText: '이메일'),
+                    decoration: const InputDecoration(labelText: '?�메??),
                     onChanged: userProvider.setEmail,
                   ),
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: '비밀번호'),
+                    decoration: const InputDecoration(labelText: '비�?번호'),
                   ),
                   TextField(
                     controller: _confirmPasswordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: '비밀번호 확인'),
+                    decoration: const InputDecoration(labelText: '비�?번호 ?�인'),
                   ),
                   DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: "성별"),
+                    decoration: const InputDecoration(labelText: "?�별"),
                     value: _selectedGender,
                     items: const [
-                      DropdownMenuItem(value: "남성", child: Text("남성")),
-                      DropdownMenuItem(value: "여성", child: Text("여성")),
+                      DropdownMenuItem(value: "?�성", child: Text("?�성")),
+                      DropdownMenuItem(value: "?�성", child: Text("?�성")),
                     ],
                     onChanged: (value) => setState(() => _selectedGender = value),
                   ),
@@ -201,24 +201,24 @@ class _SignupScreenState extends State<SignupScreen> {
               isActive: _currentStep >= 0,
             ),
             Step(
-              title: const Text("추가 정보"),
+              title: const Text("추�? ?�보"),
               content: TextField(
-                decoration: const InputDecoration(labelText: '닉네임'),
+                decoration: const InputDecoration(labelText: '?�네??),
                 onChanged: userProvider.setNickName,
               ),
               isActive: _currentStep >= 1,
             ),
             Step(
-              title: const Text("약관 동의"),
+              title: const Text("?��? ?�의"),
               content: Column(
                 children: List.generate(5, (index) => renderContainer(
                   _isChecked[index],
                   [
-                    '모두 동의',
-                    '만 14세 이상입니다.(필수)',
-                    '개인정보처리방침(필수)',
-                    '서비스 이용 약관(필수)',
-                    '이벤트 및 할인 혜택 안내 동의(선택)',
+                    '모두 ?�의',
+                    '�?14???�상?�니??(?�수)',
+                    '개인?�보처리방침(?�수)',
+                    '?�비???�용 ?��?(?�수)',
+                    '?�벤??�??�인 ?�택 ?�내 ?�의(?�택)',
                   ][index],
                       () => _updateCheckState(index),
                 )),

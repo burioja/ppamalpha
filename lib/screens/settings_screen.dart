@@ -16,7 +16,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData(); // 초기 데이터 로드
+    _loadUserData(); // 초기 ?�이??로드
   }
 
   Future<void> _loadUserData() async {
@@ -28,14 +28,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     await userProvider.updateUserData();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('정보가 성공적으로 저장되었습니다.')),
+      const SnackBar(content: Text('?�보가 ?�공?�으�??�?�되?�습?�다.')),
     );
   }
 
   Future<void> _logout() async {
     await _auth.signOut();
     if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed('/login'); // 로그인 화면으로 이동
+    Navigator.of(context).pushReplacementNamed('/login'); // 로그???�면?�로 ?�동
   }
 
   @override
@@ -43,11 +43,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userProvider = Provider.of<UserProvider>(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("개인정보 수정")),
+      appBar: AppBar(title: const Text("개인?�보 ?�정")),
       body: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: MediaQuery.of(context).size.height, // 최소 높이 설정
+            minHeight: MediaQuery.of(context).size.height, // 최소 ?�이 ?�정
           ),
           child: IntrinsicHeight(
             child: Padding(
@@ -55,22 +55,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 이메일 (수정 불가)
+                  // ?�메??(?�정 불�?)
                   TextField(
                     controller: TextEditingController(text: userProvider.email),
                     decoration: const InputDecoration(
-                      labelText: '이메일',
+                      labelText: '?�메??,
                       border: OutlineInputBorder(),
                     ),
                     enabled: false,
                   ),
                   const SizedBox(height: 10),
 
-                  // 핸드폰 번호
+                  // ?�드??번호
                   TextField(
                     controller: TextEditingController(text: userProvider.phoneNumber),
                     decoration: const InputDecoration(
-                      labelText: '핸드폰 번호',
+                      labelText: '?�드??번호',
                       border: OutlineInputBorder(),
                     ),
                     onChanged: userProvider.setPhoneNumber,
@@ -88,7 +88,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Workplace 입력
+                  // Workplace ?�력
                   Column(
                     children: List.generate(userProvider.workPlaces.length, (index) {
                       return Row(
@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: TextField(
                               controller: TextEditingController(
                                   text: userProvider.workPlaces[index]['workplaceinput']),
-                              decoration: const InputDecoration(labelText: '일터 입력'),
+                              decoration: const InputDecoration(labelText: '?�터 ?�력'),
                               onChanged: (value) {
                                 userProvider.updateWorkPlace(index, 'workplaceinput', value);
                               },
@@ -107,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: TextField(
                               controller: TextEditingController(
                                   text: userProvider.workPlaces[index]['workplaceadd']),
-                              decoration: const InputDecoration(labelText: '일터 추가'),
+                              decoration: const InputDecoration(labelText: '?�터 추�?'),
                               onChanged: (value) {
                                 userProvider.updateWorkPlace(index, 'workplaceadd', value);
                               },
@@ -129,18 +129,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 저장 및 로그아웃 버튼
+                  // ?�??�?로그?�웃 버튼
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       ElevatedButton(
                         onPressed: _saveUserData,
-                        child: const Text("저장"),
+                        child: const Text("?�??),
                       ),
                       ElevatedButton(
                         onPressed: _logout,
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text("로그아웃"),
+                        child: const Text("로그?�웃"),
                       ),
                     ],
                   ),

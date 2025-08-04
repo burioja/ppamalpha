@@ -11,22 +11,22 @@ class SearchScreen extends StatelessWidget {
     final query = searchProvider.query;
     final selectedIndex = searchProvider.selectedTabIndex;
 
-    // 탭에 따라 검색 결과 분기
+    // ??�� ?�라 검??결과 분기
     Widget buildSearchResults() {
       if (selectedIndex == 1) {
-        return const Text('🗺️ 지도 검색 결과 표시');
+        return const Text('?���?지??검??결과 ?�시');
       } else if (selectedIndex == 0) {
-        return const Text('📝 커뮤니티 검색 결과 표시');
+        return const Text('?�� 커�??�티 검??결과 ?�시');
       } else if (selectedIndex == 4) {
-        return const Text('💰 월렛 검색 결과 표시');
+        return const Text('?�� ?�렛 검??결과 ?�시');
       } else {
-        return const Text('📄 다른 탭에서는 검색 결과 없음');
+        return const Text('?�� ?�른 ??��?�는 검??결과 ?�음');
       }
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('검색'),
+        title: const Text('검??),
         backgroundColor: Colors.blueAccent,
       ),
       body: Padding(
@@ -36,14 +36,14 @@ class SearchScreen extends StatelessWidget {
             TextField(
               autofocus: true,
               decoration: const InputDecoration(
-                hintText: '검색어를 입력하세요',
+                hintText: '검?�어�??�력?�세??,
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: (value) => searchProvider.setQuery(value),
             ),
             const SizedBox(height: 20),
-            Text('검색어: "$query"', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('검?�어: "$query"', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             Expanded(child: buildSearchResults()),
           ],

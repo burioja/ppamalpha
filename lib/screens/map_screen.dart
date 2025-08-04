@@ -11,10 +11,9 @@ import 'package:http/http.dart' as http;
 import 'package:geocoding/geocoding.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'post_place_screen.dart';
 
-/// ✅ 마커 아이템 클래스
-class MarkerItem {
+
+/// ??마커 ?�이???�래??class MarkerItem {
   final String id;
   final String title;
   final String price;
@@ -22,9 +21,9 @@ class MarkerItem {
   final String userId;
   final Map<String, dynamic> data;
   final LatLng position;
-  final String? imageUrl; // 이미지 URL 추가
-  final int remainingAmount; // 남은 수량
-  final DateTime? expiryDate; // 만료 날짜
+  final String? imageUrl; // ?��?지 URL 추�?
+  final int remainingAmount; // ?��? ?�량
+  final DateTime? expiryDate; // 만료 ?�짜
 
   MarkerItem({
     required this.id,
@@ -51,15 +50,14 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
-  final String _googleApiKey = "YOUR_API_KEY"; // 바꿔줘
-  final GlobalKey mapWidgetKey = GlobalKey();
+  final String _googleApiKey = "YOUR_API_KEY"; // 바꿔�?  final GlobalKey mapWidgetKey = GlobalKey();
   LatLng? _longPressedLatLng;
   String? _mapStyle;
   BitmapDescriptor? _customMarkerIcon;
   final Set<Marker> _markers = {};
   final userId = FirebaseAuth.instance.currentUser?.uid;
   
-  // 마커 관련 변수들
+  // 마커 관??변?�들
   final List<MarkerItem> _markerItems = [];
   double _currentZoom = 15.0;
   final Set<Marker> _clusteredMarkers = {};
@@ -81,7 +79,7 @@ class _MapScreenState extends State<MapScreen> {
         _mapStyle = style;
       });
     } catch (e) {
-      print('맵 스타일 로드 오류: $e');
+      // print �� ���ŵ�
     }
   }
 
@@ -100,24 +98,23 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadCustomMarker() async {
     try {
-      // 이미지 파일을 바이트로 로드
+      // ?��?지 ?�일??바이?�로 로드
       final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
       final Uint8List bytes = data.buffer.asUint8List();
       
-      // 이미지를 코드로 디코드
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      // ?��?지�?코드�??�코??      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
       final ui.FrameInfo frameInfo = await codec.getNextFrame();
       final ui.Image image = frameInfo.image;
       
-      // 원하는 크기로 리사이즈 (더 큰 크기)
+      // ?�하???�기�?리사?�즈 (?????�기)
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(recorder);
       
-      // 마커 크기를 200x200으로 설정하고 앵커 포인트 고려
+      // 마커 ?�기�?200x200?�로 ?�정?�고 ?�커 ?�인??고려
       final double targetSize = 48.0;
       final Rect rect = Rect.fromLTWH(0, 0, targetSize, targetSize);
       
-      // 이미지 비율 유지하면서 중앙 정렬
+      // ?��?지 비율 ?��??�면??중앙 ?�렬
       final double imageRatio = image.width / image.height;
       final double targetRatio = targetSize / targetSize;
       
@@ -127,12 +124,12 @@ class _MapScreenState extends State<MapScreen> {
       double offsetY = 0;
       
       if (imageRatio > targetRatio) {
-        // 이미지가 더 넓음 - 높이에 맞춤
+        // ?��?지가 ???�음 - ?�이??맞춤
         drawHeight = targetSize;
         drawWidth = targetSize * imageRatio;
         offsetX = (targetSize - drawWidth) / 2;
       } else {
-        // 이미지가 더 높음 - 너비에 맞춤
+        // ?��?지가 ???�음 - ?�비??맞춤
         drawWidth = targetSize;
         drawHeight = targetSize / imageRatio;
         offsetY = (targetSize - drawHeight) / 2;
@@ -154,11 +151,11 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _customMarkerIcon = icon;
         });
-        print('마커 크기 조정 완료: ${targetSize.toInt()}x${targetSize.toInt()} (앵커 포인트 고려)');
+        print('마커 ?�기 조정 ?�료: ${targetSize.toInt()}x${targetSize.toInt()} (?�커 ?�인??고려)');
       }
     } catch (e) {
-      print('마커 크기 조정 오류: $e');
-      // 오류 시 기본 방법으로 폴백
+      // print �� ���ŵ�
+      // ?�류 ??기본 방법?�로 ?�백
       final icon = await BitmapDescriptor.fromAssetImage(
         const ImageConfiguration(),
         'assets/images/ppam_work.png',
@@ -180,46 +177,46 @@ class _MapScreenState extends State<MapScreen> {
     if (_mapStyle != null) controller.setMapStyle(_mapStyle);
   }
 
-  /// ✅ 간단한 클러스터링 함수
+  /// ??간단???�러?�터�??�수
   void _updateClustering() {
-    print('현재 줌 레벨: $_currentZoom, 마커 개수: ${_markerItems.length}');
+    // print �� ���ŵ�
     
     if (_currentZoom < 12.0 && _markerItems.length > 1) {
-      // 줌이 멀고 마커가 2개 이상이면 클러스터링 적용
+      // 줌이 멀�?마커가 2�??�상?�면 ?�러?�터�??�용
       _createClusters();
     } else {
-      // 줌이 가까우거나 마커가 1개 이하면 개별 마커 표시
+      // 줌이 가까우거나 마커가 1�??�하�?개별 마커 ?�시
       _showIndividualMarkers();
     }
   }
 
-  /// ✅ 클러스터 생성
+  /// ???�러?�터 ?�성
   void _createClusters() {
-    print('클러스터 생성 시작 - 마커 개수: ${_markerItems.length}');
+    // print �� ���ŵ�
     
     _clusteredMarkers.clear();
     final clusters = <String, List<MarkerItem>>{};
     
-    // 마커들을 그룹화 (더 세밀한 그리드 기반)
+    // 마커?�을 그룹??(???��???그리??기반)
     for (final item in _markerItems) {
-      // 더 작은 그리드로 분할하여 클러스터링 효과 향상
+      // ???��? 그리?�로 분할?�여 ?�러?�터�??�과 ?�상
       final gridKey = '${(item.position.latitude * 1000).round()}_${(item.position.longitude * 1000).round()}';
       clusters.putIfAbsent(gridKey, () => []).add(item);
     }
     
-    print('생성된 클러스터 개수: ${clusters.length}');
+    // print �� ���ŵ�
     
-    // 클러스터 마커 생성
+    // ?�러?�터 마커 ?�성
     for (final cluster in clusters.values) {
       if (cluster.length == 1) {
-        // 단일 마커는 그대로 표시
+        // ?�일 마커??그�?�??�시
         final item = cluster.first;
         _clusteredMarkers.add(_createMarker(item));
       } else {
-        // 여러 마커는 클러스터로 표시
+        // ?�러 마커???�러?�터�??�시
         final center = _calculateClusterCenter(cluster);
         _clusteredMarkers.add(_createClusterMarker(center, cluster.length));
-        print('클러스터 생성: ${cluster.length}개 마커');
+        // print �� ���ŵ�
       }
     }
     
@@ -227,12 +224,12 @@ class _MapScreenState extends State<MapScreen> {
       _isClustered = true;
     });
     
-    print('클러스터링 완료 - 표시될 마커 개수: ${_clusteredMarkers.length}');
+    // print �� ���ŵ�
   }
 
-  /// ✅ 개별 마커 표시
+  /// ??개별 마커 ?�시
   void _showIndividualMarkers() {
-    print('개별 마커 표시 - 마커 개수: ${_markerItems.length}');
+    // print �� ���ŵ�
     
     _clusteredMarkers.clear();
     for (final item in _markerItems) {
@@ -243,10 +240,10 @@ class _MapScreenState extends State<MapScreen> {
       _isClustered = false;
     });
     
-    print('개별 마커 표시 완료 - 표시될 마커 개수: ${_clusteredMarkers.length}');
+    // print �� ���ŵ�
   }
 
-  /// ✅ 클러스터 중심점 계산
+  /// ???�러?�터 중심??계산
   LatLng _calculateClusterCenter(List<MarkerItem> cluster) {
     double totalLat = 0;
     double totalLng = 0;
@@ -259,16 +256,16 @@ class _MapScreenState extends State<MapScreen> {
     return LatLng(totalLat / cluster.length, totalLng / cluster.length);
   }
 
-  /// ✅ 마커 생성
+  /// ??마커 ?�성
   Marker _createMarker(MarkerItem item) {
     return Marker(
       markerId: MarkerId(item.id),
       position: item.position,
       icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarker,
-      anchor: const Offset(0.5, 1.0), // 마커 하단 중앙에 앵커 설정
+      anchor: const Offset(0.5, 1.0), // 마커 ?�단 중앙???�커 ?�정
       infoWindow: InfoWindow(
         title: item.title,
-        snippet: '남은 수량: ${item.remainingAmount}개',
+        snippet: '?��? ?�량: ${item.remainingAmount}�?,
       ),
       onTap: () {
         if (item.userId == userId) {
@@ -280,30 +277,29 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 클러스터 마커 생성
+  /// ???�러?�터 마커 ?�성
   Marker _createClusterMarker(LatLng position, int count) {
     return Marker(
       markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
       position: position,
       icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      anchor: const Offset(0.5, 1.0), // 마커 하단 중앙에 앵커 설정
+      anchor: const Offset(0.5, 1.0), // 마커 ?�단 중앙???�커 ?�정
       infoWindow: InfoWindow(
-        title: '클러스터',
+        title: '?�러?�터',
         snippet: '$count개의 마커',
       ),
       onTap: () {
-        // 클러스터 탭시 줌 인
-        mapController.animateCamera(CameraUpdate.zoomIn());
+        // ?�러?�터 ??�� �???        mapController.animateCamera(CameraUpdate.zoomIn());
       },
     );
   }
 
-  /// ✅ Firestore에서 마커 불러오기
+  /// ??Firestore?�서 마커 불러?�기
   Future<void> _loadMarkersFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('markers').get();
     final docs = snapshot.docs;
 
-    print('Firestore에서 ${docs.length}개의 마커 데이터 로드');
+    // print �� ���ŵ�
 
     _markerItems.clear();
     _markers.clear();
@@ -313,13 +309,13 @@ class _MapScreenState extends State<MapScreen> {
       final data = doc.data();
       final LatLng pos = LatLng(data['lat'], data['lng']);
       
-      // 만료 날짜 확인
+      // 만료 ?�짜 ?�인
       final expiryTimestamp = data['expiryDate'] as Timestamp?;
       final expiryDate = expiryTimestamp?.toDate();
       
-      // 만료된 마커는 건너뛰기
+      // 만료??마커??건너?�기
       if (expiryDate != null && DateTime.now().isAfter(expiryDate)) {
-        print('만료된 마커 건너뛰기: ${doc.id}');
+        // print �� ���ŵ�
         continue;
       }
       
@@ -339,17 +335,16 @@ class _MapScreenState extends State<MapScreen> {
       _markerItems.add(markerItem);
     }
     
-    print('마커 아이템 생성 완료: ${_markerItems.length}개');
+    // print �� ���ŵ�
     
-    // 클러스터링 적용
+    // ?�러?�터�??�용
     _updateClustering();
   }
 
-  /// ✅ Firestore에 마커 저장
-  Future<void> _addMarkerToFirestore(LatLng position, Map<String, dynamic> result) async {
+  /// ??Firestore??마커 ?�??  Future<void> _addMarkerToFirestore(LatLng position, Map<String, dynamic> result) async {
     if (userId == null) return;
     
-    // 만료 날짜 계산
+    // 만료 ?�짜 계산
     final period = int.tryParse(result['period']?.toString() ?? '24') ?? 24;
     final periodUnit = result['periodUnit'] ?? 'Hour';
     final expiryDate = _calculateExpiryDate(period, periodUnit);
@@ -362,7 +357,7 @@ class _MapScreenState extends State<MapScreen> {
       'amount': result['amount'],
       'userId': userId,
       'imageUrl': result['imageUrl'],
-      'remainingAmount': int.tryParse(result['amount']?.toString() ?? '0') ?? 0, // 초기 수량
+      'remainingAmount': int.tryParse(result['amount']?.toString() ?? '0') ?? 0, // 초기 ?�량
       'expiryDate': expiryDate,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -377,7 +372,7 @@ class _MapScreenState extends State<MapScreen> {
       'expiryDate': expiryDate,
     };
 
-    // 새로운 마커 아이템 생성
+    // ?�로??마커 ?�이???�성
     final markerItem = MarkerItem(
       id: doc.id,
       title: 'PPAM Marker',
@@ -391,14 +386,14 @@ class _MapScreenState extends State<MapScreen> {
       expiryDate: expiryDate,
     );
 
-    // 마커 추가
+    // 마커 추�?
     _markerItems.add(markerItem);
     
-    // 클러스터링 업데이트
+    // ?�러?�터�??�데?�트
     _updateClustering();
   }
 
-  /// ✅ 만료 날짜 계산
+  /// ??만료 ?�짜 계산
   DateTime _calculateExpiryDate(int period, String unit) {
     final now = DateTime.now();
     switch (unit) {
@@ -413,7 +408,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// ✅ 마커 액션 메뉴 표시 (소유자용)
+  /// ??마커 ?�션 메뉴 ?�시 (?�유?�용)
   void _showMarkerActionMenu(String markerId, Map<String, dynamic> data) {
     final remainingAmount = data['remainingAmount'] ?? 0;
     final imageUrl = data['imageUrl'];
@@ -422,7 +417,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(data['title'] ?? '전단지 메뉴'),
+          title: Text(data['title'] ?? '?�단지 메뉴'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,11 +434,11 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
-              Text('가격: ${data['price']}원'),
+              Text('가�? ${data['price']}??),
               const SizedBox(height: 8),
-              Text('총 수량: ${data['amount']}개'),
+              Text('�??�량: ${data['amount']}�?),
               const SizedBox(height: 8),
-              Text('남은 수량: $remainingAmount개', 
+              Text('?��? ?�량: $remainingAmount�?, 
                 style: TextStyle(
                   color: remainingAmount > 0 ? Colors.green : Colors.red,
                   fontWeight: FontWeight.bold,
@@ -451,7 +446,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                '원하는 작업을 선택하세요:',
+                '?�하???�업???�택?�세??',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -465,7 +460,7 @@ class _MapScreenState extends State<MapScreen> {
                 Navigator.of(context).pop();
                 _showMarkerInfo(data);
               },
-              child: const Text('정보 보기'),
+              child: const Text('?�보 보기'),
             ),
             if (remainingAmount > 0)
               TextButton(
@@ -476,7 +471,7 @@ class _MapScreenState extends State<MapScreen> {
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),
-                child: const Text('회수하기'),
+                child: const Text('?�수?�기'),
               ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -488,7 +483,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 마커 정보 표시
+  /// ??마커 ?�보 ?�시
   void _showMarkerInfo(Map<String, dynamic> data) {
     final remainingAmount = data['remainingAmount'] ?? 0;
     final imageUrl = data['imageUrl'];
@@ -497,7 +492,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(data['title'] ?? '전단지 정보'),
+          title: Text(data['title'] ?? '?�단지 ?�보'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,13 +509,13 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
-              Text('가격: ${data['price']}원'),
+              Text('가�? ${data['price']}??),
               const SizedBox(height: 8),
-              Text('남은 수량: $remainingAmount개'),
+              Text('?��? ?�량: $remainingAmount�?),
               const SizedBox(height: 16),
               if (remainingAmount > 0) ...[
                 const Text(
-                  '이 마커 근처(30m 이내)에서 수령할 수 있습니다.',
+                  '??마커 근처(30m ?�내)?�서 ?�령?????�습?�다.',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey,
@@ -532,7 +527,7 @@ class _MapScreenState extends State<MapScreen> {
                     Navigator.of(context).pop();
                     _checkProximityAndReceive(data);
                   },
-                  child: const Text('근처에서 수령하기'),
+                  child: const Text('근처?�서 ?�령?�기'),
                 ),
               ],
             ],
@@ -540,7 +535,7 @@ class _MapScreenState extends State<MapScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('확인'),
+              child: const Text('?�인'),
             ),
           ],
         );
@@ -548,35 +543,34 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ GPS 근접 확인 및 수령
+  /// ??GPS 근접 ?�인 �??�령
   Future<void> _checkProximityAndReceive(Map<String, dynamic> data) async {
     try {
-      // 현재 위치 가져오기
-      Position? currentPosition = await LocationService.getCurrentPosition();
+      // ?�재 ?�치 가?�오�?      Position? currentPosition = await LocationService.getCurrentPosition();
       if (currentPosition == null) {
-        _showErrorDialog('위치 정보를 가져올 수 없습니다.');
+        _showErrorDialog('?�치 ?�보�?가?�올 ???�습?�다.');
         return;
       }
 
       final currentLatLng = LatLng(currentPosition.latitude, currentPosition.longitude);
       final markerLatLng = LatLng(data['lat'], data['lng']);
       
-      // 거리 계산 (미터 단위)
+      // 거리 계산 (미터 ?�위)
       final distance = _calculateDistance(currentLatLng, markerLatLng);
       
-      if (distance <= 30) { // 30m 이내
+      if (distance <= 30) { // 30m ?�내
         await _receiveImage(data);
       } else {
-        _showErrorDialog('마커로부터 너무 멀리 있습니다.\n거리: ${distance.toStringAsFixed(1)}m');
+        _showErrorDialog('마커로�????�무 멀�??�습?�다.\n거리: ${distance.toStringAsFixed(1)}m');
       }
     } catch (e) {
-      _showErrorDialog('오류가 발생했습니다: $e');
+      _showErrorDialog('?�류가 발생?�습?�다: $e');
     }
   }
 
-  /// ✅ 거리 계산 (미터 단위)
+  /// ??거리 계산 (미터 ?�위)
   double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371000; // 지구 반지름 (미터)
+    const double earthRadius = 6371000; // 지�?반�?�?(미터)
     
     final lat1Rad = point1.latitude * (pi / 180);
     final lat2Rad = point2.latitude * (pi / 180);
@@ -590,24 +584,24 @@ class _MapScreenState extends State<MapScreen> {
     return earthRadius * c;
   }
 
-  /// ✅ 이미지 수령
+  /// ???��?지 ?�령
   Future<void> _receiveImage(Map<String, dynamic> data) async {
     final markerId = data['id'];
     final imageUrl = data['imageUrl'];
     final currentAmount = data['remainingAmount'] ?? 0;
     
     if (currentAmount <= 0) {
-      _showErrorDialog('수령 가능한 수량이 없습니다.');
+      _showErrorDialog('?�령 가?�한 ?�량???�습?�다.');
       return;
     }
 
     try {
-      // Firestore에서 수량 감소
+      // Firestore?�서 ?�량 감소
       await FirebaseFirestore.instance.collection('markers').doc(markerId).update({
         'remainingAmount': currentAmount - 1,
       });
 
-      // 사용자 월렛에 이미지 추가
+      // ?�용???�렛???��?지 추�?
       if (userId != null && imageUrl != null) {
         await FirebaseFirestore.instance
             .collection('users')
@@ -620,27 +614,26 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
 
-      // 마커 목록 업데이트
+      // 마커 목록 ?�데?�트
       await _loadMarkersFromFirestore();
 
-      _showSuccessDialog('이미지를 성공적으로 수령했습니다!');
+      _showSuccessDialog('?��?지�??�공?�으�??�령?�습?�다!');
     } catch (e) {
-      _showErrorDialog('수령 중 오류가 발생했습니다: $e');
+      _showErrorDialog('?�령 �??�류가 발생?�습?�다: $e');
     }
   }
 
-  /// ✅ 오류 다이얼로그
-  void _showErrorDialog(String message) {
+  /// ???�류 ?�이?�로�?  void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('오류'),
+          title: const Text('?�류'),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('확인'),
+              child: const Text('?�인'),
             ),
           ],
         );
@@ -648,18 +641,17 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 성공 다이얼로그
-  void _showSuccessDialog(String message) {
+  /// ???�공 ?�이?�로�?  void _showSuccessDialog(String message) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('성공'),
+          title: const Text('?�공'),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('확인'),
+              child: const Text('?�인'),
             ),
           ],
         );
@@ -667,25 +659,24 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 마커 회수 확인 다이얼로그
-  void _showRecoveryDialog(String markerId, Map<String, dynamic> data) {
+  /// ??마커 ?�수 ?�인 ?�이?�로�?  void _showRecoveryDialog(String markerId, Map<String, dynamic> data) {
     final remainingAmount = data['remainingAmount'] ?? 0;
     
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('전단지 회수'),
+          title: const Text('?�단지 ?�수'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${data['title'] ?? '전단지'}를 회수하시겠습니까?'),
+              Text('${data['title'] ?? '?�단지'}�??�수?�시겠습?�까?'),
               const SizedBox(height: 8),
-              Text('남은 수량: $remainingAmount개'),
+              Text('?��? ?�량: $remainingAmount�?),
               const SizedBox(height: 16),
               const Text(
-                '회수 옵션을 선택하세요:',
+                '?�수 ?�션???�택?�세??',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -694,7 +685,7 @@ class _MapScreenState extends State<MapScreen> {
                   Navigator.of(context).pop();
                   _recoverPartialAmount(markerId, data, remainingAmount);
                 },
-                child: Text('전체 회수 ($remainingAmount개)'),
+                child: Text('?�체 ?�수 ($remainingAmount�?'),
               ),
               if (remainingAmount > 1)
                 TextButton(
@@ -702,7 +693,7 @@ class _MapScreenState extends State<MapScreen> {
                     Navigator.of(context).pop();
                     _showPartialRecoveryDialog(markerId, data, remainingAmount);
                   },
-                  child: const Text('일부 회수'),
+                  child: const Text('?��? ?�수'),
                 ),
             ],
           ),
@@ -717,26 +708,25 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 일부 회수 다이얼로그
-  void _showPartialRecoveryDialog(String markerId, Map<String, dynamic> data, int maxAmount) {
+  /// ???��? ?�수 ?�이?�로�?  void _showPartialRecoveryDialog(String markerId, Map<String, dynamic> data, int maxAmount) {
     final TextEditingController amountController = TextEditingController();
     
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('회수할 수량 입력'),
+          title: const Text('?�수???�량 ?�력'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('최대 회수 가능: $maxAmount개'),
+              Text('최�? ?�수 가?? $maxAmount�?),
               const SizedBox(height: 8),
               TextField(
                 controller: amountController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: '회수할 수량',
-                  hintText: '숫자를 입력하세요',
+                  labelText: '?�수???�량',
+                  hintText: '?�자�??�력?�세??,
                 ),
               ),
             ],
@@ -753,10 +743,10 @@ class _MapScreenState extends State<MapScreen> {
                   Navigator.of(context).pop();
                   _recoverPartialAmount(markerId, data, amount);
                 } else {
-                  _showErrorDialog('올바른 수량을 입력하세요 (1-$maxAmount)');
+                  _showErrorDialog('?�바�??�량???�력?�세??(1-$maxAmount)');
                 }
               },
-              child: const Text('회수'),
+              child: const Text('?�수'),
             ),
           ],
         );
@@ -764,7 +754,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 부분 회수 실행
+  /// ??부�??�수 ?�행
   Future<void> _recoverPartialAmount(String markerId, Map<String, dynamic> data, int amount) async {
     try {
       final currentAmount = data['remainingAmount'] ?? 0;
@@ -775,32 +765,31 @@ class _MapScreenState extends State<MapScreen> {
           'remainingAmount': newAmount,
         });
         
-        // 마커 목록 업데이트
+        // 마커 목록 ?�데?�트
         await _loadMarkersFromFirestore();
         
         _showRecoverySuccessDialog(amount);
       } else {
-        _showErrorDialog('회수할 수량이 부족합니다.');
+        _showErrorDialog('?�수???�량??부족합?�다.');
       }
     } catch (e) {
-      _showErrorDialog('회수 중 오류가 발생했습니다: $e');
+      _showErrorDialog('?�수 �??�류가 발생?�습?�다: $e');
     }
   }
 
-  /// ✅ 회수 완료 다이얼로그
-  void _showRecoverySuccessDialog([int? amount]) {
+  /// ???�수 ?�료 ?�이?�로�?  void _showRecoverySuccessDialog([int? amount]) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('회수 완료'),
+          title: const Text('?�수 ?�료'),
           content: Text(amount != null 
-            ? '$amount개의 전단지가 성공적으로 회수되었습니다.'
-            : '전단지가 성공적으로 회수되었습니다.'),
+            ? '$amount개의 ?�단지가 ?�공?�으�??�수?�었?�니??'
+            : '?�단지가 ?�공?�으�??�수?�었?�니??'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('확인'),
+              child: const Text('?�인'),
             ),
           ],
         );
@@ -808,41 +797,30 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// ✅ 마커 삭제 (Firestore + UI)
+  /// ??마커 ??�� (Firestore + UI)
   Future<void> _removeMarker(String markerId) async {
     await FirebaseFirestore.instance.collection('markers').doc(markerId).delete();
     
-    // 마커 제거
+    // 마커 ?�거
     _markerItems.removeWhere((item) => item.id == markerId);
     
-    // 클러스터링 업데이트
+    // ?�러?�터�??�데?�트
     _updateClustering();
   }
 
-  /// ✅ 마커 추가
+  /// ??마커 추�?
   Future<void> _handleAddMarker() async {
-    // 현재 길게 누른 위치 저장
-    final pressedPosition = _longPressedLatLng;
+    // ?�재 길게 ?�른 ?�치 ?�??    final pressedPosition = _longPressedLatLng;
     
-    // 팝업 창 닫기
+    // ?�업 �??�기
     setState(() {
       _longPressedLatLng = null;
     });
 
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const PostPlaceScreen()),
+    // PostPlaceScreen????��?�어 기능??비활?�화
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('??기능?� ?�재 ?�용?????�습?�다.')),
     );
-
-    if (result != null && pressedPosition != null) {
-      // 마커 생성 시 기본 이미지 설정
-      final markerData = <String, dynamic>{
-        ...result,
-        'imageUrl': result['imageUrl'] ?? 'assets/images/ppam_work.png',
-      };
-      
-      await _addMarkerToFirestore(pressedPosition, markerData);
-    }
   }
 
   Widget _buildPopupWidget() {
@@ -867,15 +845,15 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             TextButton(
               onPressed: _handleAddMarker,
-              child: const Text("이 위치에 뿌리기"),
+              child: const Text("???�치??뿌리�?),
             ),
             TextButton(
               onPressed: _handleAddMarker,
-              child: const Text("이 주소에 뿌리기"),
+              child: const Text("??주소??뿌리�?),
             ),
             TextButton(
               onPressed: _handleAddMarker,
-              child: const Text("주변 사업자에게 뿌리기"),
+              child: const Text("주�? ?�업?�에�?뿌리�?),
             ),
             const Divider(height: 24),
             TextButton(
@@ -896,7 +874,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _currentPosition == null
-          ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
+          ? const Center(child: Text("?�재 ?�치�?불러?�는 중입?�다..."))
           : Stack(
         children: [
           GoogleMap(
@@ -925,7 +903,7 @@ class _MapScreenState extends State<MapScreen> {
                   markerId: const MarkerId('long_press_marker'),
                   position: _longPressedLatLng!,
                   icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-                  infoWindow: const InfoWindow(title: "선택한 위치"),
+                  infoWindow: const InfoWindow(title: "?�택???�치"),
                 ),
             },
             onCameraMove: (CameraPosition position) {

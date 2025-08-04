@@ -5,10 +5,10 @@ class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // 현재 사용자 ID 가져오기
+  // ?�재 ?�용??ID 가?�오�?
   String? get currentUserId => _auth.currentUser?.uid;
 
-  // 사용자 프로필 컬렉션 참조
+  // ?�용???�로??컬렉??참조
   DocumentReference<Map<String, dynamic>> get _userProfileDoc {
     return _firestore
         .collection('users')
@@ -17,12 +17,12 @@ class UserService {
         .doc('info');
   }
 
-  // 사용자 프로필 가져오기
+  // ?�용???�로??가?�오�?
   Stream<DocumentSnapshot<Map<String, dynamic>>> getUserProfile() {
     return _userProfileDoc.snapshots();
   }
 
-  // 사용자 프로필 생성/업데이트
+  // ?�용???�로???�성/?�데?�트
   Future<void> updateUserProfile({
     String? nickname,
     String? address,
@@ -34,7 +34,7 @@ class UserService {
     String? gender,
     String? birth,
   }) async {
-    if (currentUserId == null) throw Exception('사용자가 로그인되지 않았습니다.');
+    if (currentUserId == null) throw Exception('?�용?��? 로그?�되지 ?�았?�니??');
 
     final updates = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -50,7 +50,7 @@ class UserService {
     if (gender != null) updates['gender'] = gender;
     if (birth != null) updates['birth'] = birth;
 
-    // createdAt이 없으면 추가
+    // createdAt???�으�?추�?
     final doc = await _userProfileDoc.get();
     if (!doc.exists) {
       updates['createdAt'] = FieldValue.serverTimestamp();
@@ -59,7 +59,7 @@ class UserService {
     await _userProfileDoc.set(updates, SetOptions(merge: true));
   }
 
-  // 사용자 닉네임 가져오기
+  // ?�용???�네??가?�오�?
   Future<String?> getNickname() async {
     try {
       final doc = await _userProfileDoc.get();
@@ -72,7 +72,7 @@ class UserService {
     }
   }
 
-  // 사용자 권한 가져오기 (workplaces 컬렉션에서)
+  // ?�용??권한 가?�오�?(workplaces 컬렉?�에??
   Future<String?> getUserAuthority() async {
     try {
       final workplacesSnapshot = await _firestore
@@ -82,19 +82,19 @@ class UserService {
           .get();
       
       if (workplacesSnapshot.docs.isNotEmpty) {
-        // 첫 번째 workplace의 role을 반환
+        // �?번째 workplace??role??반환
         return workplacesSnapshot.docs.first.data()['role'];
       }
-      return 'User'; // 기본값
+      return 'User'; // 기본�?
     } catch (e) {
       return 'User';
     }
   }
 
-  // 사용자 통계 가져오기
+  // ?�용???�계 가?�오�?
   Future<Map<String, dynamic>> getUserStats() async {
     try {
-      // 스케줄 통계
+      // ?��?�??�계
       final schedulesSnapshot = await _firestore
           .collection('users')
           .doc(currentUserId)
@@ -106,7 +106,7 @@ class UserService {
           .where((doc) => doc.data()['isCompleted'] == true)
           .length;
       
-      // 팔로잉 수
+      // ?�로????
       final followingSnapshot = await _firestore
           .collection('user_tracks')
           .doc(currentUserId)
@@ -115,7 +115,7 @@ class UserService {
       
       final followingCount = followingSnapshot.docs.length;
       
-      // 커넥션 수
+      // 커넥????
       final connectionsSnapshot = await _firestore
           .collection('user_connections')
           .doc(currentUserId)
