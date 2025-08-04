@@ -32,7 +32,7 @@ class ModeSwitcher extends StatelessWidget {
             const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,       // 🔧 세로축(상-하 방향) 중앙 정렬
+              mainAxisAlignment: MainAxisAlignment.center,       // ?�� ?�로�?????방향) 중앙 ?�렬
               children: [
                 Text(
                   'Work',

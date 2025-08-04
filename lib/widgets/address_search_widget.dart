@@ -27,7 +27,7 @@ class _AddressSearchWidgetState extends State<AddressSearchWidget> {
         _suggestedLocations = locations;
       });
     } catch (e) {
-      print('주소 검색 오류: $e');
+      // print �� ���ŵ�
     }
   }
 
@@ -39,7 +39,7 @@ class _AddressSearchWidgetState extends State<AddressSearchWidget> {
           controller: widget.controller,
           decoration: widget.decoration ??
               const InputDecoration(
-                labelText: '주소 검색',
+                labelText: '주소 검??,
               ),
           onChanged: _searchAddress,
         ),
@@ -50,7 +50,7 @@ class _AddressSearchWidgetState extends State<AddressSearchWidget> {
             itemBuilder: (context, index) {
               final location = _suggestedLocations[index];
               return ListTile(
-                title: Text('위도: ${location.latitude}, 경도: ${location.longitude}'),
+                title: Text('?�도: ${location.latitude}, 경도: ${location.longitude}'),
                 onTap: () {
                   widget.onAddressSelected('${location.latitude},${location.longitude}');
                   widget.controller.clear();

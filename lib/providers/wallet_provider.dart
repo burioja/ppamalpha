@@ -23,11 +23,11 @@ class WalletProvider with ChangeNotifier {
           .get();
 
       _uploadedImages = snapshot.docs.map((doc) => doc.data()).toList();
-      print('업로드된 이미지 로드 완료: ${_uploadedImages.length}개');
+      // print �� ���ŵ�
       notifyListeners();
     } catch (e) {
-      print('업로드된 이미지 로드 오류: $e');
-      // 인덱스 오류 시 단순 쿼리로 폴백
+      // print �� ���ŵ�
+      // ?�덱???�류 ???�순 쿼리�??�백
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -37,10 +37,10 @@ class WalletProvider with ChangeNotifier {
             .get();
 
         _uploadedImages = snapshot.docs.map((doc) => doc.data()).toList();
-        print('폴백 쿼리로 업로드된 이미지 로드 완료: ${_uploadedImages.length}개');
+        // print �� ���ŵ�
         notifyListeners();
       } catch (fallbackError) {
-        print('폴백 쿼리도 실패: $fallbackError');
+        // print �� ���ŵ�
         _uploadedImages = [];
         notifyListeners();
       }
@@ -61,11 +61,11 @@ class WalletProvider with ChangeNotifier {
           .get();
 
       _receivedImages = snapshot.docs.map((doc) => doc.data()).toList();
-      print('수신된 이미지 로드 완료: ${_receivedImages.length}개');
+      // print �� ���ŵ�
       notifyListeners();
     } catch (e) {
-      print('수신된 이미지 로드 오류: $e');
-      // 인덱스 오류 시 단순 쿼리로 폴백
+      // print �� ���ŵ�
+      // ?�덱???�류 ???�순 쿼리�??�백
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -75,10 +75,10 @@ class WalletProvider with ChangeNotifier {
             .get();
 
         _receivedImages = snapshot.docs.map((doc) => doc.data()).toList();
-        print('폴백 쿼리로 수신된 이미지 로드 완료: ${_receivedImages.length}개');
+        // print �� ���ŵ�
         notifyListeners();
       } catch (fallbackError) {
-        print('폴백 쿼리도 실패: $fallbackError');
+        // print �� ���ŵ�
         _receivedImages = [];
         notifyListeners();
       }

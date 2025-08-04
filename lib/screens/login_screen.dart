@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인에 실패했습니다.')),
+        const SnackBar(content: Text('로그?�에 ?�패?�습?�다.')),
       );
     }
   }
@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // ✅ 기본 화면 (입력 필드 포함)
+            // ??기본 ?�면 (?�력 ?�드 ?�함)
             Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _emailController,
                           decoration: InputDecoration(
-                            labelText: '이메일',
+                            labelText: '?�메??,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _passwordController,
                           obscureText: true,
                           decoration: InputDecoration(
-                            labelText: '비밀번호',
+                            labelText: '비�?번호',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
@@ -90,10 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: TextButton(
                                 onPressed: () {
-                                  // 이메일 찾기 구현
+                                  // ?�메??찾기 구현
                                 },
                                 child: const Text(
-                                  '이메일 찾기',
+                                  '?�메??찾기',
                                   style: TextStyle(color: Color(0xFF4D4DFF)),
                                 ),
                               ),
@@ -101,17 +101,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: TextButton(
                                 onPressed: () {
-                                  // 비밀번호 찾기 구현
+                                  // 비�?번호 찾기 구현
                                 },
                                 child: const Text(
-                                  '비밀번호 찾기',
+                                  '비�?번호 찾기',
                                   style: TextStyle(color: Color(0xFF4D4DFF)),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: bottomInset + 120), // 버튼과 간섭 없게 추가 여백
+                        SizedBox(height: bottomInset + 120), // 버튼�?간섭 ?�게 추�? ?�백
                       ],
                     ),
                   ),
@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
 
-            // ✅ 로그인/가입 버튼 - 항상 하단 + 키보드 올라오면 따라감
+            // ??로그??가??버튼 - ??�� ?�단 + ?�보???�라?�면 ?�라�?
             Positioned(
               bottom: bottomInset + 16,
               left: 24,
@@ -138,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: const Text(
-                        '로그인',
+                        '로그??,
                         style: TextStyle(fontSize: 16, color: Colors.white),
                       ),
                     ),
@@ -158,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: const Text(
-                        '가입하기',
+                        '가?�하�?,
                         style: TextStyle(fontSize: 16, color: Colors.white),
                       ),
                     ),

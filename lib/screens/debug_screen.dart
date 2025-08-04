@@ -23,7 +23,7 @@ class _DebugScreenState extends State<DebugScreen> {
     try {
       final Map<String, dynamic> data = {};
 
-      // workplaces 컬렉션 확인
+      // workplaces 컬렉???�인
       final workplacesSnapshot = await _firestore.collection('workplaces').get();
       data['workplaces'] = {
         'count': workplacesSnapshot.docs.length,
@@ -33,7 +33,7 @@ class _DebugScreenState extends State<DebugScreen> {
         }).toList(),
       };
 
-      // places 컬렉션 확인
+      // places 컬렉???�인
       final placesSnapshot = await _firestore.collection('places').get();
       data['places'] = {
         'count': placesSnapshot.docs.length,
@@ -43,7 +43,7 @@ class _DebugScreenState extends State<DebugScreen> {
         }).toList(),
       };
 
-      // users 컬렉션 확인
+      // users 컬렉???�인
       final usersSnapshot = await _firestore.collection('users').get();
       data['users'] = {
         'count': usersSnapshot.docs.length,
@@ -53,7 +53,7 @@ class _DebugScreenState extends State<DebugScreen> {
         }).toList(),
       };
 
-      // user_tracks 컬렉션 확인
+      // user_tracks 컬렉???�인
       final tracksSnapshot = await _firestore.collection('user_tracks').get();
       data['user_tracks'] = {
         'count': tracksSnapshot.docs.length,
@@ -68,7 +68,7 @@ class _DebugScreenState extends State<DebugScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('데이터 로드 오류: $e');
+      // print �� ���ŵ�
       setState(() {
         _isLoading = false;
       });
@@ -79,7 +79,7 @@ class _DebugScreenState extends State<DebugScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Firestore 데이터 확인'),
+        title: const Text('Firestore ?�이???�인'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -100,7 +100,7 @@ class _DebugScreenState extends State<DebugScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Firestore 데이터베이스 현황',
+                    'Firestore ?�이?�베?�스 ?�황',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 20),
@@ -116,7 +116,7 @@ class _DebugScreenState extends State<DebugScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       child: ExpansionTile(
         title: Text(
-          '$collectionName (${data['count']}개)',
+          '$collectionName (${data['count']}�?',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         children: [
@@ -125,7 +125,7 @@ class _DebugScreenState extends State<DebugScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('총 문서 수: ${data['count']}'),
+                Text('�?문서 ?? ${data['count']}'),
                 const SizedBox(height: 8),
                 if (data['documents'].isNotEmpty) ...[
                   const Text('문서 목록:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -142,12 +142,12 @@ class _DebugScreenState extends State<DebugScreen> {
                       children: [
                         Text('ID: ${doc['id']}', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text('데이터: ${doc['data']}'),
+                        Text('?�이?? ${doc['data']}'),
                       ],
                     ),
                   )).toList(),
                 ] else ...[
-                  const Text('문서가 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('문서가 ?�습?�다.', style: TextStyle(color: Colors.grey)),
                 ],
               ],
             ),

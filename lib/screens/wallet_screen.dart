@@ -24,60 +24,60 @@ class WalletScreenState extends State<WalletScreen> {
   final picker = ImagePicker();
   final userId = FirebaseAuth.instance.currentUser?.uid;
   
-  // 이미지 압축/리사이징 설정
-  static const int maxWidth = 1024;  // 최대 너비
-  static const int maxHeight = 1024; // 최대 높이
-  static const int quality = 85;     // JPEG 품질 (0-100)
+  // ?��?지 ?�축/리사?�징 ?�정
+  static const int maxWidth = 1024;  // 최�? ?�비
+  static const int maxHeight = 1024; // 최�? ?�이
+  static const int quality = 85;     // JPEG ?�질 (0-100)
 
-  /// ✅ 이미지 압축/리사이징 함수
+  /// ???��?지 ?�축/리사?�징 ?�수
   Future<Uint8List> _compressAndResizeImage(File imageFile) async {
     try {
-      // 이미지 파일을 바이트로 읽기
+      // ?��?지 ?�일??바이?�로 ?�기
       Uint8List imageBytes = await imageFile.readAsBytes();
       
-      // 이미지 디코딩
+      // ?��?지 ?�코??
       img.Image? image = img.decodeImage(imageBytes);
-      if (image == null) throw Exception('이미지를 디코딩할 수 없습니다.');
+      if (image == null) throw Exception('?��?지�??�코?�할 ???�습?�다.');
       
-      // 원본 크기 로그
-      debugPrint('원본 이미지 크기: ${image.width}x${image.height}');
+      // ?�본 ?�기 로그
+      debug// print �� ���ŵ�
       
-      // 리사이징이 필요한지 확인
+      // 리사?�징???�요?��? ?�인
       bool needsResize = image.width > maxWidth || image.height > maxHeight;
       
       if (needsResize) {
-        // 비율을 유지하면서 리사이징
+        // 비율???��??�면??리사?�징
         double aspectRatio = image.width / image.height;
         int newWidth, newHeight;
         
         if (aspectRatio > 1) {
-          // 가로가 더 긴 경우
+          // 가로�? ??�?경우
           newWidth = maxWidth;
           newHeight = (maxWidth / aspectRatio).round();
         } else {
-          // 세로가 더 긴 경우
+          // ?�로가 ??�?경우
           newHeight = maxHeight;
           newWidth = (maxHeight * aspectRatio).round();
         }
         
-        // 이미지 리사이징
+        // ?��?지 리사?�징
         image = img.copyResize(image, width: newWidth, height: newHeight);
-        debugPrint('리사이징된 이미지 크기: ${image.width}x${image.height}');
+        debug// print �� ���ŵ�
       }
       
-      // JPEG로 압축
+      // JPEG�??�축
       Uint8List compressedBytes = img.encodeJpg(image, quality: quality);
       
-      // 압축 결과 로그
+      // ?�축 결과 로그
       double compressionRatio = (1 - compressedBytes.length / imageBytes.length) * 100;
-      debugPrint('압축률: ${compressionRatio.toStringAsFixed(1)}%');
-      debugPrint('원본 크기: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
-      debugPrint('압축 크기: ${(compressedBytes.length / 1024).toStringAsFixed(1)}KB');
+      debugPrint('?�축�? ${compressionRatio.toStringAsFixed(1)}%');
+      debugPrint('?�본 ?�기: ${(imageBytes.length / 1024).toStringAsFixed(1)}KB');
+      debugPrint('?�축 ?�기: ${(compressedBytes.length / 1024).toStringAsFixed(1)}KB');
       
       return compressedBytes;
     } catch (e) {
-      debugPrint('이미지 압축 오류: $e');
-      // 압축 실패 시 원본 반환
+      debug// print �� ���ŵ�
+      // ?�축 ?�패 ???�본 반환
       return await imageFile.readAsBytes();
     }
   }
@@ -87,7 +87,7 @@ class WalletScreenState extends State<WalletScreen> {
 
     if (pickedFiles.isEmpty || userId == null) return;
 
-    // 로딩 다이얼로그 표시
+    // 로딩 ?�이?�로�??�시
     if (mounted) {
       showDialog(
         context: context,
@@ -98,7 +98,7 @@ class WalletScreenState extends State<WalletScreen> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(width: 20),
-                Text("이미지 처리 중..."),
+                Text("?��?지 처리 �?.."),
               ],
             ),
           );
@@ -110,7 +110,7 @@ class WalletScreenState extends State<WalletScreen> {
       for (var file in pickedFiles) {
         File imageFile = File(file.path);
         
-        // 이미지 압축/리사이징
+        // ?��?지 ?�축/리사?�징
         Uint8List compressedBytes = await _compressAndResizeImage(imageFile);
         
         String fileName = "${DateTime.now().millisecondsSinceEpoch}_${file.name}";
@@ -118,7 +118,7 @@ class WalletScreenState extends State<WalletScreen> {
 
         Reference ref = FirebaseStorage.instance.ref().child(storagePath);
         
-        // 압축된 바이트 데이터를 Firebase Storage에 업로드
+        // ?�축??바이???�이?��? Firebase Storage???�로??
         await ref.putData(compressedBytes);
         String fileUrl = await ref.getDownloadURL();
 
@@ -132,20 +132,20 @@ class WalletScreenState extends State<WalletScreen> {
           'fileUrl': fileUrl,
           'fileType': 'image',
           'source': isUpload ? 'upload' : 'received',
-          'sourceName': isUpload ? '내 업로드' : '지도 마커',
+          'sourceName': isUpload ? '???�로?? : '지??마커',
           'receivedAt': Timestamp.now(),
-          'compressed': true, // 압축 여부 표시
+          'compressed': true, // ?�축 ?��? ?�시
         });
       }
 
-      // 로딩 다이얼로그 닫기
+      // 로딩 ?�이?�로�??�기
       if (mounted) {
         Navigator.of(context).pop();
 
-        // 성공 메시지 표시
+        // ?�공 메시지 ?�시
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${pickedFiles.length}개의 이미지가 압축되어 업로드되었습니다.'),
+            content: Text('${pickedFiles.length}개의 ?��?지가 ?�축?�어 ?�로?�되?�습?�다.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -154,7 +154,7 @@ class WalletScreenState extends State<WalletScreen> {
       if (mounted) {
         if (isUpload) {
           await _loadUploadedImages();
-          // WalletProvider도 업데이트
+          // WalletProvider???�데?�트
           final walletProvider = Provider.of<WalletProvider>(context, listen: false);
           await walletProvider.loadUploadedImages();
         } else {
@@ -163,14 +163,14 @@ class WalletScreenState extends State<WalletScreen> {
         }
       }
     } catch (e) {
-      // 로딩 다이얼로그 닫기
+      // 로딩 ?�이?�로�??�기
       if (mounted) {
         Navigator.of(context).pop();
         
-        // 오류 메시지 표시
+        // ?�류 메시지 ?�시
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('이미지 업로드 중 오류가 발생했습니다: $e'),
+            content: Text('?��?지 ?�로??�??�류가 발생?�습?�다: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -182,7 +182,7 @@ class WalletScreenState extends State<WalletScreen> {
     if (userId == null) return;
 
     try {
-      debugPrint('업로드된 이미지 로딩 시작...');
+      debug// print �� ���ŵ�
       
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -192,23 +192,23 @@ class WalletScreenState extends State<WalletScreen> {
           .orderBy('receivedAt', descending: true)
           .get();
 
-      debugPrint('Firestore에서 ${snapshot.docs.length}개의 이미지 데이터 로드됨');
+      debug// print �� ���ŵ�
 
       if (mounted) {
         setState(() {
           _uploadedImages = snapshot.docs.map((doc) {
             final data = doc.data();
-            debugPrint('이미지 데이터: ${data['fileName']} - ${data['fileUrl']}');
+            debug// print �� ���ŵ�
             return data;
           }).toList();
         });
-        debugPrint('업로드된 이미지 목록 갱신 완료: ${_uploadedImages.length}개');
+        debug// print �� ���ŵ�
       }
     } catch (e) {
-      debugPrint('업로드된 이미지 로딩 오류: $e');
-      // 인덱스 오류 시 단순 쿼리로 폴백
+      debug// print �� ���ŵ�
+      // ?�덱???�류 ???�순 쿼리�??�백
       try {
-        debugPrint('폴백 쿼리로 재시도...');
+        debug// print �� ���ŵ�
         final snapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
@@ -216,20 +216,20 @@ class WalletScreenState extends State<WalletScreen> {
             .where('source', isEqualTo: 'upload')
             .get();
 
-        debugPrint('폴백 쿼리로 ${snapshot.docs.length}개의 이미지 데이터 로드됨');
+        debug// print �� ���ŵ�
 
         if (mounted) {
           setState(() {
             _uploadedImages = snapshot.docs.map((doc) {
               final data = doc.data();
-              debugPrint('폴백 이미지 데이터: ${data['fileName']} - ${data['fileUrl']}');
+              debug// print �� ���ŵ�
               return data;
             }).toList();
           });
-          debugPrint('폴백으로 업로드된 이미지 목록 갱신 완료: ${_uploadedImages.length}개');
+          debug// print �� ���ŵ�
         }
       } catch (fallbackError) {
-        debugPrint('폴백 쿼리도 실패: $fallbackError');
+        debug// print �� ���ŵ�
         if (mounted) {
           setState(() {
             _uploadedImages = [];
@@ -262,7 +262,7 @@ class WalletScreenState extends State<WalletScreen> {
       if (mounted) {
         if (isUpload) {
           await _loadUploadedImages();
-          // WalletProvider도 업데이트
+          // WalletProvider???�데?�트
           final walletProvider = Provider.of<WalletProvider>(context, listen: false);
           await walletProvider.loadUploadedImages();
         } else {
@@ -271,10 +271,10 @@ class WalletScreenState extends State<WalletScreen> {
         }
       }
     } catch (e) {
-      debugPrint("삭제 오류: $e");
+      debug// print �� ���ŵ�
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("이미지 삭제 중 오류 발생")),
+          const SnackBar(content: Text("?��?지 ??�� �??�류 발생")),
         );
       }
     }
@@ -285,8 +285,8 @@ class WalletScreenState extends State<WalletScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("이미지 삭제"),
-          content: const Text("정말 삭제하시겠습니까?"),
+          title: const Text("?��?지 ??��"),
+          content: const Text("?�말 ??��?�시겠습?�까?"),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -297,7 +297,7 @@ class WalletScreenState extends State<WalletScreen> {
                 Navigator.pop(context);
                 await _deleteImage(imageData, isUpload);
               },
-              child: const Text("삭제", style: TextStyle(color: Colors.red)),
+              child: const Text("??��", style: TextStyle(color: Colors.red)),
             ),
           ],
         );
@@ -305,7 +305,7 @@ class WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  /// ✅ 압축 설정 다이얼로그
+  /// ???�축 ?�정 ?�이?�로�?
   void _showCompressionSettings() {
     int currentQuality = quality;
     int currentMaxWidth = maxWidth;
@@ -317,11 +317,11 @@ class WalletScreenState extends State<WalletScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text("이미지 압축 설정"),
+              title: const Text("?��?지 ?�축 ?�정"),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text("JPEG 품질 (높을수록 용량 증가)"),
+                  const Text("JPEG ?�질 (?�을?�록 ?�량 증�?)"),
                   Slider(
                     value: currentQuality.toDouble(),
                     min: 10,
@@ -334,15 +334,15 @@ class WalletScreenState extends State<WalletScreen> {
                       });
                     },
                   ),
-                  Text("품질: $currentQuality%"),
+                  Text("?�질: $currentQuality%"),
                   const SizedBox(height: 20),
-                  const Text("최대 크기 (픽셀)"),
+                  const Text("최�? ?�기 (?��?)"),
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
                           decoration: const InputDecoration(
-                            labelText: "너비",
+                            labelText: "?�비",
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
@@ -358,7 +358,7 @@ class WalletScreenState extends State<WalletScreen> {
                       Expanded(
                         child: TextField(
                           decoration: const InputDecoration(
-                            labelText: "높이",
+                            labelText: "?�이",
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
@@ -374,7 +374,7 @@ class WalletScreenState extends State<WalletScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    "※ 설정은 다음 업로드부터 적용됩니다",
+                    "???�정?� ?�음 ?�로?��????�용?�니??,
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
@@ -390,18 +390,18 @@ class WalletScreenState extends State<WalletScreen> {
                 ),
                 TextButton(
                   onPressed: () {
-                    // 설정 저장 (실제로는 SharedPreferences나 Provider에 저장)
+                    // ?�정 ?�??(?�제로는 SharedPreferences??Provider???�??
                     Navigator.pop(context);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text("압축 설정이 저장되었습니다."),
+                          content: Text("?�축 ?�정???�?�되?�습?�다."),
                           backgroundColor: Colors.green,
                         ),
                       );
                     }
                   },
-                  child: const Text("저장"),
+                  child: const Text("?�??),
                 ),
               ],
             );
@@ -412,7 +412,7 @@ class WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildImageCarousel(List<Map<String, dynamic>> images, bool isUpload) {
-    debugPrint('캐러셀 빌드: ${images.length}개의 이미지, isUpload: $isUpload');
+    debug// print �� ���ŵ�
     
     if (images.isEmpty) {
       return const Center(
@@ -421,7 +421,7 @@ class WalletScreenState extends State<WalletScreen> {
           children: [
             Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
             SizedBox(height: 8),
-            Text("이미지가 없습니다.", style: TextStyle(color: Colors.grey)),
+            Text("?��?지가 ?�습?�다.", style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
@@ -435,7 +435,7 @@ class WalletScreenState extends State<WalletScreen> {
         viewportFraction: 0.5,
       ),
       items: images.map((data) {
-        debugPrint('캐러셀 아이템: ${data['fileName']} - ${data['fileUrl']}');
+        debug// print �� ���ŵ�
         return GestureDetector(
           onTap: () => _showDeleteDialog(data, isUpload),
           child: Container(
@@ -448,7 +448,7 @@ class WalletScreenState extends State<WalletScreen> {
                 width: 100,
                 height: 150,
                 errorBuilder: (context, error, stackTrace) {
-                  debugPrint('이미지 로드 오류: $error');
+                  debug// print �� ���ŵ�
                   return Container(
                     width: 100,
                     height: 150,
@@ -493,12 +493,12 @@ class WalletScreenState extends State<WalletScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Wallet 화면"),
+        title: const Text("Wallet ?�면"),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: _showCompressionSettings,
-            tooltip: '압축 설정',
+            tooltip: '?�축 ?�정',
           ),
         ],
       ),
@@ -507,7 +507,7 @@ class WalletScreenState extends State<WalletScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("내가 업로드한 그림", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("?��? ?�로?�한 그림", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             _buildImageCarousel(_uploadedImages, true),
             Align(
@@ -515,11 +515,11 @@ class WalletScreenState extends State<WalletScreen> {
               child: TextButton.icon(
                 onPressed: () => _pickAndUploadImage(true),
                 icon: const Icon(Icons.upload, color: Colors.blue),
-                label: const Text("이미지 업로드", style: TextStyle(color: Colors.blue)),
+                label: const Text("?��?지 ?�로??, style: TextStyle(color: Colors.blue)),
               ),
             ),
             const SizedBox(height: 20),
-            const Text("내가 받은 그림", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("?��? 받�? 그림", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             _buildImageCarousel(receivedImages, false),
             Align(
@@ -527,7 +527,7 @@ class WalletScreenState extends State<WalletScreen> {
               child: TextButton.icon(
                 onPressed: () => _pickAndUploadImage(false),
                 icon: const Icon(Icons.download, color: Colors.green),
-                label: const Text("이미지 추가", style: TextStyle(color: Colors.green)),
+                label: const Text("?��?지 추�?", style: TextStyle(color: Colors.green)),
               ),
             ),
           ],

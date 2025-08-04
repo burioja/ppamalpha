@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 
 class TrackConnectionScreen extends StatefulWidget {
-  final String type; // 'track' 또는 'connection'
+  final String type; // 'track' ?�는 'connection'
   
   const TrackConnectionScreen({
     super.key,
@@ -22,7 +22,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.type == 'track' ? '팔로잉하는 워크플레이스' : '팔로워';
+    final title = widget.type == 'track' ? '?�로?�하???�크?�레?�스' : '?�로??;
     
     return Scaffold(
       appBar: AppBar(
@@ -36,7 +36,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: () {
                 setState(() {
-                  // 데이터 새로고침
+                  // ?�이???�로고침
                 });
               },
             ),
@@ -56,7 +56,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                 children: [
                   const Icon(Icons.error, size: 48, color: Colors.red),
                   const SizedBox(height: 16),
-                  Text('오류가 발생했습니다: ${snapshot.error}'),
+                  Text('?�류가 발생?�습?�다: ${snapshot.error}'),
                 ],
               ),
             );
@@ -77,8 +77,8 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                   const SizedBox(height: 16),
                   Text(
                     widget.type == 'track' 
-                        ? 'Track한 플레이스가 없습니다.' 
-                        : 'Connection이 없습니다.',
+                        ? 'Track???�레?�스가 ?�습?�다.' 
+                        : 'Connection???�습?�다.',
                     style: const TextStyle(fontSize: 16, color: Colors.grey),
                   ),
                 ],
@@ -92,7 +92,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
               crossAxisCount: _getCrossAxisCount(context),
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 2.5, // 가로:세로 비율 조정
+              childAspectRatio: 2.5, // 가�??�로 비율 조정
             ),
             itemCount: users.length,
             itemBuilder: (context, index) {
@@ -108,32 +108,32 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
   Future<List<Map<String, dynamic>>> _getUserList() async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      print('사용자 ID가 null입니다.');
+      // print �� ���ŵ�
       return [];
     }
 
-    print('Track/Connection 데이터 로드 시작 - 사용자 ID: $currentUserId');
+    // print �� ���ŵ�
 
     try {
       if (widget.type == 'track') {
-        // 사용자가 Track한 플레이스 목록 가져오기
+        // ?�용?��? Track???�레?�스 목록 가?�오�?
         final followingSnapshot = await _firestore
             .collection('user_tracks')
             .doc(currentUserId)
             .collection('following')
             .get();
         
-        print('Track 데이터 로드 - 문서 개수: ${followingSnapshot.docs.length}');
+        // print �� ���ŵ�
         
         final List<Map<String, dynamic>> workplaces = [];
         for (final doc in followingSnapshot.docs) {
           final workplaceData = doc.data();
           final workplaceId = doc.id;
-          final trackMode = workplaceData['mode'] ?? 'work'; // 트랙 모드 가져오기
+          final trackMode = workplaceData['mode'] ?? 'work'; // ?�랙 모드 가?�오�?
           
-          print('Track 플레이스 ID: $workplaceId, 모드: $trackMode, 데이터: $workplaceData');
+          // print �� ���ŵ�
           
-          // 플레이스 상세 정보 가져오기
+          // ?�레?�스 ?�세 ?�보 가?�오�?
           try {
             final workplaceDoc = await _firestore
                 .collection('places')
@@ -142,55 +142,55 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
             
             if (workplaceDoc.exists) {
               final workplaceInfo = workplaceDoc.data()!;
-              print('플레이스 정보 찾음: ${workplaceInfo['name']}');
+              // print �� ���ŵ�
               workplaces.add({
                 'workplaceId': workplaceId,
-                'nickname': workplaceInfo['name'] ?? '플레이스',
-                'authority': 'workplace', // 워크플레이스 표시
+                'nickname': workplaceInfo['name'] ?? '?�레?�스',
+                'authority': 'workplace', // ?�크?�레?�스 ?�시
                 'profileImageUrl': workplaceInfo['profileImageUrl'] ?? '',
-                'trackMode': trackMode, // 트랙 모드 추가
+                'trackMode': trackMode, // ?�랙 모드 추�?
               });
             } else {
-              print('플레이스 정보 없음: $workplaceId');
+              // print �� ���ŵ�
             }
           } catch (e) {
-            print('플레이스 정보 가져오기 실패: $e');
+            // print �� ���ŵ�
           }
         }
         
-        print('최종 Track 플레이스 개수: ${workplaces.length}');
+        // print �� ���ŵ�
         return workplaces;
       } else {
-        // Connection: 내가 트랙하고 있는 플레이스의 다른 사용자들 목록
+        // Connection: ?��? ?�랙?�고 ?�는 ?�레?�스???�른 ?�용?�들 목록
         final List<Map<String, dynamic>> connections = [];
         
-        // 1. 내가 트랙하고 있는 플레이스 목록 가져오기
+        // 1. ?��? ?�랙?�고 ?�는 ?�레?�스 목록 가?�오�?
         final followingSnapshot = await _firestore
             .collection('user_tracks')
             .doc(currentUserId)
             .collection('following')
             .get();
         
-        print('내가 트랙하는 플레이스 개수: ${followingSnapshot.docs.length}');
+        // print �� ���ŵ�
         
         for (final followingDoc in followingSnapshot.docs) {
           final placeId = followingDoc.id;
           
-          // 2. 이 플레이스에 속한 다른 사용자들 가져오기
+          // 2. ???�레?�스???�한 ?�른 ?�용?�들 가?�오�?
           final membersSnapshot = await _firestore
               .collection('places')
               .doc(placeId)
               .collection('members')
               .get();
           
-          print('플레이스 $placeId의 멤버 수: ${membersSnapshot.docs.length}');
+          // print �� ���ŵ�
           
           for (final memberDoc in membersSnapshot.docs) {
             final memberUserId = memberDoc.id;
             
-            // 내가 아닌 사용자만 추가
+            // ?��? ?�닌 ?�용?�만 추�?
             if (memberUserId != currentUserId) {
-              // 사용자 상세 정보 가져오기
+              // ?�용???�세 ?�보 가?�오�?
               try {
                 final userDoc = await _firestore
                     .collection('users')
@@ -200,26 +200,26 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                 if (userDoc.exists) {
                   final userData = userDoc.data()!;
                   
-                  // 새로운 구조에서 닉네임 가져오기
-                  String nickname = '닉네임';
+                  // ?�로??구조?�서 ?�네??가?�오�?
+                  String nickname = '?�네??;
                   if (userData['profile'] != null && 
                       userData['profile']['info'] != null) {
-                    nickname = userData['profile']['info']['nickname'] ?? '닉네임';
+                    nickname = userData['profile']['info']['nickname'] ?? '?�네??;
                   } else {
-                    nickname = userData['nickname'] ?? '닉네임';
+                    nickname = userData['nickname'] ?? '?�네??;
                   }
                   
-                  // 사용자의 역할 정보 가져오기
+                  // ?�용?�의 ??�� ?�보 가?�오�?
                   String authority = '직원';
                   try {
                     final memberData = memberDoc.data();
                     authority = memberData['roleId'] ?? '직원';
                   } catch (e) {
-                    print('멤버 역할 정보 가져오기 실패: $e');
+                    // print �� ���ŵ�
                   }
                   
-                  // 플레이스 정보도 가져오기
-                  String placeName = '플레이스';
+                  // ?�레?�스 ?�보??가?�오�?
+                  String placeName = '?�레?�스';
                   try {
                     final placeDoc = await _firestore
                         .collection('places')
@@ -231,7 +231,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                       placeName = placeData['name'] ?? placeId;
                     }
                   } catch (e) {
-                    print('플레이스 정보 가져오기 실패: $e');
+                    // print �� ���ŵ�
                   }
                   
                   connections.add({
@@ -244,13 +244,13 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                   });
                 }
               } catch (e) {
-                print('사용자 정보 가져오기 실패: $e');
+                // print �� ���ŵ�
               }
             }
           }
         }
         
-        // 중복 제거 (같은 사용자가 여러 플레이스에 속할 수 있음)
+        // 중복 ?�거 (같�? ?�용?��? ?�러 ?�레?�스???�할 ???�음)
         final uniqueConnections = <String, Map<String, dynamic>>{};
         for (final connection in connections) {
           final userId = connection['userId'];
@@ -259,11 +259,11 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
           }
         }
         
-        print('최종 커넥션 개수: ${uniqueConnections.length}');
+        // print �� ���ŵ�
         return uniqueConnections.values.toList();
       }
     } catch (e) {
-      print('사용자 목록 가져오기 실패: $e');
+      // print �� ���ŵ�
       return [];
     }
   }
@@ -279,16 +279,16 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
         if (userDoc.exists) {
           final userData = userDoc.data()!;
           
-          // 새로운 구조에서 닉네임 가져오기
-          String nickname = '닉네임';
+          // ?�로??구조?�서 ?�네??가?�오�?
+          String nickname = '?�네??;
           if (userData['profile'] != null && 
               userData['profile']['info'] != null) {
-            nickname = userData['profile']['info']['nickname'] ?? '닉네임';
+            nickname = userData['profile']['info']['nickname'] ?? '?�네??;
           } else {
-            nickname = userData['nickname'] ?? '닉네임';
+            nickname = userData['nickname'] ?? '?�네??;
           }
           
-          // 사용자의 역할 정보 가져오기 (기본값: 직원)
+          // ?�용?�의 ??�� ?�보 가?�오�?(기본�? 직원)
           String authority = '직원';
           try {
             final userPlacesSnapshot = await _firestore
@@ -303,7 +303,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
               authority = userPlaceData['roleName'] ?? '직원';
             }
           } catch (e) {
-            print('사용자 역할 정보 가져오기 실패: $e');
+            // print �� ���ŵ�
           }
           
           userDetails.add({
@@ -314,71 +314,71 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
           });
         }
       } catch (e) {
-        print('사용자 정보 가져오기 실패: $e');
+        // print �� ���ŵ�
       }
     }
     
     return userDetails;
   }
 
-  // 화면 크기에 따른 열 수 결정
+  // ?�면 ?�기???�른 ????결정
   int _getCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     
-    // 모바일 기준 너비 (약 400px)
+    // 모바??기�? ?�비 (??400px)
     if (screenWidth < 600) {
-      return 2; // 모바일: 2열
+      return 2; // 모바?? 2??
     } else if (screenWidth < 900) {
-      return 3; // 태블릿: 3열
+      return 3; // ?�블�? 3??
     } else {
-      return 4; // 데스크톱: 4열
+      return 4; // ?�스?�톱: 4??
     }
   }
 
   Widget _buildUserCard(Map<String, dynamic> userData) {
     final userId = userData['userId'] ?? '';
-    final nickname = userData['nickname'] ?? '닉네임';
+    final nickname = userData['nickname'] ?? '?�네??;
     final authority = userData['authority'] ?? 'Authority';
     final profileImageUrl = userData['profileImageUrl'] ?? '';
-    final trackMode = userData['trackMode'] ?? 'work'; // 트랙 모드 가져오기
-    final placeName = userData['placeName'] ?? ''; // 플레이스 이름
+    final trackMode = userData['trackMode'] ?? 'work'; // ?�랙 모드 가?�오�?
+    final placeName = userData['placeName'] ?? ''; // ?�레?�스 ?�름
 
-    // 권한 레벨에 따른 색상과 텍스트 설정
+    // 권한 ?�벨???�른 ?�상�??�스???�정
     Color authorityColor;
     String authorityText;
     
     if (widget.type == 'track') {
-      // Track의 경우 모드만 표시
+      // Track??경우 모드�??�시
       authorityColor = trackMode == 'work' ? Colors.blue : Colors.green;
-      authorityText = trackMode == 'work' ? '워크' : '라이프';
+      authorityText = trackMode == 'work' ? '?�크' : '?�이??;
     } else {
-      // Connection의 경우 사용자 역할 표시
+      // Connection??경우 ?�용????�� ?�시
       switch (authority.toLowerCase()) {
         case 'owner':
-        case '소유자':
-        case '사장':
-        case '대표':
+        case '?�유??:
+        case '?�장':
+        case '?�??:
         case '캡틴':
           authorityColor = Colors.red.shade700;
-          authorityText = '소유자';
+          authorityText = '?�유??;
           break;
         case 'manager':
         case '관리자':
-        case '매니저':
+        case '매니?�':
         case '보조캡틴':
           authorityColor = Colors.orange.shade700;
           authorityText = '관리자';
           break;
         case 'employee':
         case '직원':
-        case '스태프':
+        case '?�태??:
           authorityColor = Colors.blue.shade700;
           authorityText = '직원';
           break;
         case 'customer':
         case '고객':
-        case '손님':
-        case '회원':
+        case '?�님':
+        case '?�원':
           authorityColor = Colors.green.shade700;
           authorityText = '고객';
           break;
@@ -397,7 +397,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
         padding: const EdgeInsets.all(8),
         child: Row(
           children: [
-            // 왼쪽: 프로필 이미지
+            // ?�쪽: ?�로???��?지
             CircleAvatar(
               radius: 20,
               backgroundImage: profileImageUrl.isNotEmpty
@@ -406,13 +406,13 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
             ),
             const SizedBox(width: 8),
             
-            // 오른쪽: 닉네임과 권한
+            // ?�른�? ?�네?�과 권한
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 상단: 닉네임
+                  // ?�단: ?�네??
                   Text(
                     nickname,
                     style: const TextStyle(
@@ -424,7 +424,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                   ),
                   const SizedBox(height: 2),
                   
-                  // 중간: 플레이스 이름 (커넥션인 경우만)
+                  // 중간: ?�레?�스 ?�름 (커넥?�인 경우�?
                   if (widget.type == 'connection' && placeName.isNotEmpty) ...[
                     Text(
                       placeName,
@@ -438,7 +438,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                     const SizedBox(height: 2),
                   ],
                   
-                  // 하단: Authority 또는 모드 정보
+                  // ?�단: Authority ?�는 모드 ?�보
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
@@ -450,7 +450,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (widget.type == 'track') ...[
-                          // 트랙의 경우 모드 아이콘과 텍스트
+                          // ?�랙??경우 모드 ?�이콘과 ?�스??
                           Icon(
                             trackMode == 'work' ? Icons.work : Icons.home,
                             size: 10,

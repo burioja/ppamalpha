@@ -6,13 +6,13 @@ class UserProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 기존 변수
+  // 기존 변??
   String _email = '';
   String _phoneNumber = '';
   String _address = '';
   List<Map<String, String>> _workPlaces = [];
 
-  // 추가된 변수
+  // 추�???변??
   String _nickName = '';
   String _profileImageUrl = '';
   String _birthDate = '';
@@ -112,7 +112,7 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // WorkPlaces 관리 메서드
+  // WorkPlaces 관�?메서??
   void addWorkPlace() {
     _workPlaces.add({'workplaceinput': '', 'workplaceadd': ''});
     notifyListeners();
@@ -132,7 +132,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Firebase에서 사용자 데이터 가져오기
+  // Firebase?�서 ?�용???�이??가?�오�?
   Future<void> fetchUserData() async {
     try {
       final user = _auth.currentUser;
@@ -144,7 +144,7 @@ class UserProvider with ChangeNotifier {
           _address = doc['address'] ?? '';
           _workPlaces = List<Map<String, String>>.from(doc['workPlaces'] ?? []);
 
-          // 추가된 데이터 가져오기
+          // 추�????�이??가?�오�?
           _nickName = doc['nickName'] ?? '';
           _profileImageUrl = doc['profileImageUrl'] ?? '';
           _birthDate = doc['birthDate'] ?? '';
@@ -159,11 +159,11 @@ class UserProvider with ChangeNotifier {
         }
       }
     } catch (e) {
-      print('사용자 데이터 가져오기 실패: $e');
+      // print �� ���ŵ�
     }
   }
 
-  // Firebase에 사용자 데이터 업데이트
+  // Firebase???�용???�이???�데?�트
   Future<void> updateUserData() async {
     try {
       final user = _auth.currentUser;
@@ -175,7 +175,7 @@ class UserProvider with ChangeNotifier {
           'workPlaces': _workPlaces,
           'nickName': _nickName,
 
-          // 추가된 데이터 업데이트
+          // 추�????�이???�데?�트
 
           'profileImageUrl': _profileImageUrl,
           'birthDate': _birthDate,
@@ -187,12 +187,12 @@ class UserProvider with ChangeNotifier {
           'bankAccount': _bankAccount,
         });
 
-        // FirebaseAuth 이메일 업데이트
+        // FirebaseAuth ?�메???�데?�트
         await user.updateEmail(_email);
         notifyListeners();
       }
     } catch (e) {
-      print('사용자 데이터 업데이트 실패: $e');
+      // print �� ���ŵ�
     }
   }
 }

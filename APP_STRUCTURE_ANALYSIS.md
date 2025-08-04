@@ -1,7 +1,7 @@
 # PPAMPROTO 앱 구조 분석
 
 ## 📱 앱 개요
-PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Firebase 백엔드를 활용한 모바일 애플리케이션입니다. 사용자의 위치 정보를 기반으로 한 커뮤니티 기능과 지도 서비스를 제공합니다.
+PPAMPROTO는 Flutter 기반의 위치 기반 앱으로, Firebase 백엔드를 활용한 모바일 애플리케이션입니다. 사용자의 위치 정보를 기반으로 한 지도 서비스와 지갑 기능을 제공합니다.
 
 ## 🏗️ 전체 아키텍처
 
@@ -24,26 +24,24 @@ PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Fire
 │   │   ├── user_provider.dart      # 사용자 정보 관리 (199 lines)
 │   │   ├── status_provider.dart    # 앱 상태 관리 (12 lines)
 │   │   ├── search_provider.dart    # 검색 상태 관리 (24 lines)
-│   │   └── screen_provider.dart    # 화면 전환 상태 (13 lines)
+│   │   ├── screen_provider.dart    # 화면 전환 상태 (13 lines)
+│   │   └── wallet_provider.dart    # 지갑 상태 관리
 │   ├── screens/           # UI 화면들
-│   │   ├── main_screen.dart        # 메인 화면 (탭 기반) (316 lines)
+│   │   ├── main_screen.dart        # 메인 화면 (탭 기반) (347 lines)
 │   │   ├── login_screen.dart       # 로그인 (171 lines)
 │   │   ├── signup_screen.dart      # 회원가입 (256 lines)
-│   │   ├── map_screen.dart         # 지도 화면 (251 lines)
-│   │   ├── community_screen.dart   # 커뮤니티 (208 lines)
+│   │   ├── map_screen.dart         # 지도 화면 (946 lines)
 │   │   ├── search_screen.dart      # 검색 (55 lines)
-│   │   ├── shop_screen.dart        # 쇼핑 (25 lines)
-│   │   ├── store_screen.dart       # 스토어 (57 lines)
-│   │   ├── wallet_screen.dart      # 지갑 (98 lines)
+│   │   ├── wallet_screen.dart      # 지갑 (539 lines)
 │   │   ├── settings_screen.dart    # 설정 (156 lines)
 │   │   ├── budget_screen.dart      # 예산 (13 lines)
-│   │   ├── post_detail_screen.dart # 게시글 상세 (176 lines)
-│   │   ├── post_place_screen.dart  # 장소 게시 (222 lines)
-│   │   ├── write_post_screen.dart  # 게시글 작성 (55 lines)
 │   │   └── map_search_screen.dart  # 지도 검색 (42 lines)
 │   ├── services/          # 비즈니스 로직 서비스
 │   │   ├── firebase_service.dart   # Firebase 연동 (37 lines)
-│   │   └── location_service.dart   # 위치 서비스 (56 lines)
+│   │   ├── location_service.dart   # 위치 서비스 (56 lines)
+│   │   ├── user_service.dart       # 사용자 서비스
+│   │   ├── track_service.dart      # 트랙 서비스
+│   │   └── database_migration_service.dart # 데이터베이스 마이그레이션
 │   └── widgets/           # 재사용 가능한 UI 컴포넌트
 │       ├── user_status_widget.dart     # 사용자 상태 (84 lines)
 │       ├── mode_switcher.dart          # 모드 전환 (60 lines)
@@ -77,6 +75,7 @@ PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Fire
 - `UserProvider`: 사용자 정보 및 프로필 관리 (199 lines)
 - `SearchProvider`: 검색 기능 상태 관리
 - `ScreenProvider`: 화면 전환 상태 관리
+- `WalletProvider`: 지갑 상태 관리
 
 ### 2. 인증 시스템 (Authentication)
 - **AuthWrapper**: Firebase Auth 상태를 감지하여 자동 로그인/로그아웃 처리
@@ -86,11 +85,8 @@ PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Fire
 
 ### 3. 메인 화면 구조 (MainScreen)
 **탭 기반 네비게이션:**
-1. **Community** (Icons.people) - 커뮤니티 기능
-2. **Map** (Icons.map) - 지도 화면
-3. **Store** (Icons.store) - 스토어 화면
-4. **Shop** (Icons.shopping_cart) - 쇼핑 화면
-5. **Wallet** (Icons.account_balance_wallet) - 지갑 화면
+1. **Map** (Icons.map) - 지도 화면
+2. **Wallet** (Icons.account_balance_wallet) - 지갑 화면
 
 **특별 기능:**
 - **ModeSwitcher**: Work/Life 모드 전환
@@ -112,14 +108,8 @@ PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Fire
 
 ### 5. 화면별 기능 분석
 
-#### 커뮤니티 관련
-- **CommunityScreen**: 커뮤니티 메인 화면 (208 lines)
-- **PostDetailScreen**: 게시글 상세 보기 (176 lines)
-- **WritePostScreen**: 게시글 작성 (55 lines)
-- **PostPlaceScreen**: 장소 관련 게시 (222 lines)
-
 #### 지도 관련
-- **MapScreen**: Google Maps 연동 (251 lines)
+- **MapScreen**: Google Maps 연동 (946 lines)
 - **MapSearchScreen**: 지도 기반 검색 (42 lines)
 - **LocationService**: 위치 정보 처리 (56 lines)
 
@@ -129,10 +119,8 @@ PPAMPROTO는 Flutter 기반의 위치 기반 소셜 커뮤니티 앱으로, Fire
 - **AddressSearchWidget**: 주소 검색 (69 lines)
 
 #### 금융 관련
-- **WalletScreen**: 지갑 기능 (98 lines)
+- **WalletScreen**: 지갑 기능 (539 lines)
 - **BudgetScreen**: 예산 관리 (13 lines)
-- **ShopScreen**: 쇼핑 (25 lines)
-- **StoreScreen**: 스토어 (57 lines)
 
 #### 설정 및 관리
 - **SettingsScreen**: 사용자 설정 (156 lines)

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class TrackService {
-  // Track 플레이스 개수 가져오기 (모드별 필터링)
+  // Track ?�레?�스 개수 가?�오�?(모드�??�터�?
   static Future<int> getTrackCount(String mode) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -14,36 +14,36 @@ class TrackService {
           .collection('following')
           .get();
 
-      print('Track 개수 계산 - 문서 개수: ${trackSnapshot.docs.length}');
+      // print �� ���ŵ�
       
       int modeCount = 0;
       for (var doc in trackSnapshot.docs) {
         final trackData = doc.data();
-        final trackMode = trackData['mode'] ?? 'work'; // 기본값은 work
+        final trackMode = trackData['mode'] ?? 'work'; // 기본값�? work
         
-        print('Track 문서 ID: ${doc.id}, 모드: $trackMode, 데이터: $trackData');
+        // print �� ���ŵ�
         
-        // 모드가 일치하는 경우만 카운트
+        // 모드가 ?�치?�는 경우�?카운??
         if (trackMode == mode) {
           modeCount++;
         }
       }
 
-      print('$mode 모드 Track 개수: $modeCount');
+      // print �� ���ŵ�
       return modeCount;
     } catch (e) {
-      print('Track 개수 로드 오류: $e');
+      // print �� ���ŵ�
       return 0;
     }
   }
 
-  // 플레이스를 트랙하기 (사용자의 플레이스 서브컬렉션에 등록)
+  // ?�레?�스�??�랙?�기 (?�용?�의 ?�레?�스 ?�브컬렉?�에 ?�록)
   static Future<bool> trackPlace(String placeId, String mode) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
 
-      // 1. user_tracks/following에 추가
+      // 1. user_tracks/following??추�?
       await FirebaseFirestore.instance
           .collection('user_tracks')
           .doc(user.uid)
@@ -56,7 +56,7 @@ class TrackService {
         'status': 'active',
       });
 
-      // 2. 사용자의 플레이스 서브컬렉션에 추가
+      // 2. ?�용?�의 ?�레?�스 ?�브컬렉?�에 추�?
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -65,27 +65,27 @@ class TrackService {
           .set({
         'mode': mode,
         'roleId': 'tracker',
-        'roleName': '트래커',
+        'roleName': '?�래�?,
         'joinedAt': FieldValue.serverTimestamp(),
         'status': 'active',
         'permissions': ['view', 'track'],
       });
 
-      print('플레이스 $placeId를 $mode 모드로 트랙했습니다.');
+      // print �� ���ŵ�
       return true;
     } catch (e) {
-      print('플레이스 트랙 오류: $e');
+      // print �� ���ŵ�
       return false;
     }
   }
 
-  // 플레이스 트랙 해제
+  // ?�레?�스 ?�랙 ?�제
   static Future<bool> untrackPlace(String placeId) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
 
-      // 1. user_tracks/following에서 제거
+      // 1. user_tracks/following?�서 ?�거
       await FirebaseFirestore.instance
           .collection('user_tracks')
           .doc(user.uid)
@@ -93,7 +93,7 @@ class TrackService {
           .doc(placeId)
           .delete();
 
-      // 2. 사용자의 플레이스 서브컬렉션에서 제거
+      // 2. ?�용?�의 ?�레?�스 ?�브컬렉?�에???�거
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -101,15 +101,15 @@ class TrackService {
           .doc(placeId)
           .delete();
 
-      print('플레이스 $placeId 트랙을 해제했습니다.');
+      // print �� ���ŵ�
       return true;
     } catch (e) {
-      print('플레이스 트랙 해제 오류: $e');
+      // print �� ���ŵ�
       return false;
     }
   }
 
-  // 특정 플레이스가 트랙 중인지 확인
+  // ?�정 ?�레?�스가 ?�랙 중인지 ?�인
   static Future<bool> isTracked(String placeId) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -124,7 +124,7 @@ class TrackService {
 
       return doc.exists;
     } catch (e) {
-      print('트랙 상태 확인 오류: $e');
+      // print �� ���ŵ�
       return false;
     }
   }

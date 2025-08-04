@@ -6,14 +6,14 @@ import 'dart:math';
 
 class WorkplaceData {
   final List<String> data; // {groupdata1, groupdata2, groupdata3, workplaceinput + workplaceadd}
-  final Color color;       // 그룹별 고정 색상
-  final String mode;       // work 또는 life
-  final String placeId;    // 플레이스 ID
+  final Color color;       // 그룹�?고정 ?�상
+  final String mode;       // work ?�는 life
+  final String placeId;    // ?�레?�스 ID
 
   WorkplaceData(this.data, this.color, {this.mode = 'work', this.placeId = ''});
 }
 
-// 랜덤 색상 생성 함수
+// ?�덤 ?�상 ?�성 ?�수
 Color generateRandomColor() {
   Random random = Random();
   return Color.fromARGB(
@@ -24,13 +24,13 @@ Color generateRandomColor() {
   );
 }
 
-// 모드별 플레이스 가져오기
+// 모드�??�레?�스 가?�오�?
 Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
   List<List<WorkplaceData>> workplacesList = [];
   try {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      // 기본 개인 플레이스 제공
+      // 기본 개인 ?�레?�스 ?�공
       if (mode == 'life') {
         workplacesList.add([WorkplaceData(['개인'], Colors.blue.shade300, mode: 'life', placeId: 'personal')]);
       } else {
@@ -39,10 +39,10 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
       return workplacesList;
     }
 
-    // 기존 데이터 구조와 새로운 구조 모두 확인
+    // 기존 ?�이??구조?� ?�로??구조 모두 ?�인
     List<WorkplaceData> modeWorkplaces = [];
 
-    // 1. 새로운 PRD 구조에서 사용자 플레이스 가져오기 (플레이스 서브컬렉션)
+    // 1. ?�로??PRD 구조?�서 ?�용???�레?�스 가?�오�?(?�레?�스 ?�브컬렉??
     try {
       final userPlacesSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -51,7 +51,7 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
           .where('mode', isEqualTo: mode)
           .get();
 
-      print('사용자 플레이스 서브컬렉션에서 ${userPlacesSnapshot.docs.length}개 플레이스 발견');
+      // print �� ���ŵ�
 
       for (var placeDoc in userPlacesSnapshot.docs) {
         final placeData = placeDoc.data();
@@ -59,7 +59,7 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
         final roleName = placeData['roleName'] ?? '직원';
         final workplaceAdd = placeData['workplaceAdd'] ?? '';
 
-        // 플레이스 상세 정보 가져오기
+        // ?�레?�스 ?�세 ?�보 가?�오�?
         final placeDetailDoc = await FirebaseFirestore.instance
             .collection('places')
             .doc(placeId)
@@ -74,14 +74,14 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
           Color groupColor = generateRandomColor();
 
           modeWorkplaces.add(WorkplaceData(data, groupColor, mode: mode, placeId: placeId));
-          print('플레이스 추가: $placeName (역할: $roleName)');
+          print('?�레?�스 추�?: $placeName (??��: $roleName)');
         }
       }
     } catch (e) {
-      print('새로운 구조에서 플레이스 로드 실패: $e');
+      // print �� ���ŵ�
     }
 
-    // 2. 트랙된 플레이스 가져오기 (user_tracks에서 모드별 필터링)
+    // 2. ?�랙???�레?�스 가?�오�?(user_tracks?�서 모드�??�터�?
     try {
       final trackSnapshot = await FirebaseFirestore.instance
           .collection('user_tracks')
@@ -89,20 +89,20 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
           .collection('following')
           .get();
 
-      print('user_tracks에서 ${trackSnapshot.docs.length}개 트랙 발견');
+      // print �� ���ŵ�
 
       for (var trackDoc in trackSnapshot.docs) {
         final trackData = trackDoc.data();
         final placeId = trackDoc.id;
         final trackMode = trackData['mode'] ?? 'work';
 
-        // 현재 모드와 일치하는 트랙된 플레이스만 추가
+        // ?�재 모드?� ?�치?�는 ?�랙???�레?�스�?추�?
         if (trackMode == mode) {
-          // 이미 플레이스 서브컬렉션에 있는지 확인
+          // ?��? ?�레?�스 ?�브컬렉?�에 ?�는지 ?�인
           bool alreadyAdded = modeWorkplaces.any((workplace) => workplace.placeId == placeId);
           
           if (!alreadyAdded) {
-            // 플레이스 상세 정보 가져오기
+            // ?�레?�스 ?�세 ?�보 가?�오�?
             final placeDetailDoc = await FirebaseFirestore.instance
                 .collection('places')
                 .doc(placeId)
@@ -112,20 +112,20 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
               final placeDetail = placeDetailDoc.data()!;
               final placeName = placeDetail['name'] ?? placeId;
 
-              List<String> data = ['트래커', placeName];
+              List<String> data = ['?�래�?, placeName];
               Color groupColor = generateRandomColor();
 
               modeWorkplaces.add(WorkplaceData(data, groupColor, mode: mode, placeId: placeId));
-              print('트랙된 플레이스 추가: $placeName');
+              // print �� ���ŵ�
             }
           }
         }
       }
     } catch (e) {
-      print('트랙된 플레이스 로드 실패: $e');
+      // print �� ���ŵ�
     }
 
-    // 3. 기존 데이터 구조에서도 확인 (하위 호환성)
+    // 3. 기존 ?�이??구조?�서???�인 (?�위 ?�환??
     if (modeWorkplaces.isEmpty) {
       try {
         QuerySnapshot userQuery = await FirebaseFirestore.instance
@@ -162,12 +162,12 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
           }
         }
       } catch (e) {
-        print('기존 구조에서 플레이스 로드 실패: $e');
+        // print �� ���ŵ�
       }
     }
 
     if (modeWorkplaces.isEmpty) {
-      // 기본 개인 플레이스 제공
+      // 기본 개인 ?�레?�스 ?�공
       if (mode == 'life') {
         modeWorkplaces.add(WorkplaceData(['개인'], Colors.blue.shade300, mode: 'life', placeId: 'personal'));
       } else {
@@ -175,16 +175,16 @@ Future<List<List<WorkplaceData>>> fetchUserWorkplacesByMode(String mode) async {
       }
     }
 
-    print('최종 플레이스 개수: ${modeWorkplaces.length}');
+    // print �� ���ŵ�
     workplacesList.add(modeWorkplaces);
     return workplacesList;
   } catch (e) {
-    print('플레이스 로드 오류: $e');
+    // print �� ���ŵ�
     return [];
   }
 }
 
-// Track 플레이스 개수 가져오기
+// Track ?�레?�스 개수 가?�오�?
 Future<int> getTrackCount(String mode) async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
@@ -196,26 +196,26 @@ Future<int> getTrackCount(String mode) async {
         .collection('following')
         .get();
 
-    print('Track 개수 계산 - 문서 개수: ${trackSnapshot.docs.length}');
+    // print �� ���ŵ�
     for (var doc in trackSnapshot.docs) {
-      print('Track 문서 ID: ${doc.id}, 데이터: ${doc.data()}');
+      print('Track 문서 ID: ${doc.id}, ?�이?? ${doc.data()}');
     }
 
-    // 모든 Track한 플레이스 개수 반환 (모드 필터링 제거)
+    // 모든 Track???�레?�스 개수 반환 (모드 ?�터�??�거)
     return trackSnapshot.docs.length;
   } catch (e) {
-    print('Track 개수 로드 오류: $e');
+    // print �� ���ŵ�
     return 0;
   }
 }
 
-// 기본 개인 플레이스 생성
+// 기본 개인 ?�레?�스 ?�성
 Future<void> createDefaultPersonalPlace() async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // 이미 개인 플레이스가 있는지 확인
+    // ?��? 개인 ?�레?�스가 ?�는지 ?�인
     final existingPersonalDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -224,7 +224,7 @@ Future<void> createDefaultPersonalPlace() async {
         .get();
 
     if (!existingPersonalDoc.exists) {
-      // 개인 플레이스 생성
+      // 개인 ?�레?�스 ?�성
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -239,13 +239,13 @@ Future<void> createDefaultPersonalPlace() async {
         'permissions': ['personal_schedule', 'personal_settings'],
       });
 
-      // places 컬렉션에도 개인 플레이스 생성
+      // places 컬렉?�에??개인 ?�레?�스 ?�성
       await FirebaseFirestore.instance
           .collection('places')
           .doc('personal')
           .set({
         'name': '개인',
-        'description': '개인 활동 공간',
+        'description': '개인 ?�동 공간',
         'createdBy': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'originalData': {
@@ -255,7 +255,7 @@ Future<void> createDefaultPersonalPlace() async {
         },
       });
 
-      // places/members에도 추가
+      // places/members?�도 추�?
       await FirebaseFirestore.instance
           .collection('places')
           .doc('personal')
@@ -267,9 +267,9 @@ Future<void> createDefaultPersonalPlace() async {
         'status': 'active',
       });
 
-      print('기본 개인 플레이스가 생성되었습니다.');
+      // print �� ���ŵ�
     }
   } catch (e) {
-    print('기본 개인 플레이스 생성 오류: $e');
+    // print �� ���ŵ�
   }
 }
