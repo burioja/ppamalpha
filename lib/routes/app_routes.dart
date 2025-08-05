@@ -9,6 +9,7 @@ import '../screens/user/search_screen.dart';
 import '../screens/user/map_search_screen.dart';
 import '../screens/user/track_connection_screen.dart';
 import '../screens/user/settings_screen.dart';
+import '../screens/user/post_place_screen.dart';
 import '../screens/shared/migration_screen.dart';
 import '../screens/shared/debug_screen.dart';
 
@@ -23,6 +24,7 @@ class AppRoutes {
   static const String mapSearch = '/map-search';
   static const String trackConnection = '/track-connection';
   static const String settings = '/settings';
+  static const String postPlace = '/post-place';
   static const String migration = '/migration';
   static const String debug = '/debug';
 
@@ -37,6 +39,7 @@ class AppRoutes {
     mapSearch: (context) => const MapSearchScreen(),
     trackConnection: (context) => const TrackConnectionScreen(type: 'track'),
     settings: (context) => const SettingsScreen(),
+    postPlace: (context) => const PostPlaceScreen(),
     migration: (context) => const MigrationScreen(),
     debug: (context) => const DebugScreen(),
   };
