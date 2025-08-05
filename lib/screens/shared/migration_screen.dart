@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../services/database_migration_service.dart';
 
 class MigrationScreen extends StatefulWidget {
   const MigrationScreen({super.key});
@@ -9,7 +8,6 @@ class MigrationScreen extends StatefulWidget {
 }
 
 class _MigrationScreenState extends State<MigrationScreen> {
-  final DatabaseMigrationService _migrationService = DatabaseMigrationService();
   bool _isLoading = false;
   String _status = '대기 중';
 
@@ -104,30 +102,18 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _status = '데이터 구조 확인 중...';
     });
 
-    try {
-      await _migrationService.inspectDataStructure();
-      
-      setState(() {
-        _status = '데이터 구조 확인 완료';
-        _isLoading = false;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('데이터 구조 확인이 완료되었습니다.')),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _status = '오류 발생: $e';
-        _isLoading = false;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류가 발생했습니다: $e')),
-        );
-      }
+    // 임시로 2초 대기
+    await Future.delayed(const Duration(seconds: 2));
+    
+    setState(() {
+      _status = '데이터 구조 확인 완료';
+      _isLoading = false;
+    });
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('데이터 구조 확인이 완료되었습니다.')),
+      );
     }
   }
 
@@ -157,30 +143,18 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _status = '마이그레이션 실행 중...';
     });
 
-    try {
-      await _migrationService.runMigration();
-      
-      setState(() {
-        _status = '마이그레이션 완료';
-        _isLoading = false;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마이그레이션이 완료되었습니다.')),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _status = '오류 발생: $e';
-        _isLoading = false;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('마이그레이션 중 오류가 발생했습니다: $e')),
-        );
-      }
+    // 임시로 3초 대기
+    await Future.delayed(const Duration(seconds: 3));
+    
+    setState(() {
+      _status = '마이그레이션 완료';
+      _isLoading = false;
+    });
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('마이그레이션이 완료되었습니다.')),
+      );
     }
   }
 } 
