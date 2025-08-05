@@ -9,7 +9,7 @@ class MapSearchScreen extends StatelessWidget {
       appBar: AppBar(
         title: const TextField(
           decoration: InputDecoration(
-            hintText: '검?�어�??�력?�세??,
+            hintText: '검색어를 입력하세요',
             border: InputBorder.none,
           ),
         ),
@@ -20,21 +20,21 @@ class MapSearchScreen extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.all(12),
-            child: Text('?�� ?�주 찾는 ?�소', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('지금 주로 찾는 장소', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-          ...List.generate(3, (i) => const ListTile(title: Text('?�주 찾는 ?�소?�니??), subtitle: Text('지??���?))),
+          ...List.generate(3, (i) => const ListTile(title: Text('주로 찾는 장소입니다'), subtitle: Text('지역명'))),
 
           const Padding(
             padding: EdgeInsets.all(12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('?�� 최근 검??, style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('??��', style: TextStyle(color: Colors.blue)),
+                Text('지금 최근 검색', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('더보기', style: TextStyle(color: Colors.blue)),
               ],
             ),
           ),
-          ...List.generate(10, (i) => const ListTile(title: Text('최근 검?�한 ?�어?�니??), subtitle: Text('지??���?))),
+          ...List.generate(10, (i) => const ListTile(title: Text('최근 검색한 장소입니다'), subtitle: Text('지역명'))),
         ],
       ),
     );
