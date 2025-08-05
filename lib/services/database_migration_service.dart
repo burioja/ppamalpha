@@ -5,95 +5,70 @@ class DatabaseMigrationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // ê¸°ì¡´ workplaces ?°ì´??êµ¬ì¡° ?•ì¸
-  Future<void> inspectWorkplacesStructure() async {
+  // ë°ì´í„° êµ¬ì¡° í™•ì¸
+  Future<void> inspectDataStructure() async {
     try {
-      // print ¹® Á¦°ÅµÊ
+      print('ë°ì´í„° êµ¬ì¡° í™•ì¸ ì‹œì‘...');
       
-      final workplacesSnapshot = await _firestore.collection('workplaces').get();
-      
-      if (workplacesSnapshot.docs.isEmpty) {
-        // print ¹® Á¦°ÅµÊ
-        return;
+      // users ì»¬ë ‰ì…˜ í™•ì¸
+      final usersSnapshot = await _firestore.collection('users').limit(1).get();
+      if (usersSnapshot.docs.isNotEmpty) {
+        final userData = usersSnapshot.docs.first.data();
+        print('í˜„ì¬ ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡°:');
+        print(userData.keys.toList());
       }
       
-      // ì²?ë²ˆì§¸ ë¬¸ì„œ??êµ¬ì¡° ?•ì¸
-      final firstDoc = workplacesSnapshot.docs.first;
-      final firstDocData = firstDoc.data();
-      
-      // print ¹® Á¦°ÅµÊ
-      // print ¹® Á¦°ÅµÊ
-      firstDocData.forEach((key, value) {
-        print('  $key: $value (${value.runtimeType})');
-      });
-      
-      // ëª¨ë“  ë¬¸ì„œ??ì£¼ìš” ?„ë“œ???•ì¸
-      // print ¹® Á¦°ÅµÊ
-      for (var doc in workplacesSnapshot.docs) {
-        final data = doc.data();
-        // print ¹® Á¦°ÅµÊ
-        // print ¹® Á¦°ÅµÊ
-        // print ¹® Á¦°ÅµÊ
-        // print ¹® Á¦°ÅµÊ
-        // print ¹® Á¦°ÅµÊ
-        print('  - ê¸°í? ?„ë“œ?? ${data.keys.where((key) => !['id', 'groupdata1', 'groupdata2', 'groupdata3'].contains(key)).toList()}');
-        // print ¹® Á¦°ÅµÊ
+      // workplaces ì»¬ë ‰ì…˜ í™•ì¸
+      final workplacesSnapshot = await _firestore.collection('workplaces').limit(1).get();
+      if (workplacesSnapshot.docs.isNotEmpty) {
+        final workplaceData = workplacesSnapshot.docs.first.data();
+        print('í˜„ì¬ ì§ì¥ ë°ì´í„° êµ¬ì¡°:');
+        print(workplaceData.keys.toList());
       }
       
-      // print ¹® Á¦°ÅµÊ
+      print('ë°ì´í„° êµ¬ì¡° í™•ì¸ ì™„ë£Œ');
     } catch (e) {
-      // print ¹® Á¦°ÅµÊ
+      print('ë°ì´í„° êµ¬ì¡° í™•ì¸ ì¤‘ ì˜¤ë¥˜: $e');
+      rethrow;
     }
   }
 
-  // ê¸°ì¡´ users ?°ì´??êµ¬ì¡° ?•ì¸
-  Future<void> inspectUsersStructure() async {
+  // ë§ˆì´ê·¸ë ˆì´ì…˜ ì‹¤í–‰
+  Future<void> runMigration() async {
     try {
-      // print ¹® Á¦°ÅµÊ
+      print('ë§ˆì´ê·¸ë ˆì´ì…˜ ì‹œì‘...');
       
-      final usersSnapshot = await _firestore.collection('users').get();
+      // 1. ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡° ì—…ë°ì´íŠ¸
+      await updateUserStructure();
       
-      if (usersSnapshot.docs.isEmpty) {
-        // print ¹® Á¦°ÅµÊ
-        return;
-      }
+      // 2. places ì»¬ë ‰ì…˜ ìƒì„±
+      await createPlacesStructure();
       
-      // ì²?ë²ˆì§¸ ë¬¸ì„œ??êµ¬ì¡° ?•ì¸
-      final firstDoc = usersSnapshot.docs.first;
-      final firstDocData = firstDoc.data();
-      
-      // print ¹® Á¦°ÅµÊ
-      // print ¹® Á¦°ÅµÊ
-      firstDocData.forEach((key, value) {
-        print('  $key: $value (${value.runtimeType})');
-      });
-      
-      // print ¹® Á¦°ÅµÊ
+      print('ë§ˆì´ê·¸ë ˆì´ì…˜ ì™„ë£Œ');
     } catch (e) {
-      // print ¹® Á¦°ÅµÊ
+      print('ë§ˆì´ê·¸ë ˆì´ì…˜ ì¤‘ ì˜¤ë¥˜: $e');
+      rethrow;
     }
   }
 
-  // PRD êµ¬ì¡°??ë§ëŠ” users ì»¬ë ‰???…ë°?´íŠ¸
-  Future<void> updateUsersStructure() async {
+  // ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡°ë¥¼ PRDì— ë§ê²Œ ì—…ë°ì´íŠ¸
+  Future<void> updateUserStructure() async {
     try {
-      // print ¹® Á¦°ÅµÊ
+      print('ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡° ì—…ë°ì´íŠ¸ ì‹œì‘...');
       
-      // ê¸°ì¡´ users ì»¬ë ‰?˜ì˜ ëª¨ë“  ë¬¸ì„œ ê°€?¸ì˜¤ê¸?
       final usersSnapshot = await _firestore.collection('users').get();
       
       for (var doc in usersSnapshot.docs) {
-        final userData = doc.data();
         final userId = doc.id;
+        final userData = doc.data();
         
-        // ê¸°ì¡´ ?°ì´??ë³´ì¡´
         final originalData = Map<String, dynamic>.from(userData);
         
-        // PRD êµ¬ì¡°??ë§ëŠ” ?ˆë¡œ???°ì´??êµ¬ì¡°
+        // PRD êµ¬ì¡°ì— ë§ëŠ” ìƒˆë¡œìš´ ì‚¬ìš©ì êµ¬ì¡°
         final newUserData = {
           'profile': {
             'info': {
-              'nickname': userData['nickname'] ?? '?‰ë„¤??,
+              'nickname': userData['nickname'] ?? 'ì‚¬ìš©ì',
               'email': userData['email'] ?? '',
               'phoneNumber': userData['phoneNumber'] ?? '',
               'address': userData['address'] ?? '',
@@ -109,34 +84,35 @@ class DatabaseMigrationService {
             'privacySettings': {},
             'workplaceSettings': {},
           },
-          // ê¸°ì¡´ ?°ì´??ë³´ì¡´ (ë°±ì—…??
+          // ê¸°ì¡´ ë°ì´í„° ë³´ì¡´ (ë°±ì—…ìš©)
           'originalData': originalData,
         };
         
-        // ê¸°ì¡´ ?°ì´?°ë? ?ˆë¡œ??êµ¬ì¡°ë¡??…ë°?´íŠ¸
+        // ê¸°ì¡´ ë°ì´í„°ë¥¼ ìƒˆë¡œìš´ êµ¬ì¡°ë¡œ ì—…ë°ì´íŠ¸
         await _firestore.collection('users').doc(userId).set(newUserData, SetOptions(merge: true));
-        // print ¹® Á¦°ÅµÊ
+        print('ì‚¬ìš©ì $userId ì—…ë°ì´íŠ¸ ì™„ë£Œ');
       }
       
-      // print ¹® Á¦°ÅµÊ
+      print('ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡° ì—…ë°ì´íŠ¸ ì™„ë£Œ');
     } catch (e) {
-      // print ¹® Á¦°ÅµÊ
+      print('ì‚¬ìš©ì ë°ì´í„° êµ¬ì¡° ì—…ë°ì´íŠ¸ ì¤‘ ì˜¤ë¥˜: $e');
+      rethrow;
     }
   }
 
-  // PRD êµ¬ì¡°??ë§ëŠ” places ì»¬ë ‰???ì„±
+  // PRD êµ¬ì¡°ì— ë§ëŠ” places ì»¬ë ‰ì…˜ ìƒì„±
   Future<void> createPlacesStructure() async {
     try {
-      // print ¹® Á¦°ÅµÊ
+      print('places ì»¬ë ‰ì…˜ ìƒì„± ì‹œì‘...');
       
-      // ê¸°ì¡´ workplaces ?°ì´?°ë? placesë¡?ë§ˆì´ê·¸ë ˆ?´ì…˜
+      // ê¸°ì¡´ workplaces ë°ì´í„°ë¥¼ placesë¡œ ë§ˆì´ê·¸ë ˆì´ì…˜
       final workplacesSnapshot = await _firestore.collection('workplaces').get();
       
       for (var doc in workplacesSnapshot.docs) {
         final workplaceData = doc.data();
         final workplaceId = doc.id;
         
-        // PRD êµ¬ì¡°??ë§ëŠ” places ?°ì´??(mode ?„ë“œ ?œê±°)
+        // PRD êµ¬ì¡°ì— ë§ëŠ” places ë°ì´í„° (mode í•„ë“œ ì œê±°)
         final placeData = {
           'name': workplaceData['id'] ?? workplaceId,
           'description': '${workplaceData['groupdata1'] ?? ''} - ${workplaceData['groupdata2'] ?? ''} - ${workplaceData['groupdata3'] ?? ''}',
@@ -147,7 +123,7 @@ class DatabaseMigrationService {
           },
           'createdBy': 'system',
           'createdAt': FieldValue.serverTimestamp(),
-          // ê¸°ì¡´ ?°ì´??ë³´ì¡´ (ë°±ì—…??
+          // ê¸°ì¡´ ë°ì´í„° ë³´ì¡´ (ë°±ì—…ìš©)
           'originalData': {
             'groupdata1': workplaceData['groupdata1'],
             'groupdata2': workplaceData['groupdata2'],
@@ -155,18 +131,18 @@ class DatabaseMigrationService {
           },
         };
         
-        // places ì»¬ë ‰?˜ì— ì¶”ê?
+        // places ì»¬ë ‰ì…˜ì— ì¶”ê°€
         await _firestore.collection('places').doc(workplaceId).set(placeData);
-        // print ¹® Á¦°ÅµÊ
+        print('ì¥ì†Œ $workplaceId ìƒì„± ì™„ë£Œ');
         
-        // ê¸°ë³¸ ??•  ?ì„±
+        // ê¸°ë³¸ ì—­í•  ìƒì„±
         await _firestore
             .collection('places')
             .doc(workplaceId)
             .collection('roles')
             .doc('owner')
             .set({
-          'name': '?Œìœ ??,
+          'name': 'ì†Œìœ ì',
           'permissions': ['all'],
           'level': 1,
           'createdAt': FieldValue.serverTimestamp(),
@@ -196,118 +172,13 @@ class DatabaseMigrationService {
           'createdAt': FieldValue.serverTimestamp(),
         });
         
-        await _firestore
-            .collection('places')
-            .doc(workplaceId)
-            .collection('roles')
-            .doc('customer')
-            .set({
-          'name': 'ê³ ê°',
-          'permissions': ['view'],
-          'level': 4,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        print('ì¥ì†Œ $workplaceId ì—­í•  ìƒì„± ì™„ë£Œ');
       }
       
-      // print ¹® Á¦°ÅµÊ
+      print('places ì»¬ë ‰ì…˜ ìƒì„± ì™„ë£Œ');
     } catch (e) {
-      // print ¹® Á¦°ÅµÊ
+      print('places ì»¬ë ‰ì…˜ ìƒì„± ì¤‘ ì˜¤ë¥˜: $e');
+      rethrow;
     }
-  }
-
-  // ?¬ìš©???Œë ˆ?´ìŠ¤ ê´€ê³??ì„±
-  Future<void> createUserPlaceRelationships() async {
-    try {
-      // print ¹® Á¦°ÅµÊ
-      
-      final usersSnapshot = await _firestore.collection('users').get();
-      
-      for (var userDoc in usersSnapshot.docs) {
-        final userId = userDoc.id;
-        final userData = userDoc.data();
-        
-        // ê¸°ì¡´ workPlaces ?°ì´???•ì¸
-        if (userData['workPlaces'] != null) {
-          final workPlaces = userData['workPlaces'] as List<dynamic>;
-          
-          for (var workplace in workPlaces) {
-            if (workplace is Map<String, dynamic>) {
-              final workplaceId = workplace['workplaceinput'] ?? '';
-              final workplaceAdd = workplace['workplaceadd'] ?? '';
-              
-              if (workplaceId.isNotEmpty) {
-                // ?Œë ˆ?´ìŠ¤ê°€ ì¡´ì¬?˜ëŠ”ì§€ ?•ì¸
-                final placeDoc = await _firestore.collection('places').doc(workplaceId).get();
-                
-                if (placeDoc.exists) {
-                  // ?¬ìš©?ê? ?±ë¡??ëª¨ë“œ ê²°ì • (ê¸°ë³¸ê°? work)
-                  // ê¸°ì¡´ workPlaces???Œí¬ëª¨ë“œ?ì„œ ?±ë¡??ê²ƒìœ¼ë¡?ê°„ì£¼
-                  String mode = 'work';
-                  
-                  // ?¬ìš©?ì˜ places ?œë¸Œì»¬ë ‰?˜ì— ì¶”ê?
-                  await _firestore
-                      .collection('users')
-                      .doc(userId)
-                      .collection('places')
-                      .doc(workplaceId)
-                      .set({
-                    'mode': mode,
-                    'roleId': 'employee', // ê¸°ë³¸ê°?
-                    'roleName': 'ì§ì›',
-                    'joinedAt': FieldValue.serverTimestamp(),
-                    'status': 'active',
-                    'permissions': ['schedule'],
-                    'workplaceAdd': workplaceAdd, // ì§€???•ë³´ ë³´ì¡´
-                  });
-                  
-                  // ?Œë ˆ?´ìŠ¤??members ?œë¸Œì»¬ë ‰?˜ì— ì¶”ê?
-                  await _firestore
-                      .collection('places')
-                      .doc(workplaceId)
-                      .collection('members')
-                      .doc(userId)
-                      .set({
-                    'roleId': 'employee',
-                    'joinedAt': FieldValue.serverTimestamp(),
-                    'status': 'active',
-                    'permissions': ['schedule'],
-                    'workplaceAdd': workplaceAdd, // ì§€???•ë³´ ë³´ì¡´
-                  });
-                  
-                  print('?¬ìš©??$userId - ?Œë ˆ?´ìŠ¤ $workplaceId ê´€ê³??ì„± ?„ë£Œ (mode: $mode, ì§€?? $workplaceAdd)');
-                } else {
-                  // print ¹® Á¦°ÅµÊ
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // print ¹® Á¦°ÅµÊ
-    } catch (e) {
-      // print ¹® Á¦°ÅµÊ
-    }
-  }
-
-  // ?„ì²´ ë§ˆì´ê·¸ë ˆ?´ì…˜ ?¤í–‰
-  Future<void> runMigration() async {
-    // print ¹® Á¦°ÅµÊ
-    
-    await updateUsersStructure();
-    await createPlacesStructure();
-    await createUserPlaceRelationships();
-    
-    // print ¹® Á¦°ÅµÊ
-  }
-
-  // ?°ì´??êµ¬ì¡° ?•ì¸ë§??¤í–‰
-  Future<void> inspectDataStructure() async {
-    // print ¹® Á¦°ÅµÊ
-    
-    await inspectWorkplacesStructure();
-    await inspectUsersStructure();
-    
-    // print ¹® Á¦°ÅµÊ
   }
 } 

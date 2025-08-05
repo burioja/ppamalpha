@@ -352,11 +352,54 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _handleAddMarker() {
+  void _showMarkerSetupDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return MarkerSetupDialog(
+          position: _longPressedLatLng!,
+          onMarkerCreated: (MarkerItem markerItem) {
+            _addMarkerToMap(markerItem);
+            setState(() {
+              _longPressedLatLng = null;
+            });
+          },
+        );
+      },
+    );
+  }
+
+  void _addMarkerToMap(MarkerItem markerItem) {
     setState(() {
-      _longPressedLatLng = null;
+      _markerItems.add(markerItem);
+      _clusteredMarkers.add(_createMarker(markerItem));
     });
-    // 마커 추가 로직 구현
+    
+    // Firestore에 저장
+    _saveMarkerToFirestore(markerItem);
+  }
+
+  Future<void> _saveMarkerToFirestore(MarkerItem markerItem) async {
+    try {
+      await FirebaseFirestore.instance.collection('markers').add({
+        'title': markerItem.title,
+        'price': int.parse(markerItem.price),
+        'amount': int.parse(markerItem.amount),
+        'userId': markerItem.userId,
+        'position': GeoPoint(markerItem.position.latitude, markerItem.position.longitude),
+        'remainingAmount': markerItem.remainingAmount,
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiryDate': markerItem.expiryDate,
+      });
+    } catch (e) {
+      print('마커 저장 오류: $e');
+    }
+  }
+
+  void _handleAddMarker() {
+    if (_longPressedLatLng != null) {
+      _showMarkerSetupDialog();
+    }
   }
 
   Widget _buildPopupWidget() {
@@ -461,6 +504,189 @@ class _MapScreenState extends State<MapScreen> {
             Center(child: _buildPopupWidget()),
         ],
       ),
+    );
+  }
+}
+
+class MarkerSetupDialog extends StatefulWidget {
+  final LatLng position;
+  final Function(MarkerItem) onMarkerCreated;
+
+  const MarkerSetupDialog({
+    Key? key,
+    required this.position,
+    required this.onMarkerCreated,
+  }) : super(key: key);
+
+  @override
+  _MarkerSetupDialogState createState() => _MarkerSetupDialogState();
+}
+
+class _MarkerSetupDialogState extends State<MarkerSetupDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _genderController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  
+  String _selectedGender = '남성';
+  final List<String> _genderOptions = ['남성', '여성', '기타'];
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _priceController.dispose();
+    _amountController.dispose();
+    _ageController.dispose();
+    _genderController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _createMarker() {
+    if (_formKey.currentState!.validate()) {
+      final markerItem = MarkerItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _titleController.text,
+        price: _priceController.text,
+        amount: _amountController.text,
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        data: {
+          'age': _ageController.text,
+          'gender': _selectedGender,
+          'description': _descriptionController.text,
+        },
+        position: widget.position,
+        remainingAmount: int.parse(_amountController.text),
+        expiryDate: DateTime.now().add(const Duration(days: 7)),
+      );
+
+      widget.onMarkerCreated(markerItem);
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('마커 설정'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: '제목',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '제목을 입력해주세요';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _priceController,
+                decoration: const InputDecoration(
+                  labelText: '가격 (원)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '가격을 입력해주세요';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return '숫자를 입력해주세요';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _amountController,
+                decoration: const InputDecoration(
+                  labelText: '수량',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '수량을 입력해주세요';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return '숫자를 입력해주세요';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _ageController,
+                decoration: const InputDecoration(
+                  labelText: '나이',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '나이를 입력해주세요';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return '숫자를 입력해주세요';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedGender,
+                decoration: const InputDecoration(
+                  labelText: '성별',
+                  border: OutlineInputBorder(),
+                ),
+                items: _genderOptions.map((String gender) {
+                  return DropdownMenuItem<String>(
+                    value: gender,
+                    child: Text(gender),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedGender = newValue!;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: '설명 (선택사항)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        ElevatedButton(
+          onPressed: _createMarker,
+          child: const Text('마커 생성'),
+        ),
+      ],
     );
   }
 } 
