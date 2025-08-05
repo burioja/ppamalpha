@@ -147,6 +147,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                  
+                  const SizedBox(height: 30),
+                  
+                  // 개발자 옵션
+                  const Text(
+                    '개발자 옵션',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  // 마이그레이션 버튼
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/migration');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("데이터베이스 마이그레이션"),
+                    ),
+                  ),
                 ],
               ),
             ),
