@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 import 'map_screen.dart';
 import 'wallet_screen.dart';
 
-import '../services/location_service.dart';
+import '../../services/location_service.dart';
 import 'budget_screen.dart';
 import 'search_screen.dart';
-import '../providers/search_provider.dart';
-import '../widgets/mode_switcher.dart';
+import '../../providers/search_provider.dart';
+import '../../widgets/mode_switcher.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
