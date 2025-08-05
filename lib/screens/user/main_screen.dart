@@ -6,6 +6,7 @@ import 'wallet_screen.dart';
 import '../../services/location_service.dart';
 import 'budget_screen.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
 import '../../providers/search_provider.dart';
 import '../../widgets/mode_switcher.dart';
 
@@ -138,6 +139,15 @@ class _MainScreenState extends State<MainScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
             },
             child: const Icon(Icons.search, size: 22, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+
+          // 오른쪽 설정 아이콘(설정 화면 열기)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
+            child: const Icon(Icons.settings, size: 22, color: Colors.white),
           ),
         ],
       ),
