@@ -64,10 +64,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadCollectedPosts() async {
-    if (userId == null) return;
+    final currentUserId = userId;
+    if (currentUserId == null) return;
 
     try {
-      final posts = await _postService.getCollectedPosts(userId);
+      final posts = await _postService.getCollectedPosts(currentUserId);
       setState(() {
         collectedPosts = posts;
       });

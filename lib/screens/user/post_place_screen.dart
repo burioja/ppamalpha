@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/post_service.dart';
 import '../../services/location_service.dart';
 import '../../models/post_model.dart';
@@ -15,7 +16,6 @@ class PostPlaceScreen extends StatefulWidget {
 
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final PostService _postService = PostService();
-  final LocationService _locationService = LocationService();
   final TextEditingController _contentController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   
@@ -34,18 +34,25 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoading = true);
     try {
-      final position = await _locationService.getCurrentLocation();
-      final address = await _locationService.getAddressFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      
-      setState(() {
-        _selectedLocation = LatLng(position.latitude, position.longitude);
-        _currentAddress = address;
-        _addressController.text = address;
-        _isLoading = false;
-      });
+      final position = await LocationService.getCurrentPosition();
+      if (position != null) {
+        final address = await LocationService.getAddressFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        
+        setState(() {
+          _selectedLocation = LatLng(position.latitude, position.longitude);
+          _currentAddress = address;
+          _addressController.text = address;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('위치를 가져올 수 없습니다.')),
+        );
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -57,7 +64,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   void _onMapTap(LatLng location) async {
     setState(() => _isLoading = true);
     try {
-      final address = await _locationService.getAddressFromCoordinates(
+      final address = await LocationService.getAddressFromCoordinates(
         location.latitude,
         location.longitude,
       );
@@ -96,11 +103,16 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // TODO: 실제 사용자 ID를 가져와야 함
-      const userId = 'temp_user_id';
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인이 필요합니다')),
+        );
+        return;
+      }
       
       await _postService.createPost(
-        userId: userId,
+        userId: currentUser.uid,
         content: _contentController.text.trim(),
         location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
         address: _currentAddress ?? '',

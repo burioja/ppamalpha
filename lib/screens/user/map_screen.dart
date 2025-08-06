@@ -222,10 +222,11 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _collectPost(PostModel post) async {
     try {
-      if (userId != null) {
+      final currentUserId = userId;
+      if (currentUserId != null) {
         await _postService.collectPost(
           postId: post.id,
-          userId: userId,
+          userId: currentUserId,
         );
         
         setState(() {
