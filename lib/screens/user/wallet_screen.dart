@@ -6,6 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image/image.dart' as img;
+import '../../services/post_service.dart';
+import '../../models/post_model.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -14,15 +16,26 @@ class WalletScreen extends StatefulWidget {
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen> {
+class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderStateMixin {
   final ImagePicker picker = ImagePicker();
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
+  final PostService _postService = PostService();
   List<Map<String, dynamic>> walletItems = [];
+  List<PostModel> collectedPosts = [];
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadWalletItems();
+    _loadCollectedPosts();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWalletItems() async {
@@ -47,6 +60,19 @@ class _WalletScreenState extends State<WalletScreen> {
       });
     } catch (e) {
       debugPrint('지갑 아이템 로드 오류: $e');
+    }
+  }
+
+  Future<void> _loadCollectedPosts() async {
+    if (userId == null) return;
+
+    try {
+      final posts = await _postService.getCollectedPosts(userId);
+      setState(() {
+        collectedPosts = posts;
+      });
+    } catch (e) {
+      debugPrint('회수한 포스트 로드 오류: $e');
     }
   }
 
@@ -286,12 +312,77 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  Widget _buildCollectedPost(PostModel post) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListTile(
+        leading: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.green.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(
+            Icons.post_add,
+            color: Colors.green,
+            size: 30,
+          ),
+        ),
+        title: Text(
+          post.content.length > 50 ? '${post.content.substring(0, 50)}...' : post.content,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('주소: ${post.address}'),
+            Text('회수 시간: ${_formatDate(post.createdAt)}'),
+          ],
+        ),
+        onTap: () => _showPostDetail(post),
+      ),
+    );
+  }
+
+  void _showPostDetail(PostModel post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('회수한 포스트'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('내용: ${post.content}'),
+              const SizedBox(height: 8),
+              Text('주소: ${post.address}'),
+              const SizedBox(height: 8),
+              Text('작성일: ${_formatDate(post.createdAt)}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp is Timestamp) {
       final dateTime = timestamp.toDate();
       return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     }
     return 'Unknown';
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -301,6 +392,13 @@ class _WalletScreenState extends State<WalletScreen> {
         title: const Text('지갑'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: '이미지'),
+            Tab(text: '회수한 포스트'),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -339,42 +437,85 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
         ],
       ),
-      body: walletItems.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.wallet,
-                    size: 100,
-                    color: Colors.grey,
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // 이미지 탭
+          walletItems.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.wallet,
+                        size: 100,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        '지갑이 비어있습니다',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '오른쪽 상단의 + 버튼을 눌러\n이미지를 추가해보세요',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 20),
-                  Text(
-                    '지갑이 비어있습니다',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey,
-                    ),
+                )
+              : ListView.builder(
+                  itemCount: walletItems.length,
+                  itemBuilder: (context, index) {
+                    return _buildWalletItem(walletItems[index]);
+                  },
+                ),
+          // 회수한 포스트 탭
+          collectedPosts.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.post_add,
+                        size: 100,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        '회수한 포스트가 없습니다',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '지도에서 포스트를 회수하면\n여기에 표시됩니다',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 10),
-                  Text(
-                    '오른쪽 상단의 + 버튼을 눌러\n이미지를 추가해보세요',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              itemCount: walletItems.length,
-              itemBuilder: (context, index) {
-                return _buildWalletItem(walletItems[index]);
-              },
-            ),
+                )
+              : ListView.builder(
+                  itemCount: collectedPosts.length,
+                  itemBuilder: (context, index) {
+                    return _buildCollectedPost(collectedPosts[index]);
+                  },
+                ),
+        ],
+      ),
     );
   }
 } 

@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/location_service.dart';
+import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:geocoding/geocoding.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/post_model.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -55,10 +57,13 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _longPressedLatLng;
   String? _mapStyle;
   BitmapDescriptor? _customMarkerIcon;
+  BitmapDescriptor? _postMarkerIcon;
   final Set<Marker> _markers = {};
   final userId = FirebaseAuth.instance.currentUser?.uid;
+  final PostService _postService = PostService();
   
   final List<MarkerItem> _markerItems = [];
+  final List<PostModel> _posts = [];
   double _currentZoom = 15.0;
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
@@ -69,7 +74,9 @@ class _MapScreenState extends State<MapScreen> {
     _setInitialLocation();
     _loadMapStyle();
     _loadCustomMarker();
+    _loadPostMarker();
     _loadMarkersFromFirestore();
+    _loadPostsFromFirestore();
   }
 
   Future<void> _loadMapStyle() async {
@@ -151,6 +158,17 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _loadPostMarker() async {
+    try {
+      // 포스트 마커는 녹색으로 설정
+      setState(() {
+        _postMarkerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      });
+    } catch (e) {
+      // 포스트 마커 로드 실패 시 기본 마커 사용
+    }
+  }
+
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
     if (_mapStyle != null) {
@@ -166,12 +184,80 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _showPostInfo(PostModel post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('포스트'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('내용: ${post.content}'),
+              const SizedBox(height: 8),
+              Text('주소: ${post.address}'),
+              const SizedBox(height: 8),
+              Text('작성일: ${_formatDate(post.createdAt)}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+            if (userId != null && userId != post.userId)
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _collectPost(post);
+                },
+                child: const Text('회수'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _collectPost(PostModel post) async {
+    try {
+      if (userId != null) {
+        await _postService.collectPost(
+          postId: post.id,
+          userId: userId,
+        );
+        
+        setState(() {
+          _posts.removeWhere((p) => p.id == post.id);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('포스트를 회수했습니다!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('포스트 회수에 실패했습니다: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   void _clusterMarkers() {
     if (_isClustered) return;
     
-    final clusters = <String, List<MarkerItem>>{};
+    final clusters = <String, List<dynamic>>{};
     const double clusterRadius = 0.01; // 약 1km
     
+    // 기존 마커 아이템들 클러스터링
     for (final item in _markerItems) {
       bool addedToCluster = false;
       
@@ -192,12 +278,38 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
     
+    // 포스트들 클러스터링
+    for (final post in _posts) {
+      bool addedToCluster = false;
+      
+      for (final clusterKey in clusters.keys) {
+        final clusterCenter = _parseLatLng(clusterKey);
+        final postLatLng = LatLng(post.location.latitude, post.location.longitude);
+        final distance = _calculateDistance(clusterCenter, postLatLng);
+        
+        if (distance <= clusterRadius) {
+          clusters[clusterKey]!.add(post);
+          addedToCluster = true;
+          break;
+        }
+      }
+      
+      if (!addedToCluster) {
+        final key = '${post.location.latitude},${post.location.longitude}';
+        clusters[key] = [post];
+      }
+    }
+    
     final Set<Marker> newMarkers = {};
     
     clusters.forEach((key, items) {
       if (items.length == 1) {
         final item = items.first;
-        newMarkers.add(_createMarker(item));
+        if (item is MarkerItem) {
+          newMarkers.add(_createMarker(item));
+        } else if (item is PostModel) {
+          newMarkers.add(_createPostMarker(item));
+        }
       } else {
         final center = _parseLatLng(key);
         newMarkers.add(_createClusterMarker(center, items.length));
@@ -215,8 +327,15 @@ class _MapScreenState extends State<MapScreen> {
     if (!_isClustered) return;
     
     final Set<Marker> newMarkers = {};
+    
+    // 기존 마커들 추가
     for (final item in _markerItems) {
       newMarkers.add(_createMarker(item));
+    }
+    
+    // 포스트 마커들 추가
+    for (final post in _posts) {
+      newMarkers.add(_createPostMarker(post));
     }
     
     setState(() {
@@ -246,6 +365,19 @@ class _MapScreenState extends State<MapScreen> {
         snippet: '${item.price}원 - ${item.amount}개',
       ),
       onTap: () => _showMarkerInfo(item),
+    );
+  }
+
+  Marker _createPostMarker(PostModel post) {
+    return Marker(
+      markerId: MarkerId('post_${post.id}'),
+      position: LatLng(post.location.latitude, post.location.longitude),
+      icon: _postMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      infoWindow: InfoWindow(
+        title: '포스트',
+        snippet: post.content.length > 30 ? '${post.content.substring(0, 30)}...' : post.content,
+      ),
+      onTap: () => _showPostInfo(post),
     );
   }
 
@@ -352,6 +484,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _loadPostsFromFirestore() async {
+    try {
+      if (_currentPosition != null) {
+        final posts = await _postService.getPostsNearLocation(
+          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+          radiusInKm: 5.0, // 5km 반경 내 포스트 조회
+        );
+        
+        setState(() {
+          _posts.clear();
+          _posts.addAll(posts);
+        });
+        
+        _updateClustering();
+      }
+    } catch (e) {
+      print('포스트 로드 오류: $e');
+    }
+  }
+
   void _showMarkerSetupDialog() {
     showDialog(
       context: context,
@@ -423,7 +575,7 @@ class _MapScreenState extends State<MapScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextButton(
-              onPressed: _handleAddMarker,
+              onPressed: () => _navigateToPostPlace(),
               child: const Text("이 위치에 뿌리기"),
             ),
             TextButton(
@@ -447,6 +599,13 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
     );
+  }
+
+  void _navigateToPostPlace() {
+    Navigator.pushNamed(context, '/post-place').then((_) {
+      // 포스트 생성 후 지도 새로고침
+      _loadPostsFromFirestore();
+    });
   }
 
   void goToCurrentLocation() {

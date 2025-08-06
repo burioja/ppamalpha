@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/wallet_provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/post_service.dart';
+import '../../services/location_service.dart';
+import '../../models/post_model.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
@@ -10,239 +14,249 @@ class PostPlaceScreen extends StatefulWidget {
 }
 
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _periodController = TextEditingController();
-  final TextEditingController _ageMinController = TextEditingController();
-  final TextEditingController _ageMaxController = TextEditingController();
-
-  String _periodUnit = 'Hour';
-  bool _usingSelected = false;
-  bool _replySelected = false;
-  String _gender = '남자';
-
-  String? _selectedImageUrl;
-
-  int get _totalPrice {
-    final price = int.tryParse(_priceController.text) ?? 0;
-    final amount = int.tryParse(_amountController.text) ?? 0;
-    return price * amount;
-  }
+  final PostService _postService = PostService();
+  final LocationService _locationService = LocationService();
+  final TextEditingController _contentController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  
+  GoogleMapController? _mapController;
+  LatLng? _selectedLocation;
+  String? _currentAddress;
+  bool _isLoading = false;
+  bool _showAddressConfirmation = false;
 
   @override
   void initState() {
     super.initState();
-    // ✅ 화면 진입 시 이미지 불러오기
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<WalletProvider>(context, listen: false).loadUploadedImages();
-    });
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLoading = true);
+    try {
+      final position = await _locationService.getCurrentLocation();
+      final address = await _locationService.getAddressFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      
+      setState(() {
+        _selectedLocation = LatLng(position.latitude, position.longitude);
+        _currentAddress = address;
+        _addressController.text = address;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('위치를 가져오는데 실패했습니다: $e')),
+      );
+    }
+  }
+
+  void _onMapTap(LatLng location) async {
+    setState(() => _isLoading = true);
+    try {
+      final address = await _locationService.getAddressFromCoordinates(
+        location.latitude,
+        location.longitude,
+      );
+      
+      setState(() {
+        _selectedLocation = location;
+        _currentAddress = address;
+        _addressController.text = address;
+        _isLoading = false;
+        _showAddressConfirmation = true;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('주소를 가져오는데 실패했습니다: $e')),
+      );
+    }
+  }
+
+  void _confirmAddress() {
+    setState(() => _showAddressConfirmation = false);
+  }
+
+  void _editAddress() {
+    setState(() => _showAddressConfirmation = false);
+    // 주소 입력 모드로 전환
+  }
+
+  Future<void> _createPost() async {
+    if (_selectedLocation == null || _contentController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('위치와 내용을 입력해주세요')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // TODO: 실제 사용자 ID를 가져와야 함
+      const userId = 'temp_user_id';
+      
+      await _postService.createPost(
+        userId: userId,
+        content: _contentController.text.trim(),
+        location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
+        address: _currentAddress ?? '',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다!')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('포스트 생성에 실패했습니다: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final uploadedImages = Provider.of<WalletProvider>(context).uploadedImages;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("전단지 배포 설정"),
-        backgroundColor: Colors.black87,
+        title: const Text('이 위치에 뿌리기'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              "이미지 선택",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-
-            // ✅ 이미지 캐러셀
-            SizedBox(
-              height: 120,
-              child: uploadedImages.isEmpty
-                  ? const Center(child: Text("업로드한 이미지가 없습니다."))
-                  : ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: uploadedImages.length,
-                itemBuilder: (context, index) {
-                  final data = uploadedImages[index];
-                  final imageUrl = data['fileUrl'];
-                  final isSelected = _selectedImageUrl == imageUrl;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedImageUrl = imageUrl;
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isSelected ? Colors.blue : Colors.transparent,
-                          width: 2,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                // 지도 영역
+                Expanded(
+                  flex: 2,
+                  child: _selectedLocation == null
+                      ? const Center(child: Text('위치를 선택해주세요'))
+                      : GoogleMap(
+                          onMapCreated: (controller) => _mapController = controller,
+                          initialCameraPosition: CameraPosition(
+                            target: _selectedLocation!,
+                            zoom: 15,
+                          ),
+                          onTap: _onMapTap,
+                          markers: _selectedLocation != null
+                              ? {
+                                  Marker(
+                                    markerId: const MarkerId('selected_location'),
+                                    position: _selectedLocation!,
+                                    infoWindow: InfoWindow(
+                                      title: '선택된 위치',
+                                      snippet: _currentAddress,
+                                    ),
+                                  ),
+                                }
+                              : {},
                         ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(imageUrl, width: 100, fit: BoxFit.cover),
-                      ),
+                ),
+                
+                // 주소 확인 다이얼로그
+                if (_showAddressConfirmation)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    color: Colors.blue.shade50,
+                    child: Column(
+                      children: [
+                        Text(
+                          '이 주소가 맞습니까?',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _currentAddress ?? '',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _confirmAddress,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('예'),
+                            ),
+                            ElevatedButton(
+                              onPressed: _editAddress,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('아니오'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Price"),
-                    onChanged: (_) => setState(() {}),
                   ),
-                ),
-                const SizedBox(width: 8),
+                
+                // 포스트 내용 입력 영역
                 Expanded(
-                  child: TextField(
-                    controller: _amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Amount"),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(),
-                      borderRadius: BorderRadius.circular(4),
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _addressController,
+                          decoration: const InputDecoration(
+                            labelText: '주소',
+                            border: OutlineInputBorder(),
+                          ),
+                          readOnly: true,
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _contentController,
+                          decoration: const InputDecoration(
+                            labelText: '포스트 내용',
+                            border: OutlineInputBorder(),
+                            hintText: '이 위치에 대한 메시지를 입력하세요...',
+                          ),
+                          maxLines: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _createPost,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            '포스트 뿌리기',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text("Total: $_totalPrice"),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-
-            const Text("Function", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _periodController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Period"),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: _periodUnit,
-                  items: const [
-                    DropdownMenuItem(value: 'Hour', child: Text('Hour')),
-                    DropdownMenuItem(value: 'Day', child: Text('Day')),
-                    DropdownMenuItem(value: 'Week', child: Text('Week')),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _periodUnit = value!);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                _toggleButton("Using", _usingSelected, () {
-                  setState(() => _usingSelected = !_usingSelected);
-                }),
-                _toggleButton("Reply", _replySelected, () {
-                  setState(() => _replySelected = !_replySelected);
-                }),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            const Text("Target", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            DropdownButton<String>(
-              value: _gender,
-              items: const [
-                DropdownMenuItem(value: '남자', child: Text('남자')),
-                DropdownMenuItem(value: '여자', child: Text('여자')),
-              ],
-              onChanged: (value) {
-                setState(() => _gender = value!);
-              },
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ageMinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Age (min)"),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _ageMaxController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Age (max)"),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context, {
-                    'price': _priceController.text,
-                    'amount': _amountController.text,
-                    'totalPrice': _totalPrice,
-                    'period': _periodController.text,
-                    'periodUnit': _periodUnit,
-                    'using': _usingSelected,
-                    'reply': _replySelected,
-                    'gender': _gender,
-                    'ageMin': _ageMinController.text,
-                    'ageMax': _ageMaxController.text,
-                    'imageUrl': _selectedImageUrl,
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange[200],
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                ),
-                child: const Text("PPAM!"),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _toggleButton(String label, bool selected, VoidCallback onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: selected ? Colors.purple : Colors.grey[300],
-        foregroundColor: selected ? Colors.white : Colors.black,
-      ),
-      child: Text(label),
-    );
+  @override
+  void dispose() {
+    _contentController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 } 
