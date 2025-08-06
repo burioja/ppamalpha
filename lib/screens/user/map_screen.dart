@@ -160,12 +160,60 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadPostMarker() async {
     try {
-      // 포스트 마커는 녹색으로 설정
+      // ppam_work.png를 포스트 마커로 사용
+      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
+      final Uint8List bytes = data.buffer.asUint8List();
+      
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image image = frameInfo.image;
+      
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder);
+      
+      final double targetSize = 48.0;
+      final Rect rect = Rect.fromLTWH(0, 0, targetSize, targetSize);
+      
+      final double imageRatio = image.width / image.height;
+      final double targetRatio = targetSize / targetSize;
+      
+      double drawWidth = targetSize;
+      double drawHeight = targetSize;
+      double offsetX = 0;
+      double offsetY = 0;
+      
+      if (imageRatio > targetRatio) {
+        drawHeight = targetSize;
+        drawWidth = targetSize * imageRatio;
+        offsetX = (targetSize - drawWidth) / 2;
+      } else {
+        drawWidth = targetSize;
+        drawHeight = targetSize / imageRatio;
+        offsetY = (targetSize - drawHeight) / 2;
+      }
+      
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
+        Paint(),
+      );
+      
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
+      final ByteData? resizedBytes = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (resizedBytes != null) {
+        final Uint8List resizedUint8List = resizedBytes.buffer.asUint8List();
+        setState(() {
+          _postMarkerIcon = BitmapDescriptor.fromBytes(resizedUint8List);
+        });
+      }
+    } catch (e) {
+      // 포스트 마커 로드 실패 시 기본 마커 사용
       setState(() {
         _postMarkerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
       });
-    } catch (e) {
-      // 포스트 마커 로드 실패 시 기본 마커 사용
     }
   }
 
