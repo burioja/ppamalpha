@@ -25,9 +25,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   bool _isLoading = false;
   bool _showAddressConfirmation = false;
 
+  // 기본 위치 (서울 시청)
+  static const LatLng _defaultLocation = LatLng(37.5665, 126.9780);
+
   @override
   void initState() {
     super.initState();
+    // 기본 위치로 초기화
+    _selectedLocation = _defaultLocation;
+    _currentAddress = '서울특별시 중구 세종대로 110';
+    _addressController.text = _currentAddress!;
+    
+    // 현재 위치 가져오기 시도
     _getCurrentLocation();
   }
 
@@ -48,9 +57,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           _isLoading = false;
         });
       } else {
+        // 위치를 가져올 수 없으면 기본 위치 유지
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('위치를 가져올 수 없습니다.')),
+          const SnackBar(content: Text('현재 위치를 가져올 수 없어 기본 위치를 사용합니다.')),
         );
       }
     } catch (e) {
@@ -139,7 +149,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('이 위치에 뿌리기'),
+        title: const Text('포스트 뿌리기'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
@@ -164,6 +174,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                                   Marker(
                                     markerId: const MarkerId('selected_location'),
                                     position: _selectedLocation!,
+                                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
                                     infoWindow: InfoWindow(
                                       title: '선택된 위치',
                                       snippet: _currentAddress,
@@ -181,35 +192,60 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                     color: Colors.blue.shade50,
                     child: Column(
                       children: [
-                        Text(
-                          '이 주소가 맞습니까?',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        const Icon(
+                          Icons.location_on,
+                          color: Colors.blue,
+                          size: 32,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _currentAddress ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          textAlign: TextAlign.center,
+                          '이 주소가 맞습니까?',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.blue, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          child: Text(
+                            _currentAddress ?? '',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            ElevatedButton(
-                              onPressed: _confirmAddress,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _confirmAddress,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                icon: const Icon(Icons.check),
+                                label: const Text('예, 맞습니다'),
                               ),
-                              child: const Text('예'),
                             ),
-                            ElevatedButton(
-                              onPressed: _editAddress,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _editAddress,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                icon: const Icon(Icons.edit),
+                                label: const Text('아니오, 수정'),
                               ),
-                              child: const Text('아니오'),
                             ),
                           ],
                         ),
@@ -220,39 +256,72 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                 // 포스트 내용 입력 영역
                 Expanded(
                   flex: 1,
-                  child: Padding(
+                  child: Container(
                     padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
-                          controller: _addressController,
-                          decoration: const InputDecoration(
-                            labelText: '주소',
-                            border: OutlineInputBorder(),
+                        // 위치 정보 표시
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
                           ),
-                          readOnly: true,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.blue),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _currentAddress ?? '위치를 선택해주세요',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 16),
+                        
+                        // 포스트 내용 입력
                         TextField(
                           controller: _contentController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: '포스트 내용',
-                            border: OutlineInputBorder(),
                             hintText: '이 위치에 대한 메시지를 입력하세요...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixIcon: const Icon(Icons.message),
                           ),
                           maxLines: 3,
                         ),
                         const SizedBox(height: 16),
-                        ElevatedButton(
+                        
+                        // 뿌리기 버튼
+                        ElevatedButton.icon(
                           onPressed: _createPost,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          child: const Text(
-                            '포스트 뿌리기',
+                          icon: const Icon(Icons.send),
+                          label: const Text(
+                            '이 위치에 뿌리기',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                         ),

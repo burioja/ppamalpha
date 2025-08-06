@@ -1,0 +1,10 @@
+[33m49e3dd8[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m  컴파일 에러 수정 - LocationService static 메서드 사용으로 변경 - userId nullable 처리 수정 - Firebase Auth import 추가
+[33m1e84909[m  포스트 기능 및 설정 추가 - 이 위치에 뿌리기 기능 구현 - 주소 확인 다이얼로그 (예/아니오) - 포스트 회수 기능 - 회수한 포스트 월렛 보관 - 지도 통합 및 마커 표시
+[33m038e846[m 전단지 배포 설정 화면 추가 - PostPlaceScreen 구현
+[33m3cb6219[m 지도 검색 화면 및 데이터베이스 마이그레이션 서비스 업데이트
+[33mf331c4a[m 마이그레이션 스크린 임시 수정 - DatabaseMigrationService 의존성 제거
+[33m49cbaad[m 마이그레이션 스크린 접근 기능 추가
+[33m903987b[m 리팩토링: 프로젝트 구조 개선 및 모듈화
+[33mce043bf[m Remove unnecessary files and clean up project structure
+[33m608cc58[m Fix compilation errors and encoding issues across multiple files
+[33mde26a3e[m Remove community and shop features, clean up code
