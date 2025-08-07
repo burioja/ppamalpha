@@ -220,7 +220,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         return;
       }
       
-      await _postService.createPost(
+      final postId = await _postService.createPost(
         userId: currentUser.uid,
         content: _selectedWalletFile!,
         location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
@@ -239,7 +239,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다!')),
         );
-        Navigator.pop(context);
+        
+        // 지도 화면으로 돌아가고 마커 새로고침
+        Navigator.pop(context, {
+          'postId': postId,
+          'location': _selectedLocation,
+          'address': _currentAddress,
+        });
       }
     } catch (e) {
       if (mounted) {

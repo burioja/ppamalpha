@@ -20,6 +20,10 @@ class PostModel {
   final String target;
   final int ageMin;
   final int ageMax;
+  
+  // 마커 관련 정보
+  final String markerId;
+  final String markerType;
 
   PostModel({
     required this.id,
@@ -39,7 +43,9 @@ class PostModel {
     this.target = '상관없음',
     this.ageMin = 20,
     this.ageMax = 30,
-  });
+    String? markerId,
+    this.markerType = 'ppam_work',
+  }) : markerId = markerId ?? 'post_$id';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -61,6 +67,8 @@ class PostModel {
       target: data['target'] ?? '상관없음',
       ageMin: data['ageMin'] ?? 20,
       ageMax: data['ageMax'] ?? 30,
+      markerId: data['markerId'] ?? 'post_${doc.id}',
+      markerType: data['markerType'] ?? 'ppam_work',
     );
   }
 
@@ -82,6 +90,8 @@ class PostModel {
       'target': target,
       'ageMin': ageMin,
       'ageMax': ageMax,
+      'markerId': markerId,
+      'markerType': markerType,
     };
   }
 
@@ -103,6 +113,8 @@ class PostModel {
     String? target,
     int? ageMin,
     int? ageMax,
+    String? markerId,
+    String? markerType,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -122,6 +134,8 @@ class PostModel {
       target: target ?? this.target,
       ageMin: ageMin ?? this.ageMin,
       ageMax: ageMax ?? this.ageMax,
+      markerId: markerId ?? this.markerId,
+      markerType: markerType ?? this.markerType,
     );
   }
 } 

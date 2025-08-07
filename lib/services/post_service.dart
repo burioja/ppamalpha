@@ -39,20 +39,22 @@ class PostService {
       );
 
       final docRef = await _firestore.collection('posts').add(post.toFirestore());
+      
+      // 생성된 포스트의 ID를 반환
       return docRef.id;
     } catch (e) {
       throw Exception('포스트 생성 실패: $e');
     }
   }
 
-  // 현재 위치의 포스트 조회
-  Future<List<PostModel>> getPostsNearLocation({
+  // 조건에 맞는 포스트만 조회
+  Future<List<PostModel>> getPostsNearLocationWithConditions({
     required GeoPoint location,
     required double radiusInKm,
+    String? userGender,
+    int? userAge,
   }) async {
     try {
-      // 간단한 구현: 모든 포스트를 가져와서 클라이언트에서 필터링
-      // 실제 프로덕션에서는 Firestore의 지리적 쿼리를 사용해야 함
       final querySnapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
@@ -62,6 +64,8 @@ class PostService {
       List<PostModel> posts = [];
       for (var doc in querySnapshot.docs) {
         final post = PostModel.fromFirestore(doc);
+        
+        // 거리 확인
         final distance = Geolocator.distanceBetween(
           location.latitude,
           location.longitude,
@@ -70,13 +74,59 @@ class PostService {
         );
         
         if (distance <= radiusInKm * 1000) {
-          posts.add(post);
+          // 조건 확인
+          if (_checkPostConditions(post, userGender, userAge)) {
+            posts.add(post);
+          }
         }
       }
 
       return posts;
     } catch (e) {
       throw Exception('포스트 조회 실패: $e');
+    }
+  }
+
+  // 포스트 조건 확인
+  bool _checkPostConditions(PostModel post, String? userGender, int? userAge) {
+    // 타겟 조건 파싱 (예: "남성/20대")
+    final targetParts = post.target.split('/');
+    final targetGender = targetParts.isNotEmpty ? targetParts[0] : '상관없음';
+    final targetAgeRange = targetParts.length > 1 ? targetParts[1] : '상관없음';
+    
+    // 성별 조건 확인
+    if (targetGender != '상관없음' && userGender != null) {
+      if (targetGender != userGender) return false;
+    }
+    
+    // 나이 조건 확인
+    if (targetAgeRange != '상관없음' && userAge != null) {
+      if (!_isAgeInRange(userAge, targetAgeRange)) return false;
+    }
+    
+    // 나이 범위 조건 확인
+    if (userAge != null) {
+      if (userAge < post.ageMin || userAge > post.ageMax) return false;
+    }
+    
+    return true;
+  }
+
+  // 나이 범위 확인
+  bool _isAgeInRange(int userAge, String targetAgeRange) {
+    switch (targetAgeRange) {
+      case '10대':
+        return userAge >= 10 && userAge <= 19;
+      case '20대':
+        return userAge >= 20 && userAge <= 29;
+      case '30대':
+        return userAge >= 30 && userAge <= 39;
+      case '40대':
+        return userAge >= 40 && userAge <= 49;
+      case '50대+':
+        return userAge >= 50;
+      default:
+        return true;
     }
   }
 
