@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
 
 class PostModel {
   // 필수 메타데이터
@@ -205,15 +206,16 @@ class PostModel {
     final double dLat = _degreesToRadians(lat2 - lat1);
     final double dLon = _degreesToRadians(lon2 - lon1);
     
-    final double a = (dLat / 2).sin() * (dLat / 2).sin() +
-        (lat1.sin() * lat2.sin() * (dLon / 2).sin() * (dLon / 2).sin());
-    final double c = 2 * a.sqrt().asin();
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.sin(_degreesToRadians(lat1)) * math.sin(_degreesToRadians(lat2)) * 
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double c = 2 * math.asin(math.sqrt(a));
     
     return earthRadius * c;
   }
 
   double _degreesToRadians(double degrees) {
-    return degrees * (3.14159265359 / 180);
+    return degrees * (math.pi / 180);
   }
 
   PostModel copyWith({
