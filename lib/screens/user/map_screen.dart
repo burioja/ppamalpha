@@ -231,27 +231,31 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showPostInfo(PostModel post) {
+  void _showPostInfo(PostModel flyer) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('포스트'),
+          title: Text(flyer.title),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('파일: ${post.content}'),
+              Text('발행자: ${flyer.creatorName}'),
               const SizedBox(height: 8),
-              Text('주소: ${post.address}'),
+              Text('리워드: ${flyer.reward}원'),
               const SizedBox(height: 8),
-              Text('가격: ${post.price}원'),
+              Text('타겟: ${flyer.targetGender == 'all' ? '전체' : flyer.targetGender == 'male' ? '남성' : '여성'} ${flyer.targetAge[0]}~${flyer.targetAge[1]}세'),
               const SizedBox(height: 8),
-              Text('수량: ${post.amount}개'),
+              if (flyer.targetInterest.isNotEmpty)
+                Text('관심사: ${flyer.targetInterest.join(', ')}'),
               const SizedBox(height: 8),
-              Text('타겟: ${post.target}'),
+              Text('만료일: ${_formatDate(flyer.expiresAt)}'),
               const SizedBox(height: 8),
-              Text('작성일: ${_formatDate(post.createdAt)}'),
+              if (flyer.canRespond) const Text('✓ 응답 가능'),
+              if (flyer.canForward) const Text('✓ 전달 가능'),
+              if (flyer.canRequestReward) const Text('✓ 리워드 수령 가능'),
+              if (flyer.canUse) const Text('✓ 사용 가능'),
             ],
           ),
           actions: [
@@ -259,13 +263,23 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('닫기'),
             ),
-            if (userId != null && userId != post.userId)
+            // 발행자만 회수 가능
+            if (userId != null && userId == flyer.creatorId)
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _collectPost(post);
+                  _collectPost(flyer);
                 },
                 child: const Text('회수'),
+              ),
+            // 조건에 맞는 사용자는 수령 가능
+            if (userId != null && userId != flyer.creatorId && flyer.canRequestReward)
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _collectFlyer(flyer);
+                },
+                child: const Text('수령'),
               ),
           ],
         );
@@ -273,29 +287,56 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _collectPost(PostModel post) async {
+  // 발행자가 전단지 회수
+  Future<void> _collectPost(PostModel flyer) async {
     try {
       final currentUserId = userId;
       if (currentUserId != null) {
-        await _postService.collectPost(
-          postId: post.id,
+        await _postService.collectFlyer(
+          flyerId: flyer.flyerId,
           userId: currentUserId,
         );
         
         setState(() {
-          _posts.removeWhere((p) => p.id == post.id);
+          _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
         });
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('포스트를 회수했습니다!')),
+            const SnackBar(content: Text('전단지를 회수했습니다!')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('포스트 회수에 실패했습니다: $e')),
+          SnackBar(content: Text('전단지 회수에 실패했습니다: $e')),
+        );
+      }
+    }
+  }
+
+  // 사용자가 전단지 수령
+  Future<void> _collectFlyer(PostModel flyer) async {
+    try {
+      final currentUserId = userId;
+      if (currentUserId != null) {
+        // TODO: 전단지 수령 로직 구현 (월렛에 추가, 리워드 지급 등)
+        
+        setState(() {
+          _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('전단지를 수령했습니다! ${flyer.reward}원 리워드가 지급되었습니다.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('전단지 수령에 실패했습니다: $e')),
         );
       }
     }
@@ -422,16 +463,16 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Marker _createPostMarker(PostModel post) {
+  Marker _createPostMarker(PostModel flyer) {
     return Marker(
-      markerId: MarkerId(post.markerId),
-      position: LatLng(post.location.latitude, post.location.longitude),
+      markerId: MarkerId(flyer.markerId),
+      position: LatLng(flyer.location.latitude, flyer.location.longitude),
       icon: _postMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
       infoWindow: InfoWindow(
-        title: 'PPAM 포스트',
-        snippet: '${post.price}원 - ${post.content}',
+        title: flyer.title,
+        snippet: '${flyer.reward}원 - ${flyer.creatorName}',
       ),
-      onTap: () => _showPostInfo(post),
+      onTap: () => _showPostInfo(flyer),
     );
   }
 
@@ -542,25 +583,29 @@ class _MapScreenState extends State<MapScreen> {
     try {
       if (_currentPosition != null) {
         // 사용자 정보 가져오기 (실제로는 사용자 프로필에서 가져와야 함)
-        final userGender = '남성'; // 임시 값
+        final userGender = 'male'; // 임시 값
         final userAge = 25; // 임시 값
+        final userInterests = ['패션', '뷰티']; // 임시 값
+        final userPurchaseHistory = ['화장품']; // 임시 값
         
-        final posts = await _postService.getPostsNearLocationWithConditions(
+        final flyers = await _postService.getFlyersNearLocation(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-          radiusInKm: 5.0, // 5km 반경 내 포스트 조회
+          radiusInKm: 5.0, // 5km 반경 내 전단지 조회
           userGender: userGender,
           userAge: userAge,
+          userInterests: userInterests,
+          userPurchaseHistory: userPurchaseHistory,
         );
         
         setState(() {
           _posts.clear();
-          _posts.addAll(posts);
+          _posts.addAll(flyers);
         });
         
         _updateClustering();
       }
     } catch (e) {
-      print('포스트 로드 오류: $e');
+      print('전단지 로드 오류: $e');
     }
   }
 

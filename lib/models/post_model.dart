@@ -1,141 +1,274 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PostModel {
-  final String id;
-  final String userId;
-  final String content;
+  // 필수 메타데이터
+  final String flyerId;
+  final String creatorId;
+  final String creatorName;
   final GeoPoint location;
-  final String address;
+  final int radius; // 노출 반경 (m)
   final DateTime createdAt;
+  final DateTime expiresAt;
+  final int reward; // 리워드 금액
+  
+  // 타겟팅 조건
+  final List<int> targetAge; // [20, 30] 등 범위
+  final String targetGender; // male / female / all
+  final List<String> targetInterest; // ["패션", "뷰티"] 등
+  final List<String> targetPurchaseHistory; // ["화장품", "치킨"]
+  
+  // 광고 콘텐츠
+  final List<String> mediaType; // text / image / audio
+  final List<String> mediaUrl; // 파일 링크 (1~2개 조합 가능)
+  final String title;
+  final String description;
+  
+  // 사용자 행동 조건
+  final bool canRespond;
+  final bool canForward;
+  final bool canRequestReward;
+  final bool canUse;
+  
+  // 마커 관련
+  final String markerId;
   final bool isActive;
   final bool isCollected;
   final String? collectedBy;
-  
-  // 새로운 필드들
-  final int price;
-  final int amount;
-  final int period;
-  final String periodUnit;
-  final String function;
-  final String target;
-  final int ageMin;
-  final int ageMax;
-  
-  // 마커 관련 정보
-  final String markerId;
-  final String markerType;
+  final DateTime? collectedAt;
 
   PostModel({
-    required this.id,
-    required this.userId,
-    required this.content,
+    required this.flyerId,
+    required this.creatorId,
+    required this.creatorName,
     required this.location,
-    required this.address,
+    required this.radius,
     required this.createdAt,
+    required this.expiresAt,
+    required this.reward,
+    required this.targetAge,
+    required this.targetGender,
+    required this.targetInterest,
+    required this.targetPurchaseHistory,
+    required this.mediaType,
+    required this.mediaUrl,
+    required this.title,
+    required this.description,
+    required this.canRespond,
+    required this.canForward,
+    required this.canRequestReward,
+    required this.canUse,
+    String? markerId,
     this.isActive = true,
     this.isCollected = false,
     this.collectedBy,
-    this.price = 0,
-    this.amount = 0,
-    this.period = 24,
-    this.periodUnit = 'Hour',
-    this.function = 'Using',
-    this.target = '상관없음',
-    this.ageMin = 20,
-    this.ageMax = 30,
-    String? markerId,
-    this.markerType = 'ppam_work',
-  }) : markerId = markerId ?? 'post_$id';
+    this.collectedAt,
+  }) : markerId = markerId ?? '${creatorId}_$flyerId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    
     return PostModel(
-      id: doc.id,
-      userId: data['userId'] ?? '',
-      content: data['content'] ?? '',
+      flyerId: doc.id,
+      creatorId: data['creatorId'] ?? '',
+      creatorName: data['creatorName'] ?? '',
       location: data['location'] ?? const GeoPoint(0, 0),
-      address: data['address'] ?? '',
+      radius: data['radius'] ?? 1000,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      expiresAt: (data['expiresAt'] as Timestamp).toDate(),
+      reward: data['reward'] ?? 0,
+      targetAge: List<int>.from(data['targetAge'] ?? [20, 30]),
+      targetGender: data['targetGender'] ?? 'all',
+      targetInterest: List<String>.from(data['targetInterest'] ?? []),
+      targetPurchaseHistory: List<String>.from(data['targetPurchaseHistory'] ?? []),
+      mediaType: List<String>.from(data['mediaType'] ?? ['text']),
+      mediaUrl: List<String>.from(data['mediaUrl'] ?? []),
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      canRespond: data['canRespond'] ?? false,
+      canForward: data['canForward'] ?? false,
+      canRequestReward: data['canRequestReward'] ?? true,
+      canUse: data['canUse'] ?? false,
+      markerId: data['markerId'] ?? '${data['creatorId']}_${doc.id}',
       isActive: data['isActive'] ?? true,
       isCollected: data['isCollected'] ?? false,
       collectedBy: data['collectedBy'],
-      price: data['price'] ?? 0,
-      amount: data['amount'] ?? 0,
-      period: data['period'] ?? 24,
-      periodUnit: data['periodUnit'] ?? 'Hour',
-      function: data['function'] ?? 'Using',
-      target: data['target'] ?? '상관없음',
-      ageMin: data['ageMin'] ?? 20,
-      ageMax: data['ageMax'] ?? 30,
-      markerId: data['markerId'] ?? 'post_${doc.id}',
-      markerType: data['markerType'] ?? 'ppam_work',
+      collectedAt: data['collectedAt']?.toDate(),
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
-      'userId': userId,
-      'content': content,
+      'creatorId': creatorId,
+      'creatorName': creatorName,
       'location': location,
-      'address': address,
+      'radius': radius,
       'createdAt': Timestamp.fromDate(createdAt),
+      'expiresAt': Timestamp.fromDate(expiresAt),
+      'reward': reward,
+      'targetAge': targetAge,
+      'targetGender': targetGender,
+      'targetInterest': targetInterest,
+      'targetPurchaseHistory': targetPurchaseHistory,
+      'mediaType': mediaType,
+      'mediaUrl': mediaUrl,
+      'title': title,
+      'description': description,
+      'canRespond': canRespond,
+      'canForward': canForward,
+      'canRequestReward': canRequestReward,
+      'canUse': canUse,
+      'markerId': markerId,
       'isActive': isActive,
       'isCollected': isCollected,
       'collectedBy': collectedBy,
-      'price': price,
-      'amount': amount,
-      'period': period,
-      'periodUnit': periodUnit,
-      'function': function,
-      'target': target,
-      'ageMin': ageMin,
-      'ageMax': ageMax,
-      'markerId': markerId,
-      'markerType': markerType,
+      'collectedAt': collectedAt != null ? Timestamp.fromDate(collectedAt!) : null,
     };
   }
 
+  // Meilisearch용 데이터 구조
+  Map<String, dynamic> toMeilisearch() {
+    return {
+      'id': flyerId,
+      'location': {
+        'lat': location.latitude,
+        'lng': location.longitude,
+      },
+      'title': title,
+      'targetAge': targetAge,
+      'targetGender': targetGender,
+      'targetInterest': targetInterest,
+      'targetPurchaseHistory': targetPurchaseHistory,
+      'reward': reward,
+      'mediaType': mediaType,
+      'creatorId': creatorId,
+      'radius': radius,
+      'expiresAt': expiresAt.millisecondsSinceEpoch,
+    };
+  }
+
+  // 조건 확인 메서드들
+  bool isExpired() {
+    return DateTime.now().isAfter(expiresAt);
+  }
+
+  bool isInRadius(GeoPoint userLocation) {
+    final distance = _calculateDistance(
+      location.latitude, location.longitude,
+      userLocation.latitude, userLocation.longitude,
+    );
+    return distance <= radius;
+  }
+
+  bool matchesTargetConditions({
+    required int userAge,
+    required String userGender,
+    required List<String> userInterests,
+    required List<String> userPurchaseHistory,
+  }) {
+    // 나이 조건 확인
+    if (userAge < targetAge[0] || userAge > targetAge[1]) return false;
+    
+    // 성별 조건 확인
+    if (targetGender != 'all' && targetGender != userGender) return false;
+    
+    // 관심사 조건 확인 (하나라도 일치하면 OK)
+    if (targetInterest.isNotEmpty) {
+      bool hasMatchingInterest = false;
+      for (String interest in targetInterest) {
+        if (userInterests.contains(interest)) {
+          hasMatchingInterest = true;
+          break;
+        }
+      }
+      if (!hasMatchingInterest) return false;
+    }
+    
+    // 구매 이력 조건 확인 (하나라도 일치하면 OK)
+    if (targetPurchaseHistory.isNotEmpty) {
+      bool hasMatchingHistory = false;
+      for (String history in targetPurchaseHistory) {
+        if (userPurchaseHistory.contains(history)) {
+          hasMatchingHistory = true;
+          break;
+        }
+      }
+      if (!hasMatchingHistory) return false;
+    }
+    
+    return true;
+  }
+
+  // 거리 계산 헬퍼 메서드
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371000; // 지구 반지름 (미터)
+    
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+    
+    final double a = (dLat / 2).sin() * (dLat / 2).sin() +
+        (lat1.sin() * lat2.sin() * (dLon / 2).sin() * (dLon / 2).sin());
+    final double c = 2 * a.sqrt().asin();
+    
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (3.14159265359 / 180);
+  }
+
   PostModel copyWith({
-    String? id,
-    String? userId,
-    String? content,
+    String? flyerId,
+    String? creatorId,
+    String? creatorName,
     GeoPoint? location,
-    String? address,
+    int? radius,
     DateTime? createdAt,
+    DateTime? expiresAt,
+    int? reward,
+    List<int>? targetAge,
+    String? targetGender,
+    List<String>? targetInterest,
+    List<String>? targetPurchaseHistory,
+    List<String>? mediaType,
+    List<String>? mediaUrl,
+    String? title,
+    String? description,
+    bool? canRespond,
+    bool? canForward,
+    bool? canRequestReward,
+    bool? canUse,
+    String? markerId,
     bool? isActive,
     bool? isCollected,
     String? collectedBy,
-    int? price,
-    int? amount,
-    int? period,
-    String? periodUnit,
-    String? function,
-    String? target,
-    int? ageMin,
-    int? ageMax,
-    String? markerId,
-    String? markerType,
+    DateTime? collectedAt,
   }) {
     return PostModel(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      content: content ?? this.content,
+      flyerId: flyerId ?? this.flyerId,
+      creatorId: creatorId ?? this.creatorId,
+      creatorName: creatorName ?? this.creatorName,
       location: location ?? this.location,
-      address: address ?? this.address,
+      radius: radius ?? this.radius,
       createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      reward: reward ?? this.reward,
+      targetAge: targetAge ?? this.targetAge,
+      targetGender: targetGender ?? this.targetGender,
+      targetInterest: targetInterest ?? this.targetInterest,
+      targetPurchaseHistory: targetPurchaseHistory ?? this.targetPurchaseHistory,
+      mediaType: mediaType ?? this.mediaType,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      canRespond: canRespond ?? this.canRespond,
+      canForward: canForward ?? this.canForward,
+      canRequestReward: canRequestReward ?? this.canRequestReward,
+      canUse: canUse ?? this.canUse,
+      markerId: markerId ?? this.markerId,
       isActive: isActive ?? this.isActive,
       isCollected: isCollected ?? this.isCollected,
       collectedBy: collectedBy ?? this.collectedBy,
-      price: price ?? this.price,
-      amount: amount ?? this.amount,
-      period: period ?? this.period,
-      periodUnit: periodUnit ?? this.periodUnit,
-      function: function ?? this.function,
-      target: target ?? this.target,
-      ageMin: ageMin ?? this.ageMin,
-      ageMax: ageMax ?? this.ageMax,
-      markerId: markerId ?? this.markerId,
-      markerType: markerType ?? this.markerType,
+      collectedAt: collectedAt ?? this.collectedAt,
     );
   }
 } 

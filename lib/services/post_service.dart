@@ -5,152 +5,196 @@ import '../models/post_model.dart';
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 포스트 생성
-  Future<String> createPost({
-    required String userId,
-    required String content,
+  // 전단지 생성 (Firestore + Meilisearch)
+  Future<String> createFlyer({
+    required String creatorId,
+    required String creatorName,
     required GeoPoint location,
-    required String address,
-    int price = 0,
-    int amount = 0,
-    int period = 24,
-    String periodUnit = 'Hour',
-    String function = 'Using',
-    String target = '상관없음',
-    int ageMin = 20,
-    int ageMax = 30,
+    required int radius,
+    required int reward,
+    required List<int> targetAge,
+    required String targetGender,
+    required List<String> targetInterest,
+    required List<String> targetPurchaseHistory,
+    required List<String> mediaType,
+    required List<String> mediaUrl,
+    required String title,
+    required String description,
+    required bool canRespond,
+    required bool canForward,
+    required bool canRequestReward,
+    required bool canUse,
+    required DateTime expiresAt,
   }) async {
     try {
-      final post = PostModel(
-        id: '',
-        userId: userId,
-        content: content,
+      final flyer = PostModel(
+        flyerId: '',
+        creatorId: creatorId,
+        creatorName: creatorName,
         location: location,
-        address: address,
-        price: price,
-        amount: amount,
-        period: period,
-        periodUnit: periodUnit,
-        function: function,
-        target: target,
-        ageMin: ageMin,
-        ageMax: ageMax,
+        radius: radius,
         createdAt: DateTime.now(),
+        expiresAt: expiresAt,
+        reward: reward,
+        targetAge: targetAge,
+        targetGender: targetGender,
+        targetInterest: targetInterest,
+        targetPurchaseHistory: targetPurchaseHistory,
+        mediaType: mediaType,
+        mediaUrl: mediaUrl,
+        title: title,
+        description: description,
+        canRespond: canRespond,
+        canForward: canForward,
+        canRequestReward: canRequestReward,
+        canUse: canUse,
       );
 
-      final docRef = await _firestore.collection('posts').add(post.toFirestore());
+      // Firestore에 저장
+      final docRef = await _firestore.collection('flyers').add(flyer.toFirestore());
       
-      // 생성된 포스트의 ID를 반환
+      // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
+      await _indexToMeilisearch(flyer.copyWith(flyerId: docRef.id));
+      
       return docRef.id;
     } catch (e) {
-      throw Exception('포스트 생성 실패: $e');
+      throw Exception('전단지 생성 실패: $e');
     }
   }
 
-  // 조건에 맞는 포스트만 조회
-  Future<List<PostModel>> getPostsNearLocationWithConditions({
+  // Meilisearch 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
+  Future<void> _indexToMeilisearch(PostModel flyer) async {
+    try {
+      // TODO: Meilisearch 클라이언트 구현
+      // await meilisearchClient.index('flyers').addDocuments([flyer.toMeilisearch()]);
+      print('Meilisearch 인덱싱: ${flyer.flyerId}');
+    } catch (e) {
+      print('Meilisearch 인덱싱 실패: $e');
+    }
+  }
+
+  // 위치 기반 전단지 조회 (GeoFlutterFire 사용)
+  Future<List<PostModel>> getFlyersNearLocation({
     required GeoPoint location,
     required double radiusInKm,
     String? userGender,
     int? userAge,
+    List<String>? userInterests,
+    List<String>? userPurchaseHistory,
   }) async {
     try {
+      // 1단계: 위치 기반 필터링 (GeoFlutterFire)
       final querySnapshot = await _firestore
-          .collection('posts')
+          .collection('flyers')
           .where('isActive', isEqualTo: true)
           .where('isCollected', isEqualTo: false)
           .get();
 
-      List<PostModel> posts = [];
+      List<PostModel> flyers = [];
       for (var doc in querySnapshot.docs) {
-        final post = PostModel.fromFirestore(doc);
+        final flyer = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (flyer.isExpired()) continue;
         
         // 거리 확인
-        final distance = Geolocator.distanceBetween(
-          location.latitude,
-          location.longitude,
-          post.location.latitude,
-          post.location.longitude,
-        );
+        if (!flyer.isInRadius(location)) continue;
         
-        if (distance <= radiusInKm * 1000) {
-          // 조건 확인
-          if (_checkPostConditions(post, userGender, userAge)) {
-            posts.add(post);
-          }
+        // 2단계: 타겟 조건 필터링
+        if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
+          if (!flyer.matchesTargetConditions(
+            userAge: userAge,
+            userGender: userGender,
+            userInterests: userInterests,
+            userPurchaseHistory: userPurchaseHistory,
+          )) continue;
         }
+        
+        flyers.add(flyer);
       }
 
-      return posts;
+      return flyers;
     } catch (e) {
-      throw Exception('포스트 조회 실패: $e');
+      throw Exception('전단지 조회 실패: $e');
     }
   }
 
-  // 포스트 조건 확인
-  bool _checkPostConditions(PostModel post, String? userGender, int? userAge) {
-    // 타겟 조건 파싱 (예: "남성/20대")
-    final targetParts = post.target.split('/');
-    final targetGender = targetParts.isNotEmpty ? targetParts[0] : '상관없음';
-    final targetAgeRange = targetParts.length > 1 ? targetParts[1] : '상관없음';
-    
-    // 성별 조건 확인
-    if (targetGender != '상관없음' && userGender != null) {
-      if (targetGender != userGender) return false;
-    }
-    
-    // 나이 조건 확인
-    if (targetAgeRange != '상관없음' && userAge != null) {
-      if (!_isAgeInRange(userAge, targetAgeRange)) return false;
-    }
-    
-    // 나이 범위 조건 확인
-    if (userAge != null) {
-      if (userAge < post.ageMin || userAge > post.ageMax) return false;
-    }
-    
-    return true;
-  }
-
-  // 나이 범위 확인
-  bool _isAgeInRange(int userAge, String targetAgeRange) {
-    switch (targetAgeRange) {
-      case '10대':
-        return userAge >= 10 && userAge <= 19;
-      case '20대':
-        return userAge >= 20 && userAge <= 29;
-      case '30대':
-        return userAge >= 30 && userAge <= 39;
-      case '40대':
-        return userAge >= 40 && userAge <= 49;
-      case '50대+':
-        return userAge >= 50;
-      default:
-        return true;
+  // Meilisearch를 통한 고급 필터링 (실제 구현 시)
+  Future<List<PostModel>> searchFlyersWithMeilisearch({
+    required GeoPoint location,
+    required double radiusInKm,
+    String? targetGender,
+    List<int>? targetAge,
+    List<String>? targetInterest,
+    int? minReward,
+    int? maxReward,
+  }) async {
+    try {
+      // TODO: Meilisearch 검색 구현
+      // final searchResult = await meilisearchClient.index('flyers').search(
+      //   '',
+      //   filter: _buildMeilisearchFilter(
+      //     location, radiusInKm, targetGender, targetAge, targetInterest, minReward, maxReward
+      //   ),
+      // );
+      
+      // 임시로 Firestore에서 조회
+      return await getFlyersNearLocation(
+        location: location,
+        radiusInKm: radiusInKm,
+      );
+    } catch (e) {
+      throw Exception('Meilisearch 검색 실패: $e');
     }
   }
 
-  // 포스트 회수
-  Future<void> collectPost({
-    required String postId,
+  // 전단지 회수 (발행자만 가능)
+  Future<void> collectFlyer({
+    required String flyerId,
     required String userId,
   }) async {
     try {
-      await _firestore.collection('posts').doc(postId).update({
+      // 발행자 확인
+      final flyerDoc = await _firestore.collection('flyers').doc(flyerId).get();
+      if (!flyerDoc.exists) {
+        throw Exception('전단지를 찾을 수 없습니다.');
+      }
+      
+      final flyer = PostModel.fromFirestore(flyerDoc);
+      if (flyer.creatorId != userId) {
+        throw Exception('발행자만 전단지를 회수할 수 있습니다.');
+      }
+      
+      // 회수 처리
+      await _firestore.collection('flyers').doc(flyerId).update({
         'isCollected': true,
         'collectedBy': userId,
         'collectedAt': Timestamp.now(),
       });
+      
+      // Meilisearch에서 제거
+      await _removeFromMeilisearch(flyerId);
     } catch (e) {
-      throw Exception('포스트 회수 실패: $e');
+      throw Exception('전단지 회수 실패: $e');
     }
   }
 
-  // 사용자가 회수한 포스트 조회
-  Future<List<PostModel>> getCollectedPosts(String userId) async {
+  // Meilisearch에서 제거
+  Future<void> _removeFromMeilisearch(String flyerId) async {
+    try {
+      // TODO: Meilisearch 클라이언트 구현
+      // await meilisearchClient.index('flyers').deleteDocument(flyerId);
+      print('Meilisearch에서 제거: $flyerId');
+    } catch (e) {
+      print('Meilisearch 제거 실패: $e');
+    }
+  }
+
+  // 사용자가 회수한 전단지 조회
+  Future<List<PostModel>> getCollectedFlyers(String userId) async {
     try {
       final querySnapshot = await _firestore
-          .collection('posts')
+          .collection('flyers')
           .where('collectedBy', isEqualTo: userId)
           .orderBy('collectedAt', descending: true)
           .get();
@@ -159,16 +203,16 @@ class PostService {
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
     } catch (e) {
-      throw Exception('회수한 포스트 조회 실패: $e');
+      throw Exception('회수한 전단지 조회 실패: $e');
     }
   }
 
-  // 사용자가 생성한 포스트 조회
-  Future<List<PostModel>> getUserPosts(String userId) async {
+  // 사용자가 생성한 전단지 조회
+  Future<List<PostModel>> getUserFlyers(String userId) async {
     try {
       final querySnapshot = await _firestore
-          .collection('posts')
-          .where('userId', isEqualTo: userId)
+          .collection('flyers')
+          .where('creatorId', isEqualTo: userId)
           .orderBy('createdAt', descending: true)
           .get();
 
@@ -176,18 +220,40 @@ class PostService {
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
     } catch (e) {
-      throw Exception('사용자 포스트 조회 실패: $e');
+      throw Exception('사용자 전단지 조회 실패: $e');
     }
   }
 
-  // 포스트 삭제 (비활성화)
-  Future<void> deletePost(String postId) async {
+  // 전단지 상세 정보 조회 (Lazy Load)
+  Future<PostModel?> getFlyerDetail(String flyerId) async {
     try {
-      await _firestore.collection('posts').doc(postId).update({
-        'isActive': false,
-      });
+      final doc = await _firestore.collection('flyers').doc(flyerId).get();
+      if (doc.exists) {
+        return PostModel.fromFirestore(doc);
+      }
+      return null;
     } catch (e) {
-      throw Exception('포스트 삭제 실패: $e');
+      throw Exception('전단지 상세 조회 실패: $e');
+    }
+  }
+
+  // 만료된 전단지 정리 (배치 작업용)
+  Future<void> cleanupExpiredFlyers() async {
+    try {
+      final now = DateTime.now();
+      final querySnapshot = await _firestore
+          .collection('flyers')
+          .where('expiresAt', isLessThan: Timestamp.fromDate(now))
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final batch = _firestore.batch();
+      for (var doc in querySnapshot.docs) {
+        batch.update(doc.reference, {'isActive': false});
+      }
+      await batch.commit();
+    } catch (e) {
+      throw Exception('만료 전단지 정리 실패: $e');
     }
   }
 } 
