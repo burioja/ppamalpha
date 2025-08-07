@@ -160,7 +160,6 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadPostMarker() async {
     try {
-      // ppam_work.png를 포스트 마커로 사용
       final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
       final Uint8List bytes = data.buffer.asUint8List();
       
@@ -242,9 +241,15 @@ class _MapScreenState extends State<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('내용: ${post.content}'),
+              Text('파일: ${post.content}'),
               const SizedBox(height: 8),
               Text('주소: ${post.address}'),
+              const SizedBox(height: 8),
+              Text('가격: ${post.price}원'),
+              const SizedBox(height: 8),
+              Text('수량: ${post.amount}개'),
+              const SizedBox(height: 8),
+              Text('타겟: ${post.target}'),
               const SizedBox(height: 8),
               Text('작성일: ${_formatDate(post.createdAt)}'),
             ],
@@ -419,12 +424,12 @@ class _MapScreenState extends State<MapScreen> {
 
   Marker _createPostMarker(PostModel post) {
     return Marker(
-      markerId: MarkerId('post_${post.id}'),
+      markerId: MarkerId(post.markerId),
       position: LatLng(post.location.latitude, post.location.longitude),
       icon: _postMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
       infoWindow: InfoWindow(
-        title: '포스트',
-        snippet: post.content.length > 30 ? '${post.content.substring(0, 30)}...' : post.content,
+        title: 'PPAM 포스트',
+        snippet: '${post.price}원 - ${post.content}',
       ),
       onTap: () => _showPostInfo(post),
     );
@@ -536,9 +541,15 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadPostsFromFirestore() async {
     try {
       if (_currentPosition != null) {
-        final posts = await _postService.getPostsNearLocation(
+        // 사용자 정보 가져오기 (실제로는 사용자 프로필에서 가져와야 함)
+        final userGender = '남성'; // 임시 값
+        final userAge = 25; // 임시 값
+        
+        final posts = await _postService.getPostsNearLocationWithConditions(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
           radiusInKm: 5.0, // 5km 반경 내 포스트 조회
+          userGender: userGender,
+          userAge: userAge,
         );
         
         setState(() {
@@ -651,9 +662,20 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _navigateToPostPlace() {
-    Navigator.pushNamed(context, '/post-place').then((_) {
+    Navigator.pushNamed(context, '/post-place').then((result) {
       // 포스트 생성 후 지도 새로고침
-      _loadPostsFromFirestore();
+      if (result != null && result is Map<String, dynamic>) {
+        // 새로 생성된 포스트 정보가 있으면 마커 새로고침
+        _loadPostsFromFirestore();
+        
+        // 생성된 포스트 위치로 카메라 이동
+        if (result['location'] != null) {
+          final location = result['location'] as LatLng;
+          mapController.animateCamera(
+            CameraUpdate.newLatLng(location),
+          );
+        }
+      }
     });
   }
 
