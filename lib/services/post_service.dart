@@ -11,6 +11,14 @@ class PostService {
     required String content,
     required GeoPoint location,
     required String address,
+    int price = 0,
+    int amount = 0,
+    int period = 24,
+    String periodUnit = 'Hour',
+    String function = 'Using',
+    String target = '상관없음',
+    int ageMin = 20,
+    int ageMax = 30,
   }) async {
     try {
       final post = PostModel(
@@ -19,6 +27,14 @@ class PostService {
         content: content,
         location: location,
         address: address,
+        price: price,
+        amount: amount,
+        period: period,
+        periodUnit: periodUnit,
+        function: function,
+        target: target,
+        ageMin: ageMin,
+        ageMax: ageMax,
         createdAt: DateTime.now(),
       );
 
