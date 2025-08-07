@@ -588,6 +588,7 @@ class _MapScreenState extends State<MapScreen> {
         final userInterests = ['패션', '뷰티']; // 임시 값
         final userPurchaseHistory = ['화장품']; // 임시 값
         
+        // 새로운 flyer 시스템에서 전단지 로드
         final flyers = await _postService.getFlyersNearLocation(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
           radiusInKm: 5.0, // 5km 반경 내 전단지 조회
@@ -708,16 +709,26 @@ class _MapScreenState extends State<MapScreen> {
 
   void _navigateToPostPlace() {
     Navigator.pushNamed(context, '/post-place').then((result) {
-      // 포스트 생성 후 지도 새로고침
+      // 전단지 생성 후 지도 새로고침
       if (result != null && result is Map<String, dynamic>) {
-        // 새로 생성된 포스트 정보가 있으면 마커 새로고침
+        // 새로 생성된 전단지 정보가 있으면 마커 새로고침
         _loadPostsFromFirestore();
         
-        // 생성된 포스트 위치로 카메라 이동
+        // 생성된 전단지 위치로 카메라 이동
         if (result['location'] != null) {
           final location = result['location'] as LatLng;
           mapController.animateCamera(
             CameraUpdate.newLatLng(location),
+          );
+        }
+        
+        // 성공 메시지 표시
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('전단지가 생성되었습니다! 지도에 마커가 표시됩니다.'),
+              backgroundColor: Colors.green,
+            ),
           );
         }
       }
