@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:math' as math;
 import '../models/post_model.dart';
 
 class PostService {
@@ -97,18 +98,22 @@ class PostService {
         // 만료 확인
         if (flyer.isExpired()) continue;
         
-        // 거리 확인
-        if (!flyer.isInRadius(location)) continue;
+        // 거리 확인 (반경을 km로 변환)
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          flyer.location.latitude, flyer.location.longitude,
+        );
+        if (distance > radiusInKm * 1000) continue;
         
-        // 2단계: 타겟 조건 필터링
-        if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
-          if (!flyer.matchesTargetConditions(
-            userAge: userAge,
-            userGender: userGender,
-            userInterests: userInterests,
-            userPurchaseHistory: userPurchaseHistory,
-          )) continue;
-        }
+        // 2단계: 타겟 조건 필터링 (임시로 비활성화하여 모든 flyer 표시)
+        // if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
+        //   if (!flyer.matchesTargetConditions(
+        //     userAge: userAge,
+        //     userGender: userGender,
+        //     userInterests: userInterests,
+        //     userPurchaseHistory: userPurchaseHistory,
+        //   )) continue;
+        // }
         
         flyers.add(flyer);
       }
@@ -117,6 +122,25 @@ class PostService {
     } catch (e) {
       throw Exception('전단지 조회 실패: $e');
     }
+  }
+
+  // 거리 계산 헬퍼 메서드
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371000; // 지구 반지름 (미터)
+    
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+    
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.sin(_degreesToRadians(lat1)) * math.sin(_degreesToRadians(lat2)) * 
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double c = 2 * math.asin(math.sqrt(a));
+    
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (math.pi / 180);
   }
 
   // Meilisearch를 통한 고급 필터링 (실제 구현 시)
