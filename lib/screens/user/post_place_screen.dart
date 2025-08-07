@@ -220,29 +220,61 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         return;
       }
       
-      final postId = await _postService.createPost(
-        userId: currentUser.uid,
-        content: _selectedWalletFile!,
+      // 사용자 정보 가져오기 (실제로는 사용자 프로필에서 가져와야 함)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      
+      final userData = userDoc.data() ?? {};
+      final creatorName = userData['profile']?['info']?['nickname'] ?? '사용자';
+      
+      // 나이 범위 계산
+      final ageMin = int.tryParse(_ageMinController.text) ?? 20;
+      final ageMax = int.tryParse(_ageMaxController.text) ?? 30;
+      
+      // 성별 변환
+      String targetGender = 'all';
+      if (_selectedGender == '남성') targetGender = 'male';
+      else if (_selectedGender == '여성') targetGender = 'female';
+      
+      // 기간 계산
+      int durationHours = int.tryParse(_periodController.text) ?? 24;
+      if (_selectedPeriodUnit == 'Day') durationHours *= 24;
+      else if (_selectedPeriodUnit == 'Week') durationHours *= 24 * 7;
+      else if (_selectedPeriodUnit == 'Month') durationHours *= 24 * 30;
+      
+      final expiresAt = DateTime.now().add(Duration(hours: durationHours));
+      
+      final flyerId = await _postService.createFlyer(
+        creatorId: currentUser.uid,
+        creatorName: creatorName,
         location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
-        address: _currentAddress ?? '',
-        price: int.tryParse(_priceController.text) ?? 0,
-        amount: int.tryParse(_amountController.text) ?? 0,
-        period: int.tryParse(_periodController.text) ?? 24,
-        periodUnit: _selectedPeriodUnit,
-        function: _selectedFunction,
-        target: '$_selectedGender/$_selectedAgeRange',
-        ageMin: int.tryParse(_ageMinController.text) ?? 20,
-        ageMax: int.tryParse(_ageMaxController.text) ?? 30,
+        radius: 1000, // 1km 반경
+        reward: int.tryParse(_priceController.text) ?? 0,
+        targetAge: [ageMin, ageMax],
+        targetGender: targetGender,
+        targetInterest: [], // TODO: 사용자 관심사에서 가져오기
+        targetPurchaseHistory: [], // TODO: 사용자 구매 이력에서 가져오기
+        mediaType: ['image'], // 선택된 파일 타입
+        mediaUrl: [_selectedWalletFile!], // 선택된 파일 URL
+        title: 'PPAM 전단지',
+        description: '월렛에서 선택된 파일',
+        canRespond: _selectedFunction == 'Reply',
+        canForward: true,
+        canRequestReward: true,
+        canUse: _selectedFunction == 'Using',
+        expiresAt: expiresAt,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다!')),
+          const SnackBar(content: Text('전단지가 성공적으로 생성되었습니다!')),
         );
         
         // 지도 화면으로 돌아가고 마커 새로고침
         Navigator.pop(context, {
-          'postId': postId,
+          'flyerId': flyerId,
           'location': _selectedLocation,
           'address': _currentAddress,
         });
@@ -250,7 +282,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('포스트 생성에 실패했습니다: $e')),
+          SnackBar(content: Text('전단지 생성에 실패했습니다: $e')),
         );
       }
     } finally {
