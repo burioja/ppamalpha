@@ -68,12 +68,12 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     if (currentUserId == null) return;
 
     try {
-      final posts = await _postService.getCollectedPosts(currentUserId);
+      final posts = await _postService.getCollectedFlyers(currentUserId);
       setState(() {
         collectedPosts = posts;
       });
     } catch (e) {
-      debugPrint('회수한 포스트 로드 오류: $e');
+      debugPrint('회수한 전단지 로드 오류: $e');
     }
   }
 
@@ -331,14 +331,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           ),
         ),
         title: Text(
-          post.content.length > 50 ? '${post.content.substring(0, 50)}...' : post.content,
+          post.title.length > 50 ? '${post.title.substring(0, 50)}...' : post.title,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('주소: ${post.address}'),
-            Text('회수 시간: ${_formatDate(post.createdAt)}'),
+            Text('발행자: ${post.creatorName}'),
+            Text('리워드: ${post.reward}원'),
+            Text('회수 시간: ${_formatDate(post.collectedAt ?? post.createdAt)}'),
           ],
         ),
         onTap: () => _showPostDetail(post),
@@ -351,16 +352,22 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('회수한 포스트'),
+          title: Text(post.title),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('내용: ${post.content}'),
+              Text('발행자: ${post.creatorName}'),
               const SizedBox(height: 8),
-              Text('주소: ${post.address}'),
+              Text('리워드: ${post.reward}원'),
               const SizedBox(height: 8),
-              Text('작성일: ${_formatDate(post.createdAt)}'),
+              Text('설명: ${post.description}'),
+              const SizedBox(height: 8),
+              Text('타겟: ${post.targetGender == 'all' ? '전체' : post.targetGender == 'male' ? '남성' : '여성'} ${post.targetAge[0]}~${post.targetAge[1]}세'),
+              const SizedBox(height: 8),
+              Text('만료일: ${_formatDate(post.expiresAt)}'),
+              const SizedBox(height: 8),
+              Text('회수일: ${_formatDate(post.collectedAt ?? post.createdAt)}'),
             ],
           ),
           actions: [
@@ -397,7 +404,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           controller: _tabController,
           tabs: const [
             Tab(text: '이미지'),
-            Tab(text: '회수한 포스트'),
+            Tab(text: '회수한 전단지'),
           ],
         ),
         actions: [
