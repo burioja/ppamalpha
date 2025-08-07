@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import '../../services/post_service.dart';
 import '../../services/location_service.dart';
 import '../../models/post_model.dart';
@@ -16,7 +17,6 @@ class PostPlaceScreen extends StatefulWidget {
 
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final PostService _postService = PostService();
-  final TextEditingController _contentController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
@@ -29,11 +29,14 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   String? _currentAddress;
   bool _isLoading = false;
   bool _showAddressConfirmation = false;
+  String? _mapStyle;
   
   // 설정 옵션들
   String _selectedPeriodUnit = 'Hour';
   String _selectedFunction = 'Using';
-  String _selectedTarget = '상관없음';
+  String _selectedGender = '상관없음';
+  String _selectedAgeRange = '상관없음';
+  String? _selectedWalletFile;
   
   // 기본 위치 (서울 시청)
   static const LatLng _defaultLocation = LatLng(37.5665, 126.9780);
@@ -53,8 +56,31 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     _ageMinController.text = '20';
     _ageMaxController.text = '30';
     
+    // 지도 스타일 로드
+    _loadMapStyle();
+    
     // 현재 위치 가져오기 시도
     _getCurrentLocation();
+  }
+
+  // 지도 스타일 로드
+  Future<void> _loadMapStyle() async {
+    try {
+      final style = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
+      setState(() {
+        _mapStyle = style;
+      });
+    } catch (e) {
+      // 스타일 로드 실패 시 무시
+    }
+  }
+
+  // 지도 생성 시 스타일 적용
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    if (_mapStyle != null) {
+      controller.setMapStyle(_mapStyle);
+    }
   }
 
   // 총액 계산
@@ -127,10 +153,59 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 주소 입력 모드로 전환
   }
 
+  // 월렛 파일 선택 다이얼로그
+  void _showWalletFileSelector() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('월렛에서 파일 선택'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: Column(
+              children: [
+                // 임시로 더미 데이터 사용 (실제로는 월렛에서 가져와야 함)
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: 5,
+                    itemBuilder: (context, index) {
+                      final fileName = '파일 ${index + 1}.jpg';
+                      final isSelected = _selectedWalletFile == fileName;
+                      
+                      return ListTile(
+                        leading: const Icon(Icons.image),
+                        title: Text(fileName),
+                        subtitle: Text('${DateTime.now().subtract(Duration(days: index)).toString().substring(0, 10)}'),
+                        trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedWalletFile = fileName;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _createPost() async {
-    if (_selectedLocation == null || _contentController.text.trim().isEmpty) {
+    if (_selectedLocation == null || _selectedWalletFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('위치와 내용을 입력해주세요')),
+        const SnackBar(content: Text('위치와 파일을 선택해주세요')),
       );
       return;
     }
@@ -147,7 +222,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       
       await _postService.createPost(
         userId: currentUser.uid,
-        content: _contentController.text.trim(),
+        content: _selectedWalletFile!,
         location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
         address: _currentAddress ?? '',
         price: int.tryParse(_priceController.text) ?? 0,
@@ -155,7 +230,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         period: int.tryParse(_periodController.text) ?? 24,
         periodUnit: _selectedPeriodUnit,
         function: _selectedFunction,
-        target: _selectedTarget,
+        target: '$_selectedGender/$_selectedAgeRange',
         ageMin: int.tryParse(_ageMinController.text) ?? 20,
         ageMax: int.tryParse(_ageMaxController.text) ?? 30,
       );
@@ -207,11 +282,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                     child: _selectedLocation == null
                         ? const Center(child: Text('위치를 선택해주세요'))
                         : GoogleMap(
-                            onMapCreated: (controller) => _mapController = controller,
+                            onMapCreated: _onMapCreated,
                             initialCameraPosition: CameraPosition(
                               target: _selectedLocation!,
-                              zoom: 15,
+                              zoom: 15.0,
                             ),
+                            myLocationEnabled: true,
+                            myLocationButtonEnabled: false,
+                            zoomControlsEnabled: false,
+                            zoomGesturesEnabled: true,
+                            scrollGesturesEnabled: true,
+                            tiltGesturesEnabled: true,
+                            rotateGesturesEnabled: true,
                             onTap: _onMapTap,
                             markers: _selectedLocation != null
                                 ? {
@@ -344,20 +426,37 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                             ),
                             const SizedBox(height: 20),
                             
-                            // 포스트 내용 입력
-                            TextField(
-                              controller: _contentController,
-                              decoration: InputDecoration(
-                                labelText: '포스트 내용',
-                                hintText: '이 위치에 대한 메시지를 입력하세요...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey.shade50,
-                                prefixIcon: const Icon(Icons.message),
+                            // 월렛 파일 선택
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
                               ),
-                              maxLines: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('선택된 파일', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.image, color: Colors.blue),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedWalletFile ?? '월렛에서 파일을 선택해주세요',
+                                          style: Theme.of(context).textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _showWalletFileSelector,
+                                        child: const Text('파일 선택'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 20),
                             
@@ -512,29 +611,75 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                             const Text('Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 8),
                             
-                            // 타겟 드롭다운
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: DropdownButton<String>(
-                                value: _selectedTarget,
-                                isExpanded: true,
-                                underline: Container(),
-                                items: ['상관없음', '남성', '여성', '20대', '30대', '40대', '50대+'].map((String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(value),
-                                  );
-                                }).toList(),
-                                onChanged: (String? newValue) {
-                                  setState(() {
-                                    _selectedTarget = newValue!;
-                                  });
-                                },
-                              ),
+                            // 성별 드롭다운
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Gender', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: Colors.grey),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: DropdownButton<String>(
+                                          value: _selectedGender,
+                                          isExpanded: true,
+                                          underline: Container(),
+                                          items: ['상관없음', '남성', '여성'].map((String value) {
+                                            return DropdownMenuItem<String>(
+                                              value: value,
+                                              child: Text(value),
+                                            );
+                                          }).toList(),
+                                          onChanged: (String? newValue) {
+                                            setState(() {
+                                              _selectedGender = newValue!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Age Range', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: Colors.grey),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: DropdownButton<String>(
+                                          value: _selectedAgeRange,
+                                          isExpanded: true,
+                                          underline: Container(),
+                                          items: ['상관없음', '10대', '20대', '30대', '40대', '50대+'].map((String value) {
+                                            return DropdownMenuItem<String>(
+                                              value: value,
+                                              child: Text(value),
+                                            );
+                                          }).toList(),
+                                          onChanged: (String? newValue) {
+                                            setState(() {
+                                              _selectedAgeRange = newValue!;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 12),
                             
@@ -625,7 +770,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   @override
   void dispose() {
-    _contentController.dispose();
     _addressController.dispose();
     _priceController.dispose();
     _amountController.dispose();
