@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:ui' as ui;
-import 'dart:typed_data';
 import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -9,8 +7,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/location_service.dart';
 import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
-import 'package:geocoding/geocoding.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
@@ -53,7 +49,6 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late GoogleMapController mapController;
   LatLng? _currentPosition;
-  final String _googleApiKey = "YOUR_API_KEY";
   final GlobalKey mapWidgetKey = GlobalKey();
   LatLng? _longPressedLatLng;
   String? _mapStyle;
@@ -123,7 +118,7 @@ class _MapScreenState extends State<MapScreen> {
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(recorder);
       
-      final double targetSize = 48.0;
+      const double targetSize = 48.0;
       
       final double imageRatio = image.width / image.height;
       final double targetRatio = targetSize / targetSize;
@@ -451,9 +446,19 @@ class _MapScreenState extends State<MapScreen> {
       builder: (BuildContext context) {
         // 전단지 타입인지 확인
         final isPostPlace = item.data['type'] == 'post_place';
+        final isOwner = item.userId == FirebaseAuth.instance.currentUser?.uid;
         
         return AlertDialog(
-          title: Text(item.title),
+          title: Row(
+            children: [
+              Icon(
+                isPostPlace ? Icons.description : Icons.location_on,
+                color: Colors.blue,
+              ),
+              const SizedBox(width: 8),
+              Text(item.title),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,6 +489,36 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(height: 8),
                 Text('남은 수량: ${item.remainingAmount}개'),
               ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isOwner ? Colors.blue.shade50 : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isOwner ? Colors.blue : Colors.grey,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOwner ? Icons.person : Icons.people,
+                      color: isOwner ? Colors.blue : Colors.grey,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isOwner ? '내가 등록한 마커' : '다른 사용자 마커',
+                      style: TextStyle(
+                        color: isOwner ? Colors.blue : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           actions: [
@@ -492,8 +527,8 @@ class _MapScreenState extends State<MapScreen> {
               child: const Text('닫기'),
             ),
             if (isPostPlace) ...[
-              // 전단지 수령 버튼
-              if (item.data['canRequestReward'] == true)
+              // 전단지 수령 버튼 (소유자가 아닌 경우만)
+              if (item.data['canRequestReward'] == true && !isOwner)
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pop();
@@ -503,7 +538,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
             ] else ...[
               // 일반 마커 수령/회수 버튼
-              if (item.userId == FirebaseAuth.instance.currentUser?.uid)
+              if (isOwner)
                 // 마커 소유자만 회수 가능
                 TextButton(
                   onPressed: () {
@@ -672,7 +707,7 @@ class _MapScreenState extends State<MapScreen> {
       
       _processMarkersSnapshot(snapshot);
     } catch (e) {
-      print('마커 로드 오류: $e');
+      debugPrint('마커 로드 오류: $e');
     }
   }
 
@@ -693,6 +728,8 @@ class _MapScreenState extends State<MapScreen> {
       _markerItems.clear();
     });
     
+    debugPrint('마커 스냅샷 처리 중: ${snapshot.docs.length}개 마커');
+    
     for (final doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
       final geoPoint = data['position'] as GeoPoint;
@@ -701,6 +738,7 @@ class _MapScreenState extends State<MapScreen> {
       if (data['expiryDate'] != null) {
         final expiryDate = data['expiryDate'].toDate() as DateTime;
         if (DateTime.now().isAfter(expiryDate)) {
+          debugPrint('만료된 마커 제외: ${doc.id}');
           continue; // 만료된 마커는 건너뛰기
         }
       }
@@ -719,6 +757,7 @@ class _MapScreenState extends State<MapScreen> {
       );
       
       _markerItems.add(markerItem);
+      debugPrint('마커 로드됨: ${markerItem.title} at ${markerItem.position}');
     }
     
     _updateClustering();
@@ -751,7 +790,7 @@ class _MapScreenState extends State<MapScreen> {
         _updateClustering();
       }
     } catch (e) {
-      print('전단지 로드 오류: $e');
+      debugPrint('전단지 로드 오류: $e');
     }
   }
 
@@ -765,6 +804,8 @@ class _MapScreenState extends State<MapScreen> {
     
     // Firestore에 저장
     _saveMarkerToFirestore(markerItem);
+    
+    debugPrint('마커 추가됨: ${markerItem.title} at ${markerItem.position}');
   }
 
   Future<void> _saveMarkerToFirestore(MarkerItem markerItem) async {
@@ -799,9 +840,10 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
       
-      await FirebaseFirestore.instance.collection('markers').add(markerData);
+      final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
+      debugPrint('마커 Firebase 저장 완료: ${docRef.id}');
     } catch (e) {
-      print('마커 저장 오류: $e');
+      debugPrint('마커 저장 오류: $e');
     }
   }
 
@@ -999,13 +1041,23 @@ class _MapScreenState extends State<MapScreen> {
               expiryDate: flyer.expiresAt,
             );
             
-            // 마커 추가
+            // 마커 추가 (Firebase에 저장됨)
             _addMarkerToMap(markerItem);
             
             // 생성된 전단지 위치로 카메라 이동
             mapController.animateCamera(
               CameraUpdate.newLatLng(location),
             );
+            
+            // 성공 메시지
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('마커가 성공적으로 생성되었습니다!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
           }
         } catch (e) {
           if (mounted) {

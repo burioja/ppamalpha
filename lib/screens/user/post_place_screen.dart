@@ -260,9 +260,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       
       // 기간 계산
       int durationHours = int.tryParse(_periodController.text) ?? 24;
-      if (_selectedPeriodUnit == 'Day') durationHours *= 24;
-      else if (_selectedPeriodUnit == 'Week') durationHours *= 24 * 7;
-      else if (_selectedPeriodUnit == 'Month') durationHours *= 24 * 30;
+      if (_selectedPeriodUnit == 'Day') {
+        durationHours *= 24;
+      } else if (_selectedPeriodUnit == 'Week') {
+        durationHours *= 24 * 7;
+      } else if (_selectedPeriodUnit == 'Month') {
+        durationHours *= 24 * 30;
+      }
       
       final expiresAt = DateTime.now().add(Duration(hours: durationHours));
       
@@ -446,7 +450,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.2),
+                            color: Colors.grey.withValues(alpha: 0.2),
                             spreadRadius: 1,
                             blurRadius: 5,
                             offset: const Offset(0, -2),
