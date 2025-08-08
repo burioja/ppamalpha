@@ -66,6 +66,7 @@ class _MapScreenState extends State<MapScreen> {
   double _currentZoom = 15.0;
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
+  StreamSubscription<QuerySnapshot>? _markersListener;
 
   @override
   void initState() {
@@ -75,6 +76,14 @@ class _MapScreenState extends State<MapScreen> {
     _loadCustomMarker();
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
+    _setupRealtimeListeners();
+  }
+
+  @override
+  void dispose() {
+    // 실시간 리스너 정리
+    _markersListener?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadMapStyle() async {
@@ -493,14 +502,25 @@ class _MapScreenState extends State<MapScreen> {
                   child: const Text('수령'),
                 ),
             ] else ...[
-              // 일반 마커 수령 버튼
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _handleRecovery(item.id, item.data);
-                },
-                child: const Text('수령'),
-              ),
+              // 일반 마커 수령/회수 버튼
+              if (item.userId == FirebaseAuth.instance.currentUser?.uid)
+                // 마커 소유자만 회수 가능
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _handleMarkerCollection(item.id, item.data);
+                  },
+                  child: const Text('회수'),
+                )
+              else
+                // 다른 사용자는 수령 가능
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _handleRecovery(item.id, item.data);
+                  },
+                  child: const Text('수령'),
+                ),
             ],
           ],
         );
@@ -538,14 +558,6 @@ class _MapScreenState extends State<MapScreen> {
           'collectedAt': FieldValue.serverTimestamp(),
         });
         
-        // 마커 목록에서 제거
-        setState(() {
-          _markerItems.removeWhere((marker) => marker.id == markerId);
-        });
-        
-        // 클러스터링 업데이트
-        _updateClustering();
-        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -560,6 +572,40 @@ class _MapScreenState extends State<MapScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('마커 수령에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 마커 소유자가 회수하는 함수
+  void _handleMarkerCollection(String markerId, Map<String, dynamic> data) async {
+    try {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      
+      if (currentUserId != null) {
+        // Firebase에서 마커 상태 업데이트
+        await FirebaseFirestore.instance.collection('markers').doc(markerId).update({
+          'isActive': false, // 비활성화
+          'collectedBy': currentUserId,
+          'collectedAt': FieldValue.serverTimestamp(),
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('마커를 회수했습니다!'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('마커 회수에 실패했습니다: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -624,38 +670,58 @@ class _MapScreenState extends State<MapScreen> {
           .where('isCollected', isEqualTo: false)
           .get();
       
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final geoPoint = data['position'] as GeoPoint;
-        
-        // 만료된 마커는 제외
-        if (data['expiryDate'] != null) {
-          final expiryDate = data['expiryDate'].toDate() as DateTime;
-          if (DateTime.now().isAfter(expiryDate)) {
-            continue; // 만료된 마커는 건너뛰기
-          }
-        }
-        
-        final markerItem = MarkerItem(
-          id: doc.id,
-          title: data['title'] ?? '',
-          price: data['price']?.toString() ?? '0',
-          amount: data['amount']?.toString() ?? '0',
-          userId: data['userId'] ?? '',
-          data: data,
-          position: LatLng(geoPoint.latitude, geoPoint.longitude),
-          imageUrl: data['imageUrl'],
-          remainingAmount: data['remainingAmount'] ?? 0,
-          expiryDate: data['expiryDate']?.toDate(),
-        );
-        
-        _markerItems.add(markerItem);
-      }
-      
-      _updateClustering();
+      _processMarkersSnapshot(snapshot);
     } catch (e) {
       print('마커 로드 오류: $e');
     }
+  }
+
+  void _setupRealtimeListeners() {
+    // 실시간 마커 리스너 설정
+    _markersListener = FirebaseFirestore.instance
+        .collection('markers')
+        .where('isActive', isEqualTo: true)
+        .where('isCollected', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+          _processMarkersSnapshot(snapshot);
+        });
+  }
+
+  void _processMarkersSnapshot(QuerySnapshot snapshot) {
+    setState(() {
+      _markerItems.clear();
+    });
+    
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final geoPoint = data['position'] as GeoPoint;
+      
+      // 만료된 마커는 제외
+      if (data['expiryDate'] != null) {
+        final expiryDate = data['expiryDate'].toDate() as DateTime;
+        if (DateTime.now().isAfter(expiryDate)) {
+          continue; // 만료된 마커는 건너뛰기
+        }
+      }
+      
+      final markerItem = MarkerItem(
+        id: doc.id,
+        title: data['title'] ?? '',
+        price: data['price']?.toString() ?? '0',
+        amount: data['amount']?.toString() ?? '0',
+        userId: data['userId'] ?? '',
+        data: data,
+        position: LatLng(geoPoint.latitude, geoPoint.longitude),
+        imageUrl: data['imageUrl'],
+        remainingAmount: data['remainingAmount'] ?? 0,
+        expiryDate: data['expiryDate']?.toDate(),
+      );
+      
+      _markerItems.add(markerItem);
+    }
+    
+    _updateClustering();
   }
 
   Future<void> _loadPostsFromFirestore() async {
