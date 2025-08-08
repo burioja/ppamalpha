@@ -44,26 +44,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   void initState() {
     super.initState();
     
-    // 전달받은 인수 확인
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args != null) {
-        // 전달받은 위치와 주소 정보 설정
-        if (args['location'] != null) {
-          _selectedLocation = args['location'] as LatLng;
-        }
-        if (args['address'] != null) {
-          _currentAddress = args['address'] as String;
-          _addressController.text = _currentAddress!;
-        }
-      } else {
-        // 기본 위치로 초기화
-        _selectedLocation = _defaultLocation;
-        _currentAddress = '서울특별시 중구 세종대로 110';
-        _addressController.text = _currentAddress!;
-      }
-    });
-    
     // 기본값 설정
     _priceController.text = '1000';
     _amountController.text = '10';
@@ -74,10 +54,41 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 지도 스타일 로드
     _loadMapStyle();
     
-    // 전달받은 위치가 없을 때만 현재 위치 가져오기 시도
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // 전달받은 인수 확인 및 위치 설정
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args == null || args['location'] == null) {
+      if (args != null && args['location'] != null) {
+        // 전달받은 위치 정보 설정
+        final location = args['location'] as LatLng;
+        _selectedLocation = location;
+        
+        // 전달받은 주소가 있으면 사용, 없으면 위치에서 주소 가져오기
+        if (args['address'] != null) {
+          _currentAddress = args['address'] as String;
+          _addressController.text = _currentAddress!;
+        } else {
+          // 위치에서 주소 가져오기
+          try {
+            final address = await LocationService.getAddressFromCoordinates(
+              location.latitude,
+              location.longitude,
+            );
+            _currentAddress = address;
+            _addressController.text = address;
+          } catch (e) {
+            _currentAddress = '주소를 가져올 수 없습니다';
+            _addressController.text = _currentAddress!;
+          }
+        }
+        
+        setState(() {});
+      } else {
+        // 전달받은 위치가 없으면 기본 위치로 초기화
+        _selectedLocation = _defaultLocation;
+        _currentAddress = '서울특별시 중구 세종대로 110';
+        _addressController.text = _currentAddress!;
+        
+        // 현재 위치 가져오기 시도
         _getCurrentLocation();
       }
     });
