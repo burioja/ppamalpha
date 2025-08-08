@@ -261,6 +261,19 @@ class PostService {
     }
   }
 
+  // 전단지 ID로 조회 (MarkerItem 변환용)
+  Future<PostModel?> getFlyerById(String flyerId) async {
+    try {
+      final doc = await _firestore.collection('flyers').doc(flyerId).get();
+      if (doc.exists) {
+        return PostModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('전단지 조회 실패: $e');
+    }
+  }
+
   // 만료된 전단지 정리 (배치 작업용)
   Future<void> cleanupExpiredFlyers() async {
     try {

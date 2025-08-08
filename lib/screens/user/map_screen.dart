@@ -57,7 +57,6 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _longPressedLatLng;
   String? _mapStyle;
   BitmapDescriptor? _customMarkerIcon;
-  BitmapDescriptor? _postMarkerIcon;
   final Set<Marker> _markers = {};
   final userId = FirebaseAuth.instance.currentUser?.uid;
   final PostService _postService = PostService();
@@ -74,7 +73,6 @@ class _MapScreenState extends State<MapScreen> {
     _setInitialLocation();
     _loadMapStyle();
     _loadCustomMarker();
-    _loadPostMarker();
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
   }
@@ -158,63 +156,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _loadPostMarker() async {
-    try {
-      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
-      final Uint8List bytes = data.buffer.asUint8List();
-      
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ui.Image image = frameInfo.image;
-      
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(recorder);
-      
-      final double targetSize = 48.0;
-      final Rect rect = Rect.fromLTWH(0, 0, targetSize, targetSize);
-      
-      final double imageRatio = image.width / image.height;
-      final double targetRatio = targetSize / targetSize;
-      
-      double drawWidth = targetSize;
-      double drawHeight = targetSize;
-      double offsetX = 0;
-      double offsetY = 0;
-      
-      if (imageRatio > targetRatio) {
-        drawHeight = targetSize;
-        drawWidth = targetSize * imageRatio;
-        offsetX = (targetSize - drawWidth) / 2;
-      } else {
-        drawWidth = targetSize;
-        drawHeight = targetSize / imageRatio;
-        offsetY = (targetSize - drawHeight) / 2;
-      }
-      
-      canvas.drawImageRect(
-        image,
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
-        Paint(),
-      );
-      
-      final ui.Picture picture = recorder.endRecording();
-      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
-      final ByteData? resizedBytes = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (resizedBytes != null) {
-        final Uint8List resizedUint8List = resizedBytes.buffer.asUint8List();
-        setState(() {
-          _postMarkerIcon = BitmapDescriptor.fromBytes(resizedUint8List);
-        });
-      }
-    } catch (e) {
-      // 포스트 마커 로드 실패 시 기본 마커 사용
-      setState(() {
-        _postMarkerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-      });
-    }
-  }
+
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
@@ -451,13 +393,18 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Marker _createMarker(MarkerItem item) {
+    // 전단지 타입인지 확인
+    final isPostPlace = item.data['type'] == 'post_place';
+    
     return Marker(
       markerId: MarkerId(item.id),
       position: item.position,
       icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       infoWindow: InfoWindow(
         title: item.title,
-        snippet: '${item.price}원 - ${item.amount}개',
+        snippet: isPostPlace 
+            ? '${item.price}원 - ${item.data['creatorName'] ?? '알 수 없음'}'
+            : '${item.price}원 - ${item.amount}개',
       ),
       onTap: () => _showMarkerInfo(item),
     );
@@ -467,7 +414,7 @@ class _MapScreenState extends State<MapScreen> {
     return Marker(
       markerId: MarkerId(flyer.markerId),
       position: LatLng(flyer.location.latitude, flyer.location.longitude),
-      icon: _postMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       infoWindow: InfoWindow(
         title: flyer.title,
         snippet: '${flyer.reward}원 - ${flyer.creatorName}',
@@ -493,17 +440,41 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        // 전단지 타입인지 확인
+        final isPostPlace = item.data['type'] == 'post_place';
+        
         return AlertDialog(
           title: Text(item.title),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('가격: ${item.price}원'),
-              const SizedBox(height: 8),
-              Text('수량: ${item.amount}개'),
-              const SizedBox(height: 8),
-              Text('남은 수량: ${item.remainingAmount}개'),
+              if (isPostPlace) ...[
+                Text('발행자: ${item.data['creatorName'] ?? '알 수 없음'}'),
+                const SizedBox(height: 8),
+                Text('리워드: ${item.price}원'),
+                const SizedBox(height: 8),
+                if (item.data['description'] != null && item.data['description'].isNotEmpty)
+                  Text('설명: ${item.data['description']}'),
+                const SizedBox(height: 8),
+                if (item.data['targetGender'] != null)
+                  Text('타겟 성별: ${item.data['targetGender'] == 'all' ? '전체' : item.data['targetGender'] == 'male' ? '남성' : '여성'}'),
+                const SizedBox(height: 8),
+                if (item.data['targetAge'] != null)
+                  Text('타겟 나이: ${item.data['targetAge'][0]}~${item.data['targetAge'][1]}세'),
+                const SizedBox(height: 8),
+                if (item.data['address'] != null)
+                  Text('주소: ${item.data['address']}'),
+                const SizedBox(height: 8),
+                if (item.expiryDate != null)
+                  Text('만료일: ${_formatDate(item.expiryDate!)}'),
+              ] else ...[
+                Text('가격: ${item.price}원'),
+                const SizedBox(height: 8),
+                Text('수량: ${item.amount}개'),
+                const SizedBox(height: 8),
+                Text('남은 수량: ${item.remainingAmount}개'),
+              ],
             ],
           ),
           actions: [
@@ -511,13 +482,26 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('닫기'),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _handleRecovery(item.id, item.data);
-              },
-              child: const Text('수령'),
-            ),
+            if (isPostPlace) ...[
+              // 전단지 수령 버튼
+              if (item.data['canRequestReward'] == true)
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _handleFlyerRecovery(item);
+                  },
+                  child: const Text('수령'),
+                ),
+            ] else ...[
+              // 일반 마커 수령 버튼
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _handleRecovery(item.id, item.data);
+                },
+                child: const Text('수령'),
+              ),
+            ],
           ],
         );
       },
@@ -545,6 +529,48 @@ class _MapScreenState extends State<MapScreen> {
   void _handleRecovery(String markerId, Map<String, dynamic> data) {
     // 수령 로직 구현
     print('수령 처리: $markerId');
+  }
+
+  // 전단지 수령 처리
+  void _handleFlyerRecovery(MarkerItem item) async {
+    try {
+      final flyerId = item.data['flyerId'] as String;
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      
+      if (currentUserId != null) {
+        // PostService를 통해 전단지 수령
+        await _postService.collectFlyer(
+          flyerId: flyerId,
+          userId: currentUserId,
+        );
+        
+        // 마커 목록에서 제거
+        setState(() {
+          _markerItems.removeWhere((marker) => marker.id == item.id);
+        });
+        
+        // 클러스터링 업데이트
+        _updateClustering();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('전단지를 수령했습니다!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('전단지 수령에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadMarkersFromFirestore() async {
@@ -610,22 +636,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showMarkerSetupDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return MarkerSetupDialog(
-          position: _longPressedLatLng!,
-          onMarkerCreated: (MarkerItem markerItem) {
-            _addMarkerToMap(markerItem);
-            setState(() {
-              _longPressedLatLng = null;
-            });
-          },
-        );
-      },
-    );
-  }
+
 
   void _addMarkerToMap(MarkerItem markerItem) {
     setState(() {
@@ -654,10 +665,80 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _handleAddMarker() {
+  void _handleAddMarker() async {
     if (_longPressedLatLng != null) {
-      _showMarkerSetupDialog();
+      // 선택된 위치의 주소 가져오기
+      try {
+        final address = await LocationService.getAddressFromCoordinates(
+          _longPressedLatLng!.latitude,
+          _longPressedLatLng!.longitude,
+        );
+        
+        // 주소 확인 팝업 표시
+        _showAddressConfirmationDialog(address);
+      } catch (e) {
+        // 주소 가져오기 실패 시 기본 메시지로 진행
+        _showAddressConfirmationDialog('주소를 가져올 수 없습니다');
+      }
     }
+  }
+
+  void _showAddressConfirmationDialog(String address) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('주소 확인'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '이 주소가 맞습니까?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.blue, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.blue.shade50,
+                ),
+                child: Text(
+                  address,
+                  style: const TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  _longPressedLatLng = null;
+                });
+              },
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _navigateToPostPlaceWithAddress(address);
+              },
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildPopupWidget() {
@@ -707,32 +788,93 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _navigateToPostPlace() {
-    Navigator.pushNamed(context, '/post-place').then((result) {
-      // 전단지 생성 후 지도 새로고침
-      if (result != null && result is Map<String, dynamic>) {
-        // 새로 생성된 전단지 정보가 있으면 마커 새로고침
-        _loadPostsFromFirestore();
+  void _navigateToPostPlace() async {
+    final result = await Navigator.pushNamed(context, '/post-place');
+    _handlePostPlaceResult(result);
+  }
+
+  void _navigateToPostPlaceWithAddress(String address) async {
+    // 주소 정보와 함께 포스트 화면으로 이동
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-place',
+      arguments: {
+        'location': _longPressedLatLng,
+        'address': address,
+      },
+    );
+    _handlePostPlaceResult(result);
+  }
+
+  void _handlePostPlaceResult(dynamic result) {
+    // 전단지 생성 후 지도 새로고침
+    if (result != null && result is Map<String, dynamic>) {
+      // 새로 생성된 전단지 정보를 MarkerItem으로 변환
+      if (result['location'] != null && result['flyerId'] != null) {
+        final location = result['location'] as LatLng;
+        final flyerId = result['flyerId'] as String;
+        final address = result['address'] as String?;
         
-        // 생성된 전단지 위치로 카메라 이동
-        if (result['location'] != null) {
-          final location = result['location'] as LatLng;
-          mapController.animateCamera(
-            CameraUpdate.newLatLng(location),
-          );
-        }
-        
-        // 성공 메시지 표시
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('전단지가 생성되었습니다! 지도에 마커가 표시됩니다.'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        try {
+          // PostService에서 실제 전단지 정보 가져오기
+          final flyer = await _postService.getFlyerById(flyerId);
+          
+          if (flyer != null) {
+            // MarkerItem 생성 (실제 전단지 정보 사용)
+            final markerItem = MarkerItem(
+              id: flyerId,
+              title: flyer.title,
+              price: flyer.reward.toString(),
+              amount: '1', // 전단지는 개별 단위
+              userId: flyer.creatorId,
+              data: {
+                'address': address,
+                'flyerId': flyerId,
+                'type': 'post_place',
+                'creatorName': flyer.creatorName,
+                'description': flyer.description,
+                'targetGender': flyer.targetGender,
+                'targetAge': flyer.targetAge,
+                'canRespond': flyer.canRespond,
+                'canForward': flyer.canForward,
+                'canRequestReward': flyer.canRequestReward,
+                'canUse': flyer.canUse,
+              },
+              position: location,
+              remainingAmount: 1, // 전단지는 개별 단위
+              expiryDate: flyer.expiresAt,
+            );
+            
+            // 마커 추가
+            _addMarkerToMap(markerItem);
+            
+            // 생성된 전단지 위치로 카메라 이동
+            mapController.animateCamera(
+              CameraUpdate.newLatLng(location),
+            );
+            
+            // 성공 메시지 표시
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('전단지가 생성되었습니다! 지도에 마커가 표시됩니다.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('전단지 정보를 가져오는데 실패했습니다: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
-    });
+    }
   }
 
   void goToCurrentLocation() {
@@ -794,185 +936,4 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-class MarkerSetupDialog extends StatefulWidget {
-  final LatLng position;
-  final Function(MarkerItem) onMarkerCreated;
-
-  const MarkerSetupDialog({
-    Key? key,
-    required this.position,
-    required this.onMarkerCreated,
-  }) : super(key: key);
-
-  @override
-  _MarkerSetupDialogState createState() => _MarkerSetupDialogState();
-}
-
-class _MarkerSetupDialogState extends State<MarkerSetupDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _genderController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  
-  String _selectedGender = '남성';
-  final List<String> _genderOptions = ['남성', '여성', '기타'];
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _priceController.dispose();
-    _amountController.dispose();
-    _ageController.dispose();
-    _genderController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  void _createMarker() {
-    if (_formKey.currentState!.validate()) {
-      final markerItem = MarkerItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _titleController.text,
-        price: _priceController.text,
-        amount: _amountController.text,
-        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-        data: {
-          'age': _ageController.text,
-          'gender': _selectedGender,
-          'description': _descriptionController.text,
-        },
-        position: widget.position,
-        remainingAmount: int.parse(_amountController.text),
-        expiryDate: DateTime.now().add(const Duration(days: 7)),
-      );
-
-      widget.onMarkerCreated(markerItem);
-      Navigator.of(context).pop();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('마커 설정'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: '제목',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '제목을 입력해주세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(
-                  labelText: '가격 (원)',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '가격을 입력해주세요';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return '숫자를 입력해주세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _amountController,
-                decoration: const InputDecoration(
-                  labelText: '수량',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '수량을 입력해주세요';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return '숫자를 입력해주세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _ageController,
-                decoration: const InputDecoration(
-                  labelText: '나이',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '나이를 입력해주세요';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return '숫자를 입력해주세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedGender,
-                decoration: const InputDecoration(
-                  labelText: '성별',
-                  border: OutlineInputBorder(),
-                ),
-                items: _genderOptions.map((String gender) {
-                  return DropdownMenuItem<String>(
-                    value: gender,
-                    child: Text(gender),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedGender = newValue!;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: '설명 (선택사항)',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
-        ),
-        ElevatedButton(
-          onPressed: _createMarker,
-          child: const Text('마커 생성'),
-        ),
-      ],
-    );
-  }
-} 
+ 

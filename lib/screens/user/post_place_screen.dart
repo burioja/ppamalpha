@@ -44,10 +44,26 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   @override
   void initState() {
     super.initState();
-    // 기본 위치로 초기화
-    _selectedLocation = _defaultLocation;
-    _currentAddress = '서울특별시 중구 세종대로 110';
-    _addressController.text = _currentAddress!;
+    
+    // 전달받은 인수 확인
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        // 전달받은 위치와 주소 정보 설정
+        if (args['location'] != null) {
+          _selectedLocation = args['location'] as LatLng;
+        }
+        if (args['address'] != null) {
+          _currentAddress = args['address'] as String;
+          _addressController.text = _currentAddress!;
+        }
+      } else {
+        // 기본 위치로 초기화
+        _selectedLocation = _defaultLocation;
+        _currentAddress = '서울특별시 중구 세종대로 110';
+        _addressController.text = _currentAddress!;
+      }
+    });
     
     // 기본값 설정
     _priceController.text = '1000';
@@ -59,8 +75,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 지도 스타일 로드
     _loadMapStyle();
     
-    // 현재 위치 가져오기 시도
-    _getCurrentLocation();
+    // 전달받은 위치가 없을 때만 현재 위치 가져오기 시도
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args == null || args['location'] == null) {
+        _getCurrentLocation();
+      }
+    });
   }
 
   // 지도 스타일 로드
