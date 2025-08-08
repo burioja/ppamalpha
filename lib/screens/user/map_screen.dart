@@ -986,6 +986,7 @@ class _MapScreenState extends State<MapScreen> {
 
   void _navigateToPostPlace() async {
     // 롱프레스 위치 정보와 함께 포스트 화면으로 이동
+    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
     final result = await Navigator.pushNamed(
       context, 
       '/post-place',
