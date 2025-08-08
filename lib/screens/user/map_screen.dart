@@ -674,9 +674,19 @@ class _MapScreenState extends State<MapScreen> {
           _longPressedLatLng!.longitude,
         );
         
+        // 롱프레스 팝업 닫기
+        setState(() {
+          _longPressedLatLng = null;
+        });
+        
         // 주소 확인 팝업 표시
         _showAddressConfirmationDialog(address);
       } catch (e) {
+        // 롱프레스 팝업 닫기
+        setState(() {
+          _longPressedLatLng = null;
+        });
+        
         // 주소 가져오기 실패 시 기본 메시지로 진행
         _showAddressConfirmationDialog('주소를 가져올 수 없습니다');
       }
@@ -772,9 +782,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
             TextButton(
               onPressed: () {
-                setState(() {
-                  _longPressedLatLng = null;
-                });
                 _handleAddMarker();
               },
               child: const Text("주소로 뿌리기"),
