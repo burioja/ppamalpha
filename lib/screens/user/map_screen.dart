@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'dart:math';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -57,7 +58,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _longPressedLatLng;
   String? _mapStyle;
   BitmapDescriptor? _customMarkerIcon;
-  final Set<Marker> _markers = {};
+
   final userId = FirebaseAuth.instance.currentUser?.uid;
   final PostService _postService = PostService();
   
@@ -123,7 +124,6 @@ class _MapScreenState extends State<MapScreen> {
       final Canvas canvas = Canvas(recorder);
       
       final double targetSize = 48.0;
-      final Rect rect = Rect.fromLTWH(0, 0, targetSize, targetSize);
       
       final double imageRatio = image.width / image.height;
       final double targetRatio = targetSize / targetSize;
