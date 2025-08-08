@@ -56,11 +56,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     
     // 전달받은 인수 확인 및 위치 설정
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      debugPrint('initState - 인수 확인 시작');
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      debugPrint('initState - args: $args');
+      
       if (args != null && args['location'] != null) {
         // 전달받은 위치 정보 설정
         final location = args['location'] as LatLng;
-        _selectedLocation = location;
+        debugPrint('전달받은 위치 설정: ${location.latitude}, ${location.longitude}');
+        
+        setState(() {
+          _selectedLocation = location;
+        });
         
         // 전달받은 주소가 있으면 사용, 없으면 위치에서 주소 가져오기
         if (args['address'] != null) {
@@ -81,8 +88,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           }
         }
         
-        setState(() {});
+        debugPrint('initState - 위치 설정 완료: ${_selectedLocation?.latitude}, ${_selectedLocation?.longitude}');
       } else {
+        debugPrint('initState - 전달받은 위치 없음, 기본 위치 사용');
         // 전달받은 위치가 없으면 기본 위치로 초기화
         _selectedLocation = _defaultLocation;
         _currentAddress = '서울특별시 중구 세종대로 110';
@@ -122,10 +130,12 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    debugPrint('_getCurrentLocation() 호출됨');
     setState(() => _isLoading = true);
     try {
       final position = await LocationService.getCurrentPosition();
       if (position != null) {
+        debugPrint('현재 위치 가져옴: ${position.latitude}, ${position.longitude}');
         final address = await LocationService.getAddressFromCoordinates(
           position.latitude,
           position.longitude,
@@ -281,6 +291,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       
       final expiresAt = DateTime.now().add(Duration(hours: durationHours));
       
+      debugPrint('전단지 생성 시 사용할 위치: ${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}');
       final flyerId = await _postService.createFlyer(
         creatorId: currentUser.uid,
         creatorName: creatorName,
