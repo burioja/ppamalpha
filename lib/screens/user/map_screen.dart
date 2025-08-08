@@ -779,15 +779,7 @@ class _MapScreenState extends State<MapScreen> {
               },
               child: const Text("주소로 뿌리기"),
             ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-                _handleAddMarker();
-              },
-              child: const Text("주변 업소에 뿌리기"),
-            ),
+
             const Divider(height: 24),
             TextButton(
               onPressed: () {
