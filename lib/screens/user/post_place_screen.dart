@@ -289,10 +289,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('전단지가 성공적으로 생성되었습니다!')),
-        );
-        
         // 지도 화면으로 돌아가고 마커 새로고침
         Navigator.pop(context, {
           'flyerId': flyerId,
