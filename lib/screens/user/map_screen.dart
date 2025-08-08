@@ -762,15 +762,30 @@ class _MapScreenState extends State<MapScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextButton(
-              onPressed: () => _navigateToPostPlace(),
+              onPressed: () {
+                setState(() {
+                  _longPressedLatLng = null;
+                });
+                _navigateToPostPlace();
+              },
               child: const Text("이 위치에 뿌리기"),
             ),
             TextButton(
-              onPressed: _handleAddMarker,
+              onPressed: () {
+                setState(() {
+                  _longPressedLatLng = null;
+                });
+                _handleAddMarker();
+              },
               child: const Text("주소로 뿌리기"),
             ),
             TextButton(
-              onPressed: _handleAddMarker,
+              onPressed: () {
+                setState(() {
+                  _longPressedLatLng = null;
+                });
+                _handleAddMarker();
+              },
               child: const Text("주변 업소에 뿌리기"),
             ),
             const Divider(height: 24),
@@ -852,16 +867,6 @@ class _MapScreenState extends State<MapScreen> {
             mapController.animateCamera(
               CameraUpdate.newLatLng(location),
             );
-            
-            // 성공 메시지 표시
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('전단지가 생성되었습니다! 지도에 마커가 표시됩니다.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
           }
         } catch (e) {
           if (mounted) {
