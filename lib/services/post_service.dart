@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import '../models/post_model.dart';
 
 class PostService {
@@ -67,9 +68,9 @@ class PostService {
     try {
       // TODO: Meilisearch 클라이언트 구현
       // await meilisearchClient.index('flyers').addDocuments([flyer.toMeilisearch()]);
-      print('Meilisearch 인덱싱: ${flyer.flyerId}');
+      debugPrint('Meilisearch 인덱싱: ${flyer.flyerId}');
     } catch (e) {
-      print('Meilisearch 인덱싱 실패: $e');
+      debugPrint('Meilisearch 인덱싱 실패: $e');
     }
   }
 
@@ -207,9 +208,9 @@ class PostService {
     try {
       // TODO: Meilisearch 클라이언트 구현
       // await meilisearchClient.index('flyers').deleteDocument(flyerId);
-      print('Meilisearch에서 제거: $flyerId');
+      debugPrint('Meilisearch에서 제거: $flyerId');
     } catch (e) {
-      print('Meilisearch 제거 실패: $e');
+      debugPrint('Meilisearch 제거 실패: $e');
     }
   }
 
