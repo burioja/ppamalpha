@@ -39,6 +39,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   
   // 기본 위치 (서울 시청)
   static const LatLng _defaultLocation = LatLng(37.5665, 126.9780);
+  
+  // 전달받은 인수 저장
+  Map<String, dynamic>? _args;
 
   @override
   void initState() {
@@ -57,12 +60,12 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 전달받은 인수 확인 및 위치 설정
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       debugPrint('initState - 인수 확인 시작');
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      debugPrint('initState - args: $args');
+      _args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      debugPrint('initState - args: $_args');
       
-      if (args != null && args['location'] != null) {
+      if (_args != null && _args!['location'] != null) {
         // 전달받은 위치 정보 설정
-        final location = args['location'] as LatLng;
+        final location = _args!['location'] as LatLng;
         debugPrint('전달받은 위치 설정: ${location.latitude}, ${location.longitude}');
         
         setState(() {
@@ -70,8 +73,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         });
         
         // 전달받은 주소가 있으면 사용, 없으면 위치에서 주소 가져오기
-        if (args['address'] != null) {
-          _currentAddress = args['address'] as String;
+        if (_args!['address'] != null) {
+          _currentAddress = _args!['address'] as String;
           _addressController.text = _currentAddress!;
         } else {
           // 위치에서 주소 가져오기
@@ -374,7 +377,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                             scrollGesturesEnabled: true,
                             tiltGesturesEnabled: true,
                             rotateGesturesEnabled: true,
-                            onTap: _onMapTap,
+                            onTap: _args != null && _args!['location'] != null ? null : _onMapTap,
                             markers: _selectedLocation != null
                                 ? {
                                     Marker(
