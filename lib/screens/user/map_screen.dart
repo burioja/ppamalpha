@@ -806,7 +806,7 @@ class _MapScreenState extends State<MapScreen> {
     _handlePostPlaceResult(result);
   }
 
-  void _handlePostPlaceResult(dynamic result) {
+  void _handlePostPlaceResult(dynamic result) async {
     // 전단지 생성 후 지도 새로고침
     if (result != null && result is Map<String, dynamic>) {
       // 새로 생성된 전단지 정보를 MarkerItem으로 변환
