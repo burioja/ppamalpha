@@ -526,9 +526,45 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _handleRecovery(String markerId, Map<String, dynamic> data) {
-    // 수령 로직 구현
-    print('수령 처리: $markerId');
+  void _handleRecovery(String markerId, Map<String, dynamic> data) async {
+    try {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      
+      if (currentUserId != null) {
+        // Firebase에서 마커 상태 업데이트
+        await FirebaseFirestore.instance.collection('markers').doc(markerId).update({
+          'isCollected': true,
+          'collectedBy': currentUserId,
+          'collectedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // 마커 목록에서 제거
+        setState(() {
+          _markerItems.removeWhere((marker) => marker.id == markerId);
+        });
+        
+        // 클러스터링 업데이트
+        _updateClustering();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('마커를 수령했습니다!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('마커 수령에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // 전단지 수령 처리
@@ -543,6 +579,13 @@ class _MapScreenState extends State<MapScreen> {
           flyerId: flyerId,
           userId: currentUserId,
         );
+        
+        // Firebase에서 마커 상태 업데이트
+        await FirebaseFirestore.instance.collection('markers').doc(item.id).update({
+          'isCollected': true,
+          'collectedBy': currentUserId,
+          'collectedAt': FieldValue.serverTimestamp(),
+        });
         
         // 마커 목록에서 제거
         setState(() {
@@ -577,11 +620,21 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('markers')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
           .get();
       
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final geoPoint = data['position'] as GeoPoint;
+        
+        // 만료된 마커는 제외
+        if (data['expiryDate'] != null) {
+          final expiryDate = data['expiryDate'].toDate() as DateTime;
+          if (DateTime.now().isAfter(expiryDate)) {
+            continue; // 만료된 마커는 건너뛰기
+          }
+        }
         
         final markerItem = MarkerItem(
           id: doc.id,
@@ -650,7 +703,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _saveMarkerToFirestore(MarkerItem markerItem) async {
     try {
-      await FirebaseFirestore.instance.collection('markers').add({
+      final markerData = {
         'title': markerItem.title,
         'price': int.parse(markerItem.price),
         'amount': int.parse(markerItem.amount),
@@ -659,7 +712,28 @@ class _MapScreenState extends State<MapScreen> {
         'remainingAmount': markerItem.remainingAmount,
         'createdAt': FieldValue.serverTimestamp(),
         'expiryDate': markerItem.expiryDate,
-      });
+        'isActive': true, // 활성 상태
+        'isCollected': false, // 회수되지 않음
+      };
+      
+      // 전단지 타입인 경우 추가 정보 저장
+      if (markerItem.data['type'] == 'post_place') {
+        markerData.addAll({
+          'type': 'post_place',
+          'flyerId': markerItem.data['flyerId'],
+          'creatorName': markerItem.data['creatorName'],
+          'description': markerItem.data['description'],
+          'targetGender': markerItem.data['targetGender'],
+          'targetAge': markerItem.data['targetAge'],
+          'canRespond': markerItem.data['canRespond'],
+          'canForward': markerItem.data['canForward'],
+          'canRequestReward': markerItem.data['canRequestReward'],
+          'canUse': markerItem.data['canUse'],
+          'address': markerItem.data['address'],
+        });
+      }
+      
+      await FirebaseFirestore.instance.collection('markers').add(markerData);
     } catch (e) {
       print('마커 저장 오류: $e');
     }
