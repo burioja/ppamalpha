@@ -985,7 +985,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _navigateToPostPlace() async {
-    final result = await Navigator.pushNamed(context, '/post-place');
+    // 롱프레스 위치 정보와 함께 포스트 화면으로 이동
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-place',
+      arguments: {
+        'location': _longPressedLatLng,
+        'address': null,
+      },
+    );
     _handlePostPlaceResult(result);
   }
 
@@ -1049,15 +1057,7 @@ class _MapScreenState extends State<MapScreen> {
               CameraUpdate.newLatLng(location),
             );
             
-            // 성공 메시지
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('마커가 성공적으로 생성되었습니다!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
+
           }
         } catch (e) {
           if (mounted) {
