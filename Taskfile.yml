@@ -1,0 +1,41 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  default:
+    desc: 기본 태스크 - 인사말 출력
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+  
+  build:
+    desc: Flutter 앱 빌드
+    cmds:
+      - echo "Flutter 앱을 빌드합니다..."
+      - flutter build apk
+    silent: true
+  
+  test:
+    desc: Flutter 테스트 실행
+    cmds:
+      - echo "테스트를 실행합니다..."
+      - flutter test
+    silent: true
+  
+  run:
+    desc: Flutter 개발 서버 실행
+    cmds:
+      - echo "개발 서버를 실행합니다..."
+      - flutter run
+    silent: true
+  
+  clean:
+    desc: 빌드 파일 정리
+    cmds:
+      - echo "빌드 파일을 정리합니다..."
+      - flutter clean
+    silent: true
