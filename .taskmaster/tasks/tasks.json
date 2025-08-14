@@ -1,0 +1,1158 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Flutter 프로젝트 초기 설정 및 기본 구조 구축",
+        "description": "Flutter 프로젝트를 생성하고 Firebase 연동을 위한 기본 설정을 완료합니다. 프로젝트 구조와 디자인 시스템을 구축합니다.",
+        "details": "1. Flutter 프로젝트 생성\n2. Firebase 프로젝트 생성 및 연동 (Auth, Firestore, Storage, Functions)\n3. 기본 디자인 시스템 구축 (색상, 폰트, 테마 등)\n4. 기본 네비게이션 구조 설정 (BottomNavigationBar 포함)\n5. 필요한 패키지 설치 (google_maps_flutter, firebase_core, firebase_auth, cloud_firestore, firebase_storage 등)\n6. 환경 설정 파일 구성 (개발/테스트/프로덕션)\n7. 기본 폴더 구조 설정 (screens, widgets, models, services, utils 등)",
+        "testStrategy": "1. 프로젝트 빌드 및 실행 테스트\n2. Firebase 연동 테스트\n3. 기본 네비게이션 동작 확인\n4. 개발/테스트/프로덕션 환경 전환 테스트",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Flutter 프로젝트 생성 및 개발 환경 구축",
+            "description": "Flutter SDK 설치, 개발 IDE(예: VSCode, Android Studio) 설정, 플러그인 설치, 새 Flutter 프로젝트 생성 및 기본 빌드 테스트를 수행합니다.",
+            "dependencies": [],
+            "details": "• Flutter SDK 및 환경변수 등록\n• IDE(Visual Studio Code 또는 Android Studio) 플러그인 설치\n• 새 Flutter 프로젝트 생성 및 초기 빌드 실행\n• 프로젝트 폴더 구조 확인",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Firebase 프로젝트 생성 및 Flutter 연동",
+            "description": "Firebase 콘솔에서 프로젝트를 생성하고, Flutter 앱과 연동하여 Auth, Firestore, Storage, Functions의 초기 설정을 완료합니다.",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "• Firebase 콘솔에서 새 프로젝트 생성\n• Android/iOS 앱 등록 및 google-services 파일 연동\n• firebase_core, firebase_auth, cloud_firestore, firebase_storage 등 패키지 설치\n• 각 서비스별 초기화 및 연동 테스트",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "기본 디자인 시스템 구축",
+            "description": "프로젝트 전반에 사용할 색상, 폰트, 테마 등 디자인 시스템을 정의하고 적용합니다.",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "• 색상 팔레트 및 폰트 스타일 정의\n• ThemeData 및 커스텀 테마 적용\n• 디자인 시스템 문서화 및 샘플 위젯 구현",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "기본 네비게이션 구조 설정",
+            "description": "BottomNavigationBar를 포함한 앱의 기본 네비게이션 구조를 설계 및 구현합니다.",
+            "dependencies": [
+              "1.1",
+              "1.3"
+            ],
+            "details": "• BottomNavigationBar 및 주요 화면 라우팅 구조 설계\n• 각 탭별 기본 화면 연결\n• 네비게이션 동작 테스트",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "필수 패키지 설치 및 초기 세팅",
+            "description": "google_maps_flutter, firebase_core 등 프로젝트에 필요한 주요 패키지를 설치하고, 각 패키지의 초기 설정을 완료합니다.",
+            "dependencies": [
+              "1.1",
+              "1.2"
+            ],
+            "details": "• pubspec.yaml에 패키지 추가 및 설치\n• 각 패키지의 기본 사용 예제 코드 작성 및 정상 동작 확인",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "환경 설정 파일 구성",
+            "description": "개발, 테스트, 프로덕션 환경별 환경 변수 및 설정 파일을 구성합니다.",
+            "dependencies": [
+              "1.1",
+              "1.2"
+            ],
+            "details": "• .env 또는 환경별 config 파일 작성\n• 환경별 빌드 및 실행 테스트\n• 민감 정보 관리 및 보안 체크리스트 작성",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "기본 폴더 구조 설계 및 생성",
+            "description": "screens, widgets, models, services, utils 등 표준 폴더 구조를 설계하고 실제 프로젝트에 반영합니다.",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "• 폴더 구조 설계안 작성\n• 실제 폴더 및 샘플 파일 생성\n• 구조적 일관성 및 확장성 검토",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "사용자 인증 시스템 구현",
+        "description": "Firebase Auth를 활용한 로그인, 회원가입, 비밀번호 재설정 등 사용자 인증 시스템을 구현합니다.",
+        "details": "1. Firebase Auth 설정 완료\n2. 로그인 화면 구현 (이메일/비밀번호, 소셜 로그인)\n3. 회원가입 화면 구현 (필수 정보 입력, 약관 동의)\n4. 비밀번호 재설정 기능 구현\n5. 인증 상태 관리 서비스 구현 (AuthService)\n6. 사용자 프로필 정보 Firestore 연동\n7. 로그인 상태 유지 기능 구현\n8. 인증 관련 에러 처리 및 사용자 피드백 구현",
+        "testStrategy": "1. 회원가입 프로세스 테스트\n2. 로그인/로그아웃 기능 테스트\n3. 비밀번호 재설정 프로세스 테스트\n4. 소셜 로그인 연동 테스트\n5. 인증 상태 유지 테스트\n6. 에러 상황 시뮬레이션 및 피드백 확인",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "로그인 화면 UI/UX 설계 및 구현",
+            "description": "이메일/비밀번호 및 소셜 로그인을 위한 로그인 화면의 UI/UX를 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "화면 설계, 입력 폼, 소셜 로그인 버튼, 사용자 경험(UX) 요소 포함. 디자인 시스템과 일관성 유지.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "로그인 서비스 로직 구현",
+            "description": "Firebase Auth를 활용한 이메일/비밀번호 및 소셜 로그인 서비스 로직을 구현합니다.",
+            "dependencies": [
+              "2.1"
+            ],
+            "details": "signInWithEmailAndPassword, signInWithPopup 등 Firebase Auth 메서드 적용. 로그인 성공/실패 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "회원가입 화면 UI/UX 설계 및 구현",
+            "description": "필수 정보 입력, 약관 동의 등 회원가입 화면의 UI/UX를 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "입력 폼, 약관 동의 체크박스, 에러 메시지 등 포함. 사용자 친화적 인터페이스 설계.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "회원가입 서비스 로직 구현",
+            "description": "Firebase Auth를 활용한 회원가입 서비스 로직을 구현합니다.",
+            "dependencies": [
+              "2.3"
+            ],
+            "details": "createUserWithEmailAndPassword 등 Firebase Auth 메서드 적용. 회원가입 성공/실패 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "비밀번호 재설정 UI/UX 및 서비스 로직 구현",
+            "description": "비밀번호 재설정 화면 UI/UX 설계 및 Firebase Auth 기반 재설정 로직을 구현합니다.",
+            "dependencies": [],
+            "details": "비밀번호 재설정 요청 폼, 이메일 전송 안내, Firebase의 sendPasswordResetEmail 메서드 적용.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "인증 상태 관리 서비스(AuthService) 구현",
+            "description": "로그인/로그아웃, 인증 상태 변화 감지 등 인증 상태 관리 로직을 서비스 계층으로 구현합니다.",
+            "dependencies": [
+              "2.2",
+              "2.4",
+              "2.5"
+            ],
+            "details": "onAuthStateChanged 등 Firebase Auth 리스너 활용. 인증 상태에 따른 UI/서비스 동기화.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "사용자 프로필 정보 Firestore 연동",
+            "description": "회원가입 및 로그인 시 사용자 프로필 정보를 Firestore와 연동합니다.",
+            "dependencies": [
+              "2.4",
+              "2.6"
+            ],
+            "details": "Firestore에 사용자 정보 저장/조회 로직 구현. 프로필 정보 업데이트 기능 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "인증 관련 에러 처리 및 사용자 피드백 구현",
+            "description": "인증 과정에서 발생하는 에러를 처리하고, 사용자에게 적절한 피드백을 제공합니다.",
+            "dependencies": [
+              "2.2",
+              "2.4",
+              "2.5"
+            ],
+            "details": "에러 코드별 메시지 매핑, UI 내 피드백 표시, 예외 상황 테스트 및 UX 개선.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "지도 기반 메인 화면 구현",
+        "description": "Google Maps API를 활용하여 지도 중심의 메인 화면을 구현하고, 마커 표시 및 위치 기반 기능을 개발합니다.",
+        "details": "1. Google Maps Flutter 패키지 통합\n2. 지도 초기화 및 기본 설정 (줌 레벨, 스타일 등)\n3. 사용자 현재 위치 표시 및 권한 요청 구현\n4. 마커 렌더링 시스템 구현 (커스텀 마커 디자인 포함)\n5. 마커 클러스터링 구현 (많은 마커 처리)\n6. 지도 이동 및 줌 이벤트 처리\n7. '내 위치 이동' 버튼 구현\n8. '이 위치에 뿌리기' 버튼 구현 및 광고 등록 화면 연결\n9. 마커 클릭 시 팝업 및 상세 화면 연결",
+        "testStrategy": "1. 지도 로딩 성능 테스트 (3초 이내)\n2. 위치 권한 요청 및 처리 테스트\n3. 다양한 밀도의 마커 렌더링 테스트\n4. 마커 클릭 및 팝업 표시 테스트\n5. 위치 이동 버튼 기능 테스트\n6. 다양한 기기 및 화면 크기에서의 UI 테스트",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Google Maps Flutter 패키지 및 API 키 통합",
+            "description": "Flutter 프로젝트에 google_maps_flutter 패키지를 설치하고, Google Cloud에서 발급받은 API 키를 Android/iOS에 연동합니다.",
+            "dependencies": [],
+            "details": "pubspec.yaml에 google_maps_flutter 추가, AndroidManifest.xml/Info.plist에 API 키 등록, 플랫폼별 초기 설정 분리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "지도 위젯 UI 및 초기화 로직 구현",
+            "description": "GoogleMap 위젯을 메인 화면에 배치하고, 초기 카메라 위치, 줌 레벨, 지도 스타일 등 기본 설정을 적용합니다.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "UI 레이어에서 지도 위젯 배치, 비즈니스 로직에서 초기 위치/스타일/타입 등 설정 분리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "위치 권한 요청 및 사용자 현재 위치 표시",
+            "description": "위치 권한 요청 플로우 구현 및 권한 승인 시 현재 위치를 지도에 표시합니다.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "permission_handler/geolocator 등 권한 처리 로직과 위치 표시 UI 분리, 권한 거부/허용 분기 처리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "마커 렌더링 시스템 및 커스텀 마커 디자인",
+            "description": "지도에 마커를 표시하는 시스템을 구현하고, 커스텀 마커 디자인을 적용합니다.",
+            "dependencies": [
+              "3.2"
+            ],
+            "details": "마커 데이터 관리 비즈니스 로직과 마커 UI(커스텀 아이콘 등) 분리, 마커 추가/삭제/갱신 처리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "마커 클러스터링 기능 구현",
+            "description": "많은 마커가 있을 때 클러스터링 처리하여 지도 성능과 가독성을 높입니다.",
+            "dependencies": [
+              "3.4"
+            ],
+            "details": "클러스터링 알고리즘 로직과 클러스터 UI(집합 마커) 분리, 마커 데이터 변화 시 클러스터 갱신",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "지도 이동 및 줌 이벤트 처리",
+            "description": "지도 이동, 확대/축소 등 사용자 제스처 이벤트를 감지하고, 관련 비즈니스 로직을 처리합니다.",
+            "dependencies": [
+              "3.2"
+            ],
+            "details": "지도 UI 이벤트 리스너와 이벤트별 데이터 갱신 로직 분리, 지도 상태 관리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "'내 위치 이동' 버튼 UI 및 이동 로직 구현",
+            "description": "내 위치로 이동하는 버튼 UI를 구현하고, 클릭 시 지도 카메라를 현재 위치로 이동시킵니다.",
+            "dependencies": [
+              "3.3",
+              "3.6"
+            ],
+            "details": "버튼 UI와 위치 이동 비즈니스 로직 분리, 위치 권한 미승인 시 예외 처리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "'이 위치에 뿌리기' 버튼 및 광고 등록 화면 연결",
+            "description": "지도상 특정 위치에서 '이 위치에 뿌리기' 버튼을 구현하고, 클릭 시 광고 등록 화면으로 이동합니다.",
+            "dependencies": [
+              "3.2"
+            ],
+            "details": "버튼 UI와 광고 등록 화면 네비게이션 로직 분리, 위치 정보 전달 처리",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "마커 클릭 시 팝업 및 상세 화면 연결",
+            "description": "마커 클릭 시 팝업 UI를 띄우고, 상세 화면으로 이동하는 기능을 구현합니다.",
+            "dependencies": [
+              "3.4"
+            ],
+            "details": "마커 클릭 이벤트 UI와 상세 화면 네비게이션 로직 분리, 팝업 내 정보 표시 구조화",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Firestore 데이터 모델 및 서비스 구현",
+        "description": "PRD에 정의된 데이터 구조에 따라 Firestore 데이터베이스 모델과 CRUD 서비스를 구현합니다.",
+        "details": "1. Firestore 컬렉션 구조 설계 및 구현 (users, posts, places, rewards, walletTransactions)\n2. 각 모델 클래스 구현 (User, Post, Place, Reward, WalletTransaction)\n3. 모델 간 관계 및 참조 구현\n4. CRUD 서비스 구현 (UserService, PostService, PlaceService, RewardService, WalletService)\n5. 데이터 유효성 검증 로직 구현\n6. 보안 규칙 설정 (Firestore Rules)\n7. 인덱싱 설정 (쿼리 최적화)\n8. 데이터 마이그레이션 유틸리티 구현 (필요시)",
+        "testStrategy": "1. 각 모델 CRUD 작업 단위 테스트\n2. 데이터 유효성 검증 테스트\n3. 보안 규칙 테스트 (권한에 따른 접근 제어)\n4. 쿼리 성능 테스트\n5. 대량 데이터 처리 테스트\n6. 오프라인 동작 테스트",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Firestore 컬렉션 구조 설계 및 구현",
+            "description": "PRD에 정의된 데이터 구조에 따라 users, posts, places, rewards, walletTransactions 컬렉션의 계층적 구조와 하위 컬렉션을 설계하고 Firestore에 생성합니다.",
+            "dependencies": [],
+            "details": "각 컬렉션의 필수 필드, 하위 컬렉션, 인덱싱 필요성 등을 문서화하고, 실제 Firestore 콘솔 또는 코드로 컬렉션 구조를 생성합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "각 모델 클래스 구현",
+            "description": "User, Post, Place, Reward, WalletTransaction 등 각 데이터 모델에 대한 클래스(또는 데이터 구조체)를 구현합니다.",
+            "dependencies": [
+              "4.1"
+            ],
+            "details": "각 모델의 필드, 타입, 기본 생성자, from/toJson 메서드 등 직렬화/역직렬화 로직을 포함합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "모델 간 관계 및 참조 구현",
+            "description": "모델 간의 참조(Reference) 및 관계(예: 사용자-포스트, 포스트-장소 등)를 Firestore 문서 구조와 코드에 반영합니다.",
+            "dependencies": [
+              "4.2"
+            ],
+            "details": "Reference 필드, 하위 컬렉션, DocumentReference 타입 활용 등 Firestore의 관계 표현 방식을 적용합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "CRUD 서비스 구현",
+            "description": "UserService, PostService, PlaceService, RewardService, WalletService 등 각 모델별 CRUD(생성, 조회, 수정, 삭제) 서비스 클래스를 구현합니다.",
+            "dependencies": [
+              "4.3"
+            ],
+            "details": "Firestore 쿼리, 문서 생성/수정/삭제, 컬렉션 리스닝, 트랜잭션 처리 등 Firestore API를 활용한 서비스 메서드를 작성합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "데이터 유효성 검증 로직 구현",
+            "description": "각 모델 및 서비스에서 입력 데이터의 유효성을 검증하는 로직을 구현합니다.",
+            "dependencies": [
+              "4.4"
+            ],
+            "details": "필수 필드 체크, 타입 검증, 값의 범위 및 포맷 검증, 중복 데이터 방지 등 유효성 검사 메서드를 작성합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Firestore 보안 규칙 설정",
+            "description": "데이터 접근 제어를 위한 Firestore Rules를 설계하고 적용합니다.",
+            "dependencies": [
+              "4.5"
+            ],
+            "details": "각 컬렉션/문서별 읽기, 쓰기, 업데이트, 삭제 권한을 정의하고, 인증/권한 기반 접근 제어를 구현합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "인덱싱 및 쿼리 최적화 설정",
+            "description": "복잡한 쿼리 및 성능 향상을 위한 Firestore 인덱스 설정을 구성합니다.",
+            "dependencies": [
+              "4.6"
+            ],
+            "details": "복합 인덱스, 단일 필드 인덱스, 인덱스 예외 처리 등 쿼리 패턴에 맞는 인덱스를 Firestore 콘솔 또는 index 파일로 정의합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "데이터 마이그레이션 및 테스트 코드 작성",
+            "description": "기존 데이터 구조 변경 시 마이그레이션 유틸리티를 구현하고, 전체 데이터 모델 및 서비스에 대한 단위/통합 테스트 코드를 작성합니다.",
+            "dependencies": [
+              "4.7"
+            ],
+            "details": "마이그레이션 스크립트, CRUD 및 유효성 검증 테스트, 보안 규칙 테스트, 쿼리 성능 테스트 등 테스트 케이스를 작성하고 자동화합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "광고 등록 및 관리 기능 구현",
+        "description": "광고주가 전단지 이미지를 업로드하고, 위치 설정, 타겟 조건 입력, 수량 및 단가 설정 등 광고 등록 및 관리 기능을 구현합니다.",
+        "details": "1. 광고 등록 화면 UI 구현\n2. 이미지 업로드 기능 구현 (Firebase Storage 연동)\n3. 위치 선택 지도 컴포넌트 구현 (주소 검색 포함)\n4. 타겟 조건 설정 UI 구현 (성별, 나이, 관심사 등)\n5. 수량 및 단가 설정 UI 구현\n6. 템플릿 저장 및 불러오기 기능 구현\n7. 광고 등록 프로세스 구현 (Firestore 연동)\n8. 광고 수정 및 삭제 기능 구현\n9. 광고 회수 기능 구현 (수동/자동)\n10. 광고 상태 관리 (활성/비활성/만료 등)",
+        "testStrategy": "1. 이미지 업로드 성능 및 용량 테스트\n2. 위치 선택 정확도 테스트\n3. 타겟 조건 설정 유효성 테스트\n4. 광고 등록 프로세스 E2E 테스트\n5. 템플릿 저장/불러오기 기능 테스트\n6. 광고 수정/삭제/회수 기능 테스트\n7. 다양한 네트워크 환경에서의 동작 테스트",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "광고 등록 화면 UI 설계 및 구현",
+            "description": "광고 등록을 위한 입력 폼, 안내 메시지, 단계별 진행 UI 등 전체적인 광고 등록 화면을 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "입력 필드별 유효성 검사(필수값, 형식 등) 및 사용자 입력 오류에 대한 실시간 피드백 기능 포함. UI/UX 테스트 및 접근성 고려.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "전단지 이미지 업로드 기능 구현",
+            "description": "Firebase Storage와 연동하여 전단지 이미지를 업로드하고, 업로드 상태 및 오류를 처리합니다.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "이미지 파일 형식/용량 제한, 업로드 실패 시 재시도 및 사용자 알림, 업로드 완료 후 미리보기 제공.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "위치 선택 지도 컴포넌트 구현",
+            "description": "주소 검색 및 지도 기반 위치 선택 기능을 구현합니다.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "주소 입력 자동완성, 지도에서 위치 지정, 위치 정보 유효성 검사 및 예외 처리(잘못된 주소, 위치 미선택 등).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "타겟 조건 설정 UI 및 로직 구현",
+            "description": "성별, 나이, 관심사 등 타겟 조건 입력 UI와 데이터 유효성 검증 로직을 구현합니다.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "조건별 입력값 범위/형식 체크, 필수 조건 누락 시 경고, 조건별 예외 처리(예: 나이 범위 오류 등).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "수량 및 단가 설정 UI 구현",
+            "description": "광고 수량, 단가 입력 UI와 입력값 검증 및 예외 처리 로직을 구현합니다.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "최소/최대 수량, 단가 범위 제한, 숫자 입력 오류 처리, 실시간 합계 계산 및 표시.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "광고 템플릿 저장 및 불러오기 기능 구현",
+            "description": "자주 사용하는 광고 등록 정보를 템플릿으로 저장하고 불러오는 기능을 구현합니다.",
+            "dependencies": [
+              "5.1",
+              "5.2",
+              "5.3",
+              "5.4",
+              "5.5"
+            ],
+            "details": "템플릿 저장 시 입력값 유효성 검사, 템플릿 목록 관리, 불러오기 시 데이터 매핑 및 예외 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "광고 등록 프로세스 및 Firestore 연동",
+            "description": "입력된 광고 정보를 Firestore에 저장하고, 등록 프로세스 전체 흐름을 구현합니다.",
+            "dependencies": [
+              "5.2",
+              "5.3",
+              "5.4",
+              "5.5"
+            ],
+            "details": "모든 입력값 최종 검증, Firestore 저장 실패/성공 처리, 중복 등록 방지, 트랜잭션 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "광고 수정 및 삭제 기능 구현",
+            "description": "등록된 광고의 정보 수정 및 삭제 기능을 구현하고, 관련 예외 상황을 처리합니다.",
+            "dependencies": [
+              "5.7"
+            ],
+            "details": "수정 시 기존 데이터 불러오기, 입력값 재검증, 삭제 시 사용자 확인 및 복구 불가 안내, 삭제 실패 예외 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "광고 회수 기능(수동/자동) 구현",
+            "description": "광고주가 직접 광고를 회수하거나, 만료 조건에 따라 자동 회수되는 기능을 구현합니다.",
+            "dependencies": [
+              "5.7",
+              "5.8"
+            ],
+            "details": "회수 조건(기간, 수량 소진 등) 설정, 회수 시 상태 변경 및 사용자 알림, 회수 실패 예외 처리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 10,
+            "title": "광고 상태 관리(활성/비활성/만료 등) 및 모니터링",
+            "description": "광고의 상태(활성, 비활성, 만료 등)를 관리하고, 상태 변경 로직 및 모니터링 기능을 구현합니다.",
+            "dependencies": [
+              "5.7",
+              "5.9"
+            ],
+            "details": "상태 변경 트리거(시간, 수량, 회수 등), 상태별 UI 표시, 상태 변경 실패 예외 처리 및 로그 기록.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "광고 수령 및 리워드 지급 시스템 구현",
+        "description": "사용자가 위치 기반으로 광고를 수령하고 리워드를 받는 핵심 기능을 구현합니다.",
+        "details": "1. 위치 기반 마커 수령 가능 여부 확인 로직 구현\n2. GPS 위치 인증 시스템 구현 (위조 방지 로직 포함)\n3. 광고 수령 프로세스 구현 (Firebase Functions 연동)\n4. 리워드 자동 지급 시스템 구현\n5. 수령 이력 관리 및 중복 수령 방지 로직\n6. 광고 수령 후 상세 화면 구현\n7. 리워드 지급 알림 구현\n8. 트랜잭션 기록 및 관리 시스템 구현\n9. 에러 처리 및 복구 메커니즘 구현",
+        "testStrategy": "1. GPS 위치 인증 정확도 테스트\n2. 위치 인증 응답 시간 테스트 (2초 이내)\n3. 리워드 지급 정확성 테스트\n4. 중복 수령 방지 테스트\n5. 네트워크 오류 시 복구 테스트\n6. 대량 동시 수령 시나리오 테스트\n7. GPS 위조 시도 탐지 테스트",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "위치 기반 마커 수령 가능 여부 확인 로직 구현",
+            "description": "사용자의 현재 위치와 광고 마커의 위치를 비교하여 수령 가능 여부를 판단하는 로직을 구현합니다.",
+            "dependencies": [],
+            "details": "GPS 좌표 비교, 거리 계산, 지오펜싱 적용 등 위치 기반 수령 조건을 코드로 구현합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "GPS 위치 인증 및 위조 방지 시스템 구현",
+            "description": "GPS 신호의 진위 여부를 검증하고, 위치 위조(스푸핑) 시도를 탐지 및 차단하는 인증 시스템을 개발합니다.",
+            "dependencies": [
+              "6.1"
+            ],
+            "details": "GPS 신호 무결성 체크, 위조 탐지 알고리즘, 서버-클라이언트 인증 로직을 포함합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "광고 수령 프로세스 및 Firebase Functions 연동",
+            "description": "광고 수령 요청을 처리하고, Firebase Functions와 연동하여 서버 측 비즈니스 로직을 구현합니다.",
+            "dependencies": [
+              "6.2"
+            ],
+            "details": "수령 요청 트리거, 서버 검증, 광고 데이터 업데이트, 비동기 처리 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "리워드 자동 지급 시스템 구현",
+            "description": "광고 수령 성공 시 리워드를 자동으로 지급하는 시스템을 구현합니다.",
+            "dependencies": [
+              "6.3"
+            ],
+            "details": "리워드 지급 조건 검증, 지급 트랜잭션 생성, 사용자 월렛 연동 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "수령 이력 관리 및 중복 수령 방지 로직 구현",
+            "description": "사용자의 광고 수령 이력을 관리하고, 동일 광고의 중복 수령을 방지하는 로직을 개발합니다.",
+            "dependencies": [
+              "6.4"
+            ],
+            "details": "이력 저장, 중복 체크, 데이터베이스 트랜잭션 처리 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "광고 수령 후 상세 화면 구현",
+            "description": "광고 수령 완료 후 사용자에게 상세 정보를 제공하는 UI/UX 화면을 구현합니다.",
+            "dependencies": [
+              "6.5"
+            ],
+            "details": "수령 내역, 리워드 정보, 광고 상세 설명 등 표시.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "리워드 지급 알림 시스템 구현",
+            "description": "리워드 지급 결과를 사용자에게 실시간으로 알림(푸시/인앱)하는 시스템을 개발합니다.",
+            "dependencies": [
+              "6.4"
+            ],
+            "details": "Firebase Cloud Messaging, 인앱 알림, 알림 이력 관리 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "트랜잭션 기록 및 관리 시스템 구현",
+            "description": "광고 수령 및 리워드 지급과 관련된 모든 트랜잭션을 기록하고 관리하는 시스템을 구현합니다.",
+            "dependencies": [
+              "6.4"
+            ],
+            "details": "트랜잭션 로그 저장, 조회, 감사 추적 기능 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "에러 처리 및 복구 메커니즘 구현",
+            "description": "시스템 오류 발생 시 에러를 감지하고, 자동 복구 및 사용자 안내 기능을 구현합니다.",
+            "dependencies": [
+              "6.3",
+              "6.4",
+              "6.5",
+              "6.8"
+            ],
+            "details": "에러 로깅, 롤백, 재시도, 사용자 피드백 등 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "인박스 화면 구현",
+        "description": "내 포스트, 배포한 포스트, 주운 포스트를 통합 관리하는 인박스 화면을 구현합니다.",
+        "details": "1. 인박스 화면 UI 구현 (탭 기반 구조)\n2. '내 포스트' 탭 구현 및 데이터 연동\n3. '배포한 포스트' 탭 구현 및 데이터 연동\n4. '주운 포스트' 탭 구현 및 데이터 연동\n5. 포스트 카드 UI 컴포넌트 구현\n6. 검색 및 필터링 기능 구현 (상태, 기간 등)\n7. 정렬 기능 구현 (최신순, 수령수 등)\n8. '만들기' 버튼 및 포스트 생성 플로우 연결\n9. 포스트 상세/편집 화면 연결\n10. 무한 스크롤 및 페이지네이션 구현",
+        "testStrategy": "1. 각 탭 데이터 로딩 성능 테스트\n2. 필터링 및 정렬 기능 정확성 테스트\n3. 포스트 카드 UI 렌더링 테스트\n4. 무한 스크롤 성능 테스트\n5. 포스트 상세/편집 화면 전환 테스트\n6. 다양한 데이터 양에 따른 UI 테스트",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "탭 기반 인박스 화면 UI 구조 설계 및 구현",
+            "description": "내 포스트, 배포한 포스트, 주운 포스트를 탭으로 구분하는 인박스 화면의 전체 UI 구조를 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "탭 전환 시 각 영역이 독립적으로 동작하도록 UI 컴포넌트 구조를 설계합니다. Flutter의 TabBar, TabView 등을 활용합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "'내 포스트' 탭 데이터 연동 및 상태 관리",
+            "description": "'내 포스트' 탭에서 사용자의 포스트 데이터를 불러오고 상태를 관리합니다.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Firestore 등에서 내 포스트 데이터를 비동기로 로딩하고, 로딩/에러/성공 상태를 관리합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "'배포한 포스트' 탭 데이터 연동 및 상태 관리",
+            "description": "'배포한 포스트' 탭에서 배포한 포스트 데이터를 불러오고 상태를 관리합니다.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Firestore 등에서 배포한 포스트 데이터를 비동기로 로딩하고, 로딩/에러/성공 상태를 관리합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "'주운 포스트' 탭 데이터 연동 및 상태 관리",
+            "description": "'주운 포스트' 탭에서 주운 포스트 데이터를 불러오고 상태를 관리합니다.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Firestore 등에서 주운 포스트 데이터를 비동기로 로딩하고, 로딩/에러/성공 상태를 관리합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "포스트 카드 UI 컴포넌트 설계 및 구현",
+            "description": "각 포스트를 표시하는 카드 UI 컴포넌트를 설계하고 재사용 가능하게 구현합니다.",
+            "dependencies": [
+              "7.2",
+              "7.3",
+              "7.4"
+            ],
+            "details": "포스트 정보(제목, 상태, 날짜 등)를 표시하며, 각 탭에서 재사용할 수 있도록 설계합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "검색 및 필터링 기능 구현",
+            "description": "상태, 기간 등 조건에 따라 포스트를 검색 및 필터링하는 기능을 구현합니다.",
+            "dependencies": [
+              "7.2",
+              "7.3",
+              "7.4",
+              "7.5"
+            ],
+            "details": "검색어 입력, 상태/기간 선택 등 UI와 데이터 필터링 로직을 구현합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "정렬 기능 구현",
+            "description": "최신순, 수령수 등 다양한 기준으로 포스트를 정렬하는 기능을 구현합니다.",
+            "dependencies": [
+              "7.2",
+              "7.3",
+              "7.4",
+              "7.5"
+            ],
+            "details": "정렬 기준 선택 UI와 데이터 정렬 로직을 구현합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "'만들기' 버튼 및 포스트 생성 플로우 연결",
+            "description": "인박스 화면에서 '만들기' 버튼을 통해 포스트 생성 화면으로 이동하는 플로우를 구현합니다.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "'만들기' 버튼 UI와 네비게이션, 포스트 생성 완료 후 인박스 갱신 로직을 포함합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "포스트 상세/편집 화면 연결",
+            "description": "포스트 카드를 클릭 시 상세/편집 화면으로 이동하는 기능을 구현합니다.",
+            "dependencies": [
+              "7.5"
+            ],
+            "details": "포스트 상세/편집 화면으로의 네비게이션 및 데이터 전달 로직을 구현합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 10,
+            "title": "무한 스크롤 및 페이지네이션 구현",
+            "description": "포스트 목록에 무한 스크롤 또는 페이지네이션 기능을 구현하여 대용량 데이터에 대응합니다.",
+            "dependencies": [
+              "7.2",
+              "7.3",
+              "7.4",
+              "7.5",
+              "7.6",
+              "7.7"
+            ],
+            "details": "스크롤 이벤트 감지, 추가 데이터 로딩, 로딩 상태 관리 등을 포함합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "플레이스 기능 구현",
+        "description": "포스트를 제작한 개인/사업자의 상점 또는 서비스 프로필 페이지인 플레이스 기능을 구현합니다.",
+        "details": "1. 플레이스 생성 화면 구현\n2. 플레이스 정보 입력 UI 구현 (제목, 설명, 카테고리 등)\n3. 위치 설정 및 지도 연동\n4. 사진 갤러리 업로드 및 관리 기능\n5. 운영 시간 및 연락처 설정 UI\n6. 플레이스 상세 화면 구현\n7. 플레이스와 포스트 연계 시스템 구현\n8. 플레이스 편집 기능 구현\n9. 플레이스 검색 및 필터링 기능 구현",
+        "testStrategy": "1. 플레이스 생성 프로세스 E2E 테스트\n2. 사진 갤러리 업로드 성능 테스트\n3. 위치 설정 정확도 테스트\n4. 플레이스-포스트 연계 기능 테스트\n5. 플레이스 검색 및 필터링 정확성 테스트\n6. 플레이스 상세 화면 렌더링 테스트",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "플레이스 생성 UI/UX 설계 및 구현",
+            "description": "플레이스 생성 화면의 사용자 경험(UX) 및 사용자 인터페이스(UI)를 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "와이어프레임, 프로토타입, UI 컴포넌트 설계 및 실제 화면 구현을 포함합니다.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "플레이스 정보 입력 UI 및 입력 검증 구현",
+            "description": "플레이스의 제목, 설명, 카테고리 등 정보 입력 UI와 입력값 검증 로직을 구현합니다.",
+            "dependencies": [
+              "8.1"
+            ],
+            "details": "필수/선택 입력 필드 구분, 입력값 유효성 검사, 에러 메시지 처리 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "플레이스 정보 데이터 연동 및 저장",
+            "description": "입력된 플레이스 정보를 백엔드(예: Firestore)와 연동하여 저장하는 기능을 구현합니다.",
+            "dependencies": [
+              "8.2"
+            ],
+            "details": "데이터 모델 정의, 저장/수정 API 연동, 저장 성공/실패 처리 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "위치 설정 UI 및 지도 연동",
+            "description": "플레이스 위치 설정을 위한 지도 UI와 위치 선택 기능을 구현합니다.",
+            "dependencies": [
+              "8.1"
+            ],
+            "details": "지도 API 연동, 위치 검색/선택, 좌표 데이터 추출 및 표시 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "사진 갤러리 업로드/관리 UI 및 데이터 연동",
+            "description": "플레이스 사진 업로드, 미리보기, 삭제 등 갤러리 UI와 스토리지 연동을 구현합니다.",
+            "dependencies": [
+              "8.1"
+            ],
+            "details": "이미지 업로드, 썸네일 생성, 삭제, 순서 변경, 스토리지 연동 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "운영 시간 및 연락처 입력 UI/UX 및 데이터 연동",
+            "description": "운영 시간, 연락처 입력 UI와 데이터 저장/수정 기능을 구현합니다.",
+            "dependencies": [
+              "8.1"
+            ],
+            "details": "시간 선택 UI, 연락처 입력, 데이터 유효성 검사 및 저장 연동 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "플레이스 상세 화면 UI/UX 및 데이터 표시",
+            "description": "플레이스 상세 정보, 위치, 사진, 운영 시간 등 모든 정보를 표시하는 상세 화면을 구현합니다.",
+            "dependencies": [
+              "8.3",
+              "8.4",
+              "8.5",
+              "8.6"
+            ],
+            "details": "상세 화면 레이아웃, 데이터 바인딩, 사용자 인터랙션 처리 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "플레이스와 포스트 연계 시스템 구현",
+            "description": "플레이스와 포스트를 연동하여 포스트에서 플레이스 정보를 참조하거나 연결할 수 있는 시스템을 구현합니다.",
+            "dependencies": [
+              "8.3",
+              "8.7"
+            ],
+            "details": "포스트 작성/수정 시 플레이스 선택, 연관 데이터 저장 및 표시 로직 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "플레이스 편집, 검색 및 필터링 기능 구현",
+            "description": "플레이스 정보 수정, 검색, 카테고리/위치 등 다양한 필터링 기능을 구현합니다.",
+            "dependencies": [
+              "8.3",
+              "8.7"
+            ],
+            "details": "편집 화면, 검색 UI, 필터 조건 처리, 결과 리스트 표시 및 데이터 연동 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "월렛 및 결제 시스템 구현",
+        "description": "사용자의 리워드 관리, 예치금 충전 및 출금 기능을 포함한 월렛 시스템을 구현합니다.",
+        "details": "1. 월렛 화면 UI 구현 (잔액, 트랜잭션 내역 등)\n2. 트랜잭션 내역 조회 및 필터링 기능\n3. 예치금 충전 기능 구현 (외부 결제 API 연동)\n4. 출금 기능 구현 (계좌 연동 포함)\n5. 트랜잭션 상태 관리 시스템 구현\n6. 리워드 적립 및 차감 로직 구현\n7. 월렛 보안 기능 구현 (인증 필요 트랜잭션 등)\n8. 트랜잭션 알림 시스템 구현\n9. 에러 처리 및 복구 메커니즘 구현",
+        "testStrategy": "1. 트랜잭션 정확성 테스트\n2. 충전 및 출금 프로세스 E2E 테스트\n3. 외부 결제 API 연동 테스트\n4. 트랜잭션 상태 변경 시나리오 테스트\n5. 동시 트랜잭션 처리 테스트\n6. 보안 기능 테스트\n7. 에러 상황 복구 테스트",
+        "priority": "medium",
+        "dependencies": [
+          2,
+          4,
+          6
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "월렛 화면 UI 설계 및 구현",
+            "description": "사용자 잔액, 트랜잭션 내역, 리워드 현황 등 주요 정보를 표시하는 월렛 UI를 설계하고 개발합니다.",
+            "dependencies": [],
+            "details": "와이어프레임, 프로토타입, UI 컴포넌트 개발 및 사용자 경험 최적화 작업 포함.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "트랜잭션 내역 조회 및 필터링 기능 개발",
+            "description": "사용자가 월렛 내 트랜잭션 내역을 조회하고 날짜, 유형 등으로 필터링할 수 있는 기능을 구현합니다.",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "트랜잭션 데이터 모델 설계, 조회 API 연동, 필터 UI 및 기능 개발.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "예치금 충전 기능 및 외부 결제 API 연동",
+            "description": "사용자가 외부 결제 API를 통해 예치금을 충전할 수 있도록 기능을 구현합니다.",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "결제 API 연동, 충전 프로세스 설계, 결제 결과 처리 및 UI 반영.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "출금 기능 및 계좌 연동 구현",
+            "description": "사용자가 본인 계좌로 출금할 수 있도록 계좌 인증 및 출금 프로세스를 개발합니다.",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "계좌 인증, 출금 요청 처리, 출금 내역 반영 및 UI 업데이트.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "트랜잭션 상태 관리 시스템 구축",
+            "description": "트랜잭션의 진행 상태(예: 대기, 완료, 실패 등)를 관리하는 시스템을 설계 및 구현합니다.",
+            "dependencies": [
+              "9.2",
+              "9.3",
+              "9.4"
+            ],
+            "details": "상태 전이 로직, 상태별 알림 및 UI 반영, 동시성 처리 검토.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "리워드 적립 및 차감 로직 개발",
+            "description": "사용자 활동에 따라 리워드 적립 및 차감이 자동으로 처리되는 로직을 구현합니다.",
+            "dependencies": [
+              "9.1",
+              "9.5"
+            ],
+            "details": "리워드 정책 설계, 적립/차감 트리거 구현, 트랜잭션과 연동.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "월렛 보안 기능 및 인증 시스템 구현",
+            "description": "트랜잭션 및 주요 기능에 대해 인증 및 보안 기능을 강화합니다.",
+            "dependencies": [
+              "9.3",
+              "9.4",
+              "9.5"
+            ],
+            "details": "이중 인증(2FA), KYC/AML 프로세스, 민감 정보 암호화 및 접근 제어.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "트랜잭션 알림 시스템 개발",
+            "description": "트랜잭션 발생 시 실시간 알림(푸시, SMS, 이메일 등)을 사용자에게 제공합니다.",
+            "dependencies": [
+              "9.5",
+              "9.7"
+            ],
+            "details": "알림 트리거 설계, 외부 메시징 서비스 연동, 알림 내역 관리.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "에러 처리 및 복구 메커니즘 구현",
+            "description": "월렛 및 결제 시스템 내 발생 가능한 에러 상황에 대한 처리 및 복구 로직을 개발합니다.",
+            "dependencies": [
+              "9.3",
+              "9.4",
+              "9.5",
+              "9.7"
+            ],
+            "details": "에러 유형 정의, 자동 복구 시나리오, 사용자 피드백 및 로그 관리.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "광고 리포트 및 분석 기능 구현",
+        "description": "광고주에게 광고 효과 분석을 위한 리포트 기능을 제공합니다.",
+        "details": "1. 광고 리포트 화면 UI 구현\n2. 광고 수령 통계 데이터 수집 및 처리 시스템\n3. 차트 및 그래프 컴포넌트 구현\n4. 수령률, 클릭률 등 핵심 지표 계산 로직\n5. 타겟 분석 데이터 시각화 (성별, 나이 등)\n6. 시간대별, 지역별 수령 패턴 분석\n7. 리포트 필터링 및 기간 설정 기능\n8. 리포트 내보내기 기능 (PDF, CSV 등)\n9. 실시간 데이터 업데이트 시스템",
+        "testStrategy": "1. 데이터 수집 및 처리 정확성 테스트\n2. 차트 및 그래프 렌더링 테스트\n3. 필터링 및 기간 설정 기능 테스트\n4. 대용량 데이터 처리 성능 테스트\n5. 리포트 내보내기 기능 테스트\n6. 실시간 업데이트 성능 테스트",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5,
+          6
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "광고 리포트 화면 UI 설계 및 구현",
+            "description": "광고주가 광고 효과를 직관적으로 확인할 수 있도록 리포트 화면의 UI를 설계하고 구현합니다.",
+            "dependencies": [],
+            "details": "리포트 레이아웃, 주요 지표 표시, 사용자 친화적 인터페이스 설계 및 반응형 구현 포함",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "광고 수령 통계 데이터 수집 및 처리 시스템 구축",
+            "description": "광고 수령 관련 원천 데이터를 다양한 광고 매체 API 및 내부 로그로부터 수집하고, 통합 처리 시스템을 개발합니다.",
+            "dependencies": [
+              "10.1"
+            ],
+            "details": "API 연동, 데이터 정제, 대용량 데이터 적재 및 처리, Google BigQuery 등 활용",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "차트 및 그래프 컴포넌트 개발",
+            "description": "광고 효과 분석 결과를 시각적으로 표현할 수 있는 차트 및 그래프 컴포넌트를 개발합니다.",
+            "dependencies": [
+              "10.2"
+            ],
+            "details": "막대, 선, 파이 등 다양한 차트 유형 지원, 대용량 데이터 렌더링 최적화",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "핵심 지표(수령률, 클릭률 등) 계산 로직 구현",
+            "description": "수령률, 클릭률 등 광고 효과 분석에 필요한 핵심 지표 계산 로직을 개발합니다.",
+            "dependencies": [
+              "10.2"
+            ],
+            "details": "KPI 산출 공식 정의, Pandas 등 데이터 처리 라이브러리 활용, 자동화 파이프라인 설계",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "타겟 분석 데이터 시각화 (성별, 나이 등)",
+            "description": "광고 타겟별(성별, 나이 등) 분석 데이터를 시각화하여 광고주가 타겟별 성과를 쉽게 파악할 수 있도록 합니다.",
+            "dependencies": [
+              "10.3",
+              "10.4"
+            ],
+            "details": "필터별 데이터 분류, 시각화 컴포넌트 연동, 사용자별 맞춤 분석 지원",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "시간대별, 지역별 수령 패턴 분석 기능 구현",
+            "description": "광고 수령 패턴을 시간대 및 지역별로 분석하여 리포트에 제공합니다.",
+            "dependencies": [
+              "10.4"
+            ],
+            "details": "시간/지역 기준 데이터 집계, 패턴 시각화, 대용량 데이터 처리 성능 최적화",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "리포트 필터링 및 기간 설정 기능 개발",
+            "description": "광고 리포트에서 기간, 매체, 타겟 등 다양한 조건으로 데이터를 필터링할 수 있는 기능을 구현합니다.",
+            "dependencies": [
+              "10.5",
+              "10.6"
+            ],
+            "details": "필터 UI, 쿼리 최적화, 사용자별 맞춤 리포트 제공",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "리포트 내보내기 기능(PDF, CSV 등) 구현",
+            "description": "광고 리포트를 PDF, CSV 등 다양한 포맷으로 내보낼 수 있는 기능을 개발합니다.",
+            "dependencies": [
+              "10.7"
+            ],
+            "details": "내보내기 템플릿 설계, 파일 생성 및 다운로드, 대용량 데이터 내보내기 성능 개선",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "실시간 데이터 업데이트 및 성능 최적화 시스템 구축",
+            "description": "광고 리포트 내 실시간 데이터 반영 및 대용량 데이터 처리 성능을 최적화하는 시스템을 구축합니다.",
+            "dependencies": [
+              "10.2",
+              "10.3",
+              "10.4",
+              "10.5",
+              "10.6",
+              "10.7",
+              "10.8"
+            ],
+            "details": "실시간 피드백 시스템, 데이터 스트림 처리, 캐싱 및 비동기 업데이트, 성능 모니터링",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-11T21:13:21.012Z",
+      "updated": "2025-08-11T21:13:21.012Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
