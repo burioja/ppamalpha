@@ -19,6 +19,8 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <!-- Force HTML renderer to avoid CanvasKit CORS issues for cross-origin images -->
+  <meta name="flutter-web-renderer" content="html">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -28,8 +30,7 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <script src="https://maps.googleapis.com/maps/api/js?key=
-AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg"></script>
+  <meta name="google_maps_api_key" content="">
 
   <title>ppamproto</title>
   <link rel="manifest" href="manifest.json">
@@ -38,19 +39,7 @@ AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js"></script>
 
   <!-- Firebase 초기화 -->
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyCb94vRxZmszRM3FhO4b6vaX5eRwR4F1Kg",
-      authDomain: "ppamproto-439623.firebaseapp.com",
-      projectId: "ppamproto-439623",
-      storageBucket: "ppamproto-439623.appspot.com",
-      messagingSenderId: "714872165171",
-      appId: "1:714872165171:web:1b07188ea5236f196e2446",
-    };
-
-    // Firebase 앱 초기화
-    firebase.initializeApp(firebaseConfig);
-  </script>
+  <!-- Firebase 초기화는 FlutterFire가 처리합니다 -->
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

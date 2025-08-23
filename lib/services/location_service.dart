@@ -1,7 +1,22 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LocationService {
+  // 현재 위치 가져오기 (GeoPoint 반환)
+  static Future<GeoPoint?> getCurrentLocation() async {
+    try {
+      Position? position = await getCurrentPosition();
+      if (position != null) {
+        return GeoPoint(position.latitude, position.longitude);
+      }
+      return null;
+    } catch (e) {
+      // 위치 가져오기 오류: $e
+      return null;
+    }
+  }
+
   // 현재 위치 가져오기
   static Future<Position?> getCurrentPosition() async {
     try {

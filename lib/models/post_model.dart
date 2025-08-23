@@ -11,6 +11,7 @@ class PostModel {
   final DateTime createdAt;
   final DateTime expiresAt;
   final int reward; // 리워드 금액
+  final DateTime? updatedAt; // 수정일
   
   // 타겟팅 조건
   final List<int> targetAge; // [20, 30] 등 범위
@@ -30,12 +31,17 @@ class PostModel {
   final bool canRequestReward;
   final bool canUse;
   
+  // 플레이스 연동
+  final String? placeId;
+  
   // 마커 관련
   final String markerId;
   final bool isActive;
   final bool isCollected;
   final String? collectedBy;
   final DateTime? collectedAt;
+  final bool isDistributed; // 배포 여부 (true: 배포됨, false: 발행 전)
+  final DateTime? distributedAt; // 배포 일시
 
   PostModel({
     required this.flyerId,
@@ -58,11 +64,15 @@ class PostModel {
     required this.canForward,
     required this.canRequestReward,
     required this.canUse,
+    this.placeId,
     String? markerId,
     this.isActive = true,
     this.isCollected = false,
     this.collectedBy,
     this.collectedAt,
+    this.updatedAt,
+    this.isDistributed = false,
+    this.distributedAt,
   }) : markerId = markerId ?? '${creatorId}_$flyerId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -89,11 +99,15 @@ class PostModel {
       canForward: data['canForward'] ?? false,
       canRequestReward: data['canRequestReward'] ?? true,
       canUse: data['canUse'] ?? false,
+      placeId: data['placeId'],
       markerId: data['markerId'] ?? '${data['creatorId']}_${doc.id}',
       isActive: data['isActive'] ?? true,
       isCollected: data['isCollected'] ?? false,
       collectedBy: data['collectedBy'],
       collectedAt: data['collectedAt']?.toDate(),
+      updatedAt: data['updatedAt']?.toDate(),
+      isDistributed: data['isDistributed'] ?? false,
+      distributedAt: data['distributedAt']?.toDate(),
     );
   }
 
@@ -118,11 +132,15 @@ class PostModel {
       'canForward': canForward,
       'canRequestReward': canRequestReward,
       'canUse': canUse,
+      'placeId': placeId,
       'markerId': markerId,
       'isActive': isActive,
       'isCollected': isCollected,
       'collectedBy': collectedBy,
       'collectedAt': collectedAt != null ? Timestamp.fromDate(collectedAt!) : null,
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'isDistributed': isDistributed,
+      'distributedAt': distributedAt != null ? Timestamp.fromDate(distributedAt!) : null,
     };
   }
 
@@ -239,11 +257,15 @@ class PostModel {
     bool? canForward,
     bool? canRequestReward,
     bool? canUse,
+    String? placeId,
     String? markerId,
     bool? isActive,
     bool? isCollected,
     String? collectedBy,
     DateTime? collectedAt,
+    DateTime? updatedAt,
+    bool? isDistributed,
+    DateTime? distributedAt,
   }) {
     return PostModel(
       flyerId: flyerId ?? this.flyerId,
@@ -266,11 +288,15 @@ class PostModel {
       canForward: canForward ?? this.canForward,
       canRequestReward: canRequestReward ?? this.canRequestReward,
       canUse: canUse ?? this.canUse,
+      placeId: placeId ?? this.placeId,
       markerId: markerId ?? this.markerId,
       isActive: isActive ?? this.isActive,
       isCollected: isCollected ?? this.isCollected,
       collectedBy: collectedBy ?? this.collectedBy,
       collectedAt: collectedAt ?? this.collectedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isDistributed: isDistributed ?? this.isDistributed,
+      distributedAt: distributedAt ?? this.distributedAt,
     );
   }
 } 

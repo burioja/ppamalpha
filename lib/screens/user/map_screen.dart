@@ -47,7 +47,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  late GoogleMapController mapController;
+  GoogleMapController? mapController;
   LatLng? _currentPosition;
   final GlobalKey mapWidgetKey = GlobalKey();
   LatLng? _longPressedLatLng;
@@ -955,10 +955,20 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             TextButton(
               onPressed: () {
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-                _navigateToPostPlace();
+                final target = _longPressedLatLng;
+                if (target != null) {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                  Navigator.pushNamed(
+                    context,
+                    '/post-by-location',
+                    arguments: {
+                      'location': target,
+                      'address': null,
+                    },
+                  ).then(_handlePostPlaceResult);
+                }
               },
               child: const Text("이 위치에 뿌리기"),
             ),
@@ -1054,9 +1064,11 @@ class _MapScreenState extends State<MapScreen> {
             _addMarkerToMap(markerItem);
             
             // 생성된 전단지 위치로 카메라 이동
-            mapController.animateCamera(
-              CameraUpdate.newLatLng(location),
-            );
+            if (mapController != null) {
+              mapController!.animateCamera(
+                CameraUpdate.newLatLng(location),
+              );
+            }
             
 
           }
@@ -1075,8 +1087,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void goToCurrentLocation() {
-    if (_currentPosition != null) {
-      mapController.animateCamera(
+    if (_currentPosition != null && mapController != null) {
+      mapController!.animateCamera(
         CameraUpdate.newLatLng(_currentPosition!),
       );
     }

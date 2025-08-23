@@ -37,7 +37,7 @@ dependencies:
   firebase_auth: ^5.3.1   # Firebase 인증을 위한 패키지
   firebase_storage: ^12.3.6
   cloud_firestore: ^5.4.4
-  google_maps_flutter: ^2.9.0
+  google_maps_flutter: ^2.10.0
   geolocator: ^12.0.0
   geolocator_android: 4.5.5
   geocoding: ^3.0.0
@@ -46,6 +46,8 @@ dependencies:
   http: ^1.2.2
 
   image_picker: ^1.0.7
+  file_picker: ^8.0.0
+  universal_html: ^2.2.4
   carousel_slider: ^5.0.0
   flutter_dotenv: ^5.1.0
   intl: ^0.18.1
@@ -81,6 +83,7 @@ flutter:
     - assets/workplaces.json
     - assets/map_style.json
     - assets/country_codes.json
+    - .env
 
   # To add assets to your application, add an assets section, like this:
   # assets:

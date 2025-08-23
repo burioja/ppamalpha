@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'map_screen.dart';
-import 'wallet_screen.dart';
+import 'inbox_screen.dart';
 
 import '../../services/location_service.dart';
 import 'budget_screen.dart';
@@ -24,17 +24,17 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _widgetOptions = [
     MapScreen(key: MapScreen.mapKey),
-    const WalletScreen(),
+    const InboxScreen(),
   ];
 
   final List<IconData> _icons = [
     Icons.map,
-    Icons.account_balance_wallet,
+    Icons.inbox,
   ];
 
   final List<String> _labels = [
     'Map',
-    'Wallet',
+    'Inbox',
   ];
 
   @override
