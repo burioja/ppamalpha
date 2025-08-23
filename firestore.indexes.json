@@ -1,4 +1,28 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "wallet_transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "expireAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "map_markers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postId", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

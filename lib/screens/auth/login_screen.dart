@@ -30,14 +30,30 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final email = _emailController.text.trim();
+    final pass = _passwordController.text;
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('유효한 이메일을 입력해주세요.')),
+      );
+      return;
+    }
+    if (pass.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비밀번호는 8자 이상이어야 합니다.')),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: pass,
       );
 
       if (userCredential.user != null) {

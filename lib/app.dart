@@ -8,6 +8,7 @@ import 'providers/user_provider.dart';
 import 'providers/search_provider.dart';
 import 'providers/screen_provider.dart';
 import 'providers/wallet_provider.dart';
+import 'providers/map_filter_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/user/main_screen.dart';
 
@@ -32,6 +33,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
             create: (_) => WalletProvider()
+        ),
+        ChangeNotifierProvider<MapFilterProvider>(
+          create: (_) => MapFilterProvider(),
         ),
       ],
       child: MaterialApp(

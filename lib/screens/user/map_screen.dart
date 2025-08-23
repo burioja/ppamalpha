@@ -10,6 +10,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
+import 'package:provider/provider.dart';
+import '../../providers/map_filter_provider.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -63,6 +65,7 @@ class _MapScreenState extends State<MapScreen> {
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
+  final Set<Circle> _fogOfWarCircles = {};
 
   @override
   void initState() {
@@ -73,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
     _setupRealtimeListeners();
+    _loadVisitsAndBuildFog();
   }
 
   @override
@@ -80,6 +84,54 @@ class _MapScreenState extends State<MapScreen> {
     // 실시간 리스너 정리
     _markersListener?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadVisitsAndBuildFog() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final cutoff = DateTime.now().subtract(const Duration(days: 30));
+      final snapshot = await FirebaseFirestore.instance
+          .collection('visits')
+          .doc(uid)
+          .collection('points')
+          .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+          .get();
+
+      // 빈원형(Fog) 초기화
+      final Set<Circle> circles = {};
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
+        if (gp == null) continue;
+        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0; // 방문 빈도 가중치(옵션)
+
+        // 가중치에 따른 알파값(최대 0.5)
+        final double alpha = (0.15 + (weight * 0.07)).clamp(0.15, 0.5);
+        final Color color = Colors.orange.withOpacity(alpha);
+
+        circles.add(
+          Circle(
+            circleId: CircleId('fog_${doc.id}'),
+            center: LatLng(gp.latitude, gp.longitude),
+            radius: 80, // 약 80m 반경
+            strokeWidth: 0,
+            fillColor: color,
+          ),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _fogOfWarCircles
+            ..clear()
+            ..addAll(circles);
+        });
+      }
+    } catch (e) {
+      debugPrint('Fog of War 로드 오류: $e');
+    }
   }
 
   Future<void> _loadMapStyle() async {
@@ -296,10 +348,18 @@ class _MapScreenState extends State<MapScreen> {
     if (_isClustered) return;
     
     final clusters = <String, List<dynamic>>{};
+    final filter = mounted ? context.read<MapFilterProvider>() : null;
+    final bool couponsOnly = filter?.showCouponsOnly ?? false;
+    final double maxKm = filter?.distanceKm ?? 3.0;
     const double clusterRadius = 0.01; // 약 1km
     
     // 기존 마커 아이템들 클러스터링
     for (final item in _markerItems) {
+      if (_currentPosition != null) {
+        final km = _haversineKm(_currentPosition!, item.position);
+        if (km > maxKm) continue;
+      }
+      if (couponsOnly && item.data['type'] != 'post_place') continue;
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -321,6 +381,11 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포스트들 클러스터링
     for (final post in _posts) {
+      if (_currentPosition != null) {
+        final km = _haversineKm(_currentPosition!, LatLng(post.location.latitude, post.location.longitude));
+        if (km > maxKm) continue;
+      }
+      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -368,14 +433,27 @@ class _MapScreenState extends State<MapScreen> {
     if (!_isClustered) return;
     
     final Set<Marker> newMarkers = {};
+    final filter = mounted ? context.read<MapFilterProvider>() : null;
+    final bool couponsOnly = filter?.showCouponsOnly ?? false;
+    final double maxKm = filter?.distanceKm ?? 3.0;
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
+      if (_currentPosition != null) {
+        final km = _haversineKm(_currentPosition!, item.position);
+        if (km > maxKm) continue;
+      }
+      if (couponsOnly && item.data['type'] != 'post_place') continue;
       newMarkers.add(_createMarker(item));
     }
     
     // 포스트 마커들 추가
     for (final post in _posts) {
+      if (_currentPosition != null) {
+        final km = _haversineKm(_currentPosition!, LatLng(post.location.latitude, post.location.longitude));
+        if (km > maxKm) continue;
+      }
+      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
       newMarkers.add(_createPostMarker(post));
     }
     
@@ -395,6 +473,20 @@ class _MapScreenState extends State<MapScreen> {
     return sqrt(pow(point1.latitude - point2.latitude, 2) + 
                 pow(point1.longitude - point2.longitude, 2));
   }
+
+  double _haversineKm(LatLng a, LatLng b) {
+    const double R = 6371.0;
+    final dLat = _deg2rad(b.latitude - a.latitude);
+    final dLon = _deg2rad(b.longitude - a.longitude);
+    final aa = 
+        sin(dLat/2) * sin(dLat/2) +
+        cos(_deg2rad(a.latitude)) * cos(_deg2rad(b.latitude)) *
+        sin(dLon/2) * sin(dLon/2);
+    final c = 2 * atan2(sqrt(aa), sqrt(1-aa));
+    return R * c;
+  }
+
+  double _deg2rad(double d) => d * (pi / 180.0);
 
   Marker _createMarker(MarkerItem item) {
     // 전단지 타입인지 확인
@@ -1084,6 +1176,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filters = Provider.of<MapFilterProvider>(context);
     return Scaffold(
       body: _currentPosition == null
           ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
@@ -1103,6 +1196,7 @@ class _MapScreenState extends State<MapScreen> {
             scrollGesturesEnabled: true,
             tiltGesturesEnabled: true,
             rotateGesturesEnabled: true,
+            circles: _fogOfWarCircles,
             onLongPress: (LatLng latLng) {
               setState(() {
                 _longPressedLatLng = latLng;
@@ -1124,6 +1218,43 @@ class _MapScreenState extends State<MapScreen> {
             onCameraIdle: () {
               _updateClustering();
             },
+          ),
+          // 상단 필터 바
+          Positioned(
+            top: 16,
+            left: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('쿠폰만'),
+                    selected: filters.showCouponsOnly,
+                    onSelected: (_) => filters.toggleCouponsOnly(),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('거리'),
+                  Expanded(
+                    child: Slider(
+                      min: 0.5,
+                      max: 10.0,
+                      divisions: 19,
+                      label: '${filters.distanceKm.toStringAsFixed(1)}km',
+                      value: filters.distanceKm,
+                      onChanged: (v) => filters.setDistance(v),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           if (_longPressedLatLng != null)
             Center(child: _buildPopupWidget()),
