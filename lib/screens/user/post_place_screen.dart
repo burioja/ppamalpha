@@ -1,864 +1,1193 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/services.dart';
-import '../../services/post_service.dart';
-import '../../services/location_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:convert';
+import 'package:universal_html/html.dart' as html;
+import '../../models/place_model.dart';
 import '../../models/post_model.dart';
+import '../../services/post_service.dart';
+import '../../services/firebase_service.dart';
+import '../../services/location_service.dart';
 
 class PostPlaceScreen extends StatefulWidget {
-  const PostPlaceScreen({super.key});
+  final PlaceModel place;
+  
+  const PostPlaceScreen({
+    Key? key,
+    required this.place,
+  }) : super(key: key);
 
   @override
   State<PostPlaceScreen> createState() => _PostPlaceScreenState();
 }
 
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
-  final PostService _postService = PostService();
-  final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _periodController = TextEditingController();
-  final TextEditingController _ageMinController = TextEditingController();
-  final TextEditingController _ageMaxController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _postService = PostService();
+  final _firebaseService = FirebaseService();
+  static const GeoPoint _kRefLocation = GeoPoint(37.5665, 126.9780); // 기본 참조 위치 (서울시청 인근)
   
-  GoogleMapController? _mapController;
-  LatLng? _selectedLocation;
-  String? _currentAddress;
-  bool _isLoading = false;
-  bool _showAddressConfirmation = false;
-  String? _mapStyle;
+  // 폼 컨트롤러들
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _contentController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _periodController = TextEditingController();
+  final _soundController = TextEditingController();
   
-  // 설정 옵션들
-  String _selectedPeriodUnit = 'Hour';
+  // 선택된 값들
   String _selectedFunction = 'Using';
-  String _selectedGender = '상관없음';
-  String _selectedAgeRange = '상관없음';
-  String? _selectedWalletFile;
+  String _selectedPeriodUnit = 'Hour';
+  String _selectedTarget = '상관없음/상관없음';
+  int _selectedAgeMin = 20;
+  int _selectedAgeMax = 30;
   
-  // 기본 위치 (서울 시청)
-  static const LatLng _defaultLocation = LatLng(37.5665, 126.9780);
+  // PRD2.md 요구사항 추가
+  String _selectedPostType = '일반';
+  bool _hasExpiration = false;
+  bool _canTransfer = false;
+  bool _canForward = false;
+  bool _canRespond = false;
+  String _selectedTargeting = '기본';
   
-  // 전달받은 인수 저장
-  Map<String, dynamic>? _args;
+  // 사운드 파일
+  dynamic _selectedSound;
+  String _soundFileName = '';
+  
+  // 크로스 플랫폼 이미지 저장
+  List<dynamic> _selectedImages = []; // File 또는 Uint8List
+  List<String> _imageNames = []; // 이미지 이름 저장
+  
+  // 로딩 상태
+  bool _isLoading = false;
+  bool _isLocationLoading = false;
+  bool _usedRefLocation = false;
+  
+  // 위치 정보
+  GeoPoint? _currentLocation;
+  
+  // 함수 옵션들
+  final List<String> _functions = ['Using', 'Selling', 'Buying', 'Sharing'];
+  final List<String> _periodUnits = ['Hour', 'Day', 'Week', 'Month'];
+  final List<String> _targets = [
+    '상관없음/상관없음',
+    '남성/남성',
+    '여성/여성',
+    '남성/여성',
+    '여성/남성',
+  ];
+  
+  // PRD2.md 요구사항 옵션들
+  final List<String> _postTypes = ['일반', '쿠폰'];
+  final List<String> _targetingOptions = ['기본', '고급', '맞춤형'];
 
   @override
   void initState() {
     super.initState();
-    
-    // 기본값 설정
-    _priceController.text = '1000';
-    _amountController.text = '10';
-    _periodController.text = '24';
-    _ageMinController.text = '20';
-    _ageMaxController.text = '30';
-    
-    // 지도 스타일 로드
-    _loadMapStyle();
-    
-    // 전달받은 인수 확인 및 위치 설정
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      debugPrint('initState - 인수 확인 시작');
-      _args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      debugPrint('initState - args: $_args');
-      
-      if (_args != null && _args!['location'] != null) {
-        // 전달받은 위치 정보 설정
-        final location = _args!['location'] as LatLng;
-        debugPrint('전달받은 위치 설정: ${location.latitude}, ${location.longitude}');
-        
-        setState(() {
-          _selectedLocation = location;
-        });
-        
-        // 전달받은 주소가 있으면 사용, 없으면 위치에서 주소 가져오기
-        if (_args!['address'] != null) {
-          _currentAddress = _args!['address'] as String;
-          _addressController.text = _currentAddress!;
-        } else {
-          // 위치에서 주소 가져오기
-          try {
-            final address = await LocationService.getAddressFromCoordinates(
-              location.latitude,
-              location.longitude,
-            );
-            _currentAddress = address;
-            _addressController.text = address;
-          } catch (e) {
-            _currentAddress = '주소를 가져올 수 없습니다';
-            _addressController.text = _currentAddress!;
-          }
-        }
-        
-        debugPrint('initState - 위치 설정 완료: ${_selectedLocation?.latitude}, ${_selectedLocation?.longitude}');
-      } else {
-        debugPrint('initState - 전달받은 위치 없음, 기본 위치 사용');
-        // 전달받은 위치가 없으면 기본 위치로 초기화
-        _selectedLocation = _defaultLocation;
-        _currentAddress = '서울특별시 중구 세종대로 110';
-        _addressController.text = _currentAddress!;
-        
-        // 현재 위치 가져오기 시도
-        _getCurrentLocation();
-      }
+    _getCurrentLocation();
+    _initializeForm();
+    _priceController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _amountController.addListener(() {
+      if (mounted) setState(() {});
     });
   }
 
-  // 지도 스타일 로드
-  Future<void> _loadMapStyle() async {
-    try {
-      final style = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
-      setState(() {
-        _mapStyle = style;
-      });
-    } catch (e) {
-      // 스타일 로드 실패 시 무시
+  void _initializeForm() {
+    // 플레이스 정보로 기본값 설정
+    _titleController.text = '${widget.place.name} 관련 포스트';
+    _descriptionController.text = widget.place.description;
+    
+    // 플레이스 위치를 기본 위치로 설정
+    if (widget.place.hasLocation) {
+      _currentLocation = widget.place.location;
     }
-  }
-
-  // 지도 생성 시 스타일 적용
-  void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
-    if (_mapStyle != null) {
-      controller.setMapStyle(_mapStyle);
-    }
-  }
-
-  // 총액 계산
-  int get _totalAmount {
-    int price = int.tryParse(_priceController.text) ?? 0;
-    int amount = int.tryParse(_amountController.text) ?? 0;
-    return price * amount;
   }
 
   Future<void> _getCurrentLocation() async {
-    debugPrint('_getCurrentLocation() 호출됨');
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLocationLoading = true;
+    });
+
     try {
-      final position = await LocationService.getCurrentPosition();
-      if (position != null) {
-        debugPrint('현재 위치 가져옴: ${position.latitude}, ${position.longitude}');
-        final address = await LocationService.getAddressFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-        
+      final location = await LocationService.getCurrentLocation();
+      if (location != null) {
         setState(() {
-          _selectedLocation = LatLng(position.latitude, position.longitude);
-          _currentAddress = address;
-          _addressController.text = address;
-          _isLoading = false;
+          _currentLocation = location;
         });
-      } else {
-        // 위치를 가져올 수 없으면 기본 위치 유지
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('현재 위치를 가져올 수 없어 기본 위치를 사용합니다.')),
-        );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('위치를 가져오는데 실패했습니다: $e')),
-      );
-    }
-  }
-
-  void _onMapTap(LatLng location) async {
-    setState(() => _isLoading = true);
-    try {
-      final address = await LocationService.getAddressFromCoordinates(
-        location.latitude,
-        location.longitude,
-      );
-      
+      // 위치를 가져올 수 없는 경우 플레이스 위치 사용
+      if (widget.place.hasLocation) {
+        setState(() {
+          _currentLocation = widget.place.location;
+        });
+      }
+    } finally {
       setState(() {
-        _selectedLocation = location;
-        _currentAddress = address;
-        _addressController.text = address;
-        _isLoading = false;
-        _showAddressConfirmation = true;
+        _isLocationLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('주소를 가져오는데 실패했습니다: $e')),
-      );
     }
   }
 
-  void _confirmAddress() {
-    setState(() => _showAddressConfirmation = false);
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _contentController.dispose();
+    _priceController.dispose();
+    _amountController.dispose();
+    _periodController.dispose();
+    _soundController.dispose();
+    super.dispose();
   }
 
-  void _editAddress() {
-    setState(() => _showAddressConfirmation = false);
-    // 주소 입력 모드로 전환
-  }
-
-  // 월렛 파일 선택 다이얼로그
-  void _showWalletFileSelector() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('월렛에서 파일 선택'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: Column(
-              children: [
-                // 임시로 더미 데이터 사용 (실제로는 월렛에서 가져와야 함)
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: 5,
-                    itemBuilder: (context, index) {
-                      final fileName = '파일 ${index + 1}.jpg';
-                      final isSelected = _selectedWalletFile == fileName;
-                      
-                      return ListTile(
-                        leading: const Icon(Icons.image),
-                        title: Text(fileName),
-                        subtitle: Text('${DateTime.now().subtract(Duration(days: index)).toString().substring(0, 10)}'),
-                        trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
-                        onTap: () {
-                          setState(() {
-                            _selectedWalletFile = fileName;
-                          });
-                          Navigator.of(context).pop();
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('취소'),
-            ),
-          ],
+  Future<void> _pickImage() async {
+    try {
+      if (kIsWeb) {
+        // 웹에서는 file_picker 사용
+        await _pickImageWeb();
+      } else {
+        // 모바일에서는 image_picker 사용
+        await _pickImageMobile();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지 선택 실패: $e')),
         );
-      },
+      }
+    }
+  }
+
+  Future<void> _pickImageWeb() async {
+    // 웹용 이미지 선택 (file_picker 대신 input element 사용)
+    final html.FileUploadInputElement input = html.FileUploadInputElement()
+      ..accept = 'image/*'
+      ..multiple = true;
+    
+    input.click();
+    
+    await input.onChange.first;
+    
+    if (input.files != null) {
+      for (final file in input.files!) {
+        if (file.size > 10 * 1024 * 1024) { // 10MB 제한
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')),
+            );
+          }
+          continue;
+        }
+        
+        final reader = html.FileReader();
+        reader.readAsDataUrl(file);
+        
+        await reader.onLoad.first;
+        
+        if (mounted) {
+          setState(() {
+            _selectedImages.add(reader.result as String);
+            _imageNames.add(file.name);
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _pickImageMobile() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1080,
+      imageQuality: 85,
+    );
+    
+    if (image != null) {
+      if (mounted) {
+        setState(() {
+          _selectedImages.add(File(image.path));
+          _imageNames.add(image.name);
+        });
+      }
+    }
+  }
+
+  Future<void> _pickSound() async {
+    try {
+      if (kIsWeb) {
+        await _pickSoundWeb();
+      } else {
+        await _pickSoundMobile();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('사운드 선택 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickSoundWeb() async {
+    final html.FileUploadInputElement input = html.FileUploadInputElement()
+      ..accept = 'audio/*'
+      ..multiple = false;
+    
+    input.click();
+    
+    await input.onChange.first;
+    
+    if (input.files != null && input.files!.isNotEmpty) {
+      final file = input.files!.first;
+      if (file.size > 50 * 1024 * 1024) { // 50MB 제한
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')),
+          );
+        }
+        return;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _selectedSound = file;
+          _soundFileName = file.name;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickSoundMobile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+    if (result != null && result.files.isNotEmpty) {
+      final PlatformFile file = result.files.first;
+      if (file.path != null) {
+        if (mounted) {
+          setState(() {
+            _selectedSound = File(file.path!);
+            _soundFileName = file.name;
+          });
+        }
+      }
+    }
+  }
+
+  void _removeSound() {
+    setState(() {
+      _selectedSound = null;
+      _soundFileName = '';
+    });
+  }
+
+  Future<void> _removeImage(int index) async {
+    setState(() {
+      _selectedImages.removeAt(index);
+      _imageNames.removeAt(index);
+    });
+  }
+
+  Widget _buildCrossPlatformImage(dynamic imageData) {
+    if (imageData is String) {
+      // 웹에서 파일 경로인 경우
+      if (imageData.startsWith('data:image/')) {
+        // Base64 이미지
+        return Image.memory(
+          base64Decode(imageData.split(',')[1]),
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      } else if (imageData.startsWith('http')) {
+        // 네트워크 이미지
+        return Image.network(
+          imageData,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      } else {
+        // 로컬 파일 경로 (모바일)
+        return Image.file(
+          File(imageData),
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      }
+    } else if (imageData is Uint8List) {
+      // 웹에서 바이트 데이터
+      return Image.memory(
+        imageData,
+        width: 120,
+        height: 120,
+        fit: BoxFit.cover,
+      );
+    } else if (imageData is File) {
+      // 모바일에서 File 객체
+      return Image.file(
+        imageData,
+        width: 120,
+        height: 120,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 120,
+            height: 120,
+            color: Colors.grey[300],
+            child: const Icon(Icons.error, size: 40, color: Colors.red),
+          );
+        },
+      );
+    }
+    
+    // 기본 이미지
+    return Container(
+      width: 120,
+      height: 120,
+      color: Colors.grey[300],
+      child: const Icon(Icons.image, size: 40, color: Colors.grey),
     );
   }
 
   Future<void> _createPost() async {
-    if (_selectedLocation == null || _selectedWalletFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('위치와 파일을 선택해주세요')),
-      );
-      return;
+    if (!_formKey.currentState!.validate()) return;
+    if (_currentLocation == null) {
+      setState(() {
+        if (widget.place.hasLocation) {
+          _currentLocation = widget.place.location;
+          _usedRefLocation = false;
+        } else {
+          _currentLocation = _kRefLocation;
+          _usedRefLocation = true;
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_usedRefLocation ? '위치 정보를 가져올 수 없어 기본 참조 위치를 사용합니다.' : '플레이스 위치를 사용합니다.')),
+        );
+      }
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('로그인이 필요합니다')),
-        );
-        return;
+      // 이미지 업로드
+      List<String> imageUrls = [];
+      List<String> mediaTypes = [];
+      
+      for (dynamic imagePath in _selectedImages) {
+        String url;
+        if (imagePath is File) {
+          url = await _firebaseService.uploadImage(imagePath, 'posts');
+        } else if (imagePath is String && imagePath.startsWith('data:image/')) {
+          final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
+          url = await _firebaseService.uploadImageDataUrl(imagePath, 'posts', safeName);
+        } else if (imagePath is Uint8List) {
+          // 바이트 데이터는 임시로 data URL로 변환하지 않고 건너뜀 또는 별도 처리 필요
+          // 현재는 건너뜁니다.
+          continue;
+        } else {
+          // 지원하지 않는 타입은 건너뜀
+          continue;
+        }
+        imageUrls.add(url);
+        mediaTypes.add('image');
       }
-      
-      // 사용자 정보 가져오기 (실제로는 사용자 프로필에서 가져와야 함)
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      
-      final userData = userDoc.data() ?? {};
-      final creatorName = userData['profile']?['info']?['nickname'] ?? '사용자';
-      
-      // 나이 범위 계산
-      final ageMin = int.tryParse(_ageMinController.text) ?? 20;
-      final ageMax = int.tryParse(_ageMaxController.text) ?? 30;
-      
-      // 성별 변환
-      String targetGender = 'all';
-      if (_selectedGender == '남성') targetGender = 'male';
-      else if (_selectedGender == '여성') targetGender = 'female';
-      
-      // 기간 계산
-      int durationHours = int.tryParse(_periodController.text) ?? 24;
-      if (_selectedPeriodUnit == 'Day') {
-        durationHours *= 24;
-      } else if (_selectedPeriodUnit == 'Week') {
-        durationHours *= 24 * 7;
-      } else if (_selectedPeriodUnit == 'Month') {
-        durationHours *= 24 * 30;
+
+      // 텍스트 콘텐츠가 있는 경우 추가
+      if (_contentController.text.trim().isNotEmpty) {
+        mediaTypes.add('text');
+        imageUrls.add(_contentController.text.trim());
       }
-      
-      final expiresAt = DateTime.now().add(Duration(hours: durationHours));
-      
-      debugPrint('전단지 생성 시 사용할 위치: ${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}');
-      final flyerId = await _postService.createFlyer(
-        creatorId: currentUser.uid,
-        creatorName: creatorName,
-        location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
-        radius: 1000, // 1km 반경
+
+      // 사운드 업로드
+      if (_selectedSound != null) {
+        try {
+          String audioUrl;
+          if (kIsWeb) {
+            audioUrl = await _firebaseService.uploadImageFromBlob(
+              _selectedSound,
+              'audios',
+              _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
+            );
+          } else {
+            audioUrl = await _firebaseService.uploadImage(
+              _selectedSound as File,
+              'audios',
+            );
+          }
+          mediaTypes.add('audio');
+          imageUrls.add(audioUrl);
+        } catch (e) {
+          // 사운드 업로드 실패는 치명적이지 않으므로 경고만 표시
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('사운드 업로드 실패: $e')),
+            );
+          }
+        }
+      }
+
+      // 만료기간 계산
+      DateTime calculatedExpiresAt;
+      if (_hasExpiration) {
+        final int period = int.tryParse(_periodController.text) ?? 0;
+        Duration delta;
+        switch (_selectedPeriodUnit) {
+          case 'Hour':
+            delta = Duration(hours: period);
+            break;
+          case 'Day':
+            delta = Duration(days: period);
+            break;
+          case 'Week':
+            delta = Duration(days: period * 7);
+            break;
+          case 'Month':
+            delta = Duration(days: period * 30);
+            break;
+          default:
+            delta = const Duration(days: 7);
+        }
+        calculatedExpiresAt = DateTime.now().add(delta);
+      } else {
+        calculatedExpiresAt = DateTime.now().add(const Duration(days: 7));
+      }
+
+      // 포스트 모델 생성
+      final post = PostModel(
+        flyerId: '', // Firestore에서 자동 생성
+        creatorId: _firebaseService.currentUser?.uid ?? '',
+        creatorName: _firebaseService.currentUser?.displayName ?? '익명',
+        location: _currentLocation!,
+        radius: 1000, // 기본 반경 1km
+        createdAt: DateTime.now(),
+        expiresAt: calculatedExpiresAt,
         reward: int.tryParse(_priceController.text) ?? 0,
-        targetAge: [ageMin, ageMax],
-        targetGender: targetGender,
-        targetInterest: [], // TODO: 사용자 관심사에서 가져오기
-        targetPurchaseHistory: [], // TODO: 사용자 구매 이력에서 가져오기
-        mediaType: ['image'], // 선택된 파일 타입
-        mediaUrl: [_selectedWalletFile!], // 선택된 파일 URL
-        title: 'PPAM 전단지',
-        description: '월렛에서 선택된 파일',
-        canRespond: _selectedFunction == 'Reply',
-        canForward: true,
-        canRequestReward: true,
+        targetAge: [_selectedAgeMin, _selectedAgeMax],
+        targetGender: _getGenderFromTarget(_selectedTarget),
+        targetInterest: [], // TODO: 사용자 관심사 연동
+        targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
+        mediaType: mediaTypes,
+        mediaUrl: imageUrls,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        canRespond: _canRespond,
+        canForward: _canForward,
+        canRequestReward: _canTransfer,
         canUse: _selectedFunction == 'Using',
-        expiresAt: expiresAt,
+        placeId: widget.place.id, // 플레이스 ID 연결
       );
 
+      // 포스트 저장
+      await _postService.createPost(post);
+
       if (mounted) {
-        // 지도 화면으로 돌아가고 마커 새로고침
-        Navigator.pop(context, {
-          'flyerId': flyerId,
-          'location': _selectedLocation,
-          'address': _currentAddress,
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다.')),
+        );
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전단지 생성에 실패했습니다: $e')),
+          SnackBar(content: Text('포스트 생성 실패: $e')),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  String _getGenderFromTarget(String target) {
+    if (target.contains('남성')) return 'male';
+    if (target.contains('여성')) return 'female';
+    return 'all';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('포스트 뿌리기'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.purple.shade50,
-              Colors.pink.shade50,
-            ],
+        title: Text('${widget.place.name}에서 포스트 작성'),
+        actions: [
+          TextButton(
+            onPressed: _isLoading ? null : _createPost,
+            child: _isLoading 
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('작성'),
           ),
-        ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 플레이스 정보 표시
+              _buildPlaceInfo(),
+              const SizedBox(height: 24),
+              
+              // PRD2.md 요구사항에 따른 UI 구성
+              _buildSectionTitle('포스트 기본 정보'),
+              _buildTextField(
+                controller: _titleController,
+                label: '제목',
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return '제목을 입력해주세요.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _descriptionController,
+                label: '설명',
+                maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return '설명을 입력해주세요.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _contentController,
+                label: '내용 (선택사항)',
+                maxLines: 5,
+              ),
+              const SizedBox(height: 16),
+              
+              // 포스트 타입 선택
+              _buildDropdown(
+                label: '포스트 타입',
+                value: _selectedPostType,
+                items: _postTypes,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedPostType = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // 미디어 업로드 섹션
+              _buildSectionTitle('미디어 업로드'),
+              _buildImageUpload(),
+              const SizedBox(height: 16),
+              _buildSoundUpload(),
+              const SizedBox(height: 24),
+
+              // 기능 옵션 섹션
+              _buildSectionTitle('기능 옵션'),
+              _buildCheckboxOption(
+                title: '소멸시효',
+                value: _hasExpiration,
+                onChanged: (value) {
+                  setState(() {
+                    _hasExpiration = value!;
+                  });
+                },
+              ),
+              _buildCheckboxOption(
+                title: '송금 기능',
+                value: _canTransfer,
+                onChanged: (value) {
+                  setState(() {
+                    _canTransfer = value!;
+                  });
+                },
+              ),
+              _buildCheckboxOption(
+                title: '전달 기능',
+                value: _canForward,
+                onChanged: (value) {
+                  setState(() {
+                    _canForward = value!;
+                  });
+                },
+              ),
+              _buildCheckboxOption(
+                title: '응답 기능',
+                value: _canRespond,
+                onChanged: (value) {
+                  setState(() {
+                    _canRespond = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // 타겟팅 옵션
+              _buildSectionTitle('타겟팅 옵션'),
+              _buildDropdown(
+                label: '타겟팅 레벨',
+                value: _selectedTargeting,
+                items: _targetingOptions,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedTargeting = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildFunctionDropdown(),
+              const SizedBox(height: 16),
+              _buildTargetDropdown(),
+              const SizedBox(height: 16),
+              _buildAgeRange(),
+              const SizedBox(height: 24),
+
+              // 가격 및 수량 섹션
+              _buildSectionTitle('가격 및 수량'),
+              Row(
                 children: [
-                  // 지도 영역
                   Expanded(
-                    flex: 2,
-                    child: _selectedLocation == null
-                        ? const Center(child: Text('위치를 선택해주세요'))
-                        : GoogleMap(
-                            onMapCreated: _onMapCreated,
-                            initialCameraPosition: CameraPosition(
-                              target: _selectedLocation!,
-                              zoom: 15.0,
-                            ),
-                            myLocationEnabled: true,
-                            myLocationButtonEnabled: false,
-                            zoomControlsEnabled: false,
-                            zoomGesturesEnabled: true,
-                            scrollGesturesEnabled: true,
-                            tiltGesturesEnabled: true,
-                            rotateGesturesEnabled: true,
-                            onTap: _args != null && _args!['location'] != null ? null : _onMapTap,
-                            markers: _selectedLocation != null
-                                ? {
-                                    Marker(
-                                      markerId: const MarkerId('selected_location'),
-                                      position: _selectedLocation!,
-                                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                                      infoWindow: InfoWindow(
-                                        title: '선택된 위치',
-                                        snippet: _currentAddress,
-                                      ),
-                                    ),
-                                  }
-                                : {},
-                          ),
-                  ),
-                  
-                  // 주소 확인 다이얼로그
-                  if (_showAddressConfirmation)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      color: Colors.blue.shade50,
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            color: Colors.blue,
-                            size: 32,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '이 주소가 맞습니까?',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.blue, width: 2),
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.white,
-                            ),
-                            child: Text(
-                              _currentAddress ?? '',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _confirmAddress,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.check),
-                                  label: const Text('예, 맞습니다'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _editAddress,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.edit),
-                                  label: const Text('아니오, 수정'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    child: _buildTextField(
+                      controller: _priceController,
+                      label: '가격',
+                      keyboardType: TextInputType.number,
                     ),
-                  
-                  // 포스트 설정 영역
+                  ),
+                  const SizedBox(width: 16),
                   Expanded(
-                    flex: 3,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withValues(alpha: 0.2),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // 위치 정보 표시
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.location_on, color: Colors.blue),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _currentAddress ?? '위치를 선택해주세요',
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            
-                            // 월렛 파일 선택
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('선택된 파일', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.image, color: Colors.blue),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _selectedWalletFile ?? '월렛에서 파일을 선택해주세요',
-                                          style: Theme.of(context).textTheme.bodyMedium,
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _showWalletFileSelector,
-                                        child: const Text('파일 선택'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            
-                            // 가격 및 수량 설정
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Price', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: _priceController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        ),
-                                        onChanged: (value) => setState(() {}),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: _amountController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        ),
-                                        onChanged: (value) => setState(() {}),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.black, width: 1),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'Total: $_totalAmount',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            
-                            // 기능 설정
-                            const Text('Function', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            
-                            // 기간 설정
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Period', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: _periodController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: DropdownButton<String>(
-                                    value: _selectedPeriodUnit,
-                                    underline: Container(),
-                                    items: ['Hour', 'Day', 'Week', 'Month'].map((String value) {
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(value),
-                                      );
-                                    }).toList(),
-                                    onChanged: (String? newValue) {
-                                      setState(() {
-                                        _selectedPeriodUnit = newValue!;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            
-                            // 기능 버튼들
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => setState(() => _selectedFunction = 'Using'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _selectedFunction == 'Using' ? Colors.blue : Colors.grey.shade300,
-                                      foregroundColor: _selectedFunction == 'Using' ? Colors.white : Colors.black,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                    ),
-                                    child: const Text('Using'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => setState(() => _selectedFunction = 'Reply'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _selectedFunction == 'Reply' ? Colors.blue : Colors.grey.shade300,
-                                      foregroundColor: _selectedFunction == 'Reply' ? Colors.white : Colors.black,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                    ),
-                                    child: const Text('Reply'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            
-                            // 타겟 설정
-                            const Text('Target', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            
-                            // 성별 드롭다운
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Gender', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(color: Colors.grey),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: DropdownButton<String>(
-                                          value: _selectedGender,
-                                          isExpanded: true,
-                                          underline: Container(),
-                                          items: ['상관없음', '남성', '여성'].map((String value) {
-                                            return DropdownMenuItem<String>(
-                                              value: value,
-                                              child: Text(value),
-                                            );
-                                          }).toList(),
-                                          onChanged: (String? newValue) {
-                                            setState(() {
-                                              _selectedGender = newValue!;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Age Range', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(color: Colors.grey),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: DropdownButton<String>(
-                                          value: _selectedAgeRange,
-                                          isExpanded: true,
-                                          underline: Container(),
-                                          items: ['상관없음', '10대', '20대', '30대', '40대', '50대+'].map((String value) {
-                                            return DropdownMenuItem<String>(
-                                              value: value,
-                                              child: Text(value),
-                                            );
-                                          }).toList(),
-                                          onChanged: (String? newValue) {
-                                            setState(() {
-                                              _selectedAgeRange = newValue!;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            
-                            // 나이 범위 설정
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Age (min)', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: _ageMinController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Age (max)', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: _ageMaxController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            
-                            // PPAM! 버튼
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.orange.shade300, Colors.yellow.shade300],
-                                ),
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                              child: ElevatedButton(
-                                onPressed: _createPost,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(25),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'PPAM!',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    child: _buildTextField(
+                      controller: _amountController,
+                      label: '수량',
+                      keyboardType: TextInputType.number,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _periodController,
+                      label: '기간',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildPeriodUnitDropdown(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildTotalPrice(),
+              const SizedBox(height: 24),
+
+              // 이미지 섹션 제거됨 (상단 '미디어 업로드'에 통합)
+
+              // 위치 정보 섹션
+              _buildSectionTitle('위치 정보'),
+              _buildLocationInfo(),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _addressController.dispose();
-    _priceController.dispose();
-    _amountController.dispose();
-    _periodController.dispose();
-    _ageMinController.dispose();
-    _ageMaxController.dispose();
-    super.dispose();
+  Widget _buildPlaceInfo() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.place, color: Colors.blue[600]),
+              const SizedBox(width: 8),
+              Text(
+                '플레이스 정보',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue[800],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.place.name,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (widget.place.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              widget.place.description,
+              style: TextStyle(
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+          if (widget.place.address != null && widget.place.address!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    widget.place.address!,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      validator: validator,
+    );
+  }
+
+  Widget _buildFunctionDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedFunction,
+      decoration: const InputDecoration(
+        labelText: '기능',
+        border: OutlineInputBorder(),
+      ),
+      items: _functions.map((String function) {
+        return DropdownMenuItem<String>(
+          value: function,
+          child: Text(_getFunctionDisplayName(function)),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedFunction = newValue!;
+        });
+      },
+    );
+  }
+
+  String _getFunctionDisplayName(String function) {
+    switch (function) {
+      case 'Using':
+        return '사용하기';
+      case 'Selling':
+        return '팔기';
+      case 'Buying':
+        return '사기';
+      case 'Sharing':
+        return '나누기';
+      default:
+        return function;
+    }
+  }
+
+  Widget _buildTargetDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedTarget,
+      decoration: const InputDecoration(
+        labelText: '타겟',
+        border: OutlineInputBorder(),
+      ),
+      items: _targets.map((String target) {
+        return DropdownMenuItem<String>(
+          value: target,
+          child: Text(target),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedTarget = newValue!;
+        });
+      },
+    );
+  }
+
+  Widget _buildAgeRange() {
+    return Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<int>(
+            value: _selectedAgeMin,
+            decoration: const InputDecoration(
+              labelText: '최소 나이',
+              border: OutlineInputBorder(),
+            ),
+            items: List.generate(81, (index) => index + 10).map((int age) {
+              return DropdownMenuItem<int>(
+                value: age,
+                child: Text('$age세'),
+              );
+            }).toList(),
+            onChanged: (int? newValue) {
+              setState(() {
+                _selectedAgeMin = newValue!;
+                if (_selectedAgeMax < _selectedAgeMin) {
+                  _selectedAgeMax = _selectedAgeMin;
+                }
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: DropdownButtonFormField<int>(
+            value: _selectedAgeMax,
+            decoration: const InputDecoration(
+              labelText: '최대 나이',
+              border: OutlineInputBorder(),
+            ),
+            items: List.generate(81, (index) => index + 10)
+                .where((age) => age >= _selectedAgeMin)
+                .map((int age) {
+              return DropdownMenuItem<int>(
+                value: age,
+                child: Text('$age세'),
+              );
+            }).toList(),
+            onChanged: (int? newValue) {
+              setState(() {
+                _selectedAgeMax = newValue!;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPeriodUnitDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedPeriodUnit,
+      decoration: const InputDecoration(
+        labelText: '기간 단위',
+        border: OutlineInputBorder(),
+      ),
+      items: _periodUnits.map((String unit) {
+        return DropdownMenuItem<String>(
+          value: unit,
+          child: Text(_getPeriodUnitDisplayName(unit)),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedPeriodUnit = newValue!;
+        });
+      },
+    );
+  }
+
+  String _getPeriodUnitDisplayName(String unit) {
+    switch (unit) {
+      case 'Hour':
+        return '시간';
+      case 'Day':
+        return '일';
+      case 'Week':
+        return '주';
+      case 'Month':
+        return '월';
+      default:
+        return unit;
+    }
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ElevatedButton.icon(
+          onPressed: _pickImage,
+          icon: const Icon(Icons.add_photo_alternate),
+          label: const Text('이미지 추가'),
+        ),
+        if (_selectedImages.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedImages.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _buildCrossPlatformImage(_selectedImages[index]),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLocationInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_isLocationLoading) ...[
+          const Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text('위치 정보를 가져오는 중...'),
+            ],
+          ),
+        ] else if (_currentLocation != null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green[600]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '위치 정보 확인됨',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${_currentLocation!.latitude.toStringAsFixed(6)}, ${_currentLocation!.longitude.toStringAsFixed(6)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error, color: Colors.red[600]),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('위치 정보를 가져올 수 없습니다.'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          '플레이스 위치를 기준으로 포스트가 생성됩니다.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 공통 드롭다운 위젯 (String 전용)
+  Widget _buildDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      items: items
+          .map((e) => DropdownMenuItem<String>(value: e, child: Text(e)))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  // 미디어 업로드 - 이미지 (기존 이미지 피커를 래핑)
+  Widget _buildImageUpload() {
+    return _buildImagePicker();
+  }
+
+  // 미디어 업로드 - 사운드
+  Widget _buildSoundUpload() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ElevatedButton.icon(
+          onPressed: _pickSound,
+          icon: const Icon(Icons.audiotrack),
+          label: const Text('사운드 선택'),
+        ),
+        if (_soundFileName.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.music_note, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _soundFileName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: _removeSound,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('제거'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 총액 표시 (가격 × 수량)
+  Widget _buildTotalPrice() {
+    int price = int.tryParse(_priceController.text) ?? 0;
+    int amount = int.tryParse(_amountController.text) ?? 0;
+    int total = price * amount;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(
+        '총액: ${total.toString()}',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  // 공통 체크박스 옵션 위젯
+  Widget _buildCheckboxOption({
+    required String title,
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      value: value,
+      onChanged: onChanged,
+      controlAffinity: ListTileControlAffinity.leading,
+    );
   }
 } 

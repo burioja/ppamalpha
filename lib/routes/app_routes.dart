@@ -3,28 +3,49 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/user/main_screen.dart';
 import '../screens/user/map_screen.dart';
-import '../screens/user/wallet_screen.dart';
+import '../models/post_model.dart';
+
 import '../screens/user/budget_screen.dart';
 import '../screens/user/search_screen.dart';
 import '../screens/user/map_search_screen.dart';
 import '../screens/user/track_connection_screen.dart';
 import '../screens/user/settings_screen.dart';
 import '../screens/user/post_place_screen.dart';
+import '../screens/user/post_place_selection_screen.dart';
+import '../screens/user/post_by_location_screen.dart';
+import '../screens/user/location_picker_screen.dart';
+import '../screens/user/post_detail_screen.dart';
+import '../screens/user/post_edit_screen.dart';
 import '../screens/shared/migration_screen.dart';
 import '../screens/shared/debug_screen.dart';
+import '../models/place_model.dart';
+import '../screens/place/create_place_screen.dart';
+import '../screens/place/place_detail_screen.dart';
+import '../screens/place/place_image_viewer_screen.dart';
+import '../screens/place/place_search_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class AppRoutes {
   static const String login = '/login';
   static const String signup = '/signup';
   static const String main = '/main';
   static const String map = '/map';
-  static const String wallet = '/wallet';
+
   static const String budget = '/budget';
   static const String search = '/search';
   static const String mapSearch = '/map-search';
   static const String trackConnection = '/track-connection';
   static const String settings = '/settings';
   static const String postPlace = '/post-place';
+  static const String postPlaceSelection = '/post-place-selection';
+  static const String postDetail = '/post-detail';
+  static const String postEdit = '/post-edit';
+  static const String postByLocation = '/post-by-location';
+  static const String locationPicker = '/location-picker';
+  static const String createPlace = '/create-place';
+  static const String placeDetail = '/place-detail';
+  static const String placeSearch = '/place-search';
+  static const String placeImageViewer = '/place-image-viewer';
   static const String migration = '/migration';
   static const String debug = '/debug';
 
@@ -33,13 +54,75 @@ class AppRoutes {
     signup: (context) => const SignupScreen(),
     main: (context) => const MainScreen(),
     map: (context) => const MapScreen(),
-    wallet: (context) => const WalletScreen(),
+
     budget: (context) => const BudgetScreen(),
     search: (context) => const SearchScreen(),
     mapSearch: (context) => const MapSearchScreen(),
     trackConnection: (context) => const TrackConnectionScreen(type: 'track'),
     settings: (context) => const SettingsScreen(),
-    postPlace: (context) => const PostPlaceScreen(),
+    postPlace: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final place = args?['place'] as PlaceModel?;
+      
+      if (place == null) {
+        return const Scaffold(
+          body: Center(child: Text('플레이스 정보를 찾을 수 없습니다.')),
+        );
+      }
+      
+      return PostPlaceScreen(place: place);
+    },
+    postPlaceSelection: (context) => const PostPlaceSelectionScreen(),
+    postByLocation: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final location = args?['location'] as LatLng?;
+      final address = args?['address'] as String?;
+      if (location == null) {
+        return const Scaffold(body: Center(child: Text('위치 정보가 없습니다.')));
+      }
+      return PostByLocationScreen(location: location, address: address);
+    },
+    locationPicker: (context) => const LocationPickerScreen(),
+    postDetail: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final post = args?['post'] as PostModel?;
+      final isEditable = args?['isEditable'] as bool? ?? false;
+      
+      if (post == null) {
+        return const Scaffold(
+          body: Center(child: Text('포스트 정보를 찾을 수 없습니다.')),
+        );
+      }
+      
+      return PostDetailScreen(post: post, isEditable: isEditable);
+    },
+    postEdit: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final post = args?['post'] as PostModel?;
+      if (post == null) {
+        return const Scaffold(
+          body: Center(child: Text('포스트 정보를 찾을 수 없습니다.')),
+        );
+      }
+      return PostEditScreen(post: post);
+    },
+    createPlace: (context) => const CreatePlaceScreen(),
+    placeDetail: (context) {
+      final placeId = ModalRoute.of(context)?.settings.arguments as String?;
+      if (placeId == null) {
+        return const Scaffold(
+          body: Center(child: Text('플레이스 ID를 찾을 수 없습니다.')),
+        );
+      }
+      return PlaceDetailScreen(placeId: placeId);
+    },
+    placeSearch: (context) => const PlaceSearchScreen(),
+    placeImageViewer: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final images = (args?['images'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? <String>[];
+      final index = args?['index'] as int? ?? 0;
+      return PlaceImageViewerScreen(images: images, initialIndex: index);
+    },
     migration: (context) => const MigrationScreen(),
     debug: (context) => const DebugScreen(),
   };
