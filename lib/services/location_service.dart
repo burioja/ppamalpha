@@ -23,6 +23,20 @@ class LocationService {
     }
   }
 
+  // 스푸핑 감지(간단): 과도한 속도/급격한 점프 감지
+  static bool isSuspectedSpoof({required Position prev, required Position next}) {
+    try {
+      final meters = Geolocator.distanceBetween(prev.latitude, prev.longitude, next.latitude, next.longitude);
+      final dtSec = (next.timestamp?.difference(prev.timestamp ?? DateTime.now()).inSeconds ?? 1).abs();
+      if (dtSec == 0) return false;
+      final speed = meters / dtSec; // m/s
+      // 50 m/s (~180 km/h) 이상이면 의심
+      return speed > 50.0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // 좌표에서 주소로 변환 (상세 주소)
   static Future<String> getAddressFromCoordinates(double latitude, double longitude) async {
     try {

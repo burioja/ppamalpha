@@ -16,6 +16,7 @@ class _SignupScreenState extends State<SignupScreen> {
   File? _profileImage;
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   String? _selectedGender;
   int _currentStep = 0;
   final List<bool> _isChecked = List.generate(5, (index) => false);
@@ -24,6 +25,7 @@ class _SignupScreenState extends State<SignupScreen> {
   void dispose() {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -90,6 +92,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 10),
                   TextField(
+                    controller: _emailController,
                     decoration: const InputDecoration(labelText: '이메일'),
                     onChanged: userProvider.setEmail,
                   ),
@@ -111,6 +114,14 @@ class _SignupScreenState extends State<SignupScreen> {
                       DropdownMenuItem(value: "여성", child: Text("여성")),
                     ],
                     onChanged: (value) => setState(() => _selectedGender = value),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _validatePasswords(),
+                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    ),
                   ),
                 ],
               ),
@@ -145,6 +156,23 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
       ),
     );
+  }
+
+  String _validatePasswords() {
+    final email = _emailController.text.trim();
+    final pass = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (email.isNotEmpty && !emailRegex.hasMatch(email)) {
+      return '이메일 형식이 올바르지 않습니다.';
+    }
+    if (pass.isNotEmpty && pass.length < 8) {
+      return '비밀번호는 8자 이상이어야 합니다.';
+    }
+    if (confirm.isNotEmpty && confirm != pass) {
+      return '비밀번호와 확인이 일치하지 않습니다.';
+    }
+    return '';
   }
 
   Widget renderContainer(bool checked, String text, VoidCallback onTap) {

@@ -1,0 +1,93 @@
+{
+	"meta": {
+		"generatedAt": "2025-08-23T12:23:48.471Z",
+		"tasksAnalyzed": 10,
+		"totalTasks": 10,
+		"analysisCount": 10,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 13,
+			"taskTitle": "지도 화면 구현",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "지도 화면 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) Google 지도 API 통합 및 스타일링, 2) Fog of War 시각화 구현, 3) 마커 및 클러스터링 시스템 개발, 4) 포스트 필터링 UI 및 로직 구현, 5) 롱프레스 기능 및 이벤트 처리, 6) 위치 기반 포스트 수신 시스템 구현. 각 하위 작업에 대해 상세 설명, 기술 요구사항, 예상 소요 시간을 포함해주세요.",
+			"reasoning": "이 작업은 Google 지도 API 통합, 복잡한 위치 기반 기능, 마커 클러스터링, 실시간 데이터 처리 등 다양한 기술적 요소를 포함하고 있습니다. 특히 Fog of War 구현과 위치 스푸핑 감지 같은 고급 기능이 필요하며, 성능 최적화도 중요합니다. 6개의 주요 기능 영역으로 자연스럽게 분할되며, 각 영역은 독립적으로 개발하고 테스트할 수 있습니다."
+		},
+		{
+			"taskId": 18,
+			"taskTitle": "Tajapay 계좌 연동 및 예산 화면 구현",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Tajapay 계좌 연동 및 예산 화면 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) Tajapay API 연동 및 계좌 생성 프로세스 구현, 2) KYC/AML 체크 통합 및 검증 로직 구현, 3) 예산 화면 UI 및 잔액 관리 기능 구현, 4) 충전 및 출금 프로세스 개발, 5) 트랜잭션 내역 및 데이터 연동 구현. 각 하위 작업에 대해 구체적인 기능 요구사항, 기술적 고려사항, 보안 요소를 포함해주세요.",
+			"reasoning": "이 작업은 외부 금융 API 연동, 보안 인증, 트랜잭션 처리 등 금융 관련 복잡한 기능을 포함합니다. KYC/AML 검증과 같은 규제 준수 요소와 결제 프로세스 구현이 필요하며, 데이터의 정확성과 보안이 매우 중요합니다. 5개의 논리적 구성요소로 나누어 개발하는 것이 효율적이며, 각 부분은 상호 의존성을 가지면서도 독립적으로 테스트 가능합니다."
+		},
+		{
+			"taskId": 20,
+			"taskTitle": "데이터 모델 및 성능 최적화 구현",
+			"complexityScore": 9,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "데이터 모델 및 성능 최적화 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) Firestore 데이터 모델 설계 및 구현, 2) 인덱스 설정 및 쿼리 최적화, 3) 성능 최적화 전략 구현, 4) 로깅 및 분석 시스템 구축. 각 하위 작업에 대해 구체적인 기술적 접근 방법, 성능 지표, 최적화 전략을 포함해주세요.",
+			"reasoning": "이 작업은 전체 애플리케이션의 데이터 구조와 성능에 영향을 미치는 핵심적인 작업입니다. 복잡한 Firestore 데이터 모델 설계, 인덱스 최적화, 렌더링 성능 개선, 분석 시스템 구축 등 고도의 기술적 지식이 필요합니다. 또한 다른 모든 기능(11-19)에 의존성을 가지고 있어 통합적인 접근이 필요합니다. 4개의 주요 영역으로 나누어 체계적으로 접근하는 것이 효과적입니다."
+		},
+		{
+			"taskId": 19,
+			"taskTitle": "위치 검증 및 보안 기능 구현",
+			"complexityScore": 9,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "위치 검증 및 보안 기능 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) 다중 위치 검증 시스템 설계 및 구현, 2) 위치 스푸핑 감지 알고리즘 개발, 3) Firebase 보안 규칙 및 서버 측 검증 구현, 4) 위치 권한 관리 및 사용자 경험 최적화, 5) Cloud Functions 개발 및 배포. 각 하위 작업에 대해 구체적인 알고리즘 접근 방식, 보안 고려사항, 테스트 전략을 포함해주세요.",
+			"reasoning": "이 작업은 위치 데이터의 정확성과 보안을 보장하는 핵심 기능을 다루며, 복잡한 알고리즘과 다중 검증 시스템이 필요합니다. 위치 스푸핑 감지, 서버 측 검증, Cloud Functions 개발 등 고급 기술이 요구되며, 사용자 개인정보와 직접 관련된 보안 요소가 중요합니다. 5개의 주요 영역으로 나누어 체계적으로 접근하는 것이 효과적이며, 각 영역은 독립적으로 개발하면서도 통합적으로 작동해야 합니다."
+		},
+		{
+			"taskId": 17,
+			"taskTitle": "로그인 및 회원가입 화면 구현",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "로그인 및 회원가입 화면 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) 로그인 화면 UI 및 인증 로직 구현, 2) 회원가입 - 개인정보입력 화면 및 검증 로직 개발, 3) 회원가입 - 추가정보입력 화면 및 기능 구현, 4) 회원가입 - 약관동의 화면 및 완료 프로세스 개발. 각 하위 작업에 대해 UI/UX 요구사항, 데이터 검증 로직, Firebase 인증 연동 방법을 상세히 포함해주세요.",
+			"reasoning": "이 작업은 사용자 인증과 회원가입 프로세스를 구현하는 것으로, 일반적인 패턴을 따르지만 여러 단계와 검증 로직이 필요합니다. Firebase 인증, 이메일/SMS 인증, 개인정보 처리 등 다양한 기능이 포함되어 있습니다. 회원가입 프로세스가 3단계로 명확하게 구분되어 있어 4개의 논리적 하위 작업으로 나누는 것이 자연스럽습니다. 각 단계는 순차적으로 진행되며 사용자 경험을 고려한 UI 구현이 중요합니다."
+		},
+		{
+			"taskId": 16,
+			"taskTitle": "스토어 화면 및 인증 기능 구현",
+			"complexityScore": 7,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "스토어 화면 및 인증 기능 구현 작업을 다음과 같은 하위 작업으로 분할해주세요: 1) 스토어 화면 UI 및 정보 표시 기능 구현, 2) NFC 기반 직원 인증 시스템 개발, 3) WiFi 기반 위치 인증 메커니즘 구현, 4) 스토어 관리 및 데이터 연동 기능 개발. 각 하위 작업에 대해 구체적인 기술 요구사항, 인증 메커니즘의 보안 고려사항, UI/UX 디자인 지침을 포함해주세요.",
+			"reasoning": "이 작업은 스토어 정보 표시와 함께 NFC, WiFi 기반의 복잡한 인증 메커니즘을 구현해야 합니다. 특히 직원 인증 시스템은 보안이 중요하며, 다양한 하드웨어 기능(NFC, WiFi)과의 연동이 필요합니다. 스토어 데이터 관리와 인증 프로세스가 포함되어 있어 기술적 복잡도가 높습니다. 4개의 주요 기능 영역으로 나누어 개발하는 것이 효율적이며, 각 영역은 독립적으로 개발하고 테스트할 수 있습니다."
+		},
+		{
+			"taskId": 11,
+			"taskTitle": "탑바 구현",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on 탑바 구현.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 12,
+			"taskTitle": "바텀 네비게이션 및 화면 전환 구현",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on 바텀 네비게이션 및 화면 전환 구현.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 14,
+			"taskTitle": "포스트 배포 및 설정 화면 구현",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on 포스트 배포 및 설정 화면 구현.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 15,
+			"taskTitle": "인박스 화면 및 포스트 관리 구현",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on 인박스 화면 및 포스트 관리 구현.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		}
+	]
+}

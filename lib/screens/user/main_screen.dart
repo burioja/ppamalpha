@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'map_screen.dart';
 import 'wallet_screen.dart';
+import 'inbox_screen.dart';
+import 'store_screen.dart';
 
 import '../../services/location_service.dart';
 import 'budget_screen.dart';
@@ -24,16 +26,22 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _widgetOptions = [
     MapScreen(key: MapScreen.mapKey),
+    const InboxScreen(),
+    const StoreScreen(),
     const WalletScreen(),
   ];
 
   final List<IconData> _icons = [
     Icons.map,
+    Icons.inbox,
+    Icons.store,
     Icons.account_balance_wallet,
   ];
 
   final List<String> _labels = [
     'Map',
+    'Inbox',
+    'Store',
     'Wallet',
   ];
 
@@ -194,9 +202,7 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isMapLocationButton
-                              ? "현재위치"
-                              : _labels[index],
+                          isMapLocationButton ? "현재위치" : _labels[index],
                           style: TextStyle(
                             fontSize: 12,
                             color: isSelected ? accentColor : Colors.grey,
