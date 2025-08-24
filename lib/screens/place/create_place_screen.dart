@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:convert';
-import 'package:universal_html/html.dart' as html;
+
 import '../../models/place_model.dart';
 import '../../services/place_service.dart';
 import '../../services/firebase_service.dart';
@@ -414,28 +414,33 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
   }
 
   Future<void> _pickImageWeb() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..multiple = true;
-    input.click();
-    await input.onChange.first;
-    if (input.files != null) {
-      for (final file in input.files!) {
-        if (file.size > 10 * 1024 * 1024) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')));
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+        allowCompression: true,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        for (final file in result.files) {
+          if (file.size > 10 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')));
+            }
+            continue;
           }
-          continue;
+          
+          if (mounted) {
+            setState(() {
+              _selectedImages.add(file.path ?? '');
+              _imageNames.add(file.name);
+            });
+          }
         }
-        final reader = html.FileReader();
-        reader.readAsDataUrl(file);
-        await reader.onLoad.first;
-        if (mounted) {
-          setState(() {
-            _selectedImages.add(reader.result as String);
-            _imageNames.add(file.name);
-          });
-        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('이미지 선택 실패: $e')));
       }
     }
   }

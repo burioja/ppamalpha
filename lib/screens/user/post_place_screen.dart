@@ -6,12 +6,16 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
-import 'package:universal_html/html.dart' as html;
+
 import '../../models/place_model.dart';
 import '../../models/post_model.dart';
 import '../../services/post_service.dart';
 import '../../services/firebase_service.dart';
 import '../../services/location_service.dart';
+import '../../widgets/range_slider_with_input.dart';
+import '../../widgets/gender_checkbox_group.dart';
+import '../../widgets/period_slider_with_input.dart';
+import '../../widgets/price_calculator.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   final PlaceModel place;
@@ -33,19 +37,15 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   
   // 폼 컨트롤러들
   final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
   final _contentController = TextEditingController();
   final _priceController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _periodController = TextEditingController();
   final _soundController = TextEditingController();
   
   // 선택된 값들
   String _selectedFunction = 'Using';
-  String _selectedPeriodUnit = 'Hour';
-  String _selectedTarget = '상관없음/상관없음';
-  int _selectedAgeMin = 20;
-  int _selectedAgeMax = 30;
+  int _selectedPeriod = 7; // 기본 7일
+  List<String> _selectedGenders = ['male', 'female']; // 기본 남성/여성 모두
+  RangeValues _selectedAgeRange = const RangeValues(20, 30);
   
   // PRD2.md 요구사항 추가
   String _selectedPostType = '일반';
@@ -73,14 +73,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   
   // 함수 옵션들
   final List<String> _functions = ['Using', 'Selling', 'Buying', 'Sharing'];
-  final List<String> _periodUnits = ['Hour', 'Day', 'Week', 'Month'];
-  final List<String> _targets = [
-    '상관없음/상관없음',
-    '남성/남성',
-    '여성/여성',
-    '남성/여성',
-    '여성/남성',
-  ];
   
   // PRD2.md 요구사항 옵션들
   final List<String> _postTypes = ['일반', '쿠폰'];
@@ -94,15 +86,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     _priceController.addListener(() {
       if (mounted) setState(() {});
     });
-    _amountController.addListener(() {
-      if (mounted) setState(() {});
-    });
   }
 
   void _initializeForm() {
     // 플레이스 정보로 기본값 설정
     _titleController.text = '${widget.place.name} 관련 포스트';
-    _descriptionController.text = widget.place.description;
     
     // 플레이스 위치를 기본 위치로 설정
     if (widget.place.hasLocation) {
@@ -116,10 +104,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     });
 
     try {
-      final location = await LocationService.getCurrentLocation();
+      final location = await LocationService.getCurrentPosition();
       if (location != null) {
         setState(() {
-          _currentLocation = location;
+          _currentLocation = GeoPoint(location.latitude, location.longitude);
         });
       }
     } catch (e) {
@@ -139,11 +127,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
     _contentController.dispose();
     _priceController.dispose();
-    _amountController.dispose();
-    _periodController.dispose();
     _soundController.dispose();
     super.dispose();
   }
@@ -167,37 +152,41 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   Future<void> _pickImageWeb() async {
-    // 웹용 이미지 선택 (file_picker 대신 input element 사용)
-    final html.FileUploadInputElement input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..multiple = true;
-    
-    input.click();
-    
-    await input.onChange.first;
-    
-    if (input.files != null) {
-      for (final file in input.files!) {
-        if (file.size > 10 * 1024 * 1024) { // 10MB 제한
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')),
-            );
+    try {
+      // 웹에서는 file_picker 사용
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+        allowCompression: true,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        for (final file in result.files) {
+          if (file.size > 10 * 1024 * 1024) { // 10MB 제한
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')),
+              );
+            }
+            continue;
           }
-          continue;
+          
+          if (mounted) {
+            setState(() {
+              // 웹에서는 항상 bytes를 사용
+              if (file.bytes != null) {
+                _selectedImages.add(file.bytes!);
+              }
+              _imageNames.add(file.name);
+            });
+          }
         }
-        
-        final reader = html.FileReader();
-        reader.readAsDataUrl(file);
-        
-        await reader.onLoad.first;
-        
-        if (mounted) {
-          setState(() {
-            _selectedImages.add(reader.result as String);
-            _imageNames.add(file.name);
-          });
-        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지 선택 실패: $e')),
+        );
       }
     }
   }
@@ -238,30 +227,38 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   Future<void> _pickSoundWeb() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()
-      ..accept = 'audio/*'
-      ..multiple = false;
-    
-    input.click();
-    
-    await input.onChange.first;
-    
-    if (input.files != null && input.files!.isNotEmpty) {
-      final file = input.files!.first;
-      if (file.size > 50 * 1024 * 1024) { // 50MB 제한
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')),
-          );
-        }
-        return;
-      }
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
       
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.size > 50 * 1024 * 1024) { // 50MB 제한
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')),
+            );
+          }
+          return;
+        }
+        
+        if (mounted) {
+          setState(() {
+            // 웹에서는 항상 bytes를 사용
+            if (file.bytes != null) {
+              _selectedSound = file.bytes!;
+            }
+            _soundFileName = file.name;
+          });
+        }
+      }
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _selectedSound = file;
-          _soundFileName = file.name;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('사운드 선택 실패: $e')),
+        );
       }
     }
   }
@@ -394,9 +391,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
           url = await _firebaseService.uploadImageDataUrl(imagePath, 'posts', safeName);
         } else if (imagePath is Uint8List) {
-          // 바이트 데이터는 임시로 data URL로 변환하지 않고 건너뜀 또는 별도 처리 필요
-          // 현재는 건너뜁니다.
-          continue;
+          // 웹에서 선택된 바이트 데이터 처리
+          final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
+          url = await _firebaseService.uploadImageFromBlob(imagePath, 'posts', safeName);
         } else {
           // 지원하지 않는 타입은 건너뜀
           continue;
@@ -414,21 +411,27 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       // 사운드 업로드
       if (_selectedSound != null) {
         try {
-          String audioUrl;
-          if (kIsWeb) {
+          String? audioUrl;
+          if (_selectedSound is Uint8List) {
+            // 웹에서 선택된 바이트 데이터 처리
             audioUrl = await _firebaseService.uploadImageFromBlob(
               _selectedSound,
               'audios',
               _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
             );
-          } else {
+          } else if (_selectedSound is File) {
+            // 모바일에서 선택된 파일 처리
             audioUrl = await _firebaseService.uploadImage(
-              _selectedSound as File,
+              _selectedSound,
               'audios',
             );
           }
-          mediaTypes.add('audio');
-          imageUrls.add(audioUrl);
+          
+          // audioUrl이 성공적으로 생성된 경우에만 추가
+          if (audioUrl != null) {
+            mediaTypes.add('audio');
+            imageUrls.add(audioUrl);
+          }
         } catch (e) {
           // 사운드 업로드 실패는 치명적이지 않으므로 경고만 표시
           if (mounted) {
@@ -442,25 +445,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       // 만료기간 계산
       DateTime calculatedExpiresAt;
       if (_hasExpiration) {
-        final int period = int.tryParse(_periodController.text) ?? 0;
-        Duration delta;
-        switch (_selectedPeriodUnit) {
-          case 'Hour':
-            delta = Duration(hours: period);
-            break;
-          case 'Day':
-            delta = Duration(days: period);
-            break;
-          case 'Week':
-            delta = Duration(days: period * 7);
-            break;
-          case 'Month':
-            delta = Duration(days: period * 30);
-            break;
-          default:
-            delta = const Duration(days: 7);
-        }
-        calculatedExpiresAt = DateTime.now().add(delta);
+        calculatedExpiresAt = DateTime.now().add(Duration(days: _selectedPeriod));
       } else {
         calculatedExpiresAt = DateTime.now().add(const Duration(days: 7));
       }
@@ -475,14 +460,14 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         createdAt: DateTime.now(),
         expiresAt: calculatedExpiresAt,
         reward: int.tryParse(_priceController.text) ?? 0,
-        targetAge: [_selectedAgeMin, _selectedAgeMax],
-        targetGender: _getGenderFromTarget(_selectedTarget),
+        targetAge: [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
+        targetGender: _getGenderFromTarget(_selectedGenders),
         targetInterest: [], // TODO: 사용자 관심사 연동
         targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
         mediaType: mediaTypes,
         mediaUrl: imageUrls,
         title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
+        description: '', // 설명 필드 제거
         canRespond: _canRespond,
         canForward: _canForward,
         canRequestReward: _canTransfer,
@@ -514,10 +499,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     }
   }
 
-  String _getGenderFromTarget(String target) {
-    if (target.contains('남성')) return 'male';
-    if (target.contains('여성')) return 'female';
-    return 'all';
+  String _getGenderFromTarget(List<String> genders) {
+    if (genders.isEmpty) return 'all';
+    if (genders.length == 1) return genders.first;
+    return 'both'; // 남성/여성 모두
   }
 
   @override
@@ -549,7 +534,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               _buildPlaceInfo(),
               const SizedBox(height: 24),
               
-              // PRD2.md 요구사항에 따른 UI 구성
+              // 포스트 기본 정보
               _buildSectionTitle('포스트 기본 정보'),
               _buildTextField(
                 controller: _titleController,
@@ -557,18 +542,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return '제목을 입력해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _descriptionController,
-                label: '설명',
-                maxLines: 3,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '설명을 입력해주세요.';
                   }
                   return null;
                 },
@@ -656,50 +629,52 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               const SizedBox(height: 16),
               _buildFunctionDropdown(),
               const SizedBox(height: 16),
-              _buildTargetDropdown(),
+              GenderCheckboxGroup(
+                selectedGenders: _selectedGenders,
+                onChanged: (genders) {
+                  setState(() {
+                    _selectedGenders = genders;
+                  });
+                },
+                validator: (genders) {
+                  if (genders.isEmpty) {
+                    return '최소 하나의 성별을 선택해야 합니다';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
-              _buildAgeRange(),
+              RangeSliderWithInput(
+                label: '나이 범위',
+                initialValues: _selectedAgeRange,
+                min: 10,
+                max: 90,
+                divisions: 80,
+                onChanged: (range) {
+                  setState(() {
+                    _selectedAgeRange = range;
+                  });
+                },
+                labelBuilder: (value) => '${value.toInt()}세',
+              ),
               const SizedBox(height: 24),
 
-              // 가격 및 수량 섹션
-              _buildSectionTitle('가격 및 수량'),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _priceController,
-                      label: '가격',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _amountController,
-                      label: '수량',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
+              // 단가 및 기간 섹션
+              _buildSectionTitle('단가 및 기간'),
+              PriceCalculator(
+                images: _selectedImages,
+                sound: _selectedSound,
+                priceController: _priceController,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _periodController,
-                      label: '기간',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildPeriodUnitDropdown(),
-                  ),
-                ],
+              PeriodSliderWithInput(
+                initialValue: _selectedPeriod,
+                onChanged: (period) {
+                  setState(() {
+                    _selectedPeriod = period;
+                  });
+                },
               ),
-              const SizedBox(height: 8),
-              _buildTotalPrice(),
               const SizedBox(height: 24),
 
               // 이미지 섹션 제거됨 (상단 '미디어 업로드'에 통합)
@@ -848,115 +823,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     }
   }
 
-  Widget _buildTargetDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedTarget,
-      decoration: const InputDecoration(
-        labelText: '타겟',
-        border: OutlineInputBorder(),
-      ),
-      items: _targets.map((String target) {
-        return DropdownMenuItem<String>(
-          value: target,
-          child: Text(target),
-        );
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedTarget = newValue!;
-        });
-      },
-    );
-  }
 
-  Widget _buildAgeRange() {
-    return Row(
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<int>(
-            value: _selectedAgeMin,
-            decoration: const InputDecoration(
-              labelText: '최소 나이',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(81, (index) => index + 10).map((int age) {
-              return DropdownMenuItem<int>(
-                value: age,
-                child: Text('$age세'),
-              );
-            }).toList(),
-            onChanged: (int? newValue) {
-              setState(() {
-                _selectedAgeMin = newValue!;
-                if (_selectedAgeMax < _selectedAgeMin) {
-                  _selectedAgeMax = _selectedAgeMin;
-                }
-              });
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: DropdownButtonFormField<int>(
-            value: _selectedAgeMax,
-            decoration: const InputDecoration(
-              labelText: '최대 나이',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(81, (index) => index + 10)
-                .where((age) => age >= _selectedAgeMin)
-                .map((int age) {
-              return DropdownMenuItem<int>(
-                value: age,
-                child: Text('$age세'),
-              );
-            }).toList(),
-            onChanged: (int? newValue) {
-              setState(() {
-                _selectedAgeMax = newValue!;
-              });
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildPeriodUnitDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedPeriodUnit,
-      decoration: const InputDecoration(
-        labelText: '기간 단위',
-        border: OutlineInputBorder(),
-      ),
-      items: _periodUnits.map((String unit) {
-        return DropdownMenuItem<String>(
-          value: unit,
-          child: Text(_getPeriodUnitDisplayName(unit)),
-        );
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedPeriodUnit = newValue!;
-        });
-      },
-    );
-  }
 
-  String _getPeriodUnitDisplayName(String unit) {
-    switch (unit) {
-      case 'Hour':
-        return '시간';
-      case 'Day':
-        return '일';
-      case 'Week':
-        return '주';
-      case 'Month':
-        return '월';
-      default:
-        return unit;
-    }
-  }
+
+
 
   Widget _buildImagePicker() {
     return Column(
@@ -1162,19 +1033,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     );
   }
 
-  // 총액 표시 (가격 × 수량)
-  Widget _buildTotalPrice() {
-    int price = int.tryParse(_priceController.text) ?? 0;
-    int amount = int.tryParse(_amountController.text) ?? 0;
-    int total = price * amount;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Text(
-        '총액: ${total.toString()}',
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
+
 
   // 공통 체크박스 옵션 위젯
   Widget _buildCheckboxOption({

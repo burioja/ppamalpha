@@ -4,12 +4,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'dart:convert';
-import 'package:universal_html/html.dart' as html;
+
 import '../../models/post_model.dart';
 import '../../services/post_service.dart';
 import '../../services/firebase_service.dart';
+import '../../widgets/range_slider_with_input.dart';
+import '../../widgets/gender_checkbox_group.dart';
+import '../../widgets/period_slider_with_input.dart';
+import '../../widgets/price_calculator.dart';
 
 class PostEditScreen extends StatefulWidget {
   final PostModel post;
@@ -26,35 +30,25 @@ class _PostEditScreenState extends State<PostEditScreen> {
   final _firebaseService = FirebaseService();
 
   late final TextEditingController _titleController;
-  late final TextEditingController _descriptionController;
   late final TextEditingController _rewardController;
   late final TextEditingController _contentController;
-  late final TextEditingController _amountController;
-  late final TextEditingController _periodController;
 
   bool _canRespond = false;
   bool _canForward = false;
   bool _canRequestReward = true;
-  bool _hasExpiration = false;
 
   bool _isSaving = false;
 
-  // Targeting
-  String _selectedTarget = '상관없음/상관없음';
-  int _selectedAgeMin = 20;
-  int _selectedAgeMax = 30;
+  // Targeting - 새로운 형태
+  List<String> _selectedGenders = ['male', 'female'];
+  RangeValues _selectedAgeRange = const RangeValues(20, 30);
+  
+  // Period - 새로운 형태
+  int _selectedPeriod = 7;
 
   // Function
   final List<String> _functions = ['Using', 'Selling', 'Buying', 'Sharing'];
   String _selectedFunction = 'Using';
-
-  // Period unit
-  final List<String> _periodUnits = ['Hour', 'Day', 'Week', 'Month'];
-  String _selectedPeriodUnit = 'Day';
-
-  // Targeting option (UI only)
-  final List<String> _targetingOptions = ['기본', '고급', '맞춤형'];
-  String _selectedTargeting = '기본';
 
   // Media
   final List<dynamic> _selectedImages = [];
@@ -68,11 +62,8 @@ class _PostEditScreenState extends State<PostEditScreen> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.post.title);
-    _descriptionController = TextEditingController(text: widget.post.description);
     _rewardController = TextEditingController(text: widget.post.reward.toString());
     _contentController = TextEditingController(text: _extractExistingTextContent());
-    _amountController = TextEditingController(text: '');
-    _periodController = TextEditingController(text: '');
     _canRespond = widget.post.canRespond;
     _canForward = widget.post.canForward;
     _canRequestReward = widget.post.canRequestReward;
@@ -86,11 +77,8 @@ class _PostEditScreenState extends State<PostEditScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
     _rewardController.dispose();
     _contentController.dispose();
-    _amountController.dispose();
-    _periodController.dispose();
     super.dispose();
   }
 
@@ -170,52 +158,31 @@ class _PostEditScreenState extends State<PostEditScreen> {
       }
 
       // Compute expiresAt
-      DateTime newExpiresAt = widget.post.expiresAt;
-      if (_hasExpiration) {
-        final int period = int.tryParse(_periodController.text.trim()) ?? 0;
-        Duration delta;
-        switch (_selectedPeriodUnit) {
-          case 'Hour':
-            delta = Duration(hours: period);
-            break;
-          case 'Day':
-            delta = Duration(days: period);
-            break;
-          case 'Week':
-            delta = Duration(days: period * 7);
-            break;
-          case 'Month':
-            delta = Duration(days: period * 30);
-            break;
-          default:
-            delta = const Duration(days: 7);
-        }
-        newExpiresAt = DateTime.now().add(delta);
-      }
+      final Duration delta = Duration(days: _selectedPeriod);
+      final DateTime newExpiresAt = DateTime.now().add(delta);
 
       final updates = <String, dynamic>{
         'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
+        'description': '', // 설명 필드 제거
         'reward': reward,
         'canRespond': _canRespond,
         'canForward': _canForward,
         'canRequestReward': _canRequestReward,
         'canUse': _selectedFunction == 'Using',
-        'targetGender': _getGenderFromTarget(_selectedTarget),
-        'targetAge': [_selectedAgeMin, _selectedAgeMax],
+        'targetGender': _getGenderFromTarget(_selectedGenders),
+        'targetAge': [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
         'mediaType': mediaTypes,
         'mediaUrl': mediaUrls,
         'expiresAt': Timestamp.fromDate(newExpiresAt),
         'updatedAt': DateTime.now(),
       };
 
-      // Optional UI-only fields stored for reference
-      final amount = int.tryParse(_amountController.text.trim());
-      if (amount != null) {
-        updates['amount'] = amount;
-      }
-      updates['periodUnit'] = _selectedPeriodUnit;
-      updates['hasExpiration'] = _hasExpiration;
+      debugPrint('🔄 포스트 수정 데이터:');
+      debugPrint('  - flyerId: ${widget.post.flyerId}');
+      debugPrint('  - targetAge: ${updates['targetAge']}');
+      debugPrint('  - targetGender: ${updates['targetGender']}');
+      debugPrint('  - _selectedAgeRange: ${_selectedAgeRange.start.toInt()}-${_selectedAgeRange.end.toInt()}');
+      debugPrint('  - _selectedGenders: $_selectedGenders');
 
       await _postService.updatePost(widget.post.flyerId, updates);
 
@@ -284,19 +251,13 @@ class _PostEditScreenState extends State<PostEditScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: '설명', border: OutlineInputBorder()),
-                maxLines: 3,
-                validator: (v) => (v == null || v.trim().isEmpty) ? '설명을 입력해주세요.' : null,
-                enabled: !widget.post.isDistributed,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
                 controller: _contentController,
                 decoration: const InputDecoration(labelText: '내용 (선택사항)', border: OutlineInputBorder()),
                 maxLines: 5,
                 enabled: !widget.post.isDistributed,
               ),
+              const SizedBox(height: 16),
+              _buildFunctionDropdown(),
               const SizedBox(height: 24),
               _buildSectionTitle('미디어 업로드'),
               _buildImageUpload(),
@@ -306,13 +267,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
               _buildSoundUpload(),
               const SizedBox(height: 24),
               _buildSectionTitle('기능 옵션'),
-              TextFormField(
-                controller: _rewardController,
-                decoration: const InputDecoration(labelText: '리워드', border: OutlineInputBorder()),
-                keyboardType: TextInputType.number,
-                enabled: !widget.post.isDistributed,
-              ),
-              const SizedBox(height: 16),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('응답 허용'),
@@ -331,57 +285,75 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 value: _canRequestReward,
                 onChanged: widget.post.isDistributed ? null : (v) { setState(() { _canRequestReward = v ?? true; }); },
               ),
-              const SizedBox(height: 8),
-              _buildFunctionDropdown(),
               const SizedBox(height: 24),
               _buildSectionTitle('타겟팅 옵션'),
-              _buildDropdown(
-                label: '타겟팅 레벨',
-                value: _selectedTargeting,
-                items: _targetingOptions,
-                onChanged: widget.post.isDistributed ? null : (value) { setState(() { _selectedTargeting = value!; }); },
+              GenderCheckboxGroup(
+                selectedGenders: _selectedGenders,
+                onChanged: (genders) {
+                  if (!widget.post.isDistributed) {
+                    setState(() {
+                      _selectedGenders = genders;
+                    });
+                  }
+                },
+                validator: (genders) {
+                  if (genders.isEmpty) {
+                    return '최소 하나의 성별을 선택해주세요.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
-              _buildTargetDropdown(),
-              const SizedBox(height: 16),
-              _buildAgeRange(),
+              RangeSliderWithInput(
+                label: '나이 범위',
+                initialValues: _selectedAgeRange,
+                min: 10,
+                max: 90,
+                divisions: 80,
+                onChanged: widget.post.isDistributed ? null : (range) {
+                  setState(() {
+                    _selectedAgeRange = range;
+                  });
+                },
+                labelBuilder: (value) => '${value.toInt()}세',
+                validator: (range) {
+                  if (range.start < 10 || range.end > 90) {
+                    return '10~90 사이의 값을 입력해주세요.';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 24),
-              _buildSectionTitle('가격/수량 및 기간'),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _amountController,
-                      decoration: const InputDecoration(labelText: '수량', border: OutlineInputBorder()),
-                      keyboardType: TextInputType.number,
-                      enabled: !widget.post.isDistributed,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _periodController,
-                      decoration: const InputDecoration(labelText: '기간', border: OutlineInputBorder()),
-                      keyboardType: TextInputType.number,
-                      enabled: !widget.post.isDistributed,
-                    ),
-                  ),
-                ],
+              _buildSectionTitle('단가 및 기간'),
+              PriceCalculator(
+                images: _selectedImages,
+                sound: _selectedSound,
+                priceController: _rewardController,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return '단가를 입력해주세요.';
+                  }
+                  final price = int.tryParse(value.trim());
+                  if (price == null || price <= 0) {
+                    return '올바른 단가를 입력해주세요.';
+                  }
+                  return null;
+                },
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildPeriodUnitDropdown()),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('소멸시효 사용'),
-                      value: _hasExpiration,
-                      onChanged: widget.post.isDistributed ? null : (v) { setState(() { _hasExpiration = v ?? false; }); },
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              PeriodSliderWithInput(
+                initialValue: _selectedPeriod,
+                onChanged: widget.post.isDistributed ? null : (period) {
+                  setState(() {
+                    _selectedPeriod = period;
+                  });
+                },
+                validator: (period) {
+                  if (period < 1 || period > 30) {
+                    return '1~30일 사이의 값을 입력해주세요.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 24),
               _buildReadonlyInfo('생성일', widget.post.createdAt),
@@ -396,17 +368,21 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   // Initialization helpers
   void _initTargetingFromPost() {
-    _selectedAgeMin = widget.post.targetAge.isNotEmpty ? widget.post.targetAge[0] : 20;
-    _selectedAgeMax = widget.post.targetAge.length > 1 ? widget.post.targetAge[1] : _selectedAgeMin;
+    // 나이 범위 초기화
+    final ageMin = widget.post.targetAge.isNotEmpty ? widget.post.targetAge[0].toDouble() : 20.0;
+    final ageMax = widget.post.targetAge.length > 1 ? widget.post.targetAge[1].toDouble() : ageMin;
+    _selectedAgeRange = RangeValues(ageMin, ageMax);
+    
+    // 성별 초기화
     switch (widget.post.targetGender) {
       case 'male':
-        _selectedTarget = '남성/남성';
+        _selectedGenders = ['male'];
         break;
       case 'female':
-        _selectedTarget = '여성/여성';
+        _selectedGenders = ['female'];
         break;
       default:
-        _selectedTarget = '상관없음/상관없음';
+        _selectedGenders = ['male', 'female'];
     }
   }
 
@@ -417,24 +393,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
   void _initPeriodFromPost() {
     final now = DateTime.now();
     if (widget.post.expiresAt.isAfter(now)) {
-      _hasExpiration = true;
       final diff = widget.post.expiresAt.difference(now);
-      if (diff.inHours < 24) {
-        _selectedPeriodUnit = 'Hour';
-        _periodController.text = diff.inHours.clamp(1, 8760).toString();
-      } else if (diff.inDays < 7) {
-        _selectedPeriodUnit = 'Day';
-        _periodController.text = diff.inDays.clamp(1, 365).toString();
-      } else if (diff.inDays < 30) {
-        _selectedPeriodUnit = 'Week';
-        _periodController.text = (diff.inDays ~/ 7).clamp(1, 52).toString();
-      } else {
-        _selectedPeriodUnit = 'Month';
-        _periodController.text = (diff.inDays ~/ 30).clamp(1, 24).toString();
-      }
+      _selectedPeriod = diff.inDays.clamp(1, 30);
     } else {
-      _hasExpiration = false;
-      _periodController.text = '';
+      _selectedPeriod = 7; // 기본값
     }
   }
 
@@ -478,22 +440,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
     );
   }
 
-  Widget _buildDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?>? onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      items: items.map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
-      onChanged: onChanged,
-    );
-  }
+
 
   Widget _buildFunctionDropdown() {
     return DropdownButtonFormField<String>(
@@ -522,90 +469,11 @@ class _PostEditScreenState extends State<PostEditScreen> {
     }
   }
 
-  Widget _buildTargetDropdown() {
-    final targets = [
-      '상관없음/상관없음',
-      '남성/남성',
-      '여성/여성',
-      '남성/여성',
-      '여성/남성',
-    ];
-    return DropdownButtonFormField<String>(
-      value: _selectedTarget,
-      decoration: const InputDecoration(
-        labelText: '타겟',
-        border: OutlineInputBorder(),
-      ),
-      items: targets.map((t) => DropdownMenuItem<String>(value: t, child: Text(t))).toList(),
-      onChanged: widget.post.isDistributed ? null : (v) { setState(() { _selectedTarget = v!; }); },
-    );
-  }
 
-  Widget _buildAgeRange() {
-    return Row(
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<int>(
-            value: _selectedAgeMin,
-            decoration: const InputDecoration(
-              labelText: '최소 나이',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(81, (index) => index + 10).map((age) => DropdownMenuItem<int>(value: age, child: Text('$age세'))).toList(),
-            onChanged: widget.post.isDistributed ? null : (v) {
-              setState(() {
-                _selectedAgeMin = v!;
-                if (_selectedAgeMax < _selectedAgeMin) {
-                  _selectedAgeMax = _selectedAgeMin;
-                }
-              });
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: DropdownButtonFormField<int>(
-            value: _selectedAgeMax,
-            decoration: const InputDecoration(
-              labelText: '최대 나이',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(81, (index) => index + 10).where((age) => age >= _selectedAgeMin).map((age) => DropdownMenuItem<int>(value: age, child: Text('$age세'))).toList(),
-            onChanged: widget.post.isDistributed ? null : (v) {
-              setState(() { _selectedAgeMax = v!; });
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildPeriodUnitDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedPeriodUnit,
-      decoration: const InputDecoration(
-        labelText: '기간 단위',
-        border: OutlineInputBorder(),
-      ),
-      items: _periodUnits.map((u) => DropdownMenuItem<String>(value: u, child: Text(_getPeriodUnitDisplayName(u)))).toList(),
-      onChanged: widget.post.isDistributed ? null : (v) { setState(() { _selectedPeriodUnit = v!; }); },
-    );
-  }
 
-  String _getPeriodUnitDisplayName(String unit) {
-    switch (unit) {
-      case 'Hour':
-        return '시간';
-      case 'Day':
-        return '일';
-      case 'Week':
-        return '주';
-      case 'Month':
-        return '월';
-      default:
-        return unit;
-    }
-  }
+
+
 
   Widget _buildImageUpload() {
     return Column(
@@ -823,28 +691,33 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _pickImageWeb() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..multiple = true;
-    input.click();
-    await input.onChange.first;
-    if (input.files != null) {
-      for (final file in input.files!) {
-        if (file.size > 10 * 1024 * 1024) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')));
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+        allowCompression: true,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        for (final file in result.files) {
+          if (file.size > 10 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')));
+            }
+            continue;
           }
-          continue;
+          
+          if (mounted) {
+            setState(() {
+              _selectedImages.add(file.path ?? '');
+              _imageNames.add(file.name);
+            });
+          }
         }
-        final reader = html.FileReader();
-        reader.readAsDataUrl(file);
-        await reader.onLoad.first;
-        if (mounted) {
-          setState(() {
-            _selectedImages.add(reader.result as String);
-            _imageNames.add(file.name);
-          });
-        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('이미지 선택 실패: $e')));
       }
     }
   }
@@ -884,25 +757,31 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _pickSoundWeb() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()
-      ..accept = 'audio/*'
-      ..multiple = false;
-    input.click();
-    await input.onChange.first;
-    if (input.files != null && input.files!.isNotEmpty) {
-      final file = input.files!.first;
-      if (file.size > 50 * 1024 * 1024) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')));
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.size > 50 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')));
+          }
+          return;
         }
-        return;
+        if (mounted) {
+          setState(() {
+            _selectedSound = file.path ?? '';
+            _soundFileName = file.name;
+            _existingAudioUrl = '';
+          });
+        }
       }
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _selectedSound = file;
-          _soundFileName = file.name;
-          _existingAudioUrl = '';
-        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('사운드 선택 실패: $e')));
       }
     }
   }
@@ -923,9 +802,14 @@ class _PostEditScreenState extends State<PostEditScreen> {
     }
   }
 
-  String _getGenderFromTarget(String target) {
-    if (target.contains('남성')) return 'male';
-    if (target.contains('여성')) return 'female';
+  String _getGenderFromTarget(List<String> genders) {
+    if (genders.contains('male') && genders.contains('female')) {
+      return 'all';
+    } else if (genders.contains('male')) {
+      return 'male';
+    } else if (genders.contains('female')) {
+      return 'female';
+    }
     return 'all';
   }
   Widget _buildReadonlyInfo(String label, dynamic value) {

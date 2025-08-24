@@ -8,9 +8,10 @@ import '../../widgets/network_image_fallback_stub.dart'
     if (dart.library.html) '../../widgets/network_image_fallback_web.dart';
 import '../../routes/app_routes.dart';
 import '../../services/place_service.dart';
+import '../../services/post_service.dart';
 import '../../models/place_model.dart';
 
-class PostDetailScreen extends StatelessWidget {
+class PostDetailScreen extends StatefulWidget {
   final PostModel post;
   final bool isEditable;
 
@@ -21,6 +22,19 @@ class PostDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class _PostDetailScreenState extends State<PostDetailScreen> {
+  late PostModel currentPost;
+
+  @override
+  void initState() {
+    super.initState();
+    currentPost = widget.post;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -28,7 +42,7 @@ class PostDetailScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (isEditable)
+          if (widget.isEditable)
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => _editPost(context),
@@ -40,7 +54,7 @@ class PostDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (post.placeId != null) _buildPlacePreview(context),
+            if (currentPost.placeId != null) _buildPlacePreview(context),
             // 포스트 헤더
             Container(
               width: double.infinity,
@@ -76,7 +90,7 @@ class PostDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              post.title,
+                              currentPost.title,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -85,7 +99,7 @@ class PostDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                               '${_primaryMediaType()} • ${post.reward}포인트',
+                               '${_primaryMediaType()} • ${currentPost.reward}포인트',
                                style: TextStyle(
                                  fontSize: 14,
                                  color: Colors.blue.shade700,
@@ -99,7 +113,7 @@ class PostDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                                      Text(
-                     post.description,
+                     currentPost.description,
                      style: const TextStyle(
                        fontSize: 16,
                        color: Colors.black87,
@@ -113,11 +127,11 @@ class PostDetailScreen extends StatelessWidget {
 
             // 기본 정보
             _buildInfoSection('기본 정보', [
-              _buildInfoRow(Icons.person, '발행자', post.creatorName),
-              _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(post.createdAt)),
-              _buildInfoRow(Icons.timer, '만료일', _formatDate(post.expiresAt)),
-              _buildInfoRow(Icons.location_on, '위치', '${post.location.latitude.toStringAsFixed(4)}, ${post.location.longitude.toStringAsFixed(4)}'),
-              _buildInfoRow(Icons.price_change, '리워드', '${post.reward}'),
+              _buildInfoRow(Icons.person, '발행자', currentPost.creatorName),
+              _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(currentPost.createdAt)),
+              _buildInfoRow(Icons.timer, '만료일', _formatDate(currentPost.expiresAt)),
+              _buildInfoRow(Icons.location_on, '위치', '${currentPost.location.latitude.toStringAsFixed(4)}, ${currentPost.location.longitude.toStringAsFixed(4)}'),
+              _buildInfoRow(Icons.price_change, '리워드', '${currentPost.reward}'),
               _buildInfoRow(Icons.settings, '기능', _buildCapabilitiesText()),
               _buildInfoRow(Icons.group, '타겟', _buildTargetText()),
             ]),
@@ -125,7 +139,7 @@ class PostDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // 액션 버튼들
-            if (!isEditable) ...[
+            if (!widget.isEditable) ...[
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -158,13 +172,13 @@ class PostDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // 미디어(그림/텍스트/사운드) - 화면 하단에 배치
-            if (post.mediaType.isNotEmpty && post.mediaUrl.isNotEmpty)
+            if (currentPost.mediaType.isNotEmpty && currentPost.mediaUrl.isNotEmpty)
               _buildMediaSection(context),
 
             const SizedBox(height: 16),
 
             // 포스트 수정 버튼 - 최하단 배치 (편집 가능한 경우)
-            if (isEditable)
+            if (widget.isEditable)
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -185,17 +199,17 @@ class PostDetailScreen extends StatelessWidget {
   }
 
   String _primaryMediaType() {
-    if (post.mediaType.isEmpty) return 'text';
-    return post.mediaType.first;
+    if (currentPost.mediaType.isEmpty) return 'text';
+    return currentPost.mediaType.first;
   }
 
   // 미디어 섹션
   Widget _buildMediaSection(BuildContext context) {
     final items = <Widget>[];
     final firebaseService = FirebaseService();
-    for (int i = 0; i < post.mediaType.length && i < post.mediaUrl.length; i++) {
-      final type = post.mediaType[i];
-      final dynamic raw = post.mediaUrl[i];
+    for (int i = 0; i < currentPost.mediaType.length && i < currentPost.mediaUrl.length; i++) {
+      final type = currentPost.mediaType[i];
+      final dynamic raw = currentPost.mediaUrl[i];
       final String url = raw is String ? raw : raw.toString();
       // 디버그 로그
       // 무조건 로그에 남겨서 콘솔에서 확인 가능
@@ -309,12 +323,12 @@ class PostDetailScreen extends StatelessWidget {
       children: [
         const Text('디버그: 미디어 URL 목록', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
-        for (int i = 0; i < post.mediaType.length && i < post.mediaUrl.length; i++)
+        for (int i = 0; i < currentPost.mediaType.length && i < currentPost.mediaUrl.length; i++)
           FutureBuilder<String?>(
-            future: firebaseService.resolveImageUrl(post.mediaUrl[i].toString()),
+            future: firebaseService.resolveImageUrl(currentPost.mediaUrl[i].toString()),
             builder: (context, snapshot) {
-              final type = post.mediaType[i];
-              final raw = post.mediaUrl[i].toString();
+              final type = currentPost.mediaType[i];
+              final raw = currentPost.mediaUrl[i].toString();
               final resolved = snapshot.data ?? '(해석 실패)';
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
@@ -354,17 +368,17 @@ class PostDetailScreen extends StatelessWidget {
 
   String _buildCapabilitiesText() {
     final caps = <String>[];
-    if (post.canRespond) caps.add('응답');
-    if (post.canForward) caps.add('전달');
-    if (post.canRequestReward) caps.add('리워드 수령');
-    if (post.canUse) caps.add('사용');
+    if (currentPost.canRespond) caps.add('응답');
+    if (currentPost.canForward) caps.add('전달');
+    if (currentPost.canRequestReward) caps.add('리워드 수령');
+    if (currentPost.canUse) caps.add('사용');
     return caps.isEmpty ? '없음' : caps.join(', ');
   }
 
   String _buildTargetText() {
-    final gender = post.targetGender == 'all' ? '전체' : post.targetGender == 'male' ? '남성' : '여성';
-    final age = '${post.targetAge[0]}~${post.targetAge[1]}세';
-    final interests = post.targetInterest.isNotEmpty ? post.targetInterest.join(', ') : '관심사 없음';
+    final gender = currentPost.targetGender == 'all' ? '전체' : currentPost.targetGender == 'male' ? '남성' : '여성';
+    final age = '${currentPost.targetAge[0]}~${currentPost.targetAge[1]}세';
+    final interests = currentPost.targetInterest.isNotEmpty ? currentPost.targetInterest.join(', ') : '관심사 없음';
     return '$gender / $age / $interests';
   }
 
@@ -470,17 +484,32 @@ class PostDetailScreen extends StatelessWidget {
     final result = await Navigator.pushNamed(
       context,
       AppRoutes.postEdit,
-      arguments: {'post': post},
+      arguments: {'post': currentPost},
     );
     if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('포스트가 수정되었습니다.')),
-      );
+      // 포스트 데이터 새로고침
+      await _refreshPost();
+      // 성공 메시지는 _refreshPost에서 처리하거나 생략
+    }
+  }
+
+  Future<void> _refreshPost() async {
+    try {
+      final postService = PostService();
+      final updatedPost = await postService.getPostById(currentPost.flyerId);
+      if (updatedPost != null && mounted) {
+        setState(() {
+          currentPost = updatedPost;
+        });
+        debugPrint('🔄 포스트 데이터 새로고침 완료: targetAge=${currentPost.targetAge}');
+      }
+    } catch (e) {
+      debugPrint('❌ 포스트 새로고침 실패: $e');
     }
   }
 
   Widget _buildPlacePreview(BuildContext context) {
-    final String? placeId = post.placeId;
+    final String? placeId = currentPost.placeId;
     if (placeId == null || placeId.isEmpty) {
       return const SizedBox.shrink();
     }

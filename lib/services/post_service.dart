@@ -81,12 +81,42 @@ class PostService {
   // 포스트 업데이트
   Future<void> updatePost(String postId, Map<String, dynamic> updates) async {
     try {
+      debugPrint('🔄 PostService.updatePost 호출:');
+      debugPrint('  - postId: $postId');
+      debugPrint('  - targetAge: ${updates['targetAge']}');
+      debugPrint('  - targetGender: ${updates['targetGender']}');
+      
       await _firestore.collection('posts').doc(postId).update(updates);
+      
+      debugPrint('✅ 포스트 업데이트 완료');
       
       // Meilisearch 업데이트 (실제 구현 시)
       // await _updateMeilisearch(postId, updates);
     } catch (e) {
+      debugPrint('❌ 포스트 업데이트 실패: $e');
       throw Exception('포스트 업데이트 실패: $e');
+    }
+  }
+
+  // 포스트 ID로 단일 포스트 조회
+  Future<PostModel?> getPostById(String postId) async {
+    try {
+      debugPrint('🔍 PostService.getPostById 호출: $postId');
+      
+      final doc = await _firestore.collection('posts').doc(postId).get();
+      
+      if (!doc.exists) {
+        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
+        return null;
+      }
+      
+      final post = PostModel.fromFirestore(doc);
+      debugPrint('✅ 포스트 조회 완료: targetAge=${post.targetAge}');
+      
+      return post;
+    } catch (e) {
+      debugPrint('❌ 포스트 조회 실패: $e');
+      throw Exception('포스트 조회 실패: $e');
     }
   }
 
@@ -312,70 +342,13 @@ class PostService {
     }
   }
 
-    // 사용자가 생성한 전단지 조회 (페이지네이션 지원)
-  Future<List<PostModel>> getUserFlyers(String userId, {int limit = 20, DocumentSnapshot? lastDocument}) async {
-    try {
-      debugPrint('🔍 getUserFlyers 호출: userId = $userId, limit = $limit');
 
-      Query query = _firestore
-          .collection('flyers')
-          .where('creatorId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .limit(limit);
 
-      if (lastDocument != null) {
-        query = query.startAfterDocument(lastDocument);
-      }
-
-      final querySnapshot = await query.get();
-      
-      debugPrint('📊 getUserFlyers 결과: ${querySnapshot.docs.length}개 문서');
-
-      final flyers = querySnapshot.docs
-          .map((doc) => PostModel.fromFirestore(doc))
-          .toList();
-
-      // 디버깅을 위한 로그
-      for (final flyer in flyers) {
-        debugPrint('📝 Flyer: ${flyer.title} (${flyer.flyerId}) - 생성일: ${flyer.createdAt}');
-      }
-
-      return flyers;
-    } on FirebaseException catch (e) {
-      debugPrint('⚠️ FirebaseException: ${e.code} - ${e.message}');
-      if (e.code == 'failed-precondition') {
-        debugPrint('🔄 폴백 처리: 인덱스 없이 조회 후 클라이언트 정렬');
-        Query fallbackQuery = _firestore
-            .collection('flyers')
-            .where('creatorId', isEqualTo: userId)
-            .limit(limit);
-
-        if (lastDocument != null) {
-          fallbackQuery = fallbackQuery.startAfterDocument(lastDocument);
-        }
-
-        final fallbackSnapshot = await fallbackQuery.get();
-        final items = fallbackSnapshot.docs
-            .map((doc) => PostModel.fromFirestore(doc))
-            .toList();
-        items.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // DESC
-        return items;
-      }
-      rethrow;
-    } catch (e) {
-      debugPrint('❌ getUserFlyers 에러: $e');
-      throw Exception('사용자 전단지 조회 실패: $e');
-    }
-  }
-
-  // 사용자가 생성한 전단지 조회 (기존 호환성)
-  Future<List<PostModel>> getUserFlyersAll(String userId) async {
-    return getUserFlyers(userId, limit: 1000); // 큰 숫자로 모든 데이터 조회
-  }
-
-  // 사용자가 생성한 일반 포스트 조회 (posts 컬렉션)
+  // 사용자가 생성한 포스트 조회 (posts 컬렉션)
   Future<List<PostModel>> getUserPosts(String userId, {int limit = 20, DocumentSnapshot? lastDocument}) async {
     try {
+      debugPrint('🔍 getUserPosts 호출: userId = $userId, limit = $limit');
+
       Query query = _firestore
           .collection('posts')
           .where('creatorId', isEqualTo: userId)
@@ -387,9 +360,23 @@ class PostService {
       }
 
       final querySnapshot = await query.get();
-      return querySnapshot.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+      
+      debugPrint('📊 getUserPosts 결과: ${querySnapshot.docs.length}개 문서');
+
+      final posts = querySnapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      // 디버깅을 위한 로그
+      for (final post in posts) {
+        debugPrint('📝 Post: ${post.title} (${post.flyerId}) - 생성일: ${post.createdAt}');
+      }
+
+      return posts;
     } on FirebaseException catch (e) {
+      debugPrint('⚠️ FirebaseException: ${e.code} - ${e.message}');
       if (e.code == 'failed-precondition') {
+        debugPrint('🔄 폴백 처리: 인덱스 없이 조회 후 클라이언트 정렬');
         Query fallbackQuery = _firestore
             .collection('posts')
             .where('creatorId', isEqualTo: userId)
@@ -406,18 +393,16 @@ class PostService {
       }
       rethrow;
     } catch (e) {
+      debugPrint('❌ getUserPosts 에러: $e');
       throw Exception('사용자 포스트 조회 실패: $e');
     }
   }
 
-  // 사용자가 생성한 모든 포스트 조회 (flyers + posts 통합)
+  // 사용자가 생성한 모든 포스트 조회 (posts 컬렉션만 사용)
   Future<List<PostModel>> getUserAllMyPosts(String userId, {int limitPerCollection = 100}) async {
     try {
-      final flyers = await getUserFlyers(userId, limit: limitPerCollection);
       final posts = await getUserPosts(userId, limit: limitPerCollection);
-      final all = <PostModel>[...flyers, ...posts];
-      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return all;
+      return posts;
     } catch (e) {
       throw Exception('사용자 전체 포스트 조회 실패: $e');
     }

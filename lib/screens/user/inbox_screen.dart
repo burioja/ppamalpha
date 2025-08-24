@@ -93,7 +93,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     });
 
     try {
-      final newPosts = await _postService.getUserFlyers(
+      final newPosts = await _postService.getUserPosts(
         _currentUserId!,
         limit: _pageSize,
         lastDocument: _lastDocument,
@@ -431,7 +431,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
               controller: _tabController,
               children: [
                 _buildMyPostsTab(),
-                _buildReceivedPostsTab(),
+                _buildCollectedPostsTab(),
               ],
             ),
           ),
@@ -439,9 +439,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       ),
       floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
         onPressed: () async {
+          // context를 로컬 변수로 저장
+          final currentContext = context;
+          
           // 플레이스 선택 화면으로 이동
           final result = await Navigator.pushNamed(
-            context, 
+            currentContext, 
             '/post-place-selection',
             arguments: {
               'fromInbox': true,
@@ -450,21 +453,17 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           );
           
           // 포스트 생성 완료 후 인박스 갱신
-          if (result == true) {
+          if (result == true && mounted) {
             setState(() {
               // 상태 갱신으로 데이터 재로드
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('포스트가 생성되었습니다!'),
-                backgroundColor: Colors.green,
-              ),
-            );
+            // TODO: SnackBar 대신 다른 방식으로 사용자에게 알림
+            // 예: 상태 변수를 통해 UI에 메시지 표시
           }
         },
         backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white),
         tooltip: '포스트 만들기',
+        child: const Icon(Icons.add, color: Colors.white),
       ) : null,
     );
   }
@@ -631,107 +630,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 받은 포스트 탭 (PRD에 맞게 수정)
-  Widget _buildReceivedPostsTab() {
-    return FutureBuilder<List<PostModel>>(
-      future: _postService.getCollectedFlyers(_currentUserId!),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('받은 포스트 로드 오류: ${snapshot.error}'));
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.collections_bookmark, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('아직 받은 포스트가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                SizedBox(height: 8),
-                Text('지도에서 포스트를 찾아 수집해보세요!', 
-                     style: TextStyle(fontSize: 14, color: Colors.grey)),
-              ],
-            ),
-          );
-        } else {
-          final filteredPosts = _filterAndSortPosts(snapshot.data!);
-          return Column(
-            children: [
-              // 데이터 정보 헤더
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.orange.shade600),
-                    const SizedBox(width: 8),
-                    Text(
-                      '총 ${snapshot.data!.length}개 중 ${filteredPosts.length}개 표시',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.orange.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // 포스트 목록
-              Expanded(
-                child: filteredPosts.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.filter_list, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                            SizedBox(height: 8),
-                            Text('검색어나 필터를 변경해보세요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: filteredPosts.length,
-                        itemBuilder: (context, index) {
-                          final post = filteredPosts[index];
-                          return PostCard(
-                            post: post,
-                            onTap: () async {
-                              // 포스트 상세 화면으로 이동
-                              final result = await Navigator.pushNamed(
-                                context,
-                                '/post-detail',
-                                arguments: {
-                                  'post': post,
-                                  'isEditable': false, // 받은 포스트는 수정 불가
-                                },
-                              );
-                              
-                              // 포스트 사용 후 인박스 갱신
-                              if (result == true || result == 'used') {
-                                setState(() {
-                                  // 상태 갱신으로 데이터 재로드
-                                });
-                              }
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          );
-        }
-      },
-    );
-  }
+
 
   // 받은 포스트 탭 (PRD에 맞게 수정)
   Widget _buildCollectedPostsTab() {
@@ -870,7 +769,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 final distributedPosts = snapshot.data!;
                 final activePosts = distributedPosts.where((post) => post.isActive && !post.isExpired()).length;
                 final expiredPosts = distributedPosts.where((post) => post.isExpired()).length;
-                final totalReward = distributedPosts.fold<int>(0, (sum, post) => sum + post.reward);
+                final totalReward = distributedPosts.fold<int>(0, (total, post) => total + post.reward);
                 
                 return Column(
                   mainAxisSize: MainAxisSize.min,
@@ -879,7 +778,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                     Text('총 배포 포스트: ${distributedPosts.length}개'),
                     Text('활성 포스트: $activePosts개'),
                     Text('만료 포스트: $expiredPosts개'),
-                    Text('총 리워드: ${totalReward}포인트'),
+                    Text('총 리워드: $totalReward포인트'),
                   ],
                 );
               }
@@ -903,8 +802,5 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     Navigator.pushNamed(context, '/place-search');
   }
 
-  // 플레이스 생성 화면으로 이동
-  void _navigateToCreatePlace(BuildContext context) {
-    Navigator.pushNamed(context, '/create-place');
-  }
+
 }
