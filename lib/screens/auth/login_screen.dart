@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../../providers/user_provider.dart';
+import 'package:flutter/painting.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -110,23 +111,18 @@ class _LoginScreenState extends State<LoginScreen> {
           Column(
             children: [
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFF4D4DFF), Color(0xFF6666FF)],
-                    ),
-                  ),
-                  child: const Center(
+                  color: Colors.white,
+                  child: Center(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 80,
-                          color: Colors.white,
+                        Image.asset(
+                          'assets/images/logo.png',
+                          width: 150,
+                          height: 120,
+
                         ),
                         SizedBox(height: 16),
                         Text(
@@ -143,23 +139,37 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               Expanded(
-                flex: 3,
+                flex: 2,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Column(
                     children: [
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 24),
+                      const Text(
+                        '이메일',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF4D4DFF),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       TextField(
                         controller: _emailController,
                         decoration: InputDecoration(
-                          labelText: '이메일',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                          hintText: '이메일을 입력하세요',
+                          hintStyle: TextStyle(color: Colors.grey),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF4D4DFF)),
+
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0XFF4D4DFF), width: 2),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
