@@ -195,7 +195,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
-              
+              냐 
               // 메인 카테고리
               DropdownButtonFormField<String>(
                 value: _selectedCategory,

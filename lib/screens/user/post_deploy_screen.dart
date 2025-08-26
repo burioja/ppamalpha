@@ -37,6 +37,15 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     _initializeData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 다시 포커스를 받을 때 포스트 목록 새로고침
+    if (_selectedLocation != null) {
+      _loadUserPosts();
+    }
+  }
+
   void _initializeData() {
     debugPrint('PostDeployScreen 초기화 시작');
     debugPrint('arguments: ${widget.arguments}');
@@ -67,8 +76,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         debugPrint('사용자 ID: $uid');
-        // 사용자의 최근 20개 포스트 로드
-        final posts = await _postService.getUserPosts(uid, limit: 20);
+        // 사용자의 최근 50개 포스트 로드 (새로 생성된 포스트 포함)
+        final posts = await _postService.getUserPosts(uid, limit: 50);
         debugPrint('사용자 포스트 로드 완료: ${posts.length}개');
         setState(() {
           _userPosts = posts;
