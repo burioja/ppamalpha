@@ -16,6 +16,7 @@ import '../screens/user/post_by_location_screen.dart';
 import '../screens/user/location_picker_screen.dart';
 import '../screens/user/post_detail_screen.dart';
 import '../screens/user/post_edit_screen.dart';
+import '../screens/user/post_deploy_screen.dart';
 import '../screens/shared/migration_screen.dart';
 import '../screens/shared/debug_screen.dart';
 import '../models/place_model.dart';
@@ -42,6 +43,7 @@ class AppRoutes {
   static const String postEdit = '/post-edit';
   static const String postByLocation = '/post-by-location';
   static const String locationPicker = '/location-picker';
+  static const String postDeploy = '/post-deploy';
   static const String createPlace = '/create-place';
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
@@ -81,6 +83,13 @@ class AppRoutes {
         return const Scaffold(body: Center(child: Text('위치 정보가 없습니다.')));
       }
       return PostByLocationScreen(location: location, address: address);
+    },
+    postDeploy: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args == null) {
+        return const Scaffold(body: Center(child: Text('배포 정보를 찾을 수 없습니다.')));
+      }
+      return PostDeployScreen(arguments: args);
     },
     locationPicker: (context) => const LocationPickerScreen(),
     postDetail: (context) {

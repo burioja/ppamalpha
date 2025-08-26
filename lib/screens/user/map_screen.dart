@@ -350,15 +350,10 @@ class _MapScreenState extends State<MapScreen> {
     final clusters = <String, List<dynamic>>{};
     final filter = mounted ? context.read<MapFilterProvider>() : null;
     final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final double maxKm = filter?.distanceKm ?? 3.0;
     const double clusterRadius = 0.01; // 약 1km
     
     // 기존 마커 아이템들 클러스터링
     for (final item in _markerItems) {
-      if (_currentPosition != null) {
-        final km = _haversineKm(_currentPosition!, item.position);
-        if (km > maxKm) continue;
-      }
       if (couponsOnly && item.data['type'] != 'post_place') continue;
       bool addedToCluster = false;
       
@@ -381,10 +376,6 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포스트들 클러스터링
     for (final post in _posts) {
-      if (_currentPosition != null) {
-        final km = _haversineKm(_currentPosition!, LatLng(post.location.latitude, post.location.longitude));
-        if (km > maxKm) continue;
-      }
       if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
       bool addedToCluster = false;
       
@@ -435,24 +426,15 @@ class _MapScreenState extends State<MapScreen> {
     final Set<Marker> newMarkers = {};
     final filter = mounted ? context.read<MapFilterProvider>() : null;
     final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final double maxKm = filter?.distanceKm ?? 3.0;
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
-      if (_currentPosition != null) {
-        final km = _haversineKm(_currentPosition!, item.position);
-        if (km > maxKm) continue;
-      }
       if (couponsOnly && item.data['type'] != 'post_place') continue;
       newMarkers.add(_createMarker(item));
     }
     
     // 포스트 마커들 추가
     for (final post in _posts) {
-      if (_currentPosition != null) {
-        final km = _haversineKm(_currentPosition!, LatLng(post.location.latitude, post.location.longitude));
-        if (km > maxKm) continue;
-      }
       if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
       newMarkers.add(_createPostMarker(post));
     }
@@ -1029,46 +1011,127 @@ class _MapScreenState extends State<MapScreen> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 220,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        width: 280,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
               color: Colors.black26,
-              blurRadius: 6,
-              offset: const Offset(2, 2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-                _navigateToPostPlace();
-              },
-              child: const Text("이 위치에 뿌리기"),
+            const Text(
+              '포스트 배포',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4D4DFF),
+              ),
             ),
-            TextButton(
-              onPressed: () {
-                _handleAddMarker();
-              },
-              child: const Text("주소로 뿌리기"),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                  _navigateToPostDeploy();
+                },
+                icon: const Icon(Icons.location_on, color: Colors.white),
+                label: const Text(
+                  "이 위치에 뿌리기",
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4D4DFF),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
             ),
-
-            const Divider(height: 24),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-              },
-              child: const Text("취소", style: TextStyle(color: Colors.red)),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                  _navigateToPostDeployWithAddress();
+                },
+                icon: const Icon(Icons.home, color: Color(0xFF4D4DFF)),
+                label: const Text(
+                  "이 주소에 뿌리기",
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                  _navigateToPostDeployByCategory();
+                },
+                icon: const Icon(Icons.category, color: Color(0xFF4D4DFF)),
+                label: const Text(
+                  "특정 업종에 뿌리기",
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '수수료/반경/타겟팅 주의',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                },
+                child: const Text(
+                  "취소",
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              ),
             ),
           ],
         ),
@@ -1076,18 +1139,49 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _navigateToPostPlace() async {
-    // 롱프레스 위치 정보와 함께 포스트 화면으로 이동
+  void _navigateToPostDeploy() async {
+    // 이 위치에 뿌리기 - 포스트 설정화면으로 이동
     debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
     final result = await Navigator.pushNamed(
       context, 
-      '/post-place',
+      '/post-deploy',
       arguments: {
         'location': _longPressedLatLng,
+        'type': 'location',
         'address': null,
       },
     );
-    _handlePostPlaceResult(result);
+    _handlePostDeployResult(result);
+  }
+
+  void _navigateToPostDeployWithAddress() async {
+    // 이 주소에 뿌리기 - 주소 기반 포스트 설정화면으로 이동
+    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng,
+        'type': 'address',
+        'address': null,
+      },
+    );
+    _handlePostDeployResult(result);
+  }
+
+  void _navigateToPostDeployByCategory() async {
+    // 특정 업종에 뿌리기 - 업종 기반 포스트 설정화면으로 이동
+    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng,
+        'type': 'category',
+        'address': null,
+      },
+    );
+    _handlePostDeployResult(result);
   }
 
   void _navigateToPostPlaceWithAddress(String address) async {
@@ -1101,6 +1195,67 @@ class _MapScreenState extends State<MapScreen> {
       },
     );
     _handlePostPlaceResult(result);
+  }
+
+  void _handlePostDeployResult(dynamic result) async {
+    // 포스트 배포 결과 처리
+    if (result != null && result is Map<String, dynamic>) {
+      // 새로 생성된 포스트 정보를 MarkerItem으로 변환
+      if (result['location'] != null && result['postId'] != null) {
+        final location = result['location'] as LatLng;
+        final postId = result['postId'] as String;
+        final address = result['address'] as String?;
+        
+        try {
+          // PostService에서 실제 포스트 정보 가져오기
+          final post = await _postService.getPostById(postId);
+          
+          if (post != null) {
+            // MarkerItem 생성 (실제 포스트 정보 사용)
+            final markerItem = MarkerItem(
+              id: postId,
+              title: post.title,
+              price: post.reward.toString(),
+              amount: '1', // 포스트는 개별 단위
+              userId: post.creatorId,
+              data: {
+                'address': address,
+                'postId': postId,
+                'type': 'post',
+                'creatorName': post.creatorName,
+                'description': post.description,
+                'targetGender': post.targetGender,
+                'targetAge': post.targetAge,
+                'canRespond': post.canRespond,
+                'canForward': post.canForward,
+                'canRequestReward': post.canRequestReward,
+                'canUse': post.canUse,
+              },
+              position: location,
+              remainingAmount: 1, // 포스트는 개별 단위
+              expiryDate: post.expiresAt,
+            );
+            
+            // 마커 추가 (Firebase에 저장됨)
+            _addMarkerToMap(markerItem);
+            
+            // 생성된 포스트 위치로 카메라 이동
+            mapController.animateCamera(
+              CameraUpdate.newLatLng(location),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('포스트 정보를 가져오는데 실패했습니다: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    }
   }
 
   void _handlePostPlaceResult(dynamic result) async {
@@ -1239,18 +1394,6 @@ class _MapScreenState extends State<MapScreen> {
                     label: const Text('쿠폰만'),
                     selected: filters.showCouponsOnly,
                     onSelected: (_) => filters.toggleCouponsOnly(),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text('거리'),
-                  Expanded(
-                    child: Slider(
-                      min: 0.5,
-                      max: 10.0,
-                      divisions: 19,
-                      label: '${filters.distanceKm.toStringAsFixed(1)}km',
-                      value: filters.distanceKm,
-                      onChanged: (v) => filters.setDistance(v),
-                    ),
                   ),
                 ],
               ),

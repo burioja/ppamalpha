@@ -115,25 +115,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   color: Colors.white,
                   child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          width: 150,
-                          height: 120,
-
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'PPAM',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 60.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/logo.png',
+                            width: 150,
+                            height: 120,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -145,13 +138,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
-                      const Text(
-                        '이메일',
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF4D4DFF),
-                          fontWeight: FontWeight.w500,
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '이메일',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF4D4DFF),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -170,39 +165,53 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '비밀번호',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF4D4DFF),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
                         decoration: InputDecoration(
-                          labelText: '비밀번호',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                          hintText: '비밀번호를 입력하세요',
+                          hintStyle: TextStyle(color: Colors.grey),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF4D4DFF)),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      Column(
                         children: [
-                          Expanded(
+                          Center(
                             child: TextButton(
                               onPressed: () {
                                 // 이메일 찾기 구현
                               },
                               child: const Text(
-                                '이메일 찾기',
+                                '이메일을 잃어버렸어요',
                                 style: TextStyle(color: Color(0xFF4D4DFF)),
                               ),
                             ),
                           ),
-                          Expanded(
+                          Center(
                             child: TextButton(
                               onPressed: () {
                                 // 비밀번호 찾기 구현
                               },
                               child: const Text(
-                                '비밀번호 찾기',
+                                '비밀번호를 잊어버렸어요',
                                 style: TextStyle(color: Color(0xFF4D4DFF)),
                               ),
                             ),
@@ -220,8 +229,8 @@ class _LoginScreenState extends State<LoginScreen> {
           // 로그인/가입 버튼 - 하단 고정 + 키보드 올라오면 같이 올라감
           Positioned(
             bottom: bottomInset + 16,
-            left: 24,
-            right: 24,
+            left: 0,
+            right: 0,
             child: Row(
               children: [
                 Expanded(
@@ -230,9 +239,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4D4DFF),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
                       ),
                     ),
                     child: _isLoading
@@ -250,23 +259,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pushNamed(context, '/signup');
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4D4DFF),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      backgroundColor: Colors.grey.shade300,
+                      foregroundColor: const Color(0xFF4D4DFF),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
                       ),
                     ),
                     child: const Text(
-                      '회원가입',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
+                      '가입하기',
+                      style: TextStyle(fontSize: 16, color: Color(0xFF4D4DFF)),
                     ),
                   ),
                 ),
