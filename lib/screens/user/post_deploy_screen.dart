@@ -38,12 +38,23 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   void _initializeData() {
+    debugPrint('PostDeployScreen 초기화 시작');
+    debugPrint('arguments: ${widget.arguments}');
+    
     final args = widget.arguments;
     _selectedLocation = args['location'] as LatLng?;
-    _deployType = args['type'] as String?;
+    _deployType = args['type'] as String? ?? 'location'; // 기본값 설정
+    
+    debugPrint('위치: $_selectedLocation');
+    debugPrint('타입: $_deployType');
     
     if (_selectedLocation != null) {
       _loadUserPosts();
+    } else {
+      // 위치 정보가 없으면 로딩 상태 해제
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -55,13 +66,18 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
+        debugPrint('사용자 ID: $uid');
         // 사용자의 최근 20개 포스트 로드
         final posts = await _postService.getUserPosts(uid, limit: 20);
+        debugPrint('사용자 포스트 로드 완료: ${posts.length}개');
         setState(() {
           _userPosts = posts;
         });
+      } else {
+        debugPrint('사용자가 로그인되어 있지 않습니다');
       }
     } catch (e) {
+      debugPrint('포스트 로드 오류: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -71,9 +87,11 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -194,7 +212,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   String _getScreenTitle() {
-    switch (_deployType) {
+    final type = _deployType ?? 'location';
+    switch (type) {
       case 'location':
         return '이 위치에 뿌리기';
       case 'address':

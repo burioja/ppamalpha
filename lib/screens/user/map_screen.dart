@@ -1035,20 +1035,26 @@ class _MapScreenState extends State<MapScreen> {
                 color: Color(0xFF4D4DFF),
               ),
             ),
+            const SizedBox(height: 8),
+            const Text(
+              '선택한 위치에서 포스트를 배포합니다',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _longPressedLatLng = null;
-                  });
                   _navigateToPostDeploy();
                 },
                 icon: const Icon(Icons.location_on, color: Colors.white),
                 label: const Text(
                   "이 위치에 뿌리기",
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4D4DFF),
@@ -1064,15 +1070,12 @@ class _MapScreenState extends State<MapScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _longPressedLatLng = null;
-                  });
                   _navigateToPostDeployWithAddress();
                 },
                 icon: const Icon(Icons.home, color: Color(0xFF4D4DFF)),
                 label: const Text(
                   "이 주소에 뿌리기",
-                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16),
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
@@ -1089,15 +1092,12 @@ class _MapScreenState extends State<MapScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _longPressedLatLng = null;
-                  });
                   _navigateToPostDeployByCategory();
                 },
                 icon: const Icon(Icons.category, color: Color(0xFF4D4DFF)),
                 label: const Text(
                   "특정 업종에 뿌리기",
-                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16),
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
@@ -1151,6 +1151,12 @@ class _MapScreenState extends State<MapScreen> {
         'address': null,
       },
     );
+    
+    // 화면에서 돌아오면 롱프레스 마커 제거
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
     _handlePostDeployResult(result);
   }
 
@@ -1166,6 +1172,12 @@ class _MapScreenState extends State<MapScreen> {
         'address': null,
       },
     );
+    
+    // 화면에서 돌아오면 롱프레스 마커 제거
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
     _handlePostDeployResult(result);
   }
 
@@ -1181,6 +1193,12 @@ class _MapScreenState extends State<MapScreen> {
         'address': null,
       },
     );
+    
+    // 화면에서 돌아오면 롱프레스 마커 제거
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
     _handlePostDeployResult(result);
   }
 
