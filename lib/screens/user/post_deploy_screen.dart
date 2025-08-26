@@ -316,16 +316,30 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              // TODO: 포스트 만들기 화면으로 이동
-              Navigator.pushNamed(context, '/post-create');
+          ElevatedButton.icon(
+            onPressed: () async {
+              // PostPlaceSelectionScreen으로 이동하고 결과 대기
+              final result = await Navigator.pushNamed(
+                context, 
+                '/post-place-selection',
+                arguments: {
+                  'fromPostDeploy': true,
+                  'returnToPostDeploy': true,
+                },
+              );
+              
+              // 포스트 생성 완료 후 사용자 포스트 목록 새로고침
+              if (result == true && mounted) {
+                _loadUserPosts();
+              }
             },
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('포스트 만들기'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4D4DFF),
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            child: const Text('포스트 만들기'),
           ),
         ],
       ),

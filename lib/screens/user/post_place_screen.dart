@@ -482,7 +482,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다.')),
         );
-        Navigator.pop(context, true);
+        
+        // PostDeployScreen에서 온 경우와 일반적인 경우를 구분
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        final fromPostDeploy = args?['fromPostDeploy'] ?? false;
+        
+        if (fromPostDeploy) {
+          // PostDeployScreen에서 온 경우: PostDeployScreen으로 돌아가기
+          Navigator.pop(context, true);
+        } else {
+          // 일반적인 경우: 이전 화면으로 돌아가기
+          Navigator.pop(context, true);
+        }
       }
     } catch (e) {
       if (mounted) {
