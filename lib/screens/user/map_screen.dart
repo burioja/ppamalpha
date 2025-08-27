@@ -90,6 +90,28 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
+      
+      // 현재 위치가 없으면 기본 Fog of War만 생성
+      if (_currentPosition == null) {
+        _createDefaultFogOfWar();
+        return;
+      }
+
+      // 사용자 위치 반경 1km 내를 밝게 표시
+      final Set<Circle> circles = {};
+      
+      // 메인 밝은 영역 (사용자 위치 반경 1km)
+      circles.add(
+        Circle(
+          circleId: const CircleId('main_bright_area'),
+          center: _currentPosition!,
+          radius: 1000, // 1km 반경
+          strokeWidth: 0,
+          fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
+        ),
+      );
+      
+      // 방문 기록이 있는 지역들 (과거 방문지) - 밝게 표시
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -98,28 +120,38 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      // 빈원형(Fog) 초기화
-      final Set<Circle> circles = {};
-
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
-        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0; // 방문 빈도 가중치(옵션)
-
-        // 가중치에 따른 알파값(최대 0.5)
-        final double alpha = (0.15 + (weight * 0.07)).clamp(0.15, 0.5);
-        final Color color = Colors.orange.withOpacity(alpha);
-
+        
+        final visitLatLng = LatLng(gp.latitude, gp.longitude);
+        final distance = _haversineKm(_currentPosition!, visitLatLng);
+        
+        // 방문 기록이 있는 지역은 밝게 표시 (투명하게)
         circles.add(
           Circle(
-            circleId: CircleId('fog_${doc.id}'),
-            center: LatLng(gp.latitude, gp.longitude),
-            radius: 80, // 약 80m 반경
+            circleId: CircleId('bright_visit_${doc.id}'),
+            center: visitLatLng,
+            radius: 300, // 약 300m 반경 (방문지 주변도 밝게)
             strokeWidth: 0,
-            fillColor: color,
+            fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
           ),
         );
+        
+        // 방문 빈도에 따른 추가 밝은 영역 (가중치가 높을수록 더 넓게)
+        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0;
+        if (weight > 2.0) { // 자주 방문한 지역은 더 넓게
+          circles.add(
+            Circle(
+              circleId: CircleId('bright_frequent_${doc.id}'),
+              center: visitLatLng,
+              radius: 500, // 약 500m 반경
+              strokeWidth: 0,
+              fillColor: Colors.transparent, // 투명하게
+            ),
+          );
+        }
       }
 
       if (mounted) {
@@ -131,7 +163,62 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
+      // 오류 발생 시 기본 Fog of War 생성
+      _createDefaultFogOfWar();
     }
+  }
+
+  // 기본 Fog of War 생성 (사용자 위치 반경 1km만 밝게)
+  void _createDefaultFogOfWar() {
+    if (_currentPosition == null) return;
+    
+    final Set<Circle> circles = {};
+    
+    // 메인 밝은 영역 (사용자 위치 반경 1km)
+    circles.add(
+      Circle(
+        circleId: const CircleId('main_bright_area'),
+        center: _currentPosition!,
+        radius: 1000, // 1km 반경
+        strokeWidth: 0,
+        fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
+      ),
+    );
+    
+    setState(() {
+      _fogOfWarCircles
+        ..clear()
+        ..addAll(circles);
+    });
+  }
+
+  // 밝은 지역에 있는 마커만 필터링
+  bool _isInBrightArea(LatLng position) {
+    if (_currentPosition == null) return false;
+    
+    // 사용자 위치에서 1km 이내인지 확인
+    final distance = _currentPosition!.distanceTo(position);
+    if (distance <= 1000) return true; // 1km 이내
+    
+    // 방문 기록이 있는 지역인지 확인 (최근 30일)
+    return _isInVisitedArea(position);
+  }
+
+  // 방문 기록이 있는 지역인지 확인
+  bool _isInVisitedArea(LatLng position) {
+    // 방문 기록이 로드되지 않았으면 false
+    if (_fogOfWarCircles.isEmpty) return false;
+    
+    // 방문 기록이 있는 원형 영역 내에 있는지 확인
+    for (final circle in _fogOfWarCircles) {
+      if (circle.circleId.value.startsWith('bright_visit_') || 
+          circle.circleId.value.startsWith('bright_frequent_')) {
+        final distance = circle.center.distanceTo(position);
+        if (distance <= circle.radius) return true;
+      }
+    }
+    
+    return false;
   }
 
   Future<void> _loadMapStyle() async {
@@ -141,8 +228,180 @@ class _MapScreenState extends State<MapScreen> {
         _mapStyle = style;
       });
     } catch (e) {
-      // 스타일 로드 실패 시 무시
+      // 스타일 로드 실패 시 기본 어두운 스타일 사용
+      _createDefaultDarkStyle();
     }
+  }
+
+  // 기본 어두운 스타일 생성 (Fog of War 효과)
+  void _createDefaultDarkStyle() {
+    final darkStyle = '''
+    [
+      {
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#242f3e"
+          }
+        ]
+      },
+      {
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#746855"
+          }
+        ]
+      },
+      {
+        "elementType": "labels.text.stroke",
+        "stylers": [
+          {
+            "color": "#242f3e"
+          }
+        ]
+      },
+      {
+        "featureType": "administrative.locality",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#d59563"
+          }
+        ]
+      },
+      {
+        "featureType": "poi",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#d59563"
+          }
+        ]
+      },
+      {
+        "featureType": "poi.park",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#263c3f"
+          }
+        ]
+      },
+      {
+        "featureType": "poi.park",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#6b9a76"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#38414e"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "geometry.stroke",
+        "stylers": [
+          {
+            "color": "#212a37"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#9ca5b3"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#746855"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "geometry.stroke",
+        "stylers": [
+          {
+            "color": "#1f2835"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#f3d19c"
+          }
+        ]
+      },
+      {
+        "featureType": "transit",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#2f3948"
+          }
+        ]
+      },
+      {
+        "featureType": "transit.station",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#d59563"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#17263c"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#515c6d"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "labels.text.stroke",
+        "stylers": [
+          {
+            "color": "#17263c"
+          }
+        ]
+      }
+    ]
+    ''';
+    
+    setState(() {
+      _mapStyle = darkStyle;
+    });
   }
 
   Future<void> _setInitialLocation() async {
@@ -170,7 +429,7 @@ class _MapScreenState extends State<MapScreen> {
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(recorder);
       
-      const double targetSize = 48.0;
+      const double targetSize = 24.0;
       
       final double imageRatio = image.width / image.height;
       final double targetRatio = targetSize / targetSize;
@@ -212,6 +471,103 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // 클러스터 마커용 이미지 생성 (말풍선 포함)
+  Future<BitmapDescriptor?> _createClusterMarkerIcon(int count) async {
+    try {
+      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
+      final Uint8List bytes = data.buffer.asUint8List();
+      
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image image = frameInfo.image;
+      
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder);
+      
+      const double targetSize = 32.0; // 클러스터는 조금 더 크게
+      
+      // 배경 원 그리기
+      final paint = Paint()
+        ..color = Colors.orange.withOpacity(0.9)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(
+        Offset(targetSize / 2, targetSize / 2),
+        targetSize / 2,
+        paint,
+      );
+      
+      // 테두리 그리기
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+      canvas.drawCircle(
+        Offset(targetSize / 2, targetSize / 2),
+        targetSize / 2,
+        borderPaint,
+      );
+      
+      // ppam_work 이미지 그리기 (중앙에)
+      final double imageSize = targetSize * 0.6;
+      final double imageOffset = (targetSize - imageSize) / 2;
+      
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(imageOffset, imageOffset, imageSize, imageSize),
+        Paint(),
+      );
+      
+      // 숫자 말풍선 그리기 (우상단)
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: count.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      
+      // 말풍선 배경
+      final bubblePaint = Paint()
+        ..color = Colors.red
+        ..style = PaintingStyle.fill;
+      final bubbleRadius = 10.0;
+      final bubbleX = targetSize - bubbleRadius - 5;
+      final bubbleY = bubbleRadius + 5;
+      
+      canvas.drawCircle(
+        Offset(bubbleX, bubbleY),
+        bubbleRadius,
+        bubblePaint,
+      );
+      
+      // 숫자 그리기
+      textPainter.paint(
+        canvas,
+        Offset(
+          bubbleX - textPainter.width / 2,
+          bubbleY - textPainter.height / 2,
+        ),
+      );
+      
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
+      final ByteData? resizedBytes = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (resizedBytes != null) {
+        return BitmapDescriptor.fromBytes(resizedBytes.buffer.asUint8List());
+      }
+    } catch (e) {
+      debugPrint('클러스터 마커 생성 오류: $e');
+    }
+    return null;
+  }
+
 
 
   void _onMapCreated(GoogleMapController controller) {
@@ -223,15 +579,16 @@ class _MapScreenState extends State<MapScreen> {
 
   void _updateClustering() {
     // 줌 레벨에 따라 클러스터링 결정
-    if (_currentZoom < 12.0) {
+    if (_currentZoom < 13.0) {
       _clusterMarkers();
     } else {
       _showIndividualMarkers();
     }
     
-    // 디버그 정보 출력
-    debugPrint('클러스터링 업데이트: 줌=${_currentZoom}, 클러스터링=${_isClustered}, 마커 수=${_clusteredMarkers.length}');
-    debugPrint('마커 아이템 수: ${_markerItems.length}, 포스트 수: ${_posts.length}');
+    // 디버그 정보 출력 (성능 향상을 위해 줄임)
+    if (_currentZoom < 13.0) {
+      debugPrint('클러스터링 업데이트: 줌=${_currentZoom}, 마커 수=${_clusteredMarkers.length}');
+    }
   }
 
   void _showPostInfo(PostModel flyer) {
@@ -359,7 +716,7 @@ class _MapScreenState extends State<MapScreen> {
     final bool couponsOnly = filter?.showCouponsOnly ?? false;
     final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    const double clusterRadius = 0.01; // 약 1km
+    const double clusterRadius = 0.005; // 약 500m (더 세밀한 클러스터링)
     
     // 기존 마커 아이템들 클러스터링
     for (final item in _markerItems) {
@@ -428,6 +785,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       } else {
         final center = _parseLatLng(key);
+        // 클러스터 마커는 기본 아이콘으로 먼저 생성하고, 나중에 업데이트
         newMarkers.add(_createClusterMarker(center, items.length));
       }
     });
@@ -540,10 +898,10 @@ class _MapScreenState extends State<MapScreen> {
     return Marker(
       markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
       position: position,
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange), // 기본값
       infoWindow: InfoWindow(
         title: '클러스터',
-        snippet: '$count개의 마커',
+        snippet: '$count개의 마커가 이 지역에 있습니다',
       ),
       onTap: () => _showClusterInfo(position, count),
     );
@@ -677,12 +1035,42 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('클러스터 정보'),
-          content: Text('이 지역에 $count개의 마커가 있습니다.'),
+          title: Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue),
+              const SizedBox(width: 8),
+              Text('클러스터 정보'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('이 지역에 $count개의 마커가 있습니다.'),
+              const SizedBox(height: 8),
+              Text(
+                '더 자세히 보려면 이 지역으로 확대해보세요.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('닫기'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // 해당 지역으로 줌인
+                mapController.animateCamera(
+                  CameraUpdate.newLatLngZoom(position, 16.0),
+                );
+              },
+              child: const Text('확대하기'),
             ),
           ],
         );
@@ -865,11 +1253,16 @@ class _MapScreenState extends State<MapScreen> {
         expiryDate: data['expiryDate']?.toDate(),
       );
       
-      _markerItems.add(markerItem);
-      debugPrint('마커 로드됨: ${markerItem.title} at ${markerItem.position}, 타입: ${data['type']}');
+      // Fog of War: 밝은 지역에 있는 마커만 표시
+      if (_isInBrightArea(markerItem.position)) {
+        _markerItems.add(markerItem);
+        debugPrint('마커 로드됨 (밝은 지역): ${markerItem.title} at ${markerItem.position}, 타입: ${data['type']}');
+      } else {
+        debugPrint('마커 제외됨 (어두운 지역): ${markerItem.title} at ${markerItem.position}');
+      }
     }
     
-    debugPrint('마커 처리 완료: 총 ${_markerItems.length}개 마커 로드됨');
+    debugPrint('마커 처리 완료: 총 ${_markerItems.length}개 마커 로드됨 (밝은 지역만)');
     
     // 클러스터링 업데이트로 마커들을 지도에 표시
     _updateClustering();
@@ -884,10 +1277,10 @@ class _MapScreenState extends State<MapScreen> {
         final userInterests = ['패션', '뷰티']; // 임시 값
         final userPurchaseHistory = ['화장품']; // 임시 값
         
-        // 새로운 flyer 시스템에서 전단지 로드
+        // 새로운 flyer 시스템에서 전단지 로드 (Fog of War: 1km + 방문 기록 지역)
         final flyers = await _postService.getFlyersNearLocation(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-          radiusInKm: 5.0, // 5km 반경 내 전단지 조회
+          radiusInKm: 2.0, // 기본 2km 반경으로 확장 (방문 기록 지역 포함)
           userGender: userGender,
           userAge: userAge,
           userInterests: userInterests,
@@ -899,6 +1292,7 @@ class _MapScreenState extends State<MapScreen> {
           _posts.addAll(flyers);
         });
         
+        debugPrint('전단지 로드 완료: ${flyers.length}개 (1km 반경 내만)');
         _updateClustering();
       }
     } catch (e) {
@@ -1431,7 +1825,12 @@ class _MapScreenState extends State<MapScreen> {
               _currentZoom = position.zoom;
             },
             onCameraIdle: () {
-              _updateClustering();
+              // 카메라가 멈춘 후에만 클러스터링 업데이트 (성능 향상)
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (mounted) {
+                  _updateClustering();
+                }
+              });
             },
           ),
                      // 상단 필터 바
