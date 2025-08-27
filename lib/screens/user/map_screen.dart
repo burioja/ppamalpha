@@ -197,8 +197,8 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition == null) return false;
     
     // 사용자 위치에서 1km 이내인지 확인
-    final distance = _currentPosition!.distanceTo(position);
-    if (distance <= 1000) return true; // 1km 이내
+    final distance = _haversineKm(_currentPosition!, position);
+    if (distance <= 1.0) return true; // 1km 이내
     
     // 방문 기록이 있는 지역인지 확인 (최근 30일)
     return _isInVisitedArea(position);
@@ -213,8 +213,8 @@ class _MapScreenState extends State<MapScreen> {
     for (final circle in _fogOfWarCircles) {
       if (circle.circleId.value.startsWith('bright_visit_') || 
           circle.circleId.value.startsWith('bright_frequent_')) {
-        final distance = circle.center.distanceTo(position);
-        if (distance <= circle.radius) return true;
+        final distance = _haversineKm(circle.center, position);
+        if (distance <= circle.radius / 1000.0) return true; // radius를 km 단위로 변환
       }
     }
     
