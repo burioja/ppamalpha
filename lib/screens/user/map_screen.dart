@@ -65,7 +65,13 @@ class _MapScreenState extends State<MapScreen> {
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
-  final Set<Circle> _fogOfWarCircles = {};
+  final Set<Polygon> _fogOfWarPolygons = {};
+  final Set<Circle> _fogOfWarCircles = {}; // 기존 호환성을 위해 유지
+  
+  // 사용자 이동 추적을 위한 변수들
+  LatLng? _lastTrackedPosition;
+  Timer? _movementTracker;
+  static const double _movementThreshold = 50.0; // 50m 이상 이동 시 추적
 
   @override
   void initState() {
@@ -83,6 +89,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     // 실시간 리스너 정리
     _markersListener?.cancel();
+    _movementTracker?.cancel();
     super.dispose();
   }
 
@@ -93,32 +100,33 @@ class _MapScreenState extends State<MapScreen> {
       
       // 현재 위치가 없으면 기본 Fog of War만 생성
       if (_currentPosition == null) {
-        _createDefaultFogOfWar();
+        _createPolygonBasedFog();
         return;
       }
 
-      // 사용자 위치 반경 1km 내를 밝게 표시
-      final Set<Circle> circles = {};
+      // Polygon 기반 Fog of War 생성
+      final Set<Polygon> polygons = {};
+      final Set<Circle> circles = {}; // 기존 호환성을 위해 유지
       
-      // 메인 밝은 영역 (사용자 위치 반경 1km)
-      circles.add(
-        Circle(
-          circleId: const CircleId('main_bright_area'),
-          center: _currentPosition!,
-          radius: 1000, // 1km 반경
-          strokeWidth: 0,
-          fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
-        ),
-      );
+      // 전체 지도를 덮는 어두운 폴리곤
+      final double latOffset = 0.1; // 약 11km
+      final double lngOffset = 0.1; // 약 11km
       
-      // 전체 지도를 어둡게 덮는 큰 원 (Fog of War 효과)
-      circles.add(
-        Circle(
-          circleId: const CircleId('dark_overlay'),
-          center: _currentPosition!,
-          radius: 10000, // 10km 반경 (충분히 큰 영역)
+      final List<LatLng> worldBounds = [
+        LatLng(_currentPosition!.latitude - latOffset, _currentPosition!.longitude - lngOffset),
+        LatLng(_currentPosition!.latitude + latOffset, _currentPosition!.longitude - lngOffset),
+        LatLng(_currentPosition!.latitude + latOffset, _currentPosition!.longitude + lngOffset),
+        LatLng(_currentPosition!.latitude - latOffset, _currentPosition!.longitude + lngOffset),
+      ];
+      
+      // 전체 지도를 덮는 어두운 폴리곤
+      polygons.add(
+        Polygon(
+          polygonId: const PolygonId('world_dark_overlay'),
+          points: worldBounds,
+          fillColor: Colors.black.withOpacity(0.7),
+          strokeColor: Colors.transparent,
           strokeWidth: 0,
-          fillColor: Colors.black.withOpacity(0.6), // 어두운 오버레이
         ),
       );
       
@@ -131,54 +139,56 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
+      // 방문 기록이 있는 지역들을 밝게 만들기 위한 폴리곤들
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
         
         final visitLatLng = LatLng(gp.latitude, gp.longitude);
-        final distance = _haversineKm(_currentPosition!, visitLatLng);
+        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0;
+        final double radius = weight > 2.0 ? 0.5 : 0.3; // 자주 방문한 지역은 더 넓게
         
-        // 방문 기록이 있는 지역은 밝게 표시 (어두운 오버레이를 덮어씀)
+        // 방문 지역을 밝게 만들기 위한 투명한 폴리곤
+        final List<LatLng> brightArea = _createCirclePoints(visitLatLng, radius);
+        polygons.add(
+          Polygon(
+            polygonId: PolygonId('bright_visit_${doc.id}'),
+            points: brightArea,
+            fillColor: Colors.transparent,
+            strokeColor: Colors.transparent,
+            strokeWidth: 0,
+          ),
+        );
+        
+        // 기존 Circle 기반 시스템과의 호환성을 위해 유지
         circles.add(
           Circle(
             circleId: CircleId('bright_visit_${doc.id}'),
             center: visitLatLng,
-            radius: 300, // 약 300m 반경 (방문지 주변도 밝게)
+            radius: (radius * 1000).toInt(), // km를 m로 변환
             strokeWidth: 0,
-            fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
+            fillColor: Colors.transparent,
           ),
         );
-        
-        // 방문 빈도에 따른 추가 밝은 영역 (가중치가 높을수록 더 넓게)
-        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0;
-        if (weight > 2.0) { // 자주 방문한 지역은 더 넓게
-          circles.add(
-            Circle(
-              circleId: CircleId('bright_frequent_${doc.id}'),
-              center: visitLatLng,
-              radius: 500, // 약 500m 반경
-              strokeWidth: 0,
-              fillColor: Colors.transparent, // 투명하게
-            ),
-          );
-        }
       }
 
       if (mounted) {
         setState(() {
+          _fogOfWarPolygons
+            ..clear()
+            ..addAll(polygons);
           _fogOfWarCircles
             ..clear()
             ..addAll(circles);
         });
-        debugPrint('Fog of War 생성 완료: ${circles.length}개 원형 영역');
-        debugPrint('밝은 영역: 사용자 위치 1km 반경');
-        debugPrint('방문 기록 영역: ${snapshot.docs.length}개');
+        debugPrint('Polygon 기반 Fog of War 생성 완료: ${polygons.length}개 폴리곤');
+        debugPrint('밝은 영역: 사용자 위치 1km 반경 + 방문 기록 ${snapshot.docs.length}개');
       }
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
       // 오류 발생 시 기본 Fog of War 생성
-      _createDefaultFogOfWar();
+      _createPolygonBasedFog();
     }
   }
 
@@ -256,6 +266,132 @@ class _MapScreenState extends State<MapScreen> {
       // 스타일 로드 실패 시 기본 어두운 스타일 사용
       _createDefaultDarkStyle();
     }
+  }
+
+  // Polygon 기반 Fog of War 생성 (더 정확한 영역 제어)
+  void _createPolygonBasedFog() {
+    if (_currentPosition == null) return;
+    
+    final Set<Polygon> polygons = {};
+    
+    // 현재 뷰포트를 기준으로 전체 지도를 덮는 큰 사각형 생성
+    // 실제로는 지도의 현재 보이는 영역을 기준으로 해야 함
+    final double latOffset = 0.1; // 약 11km
+    final double lngOffset = 0.1; // 약 11km
+    
+    final List<LatLng> worldBounds = [
+      LatLng(_currentPosition!.latitude - latOffset, _currentPosition!.longitude - lngOffset),
+      LatLng(_currentPosition!.latitude + latOffset, _currentPosition!.longitude - lngOffset),
+      LatLng(_currentPosition!.latitude + latOffset, _currentPosition!.longitude + lngOffset),
+      LatLng(_currentPosition!.latitude - latOffset, _currentPosition!.longitude + lngOffset),
+    ];
+    
+    // 전체 지도를 덮는 어두운 폴리곤
+    polygons.add(
+      Polygon(
+        polygonId: const PolygonId('world_dark_overlay'),
+        points: worldBounds,
+        fillColor: Colors.black.withOpacity(0.7),
+        strokeColor: Colors.transparent,
+        strokeWidth: 0,
+      ),
+    );
+    
+    // 사용자 위치 주변 1km를 밝게 만들기 위해 구멍 뚫기
+    final List<LatLng> brightArea = _createCirclePoints(_currentPosition!, 1.0);
+    polygons.add(
+      Polygon(
+        polygonId: const PolygonId('bright_area_hole'),
+        points: brightArea,
+        fillColor: Colors.transparent,
+        strokeColor: Colors.transparent,
+        strokeWidth: 0,
+        holes: [], // 구멍을 만들기 위한 빈 배열
+      ),
+    );
+    
+    setState(() {
+      _fogOfWarPolygons
+        ..clear()
+        ..addAll(polygons);
+    });
+    
+    debugPrint('Polygon 기반 Fog of War 생성 완료: ${polygons.length}개 폴리곤');
+  }
+
+  // 사용자 이동 추적 시작
+  void _startMovementTracking() {
+    _movementTracker = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (_currentPosition != null && mounted) {
+        _trackUserMovement();
+      }
+    });
+  }
+
+  // 사용자 이동 추적 및 방문 기록 저장
+  Future<void> _trackUserMovement() async {
+    try {
+      if (_currentPosition == null || _lastTrackedPosition == null) {
+        _lastTrackedPosition = _currentPosition;
+        return;
+      }
+
+      final distance = _haversineKm(_lastTrackedPosition!, _currentPosition!);
+      
+      // 50m 이상 이동했을 때만 추적
+      if (distance * 1000 >= _movementThreshold) {
+        await _saveVisitedLocation(_currentPosition!);
+        _lastTrackedPosition = _currentPosition;
+        
+        // Fog of War 업데이트
+        _loadVisitsAndBuildFog();
+      }
+    } catch (e) {
+      debugPrint('사용자 이동 추적 오류: $e');
+    }
+  }
+
+  // 방문한 위치를 Firestore에 저장
+  Future<void> _saveVisitedLocation(LatLng position) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final now = DateTime.now();
+      final locationKey = '${position.latitude.toStringAsFixed(4)},${position.longitude.toStringAsFixed(4)}';
+      
+      // 방문 기록 저장
+      await FirebaseFirestore.instance
+          .collection('user_movements')
+          .doc(uid)
+          .collection('visited_cells')
+          .doc(locationKey)
+          .set({
+        'location': GeoPoint(position.latitude, position.longitude),
+        'visited_at': Timestamp.fromDate(now),
+        'weight': FieldValue.increment(1), // 방문 횟수 증가
+        'last_visit': Timestamp.fromDate(now),
+      }, SetOptions(merge: true));
+
+      debugPrint('방문 위치 저장됨: $locationKey');
+    } catch (e) {
+      debugPrint('방문 위치 저장 오류: $e');
+    }
+  }
+
+  // 원형 영역을 폴리곤 포인트로 변환
+  List<LatLng> _createCirclePoints(LatLng center, double radiusKm) {
+    final List<LatLng> points = [];
+    const int segments = 32; // 원을 32개 선분으로 근사
+    
+    for (int i = 0; i <= segments; i++) {
+      final double angle = (2 * pi * i) / segments;
+      final double lat = center.latitude + (radiusKm / 111.32) * cos(angle);
+      final double lng = center.longitude + (radiusKm / (111.32 * cos(center.latitude * pi / 180))) * sin(angle);
+      points.add(LatLng(lat, lng));
+    }
+    
+    return points;
   }
 
   // 기본 어두운 스타일 생성 (Fog of War 효과)
@@ -437,8 +573,14 @@ class _MapScreenState extends State<MapScreen> {
             ? LatLng(position.latitude, position.longitude)
             : const LatLng(37.495872, 127.025046);
       });
+      
+      // 초기 위치 설정 후 이동 추적 시작
+      _lastTrackedPosition = _currentPosition;
+      _startMovementTracking();
     } catch (_) {
       _currentPosition = const LatLng(37.492894, 127.012469);
+      _lastTrackedPosition = _currentPosition;
+      _startMovementTracking();
     }
   }
 
@@ -1831,6 +1973,7 @@ class _MapScreenState extends State<MapScreen> {
             tiltGesturesEnabled: true,
             rotateGesturesEnabled: true,
             circles: _fogOfWarCircles,
+            polygons: _fogOfWarPolygons,
             onLongPress: (LatLng latLng) {
               setState(() {
                 _longPressedLatLng = latLng;
