@@ -166,7 +166,7 @@ class _MapScreenState extends State<MapScreen> {
           Circle(
             circleId: CircleId('bright_visit_${doc.id}'),
             center: visitLatLng,
-            radius: (radius * 1000).toInt(), // km를 m로 변환
+            radius: (radius * 1000).toDouble(), // km를 m로 변환
             strokeWidth: 0,
             fillColor: Colors.transparent,
           ),
