@@ -2,18 +2,24 @@ import 'package:flutter/material.dart';
 
 class MapFilterProvider with ChangeNotifier {
   bool _showCouponsOnly = false;
-  double _distanceKm = 3.0; // 기본 3km
+  bool _showMyPostsOnly = false;
 
   bool get showCouponsOnly => _showCouponsOnly;
-  double get distanceKm => _distanceKm;
+  bool get showMyPostsOnly => _showMyPostsOnly;
 
   void toggleCouponsOnly() {
     _showCouponsOnly = !_showCouponsOnly;
     notifyListeners();
   }
 
-  void setDistance(double km) {
-    _distanceKm = km;
+  void toggleMyPostsOnly() {
+    _showMyPostsOnly = !_showMyPostsOnly;
+    notifyListeners();
+  }
+
+  void resetFilters() {
+    _showCouponsOnly = false;
+    _showMyPostsOnly = false;
     notifyListeners();
   }
 }

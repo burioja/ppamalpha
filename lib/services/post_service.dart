@@ -52,7 +52,7 @@ class PostService {
       );
 
       // Firestore에 저장
-      final docRef = await _firestore.collection('flyers').add(flyer.toFirestore());
+      final docRef = await _firestore.collection('posts').add(flyer.toFirestore());
       
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
       await _indexToMeilisearch(flyer.copyWith(flyerId: docRef.id));
@@ -161,7 +161,7 @@ class PostService {
     try {
       // 1단계: 위치 기반 필터링 (GeoFlutterFire)
       final querySnapshot = await _firestore
-          .collection('flyers')
+          .collection('posts')
           .where('isActive', isEqualTo: true)
           .where('isCollected', isEqualTo: false)
           .get();
@@ -230,7 +230,7 @@ class PostService {
   }) async {
     try {
       // TODO: Meilisearch 검색 구현
-      // final searchResult = await meilisearchClient.index('flyers').search(
+      // final searchResult = await meilisearchClient.index('posts').search(
       //   '',
       //   filter: _buildMeilisearchFilter(
       //     location, radiusInKm, targetGender, targetAge, targetInterest, minReward, maxReward
@@ -254,7 +254,7 @@ class PostService {
   }) async {
     try {
       // 발행자 확인
-      final flyerDoc = await _firestore.collection('flyers').doc(flyerId).get();
+      final flyerDoc = await _firestore.collection('posts').doc(flyerId).get();
       if (!flyerDoc.exists) {
         throw Exception('전단지를 찾을 수 없습니다.');
       }
@@ -265,7 +265,7 @@ class PostService {
       }
       
       // 회수 처리
-      await _firestore.collection('flyers').doc(flyerId).update({
+      await _firestore.collection('posts').doc(flyerId).update({
         'isCollected': true,
         'collectedBy': userId,
         'collectedAt': Timestamp.now(),
@@ -282,7 +282,7 @@ class PostService {
   Future<void> _removeFromMeilisearch(String flyerId) async {
     try {
       // TODO: Meilisearch 클라이언트 구현
-      // await meilisearchClient.index('flyers').deleteDocument(flyerId);
+      // await meilisearchClient.index('posts').deleteDocument(flyerId);
       debugPrint('Meilisearch에서 제거: $flyerId');
     } catch (e) {
       debugPrint('Meilisearch 제거 실패: $e');
@@ -293,7 +293,7 @@ class PostService {
   Future<List<PostModel>> getCollectedFlyers(String userId) async {
     try {
       final querySnapshot = await _firestore
-          .collection('flyers')
+          .collection('posts')
           .where('collectedBy', isEqualTo: userId)
           .orderBy('collectedAt', descending: true)
           .get();
@@ -305,7 +305,7 @@ class PostService {
       // 인덱스 빌드 전(failed-precondition) 임시 우회: 서버 정렬 없이 가져와 클라이언트에서 정렬
       if (e.code == 'failed-precondition') {
         final fallbackSnapshot = await _firestore
-            .collection('flyers')
+            .collection('posts')
             .where('collectedBy', isEqualTo: userId)
             .get();
         final items = fallbackSnapshot.docs

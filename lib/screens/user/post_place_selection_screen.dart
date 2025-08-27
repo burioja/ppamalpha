@@ -257,14 +257,32 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
         (place) => place.id == _selectedPlaceId,
       );
       
-      Navigator.pushReplacementNamed(
-        context,
-        '/post-place',
-        arguments: {
-          'place': selectedPlace,
-          'fromSelection': true,
-        },
-      );
+      // PostDeployScreen에서 온 경우와 일반적인 경우를 구분
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final fromPostDeploy = args?['fromPostDeploy'] ?? false;
+      
+      if (fromPostDeploy) {
+        // PostDeployScreen에서 온 경우: pushNamed 사용하여 결과 대기
+        Navigator.pushNamed(
+          context,
+          '/post-place',
+          arguments: {
+            'place': selectedPlace,
+            'fromSelection': true,
+            'fromPostDeploy': true,
+          },
+        );
+      } else {
+        // 일반적인 경우: pushReplacementNamed 사용
+        Navigator.pushReplacementNamed(
+          context,
+          '/post-place',
+          arguments: {
+            'place': selectedPlace,
+            'fromSelection': true,
+          },
+        );
+      }
     }
   }
 }

@@ -12,10 +12,11 @@ import '../screens/user/track_connection_screen.dart';
 import '../screens/user/settings_screen.dart';
 import '../screens/user/post_place_screen.dart';
 import '../screens/user/post_place_selection_screen.dart';
-import '../screens/user/post_by_location_screen.dart';
+
 import '../screens/user/location_picker_screen.dart';
 import '../screens/user/post_detail_screen.dart';
 import '../screens/user/post_edit_screen.dart';
+import '../screens/user/post_deploy_screen.dart';
 import '../screens/shared/migration_screen.dart';
 import '../screens/shared/debug_screen.dart';
 import '../models/place_model.dart';
@@ -40,8 +41,9 @@ class AppRoutes {
   static const String postPlaceSelection = '/post-place-selection';
   static const String postDetail = '/post-detail';
   static const String postEdit = '/post-edit';
-  static const String postByLocation = '/post-by-location';
+
   static const String locationPicker = '/location-picker';
+  static const String postDeploy = '/post-deploy';
   static const String createPlace = '/create-place';
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
@@ -73,14 +75,13 @@ class AppRoutes {
       return PostPlaceScreen(place: place);
     },
     postPlaceSelection: (context) => const PostPlaceSelectionScreen(),
-    postByLocation: (context) {
+
+    postDeploy: (context) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final location = args?['location'] as LatLng?;
-      final address = args?['address'] as String?;
-      if (location == null) {
-        return const Scaffold(body: Center(child: Text('위치 정보가 없습니다.')));
+      if (args == null) {
+        return const Scaffold(body: Center(child: Text('배포 정보를 찾을 수 없습니다.')));
       }
-      return PostByLocationScreen(location: location, address: address);
+      return PostDeployScreen(arguments: args);
     },
     locationPicker: (context) => const LocationPickerScreen(),
     postDetail: (context) {
