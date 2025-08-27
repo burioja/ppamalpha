@@ -222,11 +222,16 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateClustering() {
+    // 줌 레벨에 따라 클러스터링 결정
     if (_currentZoom < 12.0) {
       _clusterMarkers();
     } else {
       _showIndividualMarkers();
     }
+    
+    // 디버그 정보 출력
+    debugPrint('클러스터링 업데이트: 줌=${_currentZoom}, 클러스터링=${_isClustered}, 마커 수=${_clusteredMarkers.length}');
+    debugPrint('마커 아이템 수: ${_markerItems.length}, 포스트 수: ${_posts.length}');
   }
 
   void _showPostInfo(PostModel flyer) {
@@ -347,14 +352,23 @@ class _MapScreenState extends State<MapScreen> {
   void _clusterMarkers() {
     if (_isClustered) return;
     
+    debugPrint('클러스터링 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
+    
     final clusters = <String, List<dynamic>>{};
     final filter = mounted ? context.read<MapFilterProvider>() : null;
     final bool couponsOnly = filter?.showCouponsOnly ?? false;
+    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     const double clusterRadius = 0.01; // 약 1km
     
     // 기존 마커 아이템들 클러스터링
     for (final item in _markerItems) {
+      // 쿠폰만 필터
       if (couponsOnly && item.data['type'] != 'post_place') continue;
+      
+      // 내 포스트만 필터
+      if (myPostsOnly && item.userId != currentUserId) continue;
+      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -376,7 +390,12 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포스트들 클러스터링
     for (final post in _posts) {
+      // 쿠폰만 필터
       if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
+      
+      // 내 포스트만 필터
+      if (myPostsOnly && post.creatorId != currentUserId) continue;
+      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -421,22 +440,36 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showIndividualMarkers() {
-    if (!_isClustered) return;
+    debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final Set<Marker> newMarkers = {};
     final filter = mounted ? context.read<MapFilterProvider>() : null;
     final bool couponsOnly = filter?.showCouponsOnly ?? false;
+    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
+      // 쿠폰만 필터
       if (couponsOnly && item.data['type'] != 'post_place') continue;
+      
+      // 내 포스트만 필터
+      if (myPostsOnly && item.userId != currentUserId) continue;
+      
       newMarkers.add(_createMarker(item));
+      debugPrint('마커 추가됨: ${item.title} at ${item.position}');
     }
     
     // 포스트 마커들 추가
     for (final post in _posts) {
+      // 쿠폰만 필터
       if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
+      
+      // 내 포스트만 필터
+      if (myPostsOnly && post.creatorId != currentUserId) continue;
+      
       newMarkers.add(_createPostMarker(post));
+      debugPrint('포스트 마커 추가됨: ${post.title} at ${post.location}');
     }
     
     setState(() {
@@ -444,6 +477,8 @@ class _MapScreenState extends State<MapScreen> {
       _clusteredMarkers.addAll(newMarkers);
       _isClustered = false;
     });
+    
+    debugPrint('마커 설정 완료: 총 ${newMarkers.length}개 마커');
   }
 
   LatLng _parseLatLng(String key) {
@@ -831,9 +866,12 @@ class _MapScreenState extends State<MapScreen> {
       );
       
       _markerItems.add(markerItem);
-      debugPrint('마커 로드됨: ${markerItem.title} at ${markerItem.position}');
+      debugPrint('마커 로드됨: ${markerItem.title} at ${markerItem.position}, 타입: ${data['type']}');
     }
     
+    debugPrint('마커 처리 완료: 총 ${_markerItems.length}개 마커 로드됨');
+    
+    // 클러스터링 업데이트로 마커들을 지도에 표시
     _updateClustering();
   }
 
@@ -873,11 +911,15 @@ class _MapScreenState extends State<MapScreen> {
   void _addMarkerToMap(MarkerItem markerItem) {
     setState(() {
       _markerItems.add(markerItem);
-      _clusteredMarkers.add(_createMarker(markerItem));
+      // 마커를 직접 _clusteredMarkers에 추가하지 않고 _markerItems에만 추가
+      // _updateClustering()에서 모든 마커를 다시 생성
     });
     
     // Firestore에 저장
     _saveMarkerToFirestore(markerItem);
+    
+    // 클러스터링 업데이트로 모든 마커를 다시 생성
+    _updateClustering();
     
     debugPrint('마커 추가됨: ${markerItem.title} at ${markerItem.position}');
   }
@@ -1392,31 +1434,53 @@ class _MapScreenState extends State<MapScreen> {
               _updateClustering();
             },
           ),
-          // 상단 필터 바
-          Positioned(
-            top: 16,
-            left: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: const Text('쿠폰만'),
-                    selected: filters.showCouponsOnly,
-                    onSelected: (_) => filters.toggleCouponsOnly(),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                     // 상단 필터 바
+           Positioned(
+             top: 16,
+             left: 12,
+             right: 12,
+             child: Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+               decoration: BoxDecoration(
+                 color: Colors.white,
+                 borderRadius: BorderRadius.circular(12),
+                 boxShadow: const [
+                   BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
+                 ],
+               ),
+               child: Row(
+                 children: [
+                   FilterChip(
+                     label: const Text('쿠폰만'),
+                     selected: filters.showCouponsOnly,
+                     onSelected: (_) {
+                       filters.toggleCouponsOnly();
+                       _updateClustering();
+                     },
+                   ),
+                   const SizedBox(width: 8),
+                   FilterChip(
+                     label: const Text('내 포스트'),
+                     selected: filters.showMyPostsOnly,
+                     onSelected: (_) {
+                       filters.toggleMyPostsOnly();
+                       _updateClustering();
+                     },
+                   ),
+                   const SizedBox(width: 8),
+                   if (filters.showCouponsOnly || filters.showMyPostsOnly)
+                     FilterChip(
+                       label: const Text('필터 초기화'),
+                       selected: false,
+                       onSelected: (_) {
+                         filters.resetFilters();
+                         _updateClustering();
+                       },
+                     ),
+                 ],
+               ),
+             ),
+           ),
           if (_longPressedLatLng != null)
             Center(child: _buildPopupWidget()),
         ],

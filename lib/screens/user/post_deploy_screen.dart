@@ -153,11 +153,23 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     });
 
     try {
-      // TODO: 실제 배포 로직 구현
-      // 1. 지갑 잔액 확인
-      // 2. 예치(escrow) 홀드
-      // 3. map_markers 생성
-      // 4. posts/{id} 참조 업데이트
+      // 1. 지갑 잔액 확인 (구현 필요)
+      // 2. 예치(escrow) 홀드 (구현 필요)
+      
+      // 3. 마커 생성 및 Firestore에 저장
+      await _createMarkerInFirestore(
+        post: _selectedPost!,
+        location: _selectedLocation!,
+        quantity: quantity,
+        price: price,
+      );
+
+      // 4. 포스트 상태 업데이트 (배포됨으로 표시)
+      await _postService.updatePost(_selectedPost!.flyerId, {
+        'isDistributed': true,
+        'distributedAt': DateTime.now(),
+        'updatedAt': DateTime.now(),
+      });
 
       if (mounted) {
         Navigator.pop(context, {
@@ -581,6 +593,62 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return '미정';
     return '${date.month}/${date.day}';
+  }
+
+  // 마커를 Firestore에 생성하는 메서드
+  Future<void> _createMarkerInFirestore({
+    required PostModel post,
+    required LatLng location,
+    required int quantity,
+    required int price,
+  }) async {
+    try {
+      // 기존 마커가 있는지 확인 (중복 방지)
+      final existingMarkers = await FirebaseFirestore.instance
+          .collection('markers')
+          .where('flyerId', isEqualTo: post.flyerId)
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      if (existingMarkers.docs.isNotEmpty) {
+        debugPrint('이미 배포된 포스트의 마커가 존재합니다: ${post.flyerId}');
+        return; // 이미 마커가 있으면 생성하지 않음
+      }
+
+      final markerData = {
+        'title': post.title,
+        'price': price,
+        'amount': quantity,
+        'userId': post.creatorId,
+        'position': GeoPoint(location.latitude, location.longitude),
+        'remainingAmount': quantity,
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiryDate': post.expiresAt,
+        'isActive': true,
+        'isCollected': false,
+        'type': 'post_place', // MapScreen과 일치하는 타입
+        'flyerId': post.flyerId,
+        'creatorName': post.creatorName,
+        'description': post.description,
+        'targetGender': post.targetGender,
+        'targetAge': post.targetAge,
+        'canRespond': post.canRespond,
+        'canForward': post.canForward,
+        'canRequestReward': post.canRequestReward,
+        'canUse': post.canUse,
+        'markerId': post.markerId,
+        'radius': post.radius, // 포스트 반경 정보 추가
+      };
+
+      // markers 컬렉션에 저장
+      final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
+      
+      debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
+      debugPrint('마커 ID: ${docRef.id}, 포스트 ID: ${post.flyerId}');
+    } catch (e) {
+      debugPrint('마커 생성 실패: $e');
+      throw Exception('마커 생성에 실패했습니다: $e');
+    }
   }
 
   @override
