@@ -111,6 +111,17 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       
+      // 전체 지도를 어둡게 덮는 큰 원 (Fog of War 효과)
+      circles.add(
+        Circle(
+          circleId: const CircleId('dark_overlay'),
+          center: _currentPosition!,
+          radius: 10000, // 10km 반경 (충분히 큰 영역)
+          strokeWidth: 0,
+          fillColor: Colors.black.withOpacity(0.6), // 어두운 오버레이
+        ),
+      );
+      
       // 방문 기록이 있는 지역들 (과거 방문지) - 밝게 표시
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
@@ -128,7 +139,7 @@ class _MapScreenState extends State<MapScreen> {
         final visitLatLng = LatLng(gp.latitude, gp.longitude);
         final distance = _haversineKm(_currentPosition!, visitLatLng);
         
-        // 방문 기록이 있는 지역은 밝게 표시 (투명하게)
+        // 방문 기록이 있는 지역은 밝게 표시 (어두운 오버레이를 덮어씀)
         circles.add(
           Circle(
             circleId: CircleId('bright_visit_${doc.id}'),
@@ -160,6 +171,9 @@ class _MapScreenState extends State<MapScreen> {
             ..clear()
             ..addAll(circles);
         });
+        debugPrint('Fog of War 생성 완료: ${circles.length}개 원형 영역');
+        debugPrint('밝은 영역: 사용자 위치 1km 반경');
+        debugPrint('방문 기록 영역: ${snapshot.docs.length}개');
       }
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
@@ -182,6 +196,17 @@ class _MapScreenState extends State<MapScreen> {
         radius: 1000, // 1km 반경
         strokeWidth: 0,
         fillColor: Colors.transparent, // 투명하게 (지도가 밝게 보임)
+      ),
+    );
+    
+    // 전체 지도를 어둡게 덮는 큰 원 (Fog of War 효과)
+    circles.add(
+      Circle(
+        circleId: const CircleId('dark_overlay'),
+        center: _currentPosition!,
+        radius: 10000, // 10km 반경 (충분히 큰 영역)
+        strokeWidth: 0,
+        fillColor: Colors.black.withOpacity(0.6), // 어두운 오버레이
       ),
     );
     
@@ -429,7 +454,7 @@ class _MapScreenState extends State<MapScreen> {
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(recorder);
       
-      const double targetSize = 24.0;
+      const double targetSize = 48.0;
       
       final double imageRatio = image.width / image.height;
       final double targetRatio = targetSize / targetSize;
