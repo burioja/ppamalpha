@@ -8,7 +8,7 @@ import 'budget_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import '../../providers/search_provider.dart';
-import '../../widgets/mode_switcher.dart';
+
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,7 +18,6 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  bool _isWorkMode = true;
   int _selectedIndex = 0;
   String _currentLocation = '위치 불러오는 중...';
 
@@ -73,24 +72,10 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildTopBar() {
     return Container(
       height: 50,
-      color: _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF),
+      color: const Color(0xFF4D4DFF),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          // 왼쪽 ModeSwitcher
-          ModeSwitcher(
-            currentMode: _isWorkMode ? 0 : 1,
-            onModeChanged: (mode) {
-              setState(() {
-                _isWorkMode = mode == 0;
-                // 모드 변경 시 인덱스 리셋
-                // _currentWorkplaceIndex = 0;
-                // _currentItemIndex = 0;
-              });
-            },
-          ),
-          const SizedBox(width: 10),
-
           // 중앙 위치 (터치하면 지도 화면으로 이동)
           Expanded(
             child: GestureDetector(
@@ -120,7 +105,6 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
 
           // 오른쪽 M 아이콘(예산 화면 이동)
           GestureDetector(
@@ -158,7 +142,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildCustomNavBar() {
-    final Color accentColor = _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF);
+    final Color accentColor = const Color(0xFF4D4DFF);
 
     return Container(
       padding: const EdgeInsets.only(top: 5, bottom: 15, left: 8, right: 8),

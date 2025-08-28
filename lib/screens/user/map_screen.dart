@@ -41,7 +41,7 @@ class MarkerItem {
 }
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  MapScreen({super.key});
   static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
@@ -93,21 +93,20 @@ class _MapScreenState extends State<MapScreen> {
 
       final Set<Circle> circles = {};
 
-      // 1. 현재 위치 밝은 영역 (1km 반경)
+      // 1. 전체 화면을 덮는 검은 Fog (가장 먼저 - 뒤에 깔림)
       if (_currentPosition != null) {
         circles.add(
           Circle(
-            circleId: const CircleId('current_location'),
+            circleId: const CircleId('fog_overlay'),
             center: _currentPosition!,
-            radius: 1000, // 1km 반경
-            strokeWidth: 2,
-            strokeColor: Colors.blue,
-            fillColor: Colors.transparent, // 밝게 표시 (투명)
+            radius: 1000, // 1km 반경 (현재 위치 주변만 검은색으로)
+            strokeWidth: 0,
+            fillColor: Colors.black.withOpacity(0.7), // 검은 Fog
           ),
         );
       }
 
-      // 2. 최근 30일 방문 지역 (회색 불투명)
+      // 2. 최근 30일 방문 지역 (회색 불투명 - 검은 Fog 위에)
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -133,15 +132,16 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
 
-      // 3. 전체 화면을 덮는 검은 Fog (큰 반경으로 미방문 지역 표시)
+      // 3. 현재 위치 밝은 영역 (가장 위에 - 가장 밝게)
       if (_currentPosition != null) {
         circles.add(
           Circle(
-            circleId: const CircleId('fog_overlay'),
+            circleId: const CircleId('current_location'),
             center: _currentPosition!,
-            radius: 50000, // 50km 반경 (넓은 지역을 검은색으로)
-            strokeWidth: 0,
-            fillColor: Colors.black.withOpacity(0.7), // 검은 Fog
+            radius: 1000, // 1km 반경
+            strokeWidth: 2,
+            strokeColor: Colors.blue,
+            fillColor: Colors.transparent, // 밝게 표시 (투명)
           ),
         );
       }
