@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../controllers/map_map_controller.dart';
 import '../../controllers/map_marker_controller.dart';
 import '../../controllers/map_clustering_controller.dart';
+import '../../controllers/map_fog_of_war_controller.dart';
 
 // 매니저들
 import '../../managers/map_marker_data_manager.dart';
@@ -15,6 +16,7 @@ import '../../managers/map_marker_data_manager.dart';
 import '../../services/map_data_service.dart';
 import '../../services/map_cache_service.dart';
 import '../../services/map_batch_request_service.dart';
+import '../../services/map_visit_service.dart';
 
 // 핸들러들
 import '../../handlers/map_interaction_handler.dart';
@@ -47,6 +49,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   late MapMapController _mapController;
   late MapMarkerController _markerController;
   late MapClusteringController _clusteringController;
+  late MapFogOfWarController _fogOfWarController;
   
   // 매니저들
   late MapMarkerDataManager _dataManager;
@@ -55,6 +58,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   late MapDataService _dataService;
   late MapCacheService _cacheService;
   late MapBatchRequestService _batchService;
+  late MapVisitService _visitService;
   
   // 핸들러들
   late MapInteractionHandler _interactionHandler;
@@ -73,6 +77,9 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   
   // 마커 상태
   Set<Marker> _markers = {};
+  
+  // Fog of War state
+  Set<Circle> _fogOfWarCircles = {};
   
   @override
   void initState() {
@@ -116,6 +123,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
       _mapController = MapMapController();
       _markerController = MapMarkerController();
       _clusteringController = MapClusteringController(_markerController);
+      _fogOfWarController = MapFogOfWarController();
 
       // 2. 매니저들 초기화
       _dataManager = MapMarkerDataManager(_markerController);
@@ -124,6 +132,11 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
       _dataService = MapDataService();
       _cacheService = MapCacheService();
       _batchService = MapBatchRequestService();
+      _visitService = MapVisitService();
+      
+      // 방문 서비스 초기화
+      await _cacheService.initialize();
+      _visitService.initialize();
 
       // 4. 핸들러들 초기화
       _interactionHandler = MapInteractionHandler(
@@ -164,6 +177,10 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
 
       // 5. 생명주기 핸들러 초기화
       await _lifecycleHandler.initialize();
+      
+      // 6. Fog of War 데이터 로드
+      await _fogOfWarController.loadVisitsAndBuildFog();
+      _updateFogOfWar();
 
     } catch (error) {
       setState(() {
@@ -182,6 +199,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
     _lifecycleHandler.dispose();
     _gestureHandler.dispose();
     _interactionHandler.dispose();
+    _visitService.dispose();
     _batchService.dispose();
     _cacheService.dispose();
     _dataService.dispose();
@@ -189,6 +207,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
     _clusteringController.dispose();
     _markerController.dispose();
     _mapController.dispose();
+    _fogOfWarController.dispose();
   }
 
   @override
@@ -289,6 +308,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
       ),
       onMapCreated: _onMapCreated,
       markers: _markers,
+      circles: _fogOfWarCircles, // Fog of War 추가
       onCameraMove: _gestureHandler.onCameraMove,
       onCameraIdle: _gestureHandler.onCameraIdle,
       onTap: (_) => _interactionHandler.onMapTap(),
@@ -340,12 +360,51 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
     _updateMarkers();
   }
 
-  /// 마커 업데이트
+  /// 마커 업데이트 (방문 지역 기반 필터링 적용)
   void _updateMarkers() {
     if (!mounted) return;
     
+    // 방문 가능한 지역의 마커만 표시
+    final visibleMarkers = _markerController.getVisibleMarkers(
+      _mapController.currentPosition,
+      _fogOfWarController.visitedLocations,
+    );
+    
+    final visiblePosts = _markerController.getVisiblePosts(
+      _mapController.currentPosition,
+      _fogOfWarController.visitedLocations,
+    );
+    
+    // 임시로 원래 마커들을 저장하고 보이는 것들만 설정
+    final originalMarkers = _markerController.markerItems;
+    final originalPosts = _markerController.posts;
+    
+    _markerController.setMarkerItems(visibleMarkers);
+    _markerController.setPosts(visiblePosts);
+    
+    // 클러스터링 업데이트
+    _clusteringController.updateClustering(
+      _mapController.currentZoom,
+      showCouponsOnly: _showCouponsOnly,
+      showMyPostsOnly: _showMyPostsOnly,
+      currentUserId: null,
+    );
+    
+    // 원래 마커들로 복원
+    _markerController.setMarkerItems(originalMarkers);
+    _markerController.setPosts(originalPosts);
+    
     setState(() {
       _markers = _clusteringController.clusteredMarkers;
+    });
+  }
+  
+  /// Fog of War 업데이트
+  void _updateFogOfWar() {
+    if (!mounted) return;
+    
+    setState(() {
+      _fogOfWarCircles = _fogOfWarController.fogOfWarCircles;
     });
   }
 
@@ -353,6 +412,14 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   Future<void> _goToCurrentLocation() async {
     try {
       await _mapController.goToCurrentLocation();
+      
+      // 현재 위치 방문 기록 추가
+      if (_mapController.currentPosition != null) {
+        await _visitService.recordCurrentLocationVisit(_mapController.currentPosition!);
+        _fogOfWarController.updateCurrentPosition(_mapController.currentPosition!);
+        _updateFogOfWar();
+        _updateMarkers();
+      }
     } catch (error) {
       _onShowSnackBar('현재 위치를 가져올 수 없습니다: $error');
     }
@@ -409,12 +476,18 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
 
   /// 가시 영역 변경
   void _onVisibleBoundsChanged(LatLngBounds bounds) {
-    // TODO: 가시 영역 변경에 따른 데이터 로드
+    // 현재 위치 업데이트 시 Fog of War 갱신
+    if (_mapController.currentPosition != null) {
+      _fogOfWarController.updateCurrentPosition(_mapController.currentPosition!);
+      _updateFogOfWar();
+      _updateMarkers(); // 마커도 다시 필터링
+    }
   }
 
   /// 줌 변경
   void _onZoomChanged(double zoom) {
-    // TODO: 줌 레벨에 따른 UI 업데이트
+    // 줌 변경시 마커 클러스터링 재계산
+    _updateMarkers();
   }
 
   /// 사용자 상호작용 시작

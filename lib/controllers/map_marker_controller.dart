@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../models/post_model.dart';
 
 /// 마커 아이템 클래스
@@ -165,6 +166,85 @@ class MapMarkerController {
              post.location.longitude >= bounds.southwest.longitude &&
              post.location.longitude <= bounds.northeast.longitude;
     }).toList();
+  }
+
+  /// 방문 가능한 지역의 마커만 필터링
+  List<MapMarkerItem> getVisibleMarkers(
+    LatLng? currentPosition,
+    List<LatLng> visitedLocations, {
+    double currentLocationRadiusKm = 1.0,
+    double visitedLocationRadiusKm = 0.5,
+  }) {
+    return _markerItems.where((marker) {
+      return _isMarkerVisible(
+        marker.position,
+        currentPosition,
+        visitedLocations,
+        currentLocationRadiusKm,
+        visitedLocationRadiusKm,
+      );
+    }).toList();
+  }
+
+  /// 방문 가능한 지역의 포스트만 필터링
+  List<PostModel> getVisiblePosts(
+    LatLng? currentPosition,
+    List<LatLng> visitedLocations, {
+    double currentLocationRadiusKm = 1.0,
+    double visitedLocationRadiusKm = 0.5,
+  }) {
+    return _posts.where((post) {
+      final postLocation = LatLng(
+        post.location.latitude,
+        post.location.longitude,
+      );
+      return _isMarkerVisible(
+        postLocation,
+        currentPosition,
+        visitedLocations,
+        currentLocationRadiusKm,
+        visitedLocationRadiusKm,
+      );
+    }).toList();
+  }
+
+  /// 마커가 보이는 영역에 있는지 확인
+  bool _isMarkerVisible(
+    LatLng markerPosition,
+    LatLng? currentPosition,
+    List<LatLng> visitedLocations,
+    double currentLocationRadiusKm,
+    double visitedLocationRadiusKm,
+  ) {
+    // 현재 위치 1km 반경 내
+    if (currentPosition != null) {
+      final distanceFromCurrent = Geolocator.distanceBetween(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        markerPosition.latitude,
+        markerPosition.longitude,
+      ) / 1000; // meters to km
+      
+      if (distanceFromCurrent <= currentLocationRadiusKm) {
+        return true;
+      }
+    }
+    
+    // 방문한 위치 500m 반경 내
+    for (final visitedLocation in visitedLocations) {
+      final distanceFromVisited = Geolocator.distanceBetween(
+        visitedLocation.latitude,
+        visitedLocation.longitude,
+        markerPosition.latitude,
+        markerPosition.longitude,
+      ) / 1000; // meters to km
+      
+      if (distanceFromVisited <= visitedLocationRadiusKm) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /// 만료된 마커 제거
