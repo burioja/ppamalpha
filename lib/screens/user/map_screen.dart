@@ -1,1492 +1,577 @@
-import 'dart:ui' as ui;
-import 'dart:math';
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../../services/location_service.dart';
-import '../../services/post_service.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../models/post_model.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
+
+// 컨트롤러들
+import '../../controllers/map_map_controller.dart';
+import '../../controllers/map_marker_controller.dart';
+import '../../controllers/map_clustering_controller.dart';
+import '../../controllers/map_fog_of_war_controller.dart';
+
+// 매니저들
+import '../../managers/map_marker_data_manager.dart';
+
+// 서비스들
+import '../../services/map_data_service.dart';
+import '../../services/map_cache_service.dart';
+import '../../services/map_batch_request_service.dart';
+import '../../services/map_visit_service.dart';
+
+// 핸들러들
+import '../../handlers/map_interaction_handler.dart';
+import '../../handlers/map_gesture_handler.dart';
+import '../../handlers/map_lifecycle_handler.dart';
+
+// 위젯들
+import '../../widgets/map_filter_bar.dart';
+import '../../widgets/map_popup_widget.dart';
+import '../../widgets/map_info_dialog.dart';
+import '../../widgets/map_fog_painter.dart';
+
+// 프로바이더들
 import '../../providers/map_filter_provider.dart';
 
-/// 마커 아이템 클래스
-class MarkerItem {
-  final String id;
-  final String title;
-  final String price;
-  final String amount;
-  final String userId;
-  final Map<String, dynamic> data;
-  final LatLng position;
-  final String? imageUrl;
-  final int remainingAmount;
-  final DateTime? expiryDate;
+// 모델들
+import '../../models/post_model.dart';
 
-  MarkerItem({
-    required this.id,
-    required this.title,
-    required this.price,
-    required this.amount,
-    required this.userId,
-    required this.data,
-    required this.position,
-    this.imageUrl,
-    required this.remainingAmount,
-    this.expiryDate,
-  });
-}
-
-class MapScreen extends StatefulWidget {
-  const MapScreen({Key? key}) : super(key: key);
-  static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
+/// 리팩토링된 지도 화면
+/// 모든 기능이 분리된 컴포넌트들로 구성되어 유지보수성이 크게 향상됨
+class MapScreenRefactored extends StatefulWidget {
+  const MapScreenRefactored({super.key});
 
   @override
-  _MapScreenState createState() => _MapScreenState();
+  State<MapScreenRefactored> createState() => _MapScreenRefactoredState();
 }
 
-class _MapScreenState extends State<MapScreen> {
-  late GoogleMapController mapController;
-  LatLng? _currentPosition;
-  final GlobalKey mapWidgetKey = GlobalKey();
-  LatLng? _longPressedLatLng;
-  String? _mapStyle;
-  BitmapDescriptor? _customMarkerIcon;
-
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  final PostService _postService = PostService();
+class _MapScreenRefactoredState extends State<MapScreenRefactored>
+    with WidgetsBindingObserver {
+  // 컨트롤러들
+  late MapMapController _mapController;
+  late MapMarkerController _markerController;
+  late MapClusteringController _clusteringController;
+  late MapFogOfWarController _fogOfWarController;
   
-  final List<MarkerItem> _markerItems = [];
-  final List<PostModel> _posts = [];
-  double _currentZoom = 15.0;
-  final Set<Marker> _clusteredMarkers = {};
-  bool _isClustered = false;
-  StreamSubscription<QuerySnapshot>? _markersListener;
-  final Set<Circle> _fogOfWarCircles = {};
-
+  // 매니저들
+  late MapMarkerDataManager _dataManager;
+  
+  // 서비스들
+  late MapDataService _dataService;
+  late MapCacheService _cacheService;
+  late MapBatchRequestService _batchService;
+  late MapVisitService _visitService;
+  
+  // 핸들러들
+  late MapInteractionHandler _interactionHandler;
+  late MapGestureHandler _gestureHandler;
+  late MapLifecycleHandler _lifecycleHandler;
+  
+  // 상태 변수들
+  bool _isLoading = true;
+  bool _hasError = false;
+  String? _errorMessage;
+  bool _isMapActive = false;
+  
+  // 필터 상태
+  bool _showCouponsOnly = false;
+  bool _showMyPostsOnly = false;
+  
+  // 마커 상태
+  Set<Marker> _markers = {};
+  
+  // Fog of War state  
+  CameraPosition? _currentCameraPosition;
+  
   @override
   void initState() {
     super.initState();
-    _setInitialLocation();
-    _loadMapStyle();
-    _loadCustomMarker();
-    _loadMarkersFromFirestore();
-    _loadPostsFromFirestore();
-    _setupRealtimeListeners();
-    _loadVisitsAndBuildFog();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeComponents();
   }
 
   @override
   void dispose() {
-    // 실시간 리스너 정리
-    _markersListener?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _disposeComponents();
     super.dispose();
   }
 
-  Future<void> _loadVisitsAndBuildFog() async {
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-      final cutoff = DateTime.now().subtract(const Duration(days: 30));
-      final snapshot = await FirebaseFirestore.instance
-          .collection('visits')
-          .doc(uid)
-          .collection('points')
-          .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-          .get();
-
-      // 빈원형(Fog) 초기화
-      final Set<Circle> circles = {};
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
-        if (gp == null) continue;
-        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0; // 방문 빈도 가중치(옵션)
-
-        // 가중치에 따른 알파값(최대 0.5)
-        final double alpha = (0.15 + (weight * 0.07)).clamp(0.15, 0.5);
-        final Color color = Colors.orange.withOpacity(alpha);
-
-        circles.add(
-          Circle(
-            circleId: CircleId('fog_${doc.id}'),
-            center: LatLng(gp.latitude, gp.longitude),
-            radius: 80, // 약 80m 반경
-            strokeWidth: 0,
-            fillColor: color,
-          ),
-        );
-      }
-
-      if (mounted) {
-        setState(() {
-          _fogOfWarCircles
-            ..clear()
-            ..addAll(circles);
-        });
-      }
-    } catch (e) {
-      debugPrint('Fog of War 로드 오류: $e');
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    switch (state) {
+      case AppLifecycleState.paused:
+        _lifecycleHandler.onAppPaused();
+        break;
+      case AppLifecycleState.resumed:
+        _lifecycleHandler.onAppResumed();
+        break;
+      default:
+        break;
     }
   }
 
-  Future<void> _loadMapStyle() async {
+  /// 컴포넌트들 초기화
+  Future<void> _initializeComponents() async {
     try {
-      final style = await DefaultAssetBundle.of(context).loadString('assets/map_style.json');
       setState(() {
-        _mapStyle = style;
+        _isLoading = true;
+        _hasError = false;
       });
-    } catch (e) {
-      // 스타일 로드 실패 시 무시
-    }
-  }
 
-  Future<void> _setInitialLocation() async {
-    try {
-      Position? position = await LocationService.getCurrentPosition();
+      // 1. 컨트롤러들 초기화
+      _mapController = MapMapController();
+      _markerController = MapMarkerController();
+      _clusteringController = MapClusteringController(_markerController);
+      _fogOfWarController = MapFogOfWarController();
+
+      // 2. 매니저들 초기화
+      _dataManager = MapMarkerDataManager(_markerController);
+
+      // 3. 서비스들 초기화
+      _dataService = MapDataService();
+      _cacheService = MapCacheService();
+      _batchService = MapBatchRequestService();
+      _visitService = MapVisitService();
+      
+      // 방문 서비스 초기화
+      await _cacheService.initialize();
+      _visitService.initialize();
+
+      // 4. 핸들러들 초기화
+      _interactionHandler = MapInteractionHandler(
+        markerController: _markerController,
+        onNavigateToLocation: _onNavigateToLocation,
+        onCollectPost: _onCollectPost,
+        onSharePost: _onSharePost,
+        onEditPost: _onEditPost,
+        onDeletePost: _onDeletePost,
+        onShowSnackBar: _onShowSnackBar,
+      );
+
+      _gestureHandler = MapGestureHandler(
+        mapController: _mapController,
+        clusteringController: _clusteringController,
+        dataManager: _dataManager,
+        onCameraStateChanged: _onCameraStateChanged,
+        onVisibleBoundsChanged: _onVisibleBoundsChanged,
+        onZoomChanged: _onZoomChanged,
+        onUserInteractionStarted: _onUserInteractionStarted,
+        onUserInteractionEnded: _onUserInteractionEnded,
+      );
+
+      _lifecycleHandler = MapLifecycleHandler(
+        mapController: _mapController,
+        markerController: _markerController,
+        clusteringController: _clusteringController,
+        dataManager: _dataManager,
+        dataService: _dataService,
+        cacheService: _cacheService,
+        batchService: _batchService,
+        onLoadingStateChanged: _onLoadingStateChanged,
+        onErrorStateChanged: _onErrorStateChanged,
+        onMapStateChanged: _onMapStateChanged,
+        onInitializationComplete: _onInitializationComplete,
+        onCleanupRequired: _onCleanupRequired,
+      );
+
+      // 5. 생명주기 핸들러 초기화
+      await _lifecycleHandler.initialize();
+      
+      // 6. Fog of War 데이터 로드
+      await _fogOfWarController.loadVisitsAndBuildFog();
+      _updateFogOfWar();
+
+    } catch (error) {
       setState(() {
-        _currentPosition = position != null
-            ? LatLng(position.latitude, position.longitude)
-            : const LatLng(37.495872, 127.025046);
+        _hasError = true;
+        _errorMessage = '초기화 실패: $error';
       });
-    } catch (_) {
-      _currentPosition = const LatLng(37.492894, 127.012469);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _loadCustomMarker() async {
-    try {
-      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
-      final Uint8List bytes = data.buffer.asUint8List();
-      
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ui.Image image = frameInfo.image;
-      
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(recorder);
-      
-      const double targetSize = 48.0;
-      
-      final double imageRatio = image.width / image.height;
-      final double targetRatio = targetSize / targetSize;
-      
-      double drawWidth = targetSize;
-      double drawHeight = targetSize;
-      double offsetX = 0;
-      double offsetY = 0;
-      
-      if (imageRatio > targetRatio) {
-        drawHeight = targetSize;
-        drawWidth = targetSize * imageRatio;
-        offsetX = (targetSize - drawWidth) / 2;
-      } else {
-        drawWidth = targetSize;
-        drawHeight = targetSize / imageRatio;
-        offsetY = (targetSize - drawHeight) / 2;
-      }
-      
-      canvas.drawImageRect(
-        image,
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
-        Paint(),
-      );
-      
-      final ui.Picture picture = recorder.endRecording();
-      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
-      final ByteData? resizedBytes = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (resizedBytes != null) {
-        final Uint8List resizedUint8List = resizedBytes.buffer.asUint8List();
-        setState(() {
-          _customMarkerIcon = BitmapDescriptor.fromBytes(resizedUint8List);
-        });
-      }
-    } catch (e) {
-      // 커스텀 마커 로드 실패 시 기본 마커 사용
-    }
-  }
-
-
-
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
-    if (_mapStyle != null) {
-      controller.setMapStyle(_mapStyle);
-    }
-  }
-
-  void _updateClustering() {
-    // 줌 레벨에 따라 클러스터링 결정
-    if (_currentZoom < 12.0) {
-      _clusterMarkers();
-    } else {
-      _showIndividualMarkers();
-    }
-    
-    // 디버그 정보 출력
-    debugPrint('클러스터링 업데이트: 줌=${_currentZoom}, 클러스터링=${_isClustered}, 마커 수=${_clusteredMarkers.length}');
-    debugPrint('마커 아이템 수: ${_markerItems.length}, 포스트 수: ${_posts.length}');
-  }
-
-  void _showPostInfo(PostModel flyer) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(flyer.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('발행자: ${flyer.creatorName}'),
-              const SizedBox(height: 8),
-              Text('리워드: ${flyer.reward}원'),
-              const SizedBox(height: 8),
-              Text('타겟: ${flyer.targetGender == 'all' ? '전체' : flyer.targetGender == 'male' ? '남성' : '여성'} ${flyer.targetAge[0]}~${flyer.targetAge[1]}세'),
-              const SizedBox(height: 8),
-              if (flyer.targetInterest.isNotEmpty)
-                Text('관심사: ${flyer.targetInterest.join(', ')}'),
-              const SizedBox(height: 8),
-              Text('만료일: ${_formatDate(flyer.expiresAt)}'),
-              const SizedBox(height: 8),
-              if (flyer.canRespond) const Text('✓ 응답 가능'),
-              if (flyer.canForward) const Text('✓ 전달 가능'),
-              if (flyer.canRequestReward) const Text('✓ 리워드 수령 가능'),
-              if (flyer.canUse) const Text('✓ 사용 가능'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-            // 발행자만 회수 가능
-            if (userId != null && userId == flyer.creatorId)
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _collectPost(flyer);
-                },
-                child: const Text('회수'),
-              ),
-            // 조건에 맞는 사용자는 수령 가능
-            if (userId != null && userId != flyer.creatorId && flyer.canRequestReward)
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _collectFlyer(flyer);
-                },
-                child: const Text('수령'),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 발행자가 전단지 회수
-  Future<void> _collectPost(PostModel flyer) async {
-    try {
-      final currentUserId = userId;
-      if (currentUserId != null) {
-        await _postService.collectFlyer(
-          flyerId: flyer.flyerId,
-          userId: currentUserId,
-        );
-        
-        setState(() {
-          _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('전단지를 회수했습니다!')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전단지 회수에 실패했습니다: $e')),
-        );
-      }
-    }
-  }
-
-  // 사용자가 전단지 수령
-  Future<void> _collectFlyer(PostModel flyer) async {
-    try {
-      final currentUserId = userId;
-      if (currentUserId != null) {
-        // TODO: 전단지 수령 로직 구현 (월렛에 추가, 리워드 지급 등)
-        
-        setState(() {
-          _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('전단지를 수령했습니다! ${flyer.reward}원 리워드가 지급되었습니다.')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전단지 수령에 실패했습니다: $e')),
-        );
-      }
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  void _clusterMarkers() {
-    if (_isClustered) return;
-    
-    debugPrint('클러스터링 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
-    
-    final clusters = <String, List<dynamic>>{};
-    final filter = mounted ? context.read<MapFilterProvider>() : null;
-    final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    const double clusterRadius = 0.01; // 약 1km
-    
-    // 기존 마커 아이템들 클러스터링
-    for (final item in _markerItems) {
-      // 쿠폰만 필터
-      if (couponsOnly && item.data['type'] != 'post_place') continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && item.userId != currentUserId) continue;
-      
-      bool addedToCluster = false;
-      
-      for (final clusterKey in clusters.keys) {
-        final clusterCenter = _parseLatLng(clusterKey);
-        final distance = _calculateDistance(clusterCenter, item.position);
-        
-        if (distance <= clusterRadius) {
-          clusters[clusterKey]!.add(item);
-          addedToCluster = true;
-          break;
-        }
-      }
-      
-      if (!addedToCluster) {
-        final key = '${item.position.latitude},${item.position.longitude}';
-        clusters[key] = [item];
-      }
-    }
-    
-    // 포스트들 클러스터링
-    for (final post in _posts) {
-      // 쿠폰만 필터
-      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && post.creatorId != currentUserId) continue;
-      
-      bool addedToCluster = false;
-      
-      for (final clusterKey in clusters.keys) {
-        final clusterCenter = _parseLatLng(clusterKey);
-        final postLatLng = LatLng(post.location.latitude, post.location.longitude);
-        final distance = _calculateDistance(clusterCenter, postLatLng);
-        
-        if (distance <= clusterRadius) {
-          clusters[clusterKey]!.add(post);
-          addedToCluster = true;
-          break;
-        }
-      }
-      
-      if (!addedToCluster) {
-        final key = '${post.location.latitude},${post.location.longitude}';
-        clusters[key] = [post];
-      }
-    }
-    
-    final Set<Marker> newMarkers = {};
-    
-    clusters.forEach((key, items) {
-      if (items.length == 1) {
-        final item = items.first;
-        if (item is MarkerItem) {
-          newMarkers.add(_createMarker(item));
-        } else if (item is PostModel) {
-          newMarkers.add(_createPostMarker(item));
-        }
-      } else {
-        final center = _parseLatLng(key);
-        newMarkers.add(_createClusterMarker(center, items.length));
-      }
-    });
-    
-    setState(() {
-      _clusteredMarkers.clear();
-      _clusteredMarkers.addAll(newMarkers);
-      _isClustered = true;
-    });
-  }
-
-  void _showIndividualMarkers() {
-    debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
-    
-    final Set<Marker> newMarkers = {};
-    final filter = mounted ? context.read<MapFilterProvider>() : null;
-    final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    
-    // 기존 마커들 추가
-    for (final item in _markerItems) {
-      // 쿠폰만 필터
-      if (couponsOnly && item.data['type'] != 'post_place') continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && item.userId != currentUserId) continue;
-      
-      newMarkers.add(_createMarker(item));
-      debugPrint('마커 추가됨: ${item.title} at ${item.position}');
-    }
-    
-    // 포스트 마커들 추가
-    for (final post in _posts) {
-      // 쿠폰만 필터
-      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && post.creatorId != currentUserId) continue;
-      
-      newMarkers.add(_createPostMarker(post));
-      debugPrint('포스트 마커 추가됨: ${post.title} at ${post.location}');
-    }
-    
-    setState(() {
-      _clusteredMarkers.clear();
-      _clusteredMarkers.addAll(newMarkers);
-      _isClustered = false;
-    });
-    
-    debugPrint('마커 설정 완료: 총 ${newMarkers.length}개 마커');
-  }
-
-  LatLng _parseLatLng(String key) {
-    final parts = key.split(',');
-    return LatLng(double.parse(parts[0]), double.parse(parts[1]));
-  }
-
-  double _calculateDistance(LatLng point1, LatLng point2) {
-    return sqrt(pow(point1.latitude - point2.latitude, 2) + 
-                pow(point1.longitude - point2.longitude, 2));
-  }
-
-  double _haversineKm(LatLng a, LatLng b) {
-    const double R = 6371.0;
-    final dLat = _deg2rad(b.latitude - a.latitude);
-    final dLon = _deg2rad(b.longitude - a.longitude);
-    final aa = 
-        sin(dLat/2) * sin(dLat/2) +
-        cos(_deg2rad(a.latitude)) * cos(_deg2rad(b.latitude)) *
-        sin(dLon/2) * sin(dLon/2);
-    final c = 2 * atan2(sqrt(aa), sqrt(1-aa));
-    return R * c;
-  }
-
-  double _deg2rad(double d) => d * (pi / 180.0);
-
-  Marker _createMarker(MarkerItem item) {
-    // 전단지 타입인지 확인
-    final isPostPlace = item.data['type'] == 'post_place';
-    
-    return Marker(
-      markerId: MarkerId(item.id),
-      position: item.position,
-      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow: InfoWindow(
-        title: item.title,
-        snippet: isPostPlace 
-            ? '${item.price}원 - ${item.data['creatorName'] ?? '알 수 없음'}'
-            : '${item.price}원 - ${item.amount}개',
-      ),
-      onTap: () => _showMarkerInfo(item),
-    );
-  }
-
-  Marker _createPostMarker(PostModel flyer) {
-    return Marker(
-      markerId: MarkerId(flyer.markerId),
-      position: LatLng(flyer.location.latitude, flyer.location.longitude),
-      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow: InfoWindow(
-        title: flyer.title,
-        snippet: '${flyer.reward}원 - ${flyer.creatorName}',
-      ),
-      onTap: () => _showPostInfo(flyer),
-    );
-  }
-
-  Marker _createClusterMarker(LatLng position, int count) {
-    return Marker(
-      markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
-      position: position,
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      infoWindow: InfoWindow(
-        title: '클러스터',
-        snippet: '$count개의 마커',
-      ),
-      onTap: () => _showClusterInfo(position, count),
-    );
-  }
-
-  void _showMarkerInfo(MarkerItem item) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        // 전단지 타입인지 확인
-        final isPostPlace = item.data['type'] == 'post_place';
-        final isOwner = item.userId == FirebaseAuth.instance.currentUser?.uid;
-        
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(
-                isPostPlace ? Icons.description : Icons.location_on,
-                color: Colors.blue,
-              ),
-              const SizedBox(width: 8),
-              Text(item.title),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isPostPlace) ...[
-                Text('발행자: ${item.data['creatorName'] ?? '알 수 없음'}'),
-                const SizedBox(height: 8),
-                Text('리워드: ${item.price}원'),
-                const SizedBox(height: 8),
-                if (item.data['description'] != null && item.data['description'].isNotEmpty)
-                  Text('설명: ${item.data['description']}'),
-                const SizedBox(height: 8),
-                if (item.data['targetGender'] != null)
-                  Text('타겟 성별: ${item.data['targetGender'] == 'all' ? '전체' : item.data['targetGender'] == 'male' ? '남성' : '여성'}'),
-                const SizedBox(height: 8),
-                if (item.data['targetAge'] != null)
-                  Text('타겟 나이: ${item.data['targetAge'][0]}~${item.data['targetAge'][1]}세'),
-                const SizedBox(height: 8),
-                if (item.data['address'] != null)
-                  Text('주소: ${item.data['address']}'),
-                const SizedBox(height: 8),
-                if (item.expiryDate != null)
-                  Text('만료일: ${_formatDate(item.expiryDate!)}'),
-              ] else ...[
-                Text('가격: ${item.price}원'),
-                const SizedBox(height: 8),
-                Text('수량: ${item.amount}개'),
-                const SizedBox(height: 8),
-                Text('남은 수량: ${item.remainingAmount}개'),
-              ],
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isOwner ? Colors.blue.shade50 : Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isOwner ? Colors.blue : Colors.grey,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isOwner ? Icons.person : Icons.people,
-                      color: isOwner ? Colors.blue : Colors.grey,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isOwner ? '내가 등록한 마커' : '다른 사용자 마커',
-                      style: TextStyle(
-                        color: isOwner ? Colors.blue : Colors.grey,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-            if (isPostPlace) ...[
-              // 전단지 수령 버튼 (소유자가 아닌 경우만)
-              if (item.data['canRequestReward'] == true && !isOwner)
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _handleFlyerRecovery(item);
-                  },
-                  child: const Text('수령'),
-                ),
-            ] else ...[
-              // 일반 마커 수령/회수 버튼
-              if (isOwner)
-                // 마커 소유자만 회수 가능
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _handleMarkerCollection(item.id, item.data);
-                  },
-                  child: const Text('회수'),
-                )
-              else
-                // 다른 사용자는 수령 가능
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _handleRecovery(item.id, item.data);
-                  },
-                  child: const Text('수령'),
-                ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  void _showClusterInfo(LatLng position, int count) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('클러스터 정보'),
-          content: Text('이 지역에 $count개의 마커가 있습니다.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _handleRecovery(String markerId, Map<String, dynamic> data) async {
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      
-      if (currentUserId != null) {
-        // Firebase에서 마커 상태 업데이트
-        await FirebaseFirestore.instance.collection('markers').doc(markerId).update({
-          'isCollected': true,
-          'collectedBy': currentUserId,
-          'collectedAt': FieldValue.serverTimestamp(),
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('마커를 수령했습니다!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('마커 수령에 실패했습니다: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // 마커 소유자가 회수하는 함수
-  void _handleMarkerCollection(String markerId, Map<String, dynamic> data) async {
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      
-      if (currentUserId != null) {
-        // Firebase에서 마커 상태 업데이트
-        await FirebaseFirestore.instance.collection('markers').doc(markerId).update({
-          'isActive': false, // 비활성화
-          'collectedBy': currentUserId,
-          'collectedAt': FieldValue.serverTimestamp(),
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('마커를 회수했습니다!'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('마커 회수에 실패했습니다: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // 전단지 수령 처리
-  void _handleFlyerRecovery(MarkerItem item) async {
-    try {
-      final flyerId = item.data['flyerId'] as String;
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      
-      if (currentUserId != null) {
-        // PostService를 통해 전단지 수령
-        await _postService.collectFlyer(
-          flyerId: flyerId,
-          userId: currentUserId,
-        );
-        
-        // Firebase에서 마커 상태 업데이트
-        await FirebaseFirestore.instance.collection('markers').doc(item.id).update({
-          'isCollected': true,
-          'collectedBy': currentUserId,
-          'collectedAt': FieldValue.serverTimestamp(),
-        });
-        
-        // 마커 목록에서 제거
-        setState(() {
-          _markerItems.removeWhere((marker) => marker.id == item.id);
-        });
-        
-        // 클러스터링 업데이트
-        _updateClustering();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('전단지를 수령했습니다!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('전단지 수령에 실패했습니다: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadMarkersFromFirestore() async {
-    try {
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('markers')
-          .where('isActive', isEqualTo: true)
-          .where('isCollected', isEqualTo: false)
-          .get();
-      
-      _processMarkersSnapshot(snapshot);
-    } catch (e) {
-      debugPrint('마커 로드 오류: $e');
-    }
-  }
-
-  void _setupRealtimeListeners() {
-    // 실시간 마커 리스너 설정
-    _markersListener = FirebaseFirestore.instance
-        .collection('markers')
-        .where('isActive', isEqualTo: true)
-        .where('isCollected', isEqualTo: false)
-        .snapshots()
-        .listen((snapshot) {
-          _processMarkersSnapshot(snapshot);
-        });
-  }
-
-  void _processMarkersSnapshot(QuerySnapshot snapshot) {
-    setState(() {
-      _markerItems.clear();
-    });
-    
-    debugPrint('마커 스냅샷 처리 중: ${snapshot.docs.length}개 마커');
-    
-    for (final doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final geoPoint = data['position'] as GeoPoint;
-      
-      // 만료된 마커는 제외
-      if (data['expiryDate'] != null) {
-        final expiryDate = data['expiryDate'].toDate() as DateTime;
-        if (DateTime.now().isAfter(expiryDate)) {
-          debugPrint('만료된 마커 제외: ${doc.id}');
-          continue; // 만료된 마커는 건너뛰기
-        }
-      }
-      
-      final markerItem = MarkerItem(
-        id: doc.id,
-        title: data['title'] ?? '',
-        price: data['price']?.toString() ?? '0',
-        amount: data['amount']?.toString() ?? '0',
-        userId: data['userId'] ?? '',
-        data: data,
-        position: LatLng(geoPoint.latitude, geoPoint.longitude),
-        imageUrl: data['imageUrl'],
-        remainingAmount: data['remainingAmount'] ?? 0,
-        expiryDate: data['expiryDate']?.toDate(),
-      );
-      
-      _markerItems.add(markerItem);
-      debugPrint('마커 로드됨: ${markerItem.title} at ${markerItem.position}, 타입: ${data['type']}');
-    }
-    
-    debugPrint('마커 처리 완료: 총 ${_markerItems.length}개 마커 로드됨');
-    
-    // 클러스터링 업데이트로 마커들을 지도에 표시
-    _updateClustering();
-  }
-
-  Future<void> _loadPostsFromFirestore() async {
-    try {
-      if (_currentPosition != null) {
-        // 사용자 정보 가져오기 (실제로는 사용자 프로필에서 가져와야 함)
-        final userGender = 'male'; // 임시 값
-        final userAge = 25; // 임시 값
-        final userInterests = ['패션', '뷰티']; // 임시 값
-        final userPurchaseHistory = ['화장품']; // 임시 값
-        
-        // 새로운 flyer 시스템에서 전단지 로드
-        final flyers = await _postService.getFlyersNearLocation(
-          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-          radiusInKm: 5.0, // 5km 반경 내 전단지 조회
-          userGender: userGender,
-          userAge: userAge,
-          userInterests: userInterests,
-          userPurchaseHistory: userPurchaseHistory,
-        );
-        
-        setState(() {
-          _posts.clear();
-          _posts.addAll(flyers);
-        });
-        
-        _updateClustering();
-      }
-    } catch (e) {
-      debugPrint('전단지 로드 오류: $e');
-    }
-  }
-
-
-
-  void _addMarkerToMap(MarkerItem markerItem) {
-    setState(() {
-      _markerItems.add(markerItem);
-      // 마커를 직접 _clusteredMarkers에 추가하지 않고 _markerItems에만 추가
-      // _updateClustering()에서 모든 마커를 다시 생성
-    });
-    
-    // Firestore에 저장
-    _saveMarkerToFirestore(markerItem);
-    
-    // 클러스터링 업데이트로 모든 마커를 다시 생성
-    _updateClustering();
-    
-    debugPrint('마커 추가됨: ${markerItem.title} at ${markerItem.position}');
-  }
-
-  Future<void> _saveMarkerToFirestore(MarkerItem markerItem) async {
-    try {
-      final markerData = {
-        'title': markerItem.title,
-        'price': int.parse(markerItem.price),
-        'amount': int.parse(markerItem.amount),
-        'userId': markerItem.userId,
-        'position': GeoPoint(markerItem.position.latitude, markerItem.position.longitude),
-        'remainingAmount': markerItem.remainingAmount,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiryDate': markerItem.expiryDate,
-        'isActive': true, // 활성 상태
-        'isCollected': false, // 회수되지 않음
-      };
-      
-      // 전단지 타입인 경우 추가 정보 저장
-      if (markerItem.data['type'] == 'post_place') {
-        markerData.addAll({
-          'type': 'post_place',
-          'flyerId': markerItem.data['flyerId'],
-          'creatorName': markerItem.data['creatorName'],
-          'description': markerItem.data['description'],
-          'targetGender': markerItem.data['targetGender'],
-          'targetAge': markerItem.data['targetAge'],
-          'canRespond': markerItem.data['canRespond'],
-          'canForward': markerItem.data['canForward'],
-          'canRequestReward': markerItem.data['canRequestReward'],
-          'canUse': markerItem.data['canUse'],
-          'address': markerItem.data['address'],
-        });
-      }
-      
-      final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
-      debugPrint('마커 Firebase 저장 완료: ${docRef.id}');
-    } catch (e) {
-      debugPrint('마커 저장 오류: $e');
-    }
-  }
-
-  void _handleAddMarker() async {
-    if (_longPressedLatLng != null) {
-      // 선택된 위치의 주소 가져오기
-      try {
-        final address = await LocationService.getAddressFromCoordinates(
-          _longPressedLatLng!.latitude,
-          _longPressedLatLng!.longitude,
-        );
-        
-        // 롱프레스 팝업 닫기
-        setState(() {
-          _longPressedLatLng = null;
-        });
-        
-        // 주소 확인 팝업 표시
-        _showAddressConfirmationDialog(address);
-      } catch (e) {
-        // 롱프레스 팝업 닫기
-        setState(() {
-          _longPressedLatLng = null;
-        });
-        
-        // 주소 가져오기 실패 시 기본 메시지로 진행
-        _showAddressConfirmationDialog('주소를 가져올 수 없습니다');
-      }
-    }
-  }
-
-  void _showAddressConfirmationDialog(String address) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.location_on, color: Colors.blue),
-              SizedBox(width: 8),
-              Text('주소 확인'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '이 주소가 맞습니까?',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue, width: 2),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.blue.shade50,
-                ),
-                child: Text(
-                  address,
-                  style: const TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  _longPressedLatLng = null;
-                });
-              },
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _navigateToPostPlaceWithAddress(address);
-              },
-              child: const Text('확인'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildPopupWidget() {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: 280,
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              '포스트 배포',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF4D4DFF),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '선택한 위치에서 포스트를 배포합니다',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _navigateToPostDeploy();
-                },
-                icon: const Icon(Icons.location_on, color: Colors.white),
-                label: const Text(
-                  "이 위치에 뿌리기",
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4D4DFF),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _navigateToPostDeployWithAddress();
-                },
-                icon: const Icon(Icons.home, color: Color(0xFF4D4DFF)),
-                label: const Text(
-                  "이 주소에 뿌리기",
-                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _navigateToPostDeployByCategory();
-                },
-                icon: const Icon(Icons.category, color: Color(0xFF4D4DFF)),
-                label: const Text(
-                  "특정 업종에 뿌리기",
-                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '수수료/반경/타겟팅 주의',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () {
-                  setState(() {
-                    _longPressedLatLng = null;
-                  });
-                },
-                child: const Text(
-                  "취소",
-                  style: TextStyle(color: Colors.red, fontSize: 16),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _navigateToPostDeploy() async {
-    // 이 위치에 뿌리기 - 포스트 설정화면으로 이동
-    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
-    final result = await Navigator.pushNamed(
-      context, 
-      '/post-deploy',
-      arguments: {
-        'location': _longPressedLatLng,
-        'type': 'location',
-        'address': null,
-      },
-    );
-    
-    // 화면에서 돌아오면 롱프레스 마커 제거
-    setState(() {
-      _longPressedLatLng = null;
-    });
-    
-    _handlePostDeployResult(result);
-  }
-
-  void _navigateToPostDeployWithAddress() async {
-    // 이 주소에 뿌리기 - 주소 기반 포스트 설정화면으로 이동
-    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
-    final result = await Navigator.pushNamed(
-      context, 
-      '/post-deploy',
-      arguments: {
-        'location': _longPressedLatLng,
-        'type': 'address',
-        'address': null,
-      },
-    );
-    
-    // 화면에서 돌아오면 롱프레스 마커 제거
-    setState(() {
-      _longPressedLatLng = null;
-    });
-    
-    _handlePostDeployResult(result);
-  }
-
-  void _navigateToPostDeployByCategory() async {
-    // 특정 업종에 뿌리기 - 업종 기반 포스트 설정화면으로 이동
-    debugPrint('롱프레스 위치 전달: ${_longPressedLatLng?.latitude}, ${_longPressedLatLng?.longitude}');
-    final result = await Navigator.pushNamed(
-      context, 
-      '/post-deploy',
-      arguments: {
-        'location': _longPressedLatLng,
-        'type': 'category',
-        'address': null,
-      },
-    );
-    
-    // 화면에서 돌아오면 롱프레스 마커 제거
-    setState(() {
-      _longPressedLatLng = null;
-    });
-    
-    _handlePostDeployResult(result);
-  }
-
-  void _navigateToPostPlaceWithAddress(String address) async {
-    // 주소 정보와 함께 포스트 화면으로 이동
-    final result = await Navigator.pushNamed(
-      context, 
-      '/post-place',
-      arguments: {
-        'location': _longPressedLatLng,
-        'address': address,
-      },
-    );
-    _handlePostPlaceResult(result);
-  }
-
-  void _handlePostDeployResult(dynamic result) async {
-    // 포스트 배포 결과 처리
-    if (result != null && result is Map<String, dynamic>) {
-      // 새로 생성된 포스트 정보를 MarkerItem으로 변환
-      if (result['location'] != null && result['postId'] != null) {
-        final location = result['location'] as LatLng;
-        final postId = result['postId'] as String;
-        final address = result['address'] as String?;
-        
-        try {
-          // PostService에서 실제 포스트 정보 가져오기
-          final post = await _postService.getPostById(postId);
-          
-          if (post != null) {
-            // MarkerItem 생성 (실제 포스트 정보 사용)
-            final markerItem = MarkerItem(
-              id: postId,
-              title: post.title,
-              price: post.reward.toString(),
-              amount: '1', // 포스트는 개별 단위
-              userId: post.creatorId,
-              data: {
-                'address': address,
-                'postId': postId,
-                'type': 'post',
-                'creatorName': post.creatorName,
-                'description': post.description,
-                'targetGender': post.targetGender,
-                'targetAge': post.targetAge,
-                'canRespond': post.canRespond,
-                'canForward': post.canForward,
-                'canRequestReward': post.canRequestReward,
-                'canUse': post.canUse,
-              },
-              position: location,
-              remainingAmount: 1, // 포스트는 개별 단위
-              expiryDate: post.expiresAt,
-            );
-            
-            // 마커 추가 (Firebase에 저장됨)
-            _addMarkerToMap(markerItem);
-            
-            // 생성된 포스트 위치로 카메라 이동
-            mapController.animateCamera(
-              CameraUpdate.newLatLng(location),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('포스트 정보를 가져오는데 실패했습니다: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
-
-  void _handlePostPlaceResult(dynamic result) async {
-    // 전단지 생성 후 지도 새로고침
-    if (result != null && result is Map<String, dynamic>) {
-      // 새로 생성된 전단지 정보를 MarkerItem으로 변환
-      if (result['location'] != null && result['flyerId'] != null) {
-        final location = result['location'] as LatLng;
-        final flyerId = result['flyerId'] as String;
-        final address = result['address'] as String?;
-        
-        try {
-          // PostService에서 실제 전단지 정보 가져오기
-          final flyer = await _postService.getFlyerById(flyerId);
-          
-          if (flyer != null) {
-            // MarkerItem 생성 (실제 전단지 정보 사용)
-            final markerItem = MarkerItem(
-              id: flyerId,
-              title: flyer.title,
-              price: flyer.reward.toString(),
-              amount: '1', // 전단지는 개별 단위
-              userId: flyer.creatorId,
-              data: {
-                'address': address,
-                'flyerId': flyerId,
-                'type': 'post_place',
-                'creatorName': flyer.creatorName,
-                'description': flyer.description,
-                'targetGender': flyer.targetGender,
-                'targetAge': flyer.targetAge,
-                'canRespond': flyer.canRespond,
-                'canForward': flyer.canForward,
-                'canRequestReward': flyer.canRequestReward,
-                'canUse': flyer.canUse,
-              },
-              position: location,
-              remainingAmount: 1, // 전단지는 개별 단위
-              expiryDate: flyer.expiresAt,
-            );
-            
-            // 마커 추가 (Firebase에 저장됨)
-            _addMarkerToMap(markerItem);
-            
-            // 생성된 전단지 위치로 카메라 이동
-            mapController.animateCamera(
-              CameraUpdate.newLatLng(location),
-            );
-            
-
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('전단지 정보를 가져오는데 실패했습니다: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
-
-  void goToCurrentLocation() {
-    if (_currentPosition != null) {
-      mapController.animateCamera(
-        CameraUpdate.newLatLng(_currentPosition!),
-      );
-    }
+  /// 컴포넌트들 정리
+  void _disposeComponents() {
+    _lifecycleHandler.dispose();
+    _gestureHandler.dispose();
+    _interactionHandler.dispose();
+    _visitService.dispose();
+    _batchService.dispose();
+    _cacheService.dispose();
+    _dataService.dispose();
+    _dataManager.dispose();
+    _clusteringController.dispose();
+    _markerController.dispose();
+    _mapController.dispose();
+    _fogOfWarController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filters = Provider.of<MapFilterProvider>(context);
-    return Scaffold(
-      body: _currentPosition == null
-          ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
-          : Stack(
-        children: [
-          GoogleMap(
-            key: mapWidgetKey,
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _currentPosition!,
-              zoom: 15.0,
-            ),
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            zoomGesturesEnabled: true,
-            scrollGesturesEnabled: true,
-            tiltGesturesEnabled: true,
-            rotateGesturesEnabled: true,
-            circles: _fogOfWarCircles,
-            onLongPress: (LatLng latLng) {
-              setState(() {
-                _longPressedLatLng = latLng;
-              });
-            },
-            markers: {
-              ..._clusteredMarkers,
-              if (_longPressedLatLng != null)
-                Marker(
-                  markerId: const MarkerId('long_press_marker'),
-                  position: _longPressedLatLng!,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-                  infoWindow: const InfoWindow(title: "선택한 위치"),
-                ),
-            },
-            onCameraMove: (CameraPosition position) {
-              _currentZoom = position.zoom;
-            },
-            onCameraIdle: () {
-              _updateClustering();
-            },
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[300],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '오류가 발생했습니다',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage ?? '알 수 없는 오류',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _retryInitialization,
+                child: const Text('다시 시도'),
+              ),
+            ],
           ),
-                     // 상단 필터 바
-           Positioned(
-             top: 16,
-             left: 12,
-             right: 12,
-             child: Container(
-               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-               decoration: BoxDecoration(
-                 color: Colors.white,
-                 borderRadius: BorderRadius.circular(12),
-                 boxShadow: const [
-                   BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
-                 ],
-               ),
-               child: Row(
-                 children: [
-                   FilterChip(
-                     label: const Text('쿠폰만'),
-                     selected: filters.showCouponsOnly,
-                     onSelected: (_) {
-                       filters.toggleCouponsOnly();
-                       _updateClustering();
-                     },
-                   ),
-                   const SizedBox(width: 8),
-                   FilterChip(
-                     label: const Text('내 포스트'),
-                     selected: filters.showMyPostsOnly,
-                     onSelected: (_) {
-                       filters.toggleMyPostsOnly();
-                       _updateClustering();
-                     },
-                   ),
-                   const SizedBox(width: 8),
-                   if (filters.showCouponsOnly || filters.showMyPostsOnly)
-                     FilterChip(
-                       label: const Text('필터 초기화'),
-                       selected: false,
-                       onSelected: (_) {
-                         filters.resetFilters();
-                         _updateClustering();
-                       },
-                     ),
-                 ],
-               ),
-             ),
-           ),
-          if (_longPressedLatLng != null)
-            Center(child: _buildPopupWidget()),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          // 지도
+          _buildMap(),
+          
+          // Fog of War 오버레이
+          if (_currentCameraPosition != null)
+            MapFogOverlay(
+              camera: _currentCameraPosition!,
+              recentCircles: _fogOfWarController.recentCircles,
+              hereCircle: _fogOfWarController.hereCircle,
+              fogOpacity: 0.65,
+              fogColor: Colors.black,
+            ),
+          
+          // 상단 필터 바
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 16,
+            right: 16,
+            child: _buildFilterBar(),
+          ),
+          
+          // 현재 위치 버튼
+          Positioned(
+            bottom: 100,
+            right: 16,
+            child: _buildCurrentLocationButton(),
+          ),
+          
+          // 팝업 위젯
+          if (_interactionHandler.isPopupVisible)
+            Positioned(
+              bottom: 200,
+              left: 16,
+              right: 16,
+              child: _interactionHandler.buildPopupWidget()!,
+            ),
+          
+          // 다이얼로그 위젯
+          if (_interactionHandler.isDialogVisible)
+            _interactionHandler.buildDialogWidget()!,
+          
+          // 로딩 인디케이터
+          if (_isLoading)
+            const Positioned.fill(
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
         ],
       ),
     );
   }
-}
 
- 
+  /// 지도 위젯 빌드
+  Widget _buildMap() {
+    return GoogleMap(
+      initialCameraPosition: const CameraPosition(
+        target: LatLng(37.5665, 126.9780), // 서울 시청
+        zoom: 15.0,
+      ),
+      onMapCreated: _onMapCreated,
+      markers: _markers,
+      // circles 제거 - 이제 CustomPainter로 처리
+      onCameraMove: (position) {
+        _gestureHandler.onCameraMove(position);
+        _onCameraPositionChanged(position);
+      },
+      onCameraIdle: _gestureHandler.onCameraIdle,
+      onTap: (_) => _interactionHandler.onMapTap(),
+      onLongPress: _interactionHandler.onMapLongPress,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      mapToolbarEnabled: false,
+      style: _mapController.mapStyle, // 맵 스타일 적용
+    );
+  }
+
+  /// 필터 바 빌드
+  Widget _buildFilterBar() {
+    return MapFilterBar(
+      showCouponsOnly: _showCouponsOnly,
+      showMyPostsOnly: _showMyPostsOnly,
+      onCouponsOnlyChanged: (value) {
+        setState(() {
+          _showCouponsOnly = value;
+        });
+        _updateMarkers();
+      },
+      onMyPostsOnlyChanged: (value) {
+        setState(() {
+          _showMyPostsOnly = value;
+        });
+        _updateMarkers();
+      },
+      onFilterChanged: _updateMarkers,
+    );
+  }
+
+  /// 현재 위치 버튼 빌드
+  Widget _buildCurrentLocationButton() {
+    return FloatingActionButton(
+      heroTag: 'current_location',
+      onPressed: _goToCurrentLocation,
+      backgroundColor: Colors.white,
+      child: Icon(
+        Icons.my_location,
+        color: Colors.blue[600],
+      ),
+    );
+  }
+
+  /// 지도 생성 완료 콜백
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController.setMapController(controller);
+    
+    // 초기 카메라 위치 설정
+    setState(() {
+      _currentCameraPosition = const CameraPosition(
+        target: LatLng(37.5665, 126.9780), // 서울 시청
+        zoom: 15.0,
+      );
+    });
+    
+    _updateMarkers();
+  }
+
+  /// 마커 업데이트 (방문 지역 기반 필터링 적용)
+  void _updateMarkers() {
+    if (!mounted) return;
+    
+    // 방문 가능한 지역의 마커만 표시
+    final visibleMarkers = _markerController.getVisibleMarkers(
+      _mapController.currentPosition,
+      _fogOfWarController.visitedLocations,
+    );
+    
+    final visiblePosts = _markerController.getVisiblePosts(
+      _mapController.currentPosition,
+      _fogOfWarController.visitedLocations,
+    );
+    
+    // 임시로 원래 마커들을 저장하고 보이는 것들만 설정
+    final originalMarkers = _markerController.markerItems;
+    final originalPosts = _markerController.posts;
+    
+    _markerController.setMarkerItems(visibleMarkers);
+    _markerController.setPosts(visiblePosts);
+    
+    // 클러스터링 업데이트
+    _clusteringController.updateClustering(
+      _mapController.currentZoom,
+      showCouponsOnly: _showCouponsOnly,
+      showMyPostsOnly: _showMyPostsOnly,
+      currentUserId: null,
+    );
+    
+    // 원래 마커들로 복원
+    _markerController.setMarkerItems(originalMarkers);
+    _markerController.setPosts(originalPosts);
+    
+    setState(() {
+      _markers = _clusteringController.clusteredMarkers;
+    });
+  }
+  
+  /// 카메라 위치 변경 처리
+  void _onCameraPositionChanged(CameraPosition position) {
+    if (!mounted) return;
+    
+    setState(() {
+      _currentCameraPosition = position;
+    });
+  }
+  
+  /// Fog of War 업데이트 (마스크 기반)
+  void _updateFogOfWar() {
+    if (!mounted) return;
+    
+    // 마스크 기반에서는 setState만으로 충분 (recentCircles, hereCircle이 자동 반영)
+    setState(() {});
+  }
+
+  /// 현재 위치로 이동
+  Future<void> _goToCurrentLocation() async {
+    try {
+      await _mapController.goToCurrentLocation();
+      
+      // 현재 위치 방문 기록 추가
+      if (_mapController.currentPosition != null) {
+        await _visitService.recordCurrentLocationVisit(_mapController.currentPosition!);
+        _fogOfWarController.updateCurrentPosition(_mapController.currentPosition!);
+        _updateFogOfWar();
+        _updateMarkers();
+      }
+    } catch (error) {
+      _onShowSnackBar('현재 위치를 가져올 수 없습니다: $error');
+    }
+  }
+
+  // 콜백 함수들
+
+  /// 길찾기 실행
+  void _onNavigateToLocation(LatLng position) {
+    // TODO: 길찾기 기능 구현
+    _onShowSnackBar('길찾기 기능은 준비 중입니다');
+  }
+
+  /// 포스트 수집
+  void _onCollectPost(PostModel post) {
+    // TODO: 포스트 수집 기능 구현
+    _onShowSnackBar('포스트가 수집되었습니다');
+  }
+
+  /// 포스트 공유
+  void _onSharePost(PostModel post) {
+    // TODO: 포스트 공유 기능 구현
+    _onShowSnackBar('포스트 공유 기능은 준비 중입니다');
+  }
+
+  /// 포스트 편집
+  void _onEditPost(PostModel post) {
+    // TODO: 포스트 편집 기능 구현
+    _onShowSnackBar('포스트 편집 기능은 준비 중입니다');
+  }
+
+  /// 포스트 삭제
+  void _onDeletePost(PostModel post) {
+    // TODO: 포스트 삭제 기능 구현
+    _onShowSnackBar('포스트가 삭제되었습니다');
+  }
+
+  /// 스낵바 표시
+  void _onShowSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 카메라 상태 변경
+  void _onCameraStateChanged(bool isMoving) {
+    // TODO: 카메라 움직임 상태에 따른 UI 업데이트
+  }
+
+  /// 가시 영역 변경
+  void _onVisibleBoundsChanged(LatLngBounds bounds) {
+    // 현재 위치 업데이트 시 Fog of War 갱신
+    if (_mapController.currentPosition != null) {
+      _fogOfWarController.updateCurrentPosition(_mapController.currentPosition!);
+      _updateFogOfWar();
+      _updateMarkers(); // 마커도 다시 필터링
+    }
+  }
+
+  /// 줌 변경
+  void _onZoomChanged(double zoom) {
+    // 줌 변경시 마커 클러스터링 재계산
+    _updateMarkers();
+  }
+
+  /// 사용자 상호작용 시작
+  void _onUserInteractionStarted() {
+    // TODO: 사용자 상호작용 중 UI 상태 업데이트
+  }
+
+  /// 사용자 상호작용 종료
+  void _onUserInteractionEnded() {
+    // TODO: 사용자 상호작용 종료 후 UI 상태 업데이트
+  }
+
+  /// 로딩 상태 변경
+  void _onLoadingStateChanged(bool isLoading) {
+    if (mounted) {
+      setState(() {
+        _isLoading = isLoading;
+      });
+    }
+  }
+
+  /// 에러 상태 변경
+  void _onErrorStateChanged(bool hasError, String? message) {
+    if (mounted) {
+      setState(() {
+        _hasError = hasError;
+        _errorMessage = message;
+      });
+    }
+  }
+
+  /// 지도 상태 변경
+  void _onMapStateChanged(bool isActive) {
+    if (mounted) {
+      setState(() {
+        _isMapActive = isActive;
+      });
+    }
+  }
+
+  /// 초기화 완료
+  void _onInitializationComplete() {
+    _onShowSnackBar('지도가 준비되었습니다');
+  }
+
+  /// 정리 필요
+  void _onCleanupRequired() {
+    // TODO: 메모리 정리 및 최적화
+  }
+
+  /// 초기화 재시도
+  Future<void> _retryInitialization() async {
+    await _initializeComponents();
+  }
+}
