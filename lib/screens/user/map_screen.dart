@@ -10,8 +10,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
-import 'package:provider/provider.dart';
-import '../../providers/map_filter_provider.dart';
+// import 'package:provider/provider.dart';
+// import '../../providers/map_filter_provider.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -41,7 +41,7 @@ class MarkerItem {
 }
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({Key? key}) : super(key: key);
+  MapScreen({super.key});
   static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
@@ -90,6 +90,23 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
+
+      final Set<Circle> circles = {};
+
+      // 1. 전체 화면을 덮는 검은 Fog (가장 먼저 - 뒤에 깔림)
+      if (_currentPosition != null) {
+        circles.add(
+          Circle(
+            circleId: const CircleId('fog_overlay'),
+            center: _currentPosition!,
+            radius: 1000, // 1km 반경 (현재 위치 주변만 검은색으로)
+            strokeWidth: 0,
+            fillColor: Colors.black.withOpacity(0.7), // 검은 Fog
+          ),
+        );
+      }
+
+      // 2. 최근 30일 방문 지역 (회색 불투명 - 검은 Fog 위에)
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -98,26 +115,33 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      // 빈원형(Fog) 초기화
-      final Set<Circle> circles = {};
-
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
-        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0; // 방문 빈도 가중치(옵션)
-
-        // 가중치에 따른 알파값(최대 0.5)
-        final double alpha = (0.15 + (weight * 0.07)).clamp(0.15, 0.5);
-        final Color color = Colors.orange.withOpacity(alpha);
 
         circles.add(
           Circle(
-            circleId: CircleId('fog_${doc.id}'),
+            circleId: CircleId('visited_${doc.id}'),
             center: LatLng(gp.latitude, gp.longitude),
-            radius: 80, // 약 80m 반경
-            strokeWidth: 0,
-            fillColor: color,
+            radius: 1000, // 1km 반경
+            strokeWidth: 1,
+            strokeColor: Colors.grey.withOpacity(0.3),
+            fillColor: Colors.grey.withOpacity(0.2), // 회색 불투명
+          ),
+        );
+      }
+
+      // 3. 현재 위치 밝은 영역 (가장 위에 - 가장 밝게)
+      if (_currentPosition != null) {
+        circles.add(
+          Circle(
+            circleId: const CircleId('current_location'),
+            center: _currentPosition!,
+            radius: 1000, // 1km 반경
+            strokeWidth: 2,
+            strokeColor: Colors.blue,
+            fillColor: Colors.transparent, // 밝게 표시 (투명)
           ),
         );
       }
@@ -129,6 +153,8 @@ class _MapScreenState extends State<MapScreen> {
             ..addAll(circles);
         });
       }
+
+      debugPrint('Fog of War 로드 완료: ${circles.length}개 영역');
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
     }
@@ -160,7 +186,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadCustomMarker() async {
     try {
-      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
+      final ByteData data = await rootBundle.load('assets/images/슽.png');
       final Uint8List bytes = data.buffer.asUint8List();
       
       final ui.Codec codec = await ui.instantiateImageCodec(bytes);
@@ -355,9 +381,9 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('클러스터링 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final clusters = <String, List<dynamic>>{};
-    final filter = mounted ? context.read<MapFilterProvider>() : null;
-    final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
+    // final filter = mounted ? context.read<MapFilterProvider>() : null;
+    final bool couponsOnly = false; // filter?.showCouponsOnly ?? false;
+    final bool myPostsOnly = false; // filter?.showMyPostsOnly ?? false;
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     const double clusterRadius = 0.01; // 약 1km
     
@@ -443,9 +469,9 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final Set<Marker> newMarkers = {};
-    final filter = mounted ? context.read<MapFilterProvider>() : null;
-    final bool couponsOnly = filter?.showCouponsOnly ?? false;
-    final bool myPostsOnly = filter?.showMyPostsOnly ?? false;
+    // final filter = mounted ? context.read<MapFilterProvider>() : null;
+    final bool couponsOnly = false; // filter?.showCouponsOnly ?? false;
+    final bool myPostsOnly = false; // filter?.showMyPostsOnly ?? false;
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 기존 마커들 추가
@@ -1381,17 +1407,45 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void goToCurrentLocation() {
+  void goToCurrentLocation() async {
     if (_currentPosition != null) {
       mapController.animateCamera(
         CameraUpdate.newLatLng(_currentPosition!),
       );
+      
+      // 현재 위치 방문 기록 저장
+      await _recordCurrentLocationVisit();
+    }
+  }
+
+  /// 현재 위치 방문 기록 저장
+  Future<void> _recordCurrentLocationVisit() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || _currentPosition == null) return;
+
+      await FirebaseFirestore.instance
+          .collection('visits')
+          .doc(uid)
+          .collection('points')
+          .add({
+        'geo': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        'ts': Timestamp.now(),
+        'weight': 1.0,
+      });
+
+      // Fog of War 업데이트
+      await _loadVisitsAndBuildFog();
+      
+      debugPrint('현재 위치 방문 기록 저장 완료');
+    } catch (e) {
+      debugPrint('방문 기록 저장 오류: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final filters = Provider.of<MapFilterProvider>(context);
+    // final filters = Provider.of<MapFilterProvider>(context);
     return Scaffold(
       body: _currentPosition == null
           ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
@@ -1452,31 +1506,31 @@ class _MapScreenState extends State<MapScreen> {
                  children: [
                    FilterChip(
                      label: const Text('쿠폰만'),
-                     selected: filters.showCouponsOnly,
+                     selected: false, // filters.showCouponsOnly,
                      onSelected: (_) {
-                       filters.toggleCouponsOnly();
+                       // filters.toggleCouponsOnly();
                        _updateClustering();
                      },
                    ),
                    const SizedBox(width: 8),
                    FilterChip(
                      label: const Text('내 포스트'),
-                     selected: filters.showMyPostsOnly,
+                     selected: false, // filters.showMyPostsOnly,
                      onSelected: (_) {
-                       filters.toggleMyPostsOnly();
+                       // filters.toggleMyPostsOnly();
                        _updateClustering();
                      },
                    ),
                    const SizedBox(width: 8),
-                   if (filters.showCouponsOnly || filters.showMyPostsOnly)
-                     FilterChip(
-                       label: const Text('필터 초기화'),
-                       selected: false,
-                       onSelected: (_) {
-                         filters.resetFilters();
-                         _updateClustering();
-                       },
-                     ),
+                   // if (filters.showCouponsOnly || filters.showMyPostsOnly)
+                     // FilterChip(
+                       // label: const Text('필터 초기화'),
+                       // selected: false,
+                       // onSelected: (_) {
+                         // filters.resetFilters();
+                         // _updateClustering();
+                       // },
+                     // ),
                  ],
                ),
              ),

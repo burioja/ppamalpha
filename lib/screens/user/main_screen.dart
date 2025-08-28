@@ -8,7 +8,7 @@ import 'budget_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import '../../providers/search_provider.dart';
-import '../../widgets/mode_switcher.dart';
+
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,14 +18,20 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  bool _isWorkMode = true;
   int _selectedIndex = 0;
   String _currentLocation = '위치 불러오는 중...';
 
-  final List<Widget> _widgetOptions = [
-    MapScreen(key: MapScreen.mapKey),
-    const InboxScreen(),
-  ];
+  late final List<Widget> _widgetOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    _widgetOptions = [
+      MapScreen(),
+      const InboxScreen(),
+    ];
+    _loadCurrentAddress();
+  }
 
   final List<IconData> _icons = [
     Icons.map,
@@ -37,11 +43,7 @@ class _MainScreenState extends State<MainScreen> {
     'Inbox',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentAddress();
-  }
+
 
   Future<void> _loadCurrentAddress() async {
     try {
@@ -70,24 +72,10 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildTopBar() {
     return Container(
       height: 50,
-      color: _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF),
+      color: const Color(0xFF4D4DFF),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          // 왼쪽 ModeSwitcher
-          ModeSwitcher(
-            isWorkMode: _isWorkMode,
-            onToggle: () {
-              setState(() {
-                _isWorkMode = !_isWorkMode;
-                // 모드 변경 시 인덱스 리셋
-                // _currentWorkplaceIndex = 0;
-                // _currentItemIndex = 0;
-              });
-            },
-          ),
-          const SizedBox(width: 10),
-
           // 중앙 위치 (터치하면 지도 화면으로 이동)
           Expanded(
             child: GestureDetector(
@@ -117,7 +105,6 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
 
           // 오른쪽 M 아이콘(예산 화면 이동)
           GestureDetector(
@@ -155,7 +142,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildCustomNavBar() {
-    final Color accentColor = _isWorkMode ? const Color(0xFFFF6666) : const Color(0xFF4D4DFF);
+    final Color accentColor = const Color(0xFF4D4DFF);
 
     return Container(
       padding: const EdgeInsets.only(top: 5, bottom: 15, left: 8, right: 8),
@@ -172,10 +159,8 @@ class _MainScreenState extends State<MainScreen> {
               child: GestureDetector(
                 onTap: () {
                   if (isMapLocationButton) {
-                    final state = MapScreen.mapKey.currentState;
-                    if (state != null) {
-                      state.goToCurrentLocation();
-                    }
+                    // TODO: 지도 현재 위치로 이동 기능
+                    debugPrint('지도 현재 위치로 이동');
                   } else {
                     _onItemTapped(index);
                   }
