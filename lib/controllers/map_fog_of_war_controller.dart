@@ -4,30 +4,38 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import '../widgets/map_fog_painter.dart';
 
-/// Fog of War를 담당하는 컨트롤러
-/// 현재 위치 1km 반경은 밝게, 방문한 지역은 회색 반투명으로, 나머지는 검은색으로 표시
+/// Fog of War를 담당하는 컨트롤러 (마스크 기반)
+/// CustomPainter를 사용하여 효율적인 Fog of War 구현
 class MapFogOfWarController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  final Set<Circle> _fogOfWarCircles = {};
+  // 마스크 기반 데이터
+  final List<CircleSpec> _recentCircles = [];
+  CircleSpec? _hereCircle;
   final List<LatLng> _visitedLocations = [];
   LatLng? _currentPosition;
   
   static const double _currentLocationRadiusKm = 1.0; // 현재 위치 반경 1km
-  static const double _visitedLocationRadiusKm = 0.5; // 방문 지역 반경 500m
+  static const double _visitedLocationRadiusKm = 1.0; // 방문 지역 반경 1km (통일)
   static const int _visitHistoryDays = 30; // 한달
   
+  // 성능 최적화 설정
+  static const int _maxCirclesOnScreen = 200; // 화면 내 최대 원 개수
+  static const double _clusterDistanceMeters = 500.0; // 클러스터링 거리
+  
   // Getters
-  Set<Circle> get fogOfWarCircles => Set.unmodifiable(_fogOfWarCircles);
+  List<CircleSpec> get recentCircles => List.unmodifiable(_recentCircles);
+  CircleSpec? get hereCircle => _hereCircle;
   List<LatLng> get visitedLocations => List.unmodifiable(_visitedLocations);
   LatLng? get currentPosition => _currentPosition;
   
   /// 현재 위치 업데이트
   void updateCurrentPosition(LatLng position) {
     _currentPosition = position;
-    _updateFogOfWar();
+    _updateHereCircle();
   }
   
   /// 방문 기록을 로드하고 Fog of War 구성
@@ -44,60 +52,65 @@ class MapFogOfWarController {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
       
-      _visitedLocations.clear();
+      // 원시 위치 데이터 수집
+      final rawLocations = <LatLng>[];
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final lat = data['lat'] as double?;
         final lng = data['lng'] as double?;
         if (lat != null && lng != null) {
-          _visitedLocations.add(LatLng(lat, lng));
+          rawLocations.add(LatLng(lat, lng));
         }
       }
       
-      _updateFogOfWar();
+      // 클러스터링으로 성능 최적화
+      _visitedLocations.clear();
+      _visitedLocations.addAll(
+        LocationClusterer.clusterLocations(rawLocations, _clusterDistanceMeters)
+      );
+      
+      _updateRecentCircles();
+      _updateHereCircle();
       
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
     }
   }
   
-  /// Fog of War 서클들을 업데이트
-  void _updateFogOfWar() {
-    _fogOfWarCircles.clear();
+  /// 최근 방문 지역 원들 업데이트
+  void _updateRecentCircles() {
+    _recentCircles.clear();
     
-    // 1. 현재 위치 기반 밝은 영역 (투명)
-    if (_currentPosition != null) {
-      _fogOfWarCircles.add(
-        Circle(
-          circleId: const CircleId('current_location'),
-          center: _currentPosition!,
-          radius: _currentLocationRadiusKm * 1000, // km to meters
-          fillColor: Colors.transparent,
-          strokeColor: Colors.blue.withOpacity(0.3),
-          strokeWidth: 2,
+    // 성능 최적화: 원 개수 제한
+    final locationsToShow = _visitedLocations.take(_maxCirclesOnScreen).toList();
+    
+    for (final location in locationsToShow) {
+      // 현재 위치와 너무 가까운 곳은 제외 (중복 방지)
+      if (_currentPosition != null && 
+          _calculateDistance(_currentPosition!, location) < 100) {
+        continue;
+      }
+      
+      _recentCircles.add(
+        CircleSpec(
+          center: location,
+          radiusMeters: _visitedLocationRadiusKm * 1000, // km to meters
         ),
       );
     }
-    
-    // 2. 방문한 위치들 - 회색 반투명 (도로와 건물이 보이도록)
-    for (int i = 0; i < _visitedLocations.length; i++) {
-      final location = _visitedLocations[i];
-      
-      // 현재 위치와 겹치지 않는 방문 위치만 추가
-      if (_currentPosition == null || 
-          _calculateDistance(_currentPosition!, location) > _currentLocationRadiusKm) {
-        
-        _fogOfWarCircles.add(
-          Circle(
-            circleId: CircleId('visited_$i'),
-            center: location,
-            radius: _visitedLocationRadiusKm * 1000, // km to meters
-            fillColor: Colors.grey.withOpacity(0.4), // 회색 반투명
-            strokeColor: Colors.grey.withOpacity(0.6),
-            strokeWidth: 1,
-          ),
-        );
-      }
+  }
+  
+  /// 현재 위치 원 업데이트
+  void _updateHereCircle() {
+    if (_currentPosition != null) {
+      _hereCircle = CircleSpec(
+        center: _currentPosition!,
+        radiusMeters: _currentLocationRadiusKm * 1000, // km to meters
+        strokeColor: Colors.blue.withOpacity(0.8), // 테두리 강조
+        strokeWidth: 3.0,
+      );
+    } else {
+      _hereCircle = null;
     }
   }
   
@@ -118,9 +131,13 @@ class MapFogOfWarController {
         'ts': FieldValue.serverTimestamp(),
       });
       
-      // 로컬 리스트에도 추가
+      // 로컬 리스트에도 추가하고 클러스터링
       _visitedLocations.add(location);
-      _updateFogOfWar();
+      _visitedLocations.clear();
+      _visitedLocations.addAll(
+        LocationClusterer.clusterLocations(_visitedLocations, _clusterDistanceMeters)
+      );
+      _updateRecentCircles();
       
     } catch (e) {
       debugPrint('방문 위치 저장 오류: $e');
@@ -192,7 +209,8 @@ class MapFogOfWarController {
   
   /// 초기화
   void reset() {
-    _fogOfWarCircles.clear();
+    _recentCircles.clear();
+    _hereCircle = null;
     _visitedLocations.clear();
     _currentPosition = null;
   }

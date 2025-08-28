@@ -27,6 +27,7 @@ import '../../handlers/map_lifecycle_handler.dart';
 import '../../widgets/map_filter_bar.dart';
 import '../../widgets/map_popup_widget.dart';
 import '../../widgets/map_info_dialog.dart';
+import '../../widgets/map_fog_painter.dart';
 
 // 프로바이더들
 import '../../providers/map_filter_provider.dart';
@@ -78,8 +79,8 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   // 마커 상태
   Set<Marker> _markers = {};
   
-  // Fog of War state
-  Set<Circle> _fogOfWarCircles = {};
+  // Fog of War state  
+  CameraPosition? _currentCameraPosition;
   
   @override
   void initState() {
@@ -259,6 +260,16 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
           // 지도
           _buildMap(),
           
+          // Fog of War 오버레이
+          if (_currentCameraPosition != null)
+            MapFogOverlay(
+              camera: _currentCameraPosition!,
+              recentCircles: _fogOfWarController.recentCircles,
+              hereCircle: _fogOfWarController.hereCircle,
+              fogOpacity: 0.65,
+              fogColor: Colors.black,
+            ),
+          
           // 상단 필터 바
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
@@ -308,8 +319,11 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
       ),
       onMapCreated: _onMapCreated,
       markers: _markers,
-      circles: _fogOfWarCircles, // Fog of War 추가
-      onCameraMove: _gestureHandler.onCameraMove,
+      // circles 제거 - 이제 CustomPainter로 처리
+      onCameraMove: (position) {
+        _gestureHandler.onCameraMove(position);
+        _onCameraPositionChanged(position);
+      },
       onCameraIdle: _gestureHandler.onCameraIdle,
       onTap: (_) => _interactionHandler.onMapTap(),
       onLongPress: _interactionHandler.onMapLongPress,
@@ -317,6 +331,7 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
       mapToolbarEnabled: false,
+      style: _mapController.mapStyle, // 맵 스타일 적용
     );
   }
 
@@ -357,6 +372,15 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
   /// 지도 생성 완료 콜백
   void _onMapCreated(GoogleMapController controller) {
     _mapController.setMapController(controller);
+    
+    // 초기 카메라 위치 설정
+    setState(() {
+      _currentCameraPosition = const CameraPosition(
+        target: LatLng(37.5665, 126.9780), // 서울 시청
+        zoom: 15.0,
+      );
+    });
+    
     _updateMarkers();
   }
 
@@ -399,13 +423,21 @@ class _MapScreenRefactoredState extends State<MapScreenRefactored>
     });
   }
   
-  /// Fog of War 업데이트
-  void _updateFogOfWar() {
+  /// 카메라 위치 변경 처리
+  void _onCameraPositionChanged(CameraPosition position) {
     if (!mounted) return;
     
     setState(() {
-      _fogOfWarCircles = _fogOfWarController.fogOfWarCircles;
+      _currentCameraPosition = position;
     });
+  }
+  
+  /// Fog of War 업데이트 (마스크 기반)
+  void _updateFogOfWar() {
+    if (!mounted) return;
+    
+    // 마스크 기반에서는 setState만으로 충분 (recentCircles, hereCircle이 자동 반영)
+    setState(() {});
   }
 
   /// 현재 위치로 이동
