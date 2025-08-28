@@ -68,7 +68,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     if (currentUserId == null) return;
 
     try {
-      final posts = await _postService.getCollectedFlyers(currentUserId);
+      final posts = await _postService.getCollectedPosts(currentUserId);
       setState(() {
         collectedPosts = posts;
       });
