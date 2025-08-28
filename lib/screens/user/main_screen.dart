@@ -22,10 +22,17 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   String _currentLocation = '위치 불러오는 중...';
 
-  final List<Widget> _widgetOptions = [
-    MapScreen(key: MapScreen.mapKey),
-    const InboxScreen(),
-  ];
+  late final List<Widget> _widgetOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    _widgetOptions = [
+      MapScreen(),
+      const InboxScreen(),
+    ];
+    _loadCurrentAddress();
+  }
 
   final List<IconData> _icons = [
     Icons.map,
@@ -37,11 +44,7 @@ class _MainScreenState extends State<MainScreen> {
     'Inbox',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentAddress();
-  }
+
 
   Future<void> _loadCurrentAddress() async {
     try {
@@ -76,10 +79,10 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           // 왼쪽 ModeSwitcher
           ModeSwitcher(
-            isWorkMode: _isWorkMode,
-            onToggle: () {
+            currentMode: _isWorkMode ? 0 : 1,
+            onModeChanged: (mode) {
               setState(() {
-                _isWorkMode = !_isWorkMode;
+                _isWorkMode = mode == 0;
                 // 모드 변경 시 인덱스 리셋
                 // _currentWorkplaceIndex = 0;
                 // _currentItemIndex = 0;
@@ -172,10 +175,8 @@ class _MainScreenState extends State<MainScreen> {
               child: GestureDetector(
                 onTap: () {
                   if (isMapLocationButton) {
-                    final state = MapScreen.mapKey.currentState;
-                    if (state != null) {
-                      state.goToCurrentLocation();
-                    }
+                    // TODO: 지도 현재 위치로 이동 기능
+                    debugPrint('지도 현재 위치로 이동');
                   } else {
                     _onItemTapped(index);
                   }
