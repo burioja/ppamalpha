@@ -297,7 +297,7 @@ class _MapScreenState extends State<MapScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _collectPost(flyer);
+                  _collectPostAsCreator(flyer);
                 },
                 child: const Text('회수'),
               ),
@@ -306,7 +306,7 @@ class _MapScreenState extends State<MapScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _collectFlyer(flyer);
+                  _collectUserPost(flyer);
                 },
                 child: const Text('수령'),
               ),
@@ -316,13 +316,13 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // 발행자가 전단지 회수
-  Future<void> _collectPost(PostModel flyer) async {
+  // 발행자가 포스트 회수
+  Future<void> _collectPostAsCreator(PostModel flyer) async {
     try {
       final currentUserId = userId;
       if (currentUserId != null) {
-        await _postService.collectFlyer(
-          flyerId: flyer.flyerId,
+        await _postService.collectPostAsCreator(
+          postId: flyer.flyerId,
           userId: currentUserId,
         );
         
@@ -332,25 +332,28 @@ class _MapScreenState extends State<MapScreen> {
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('전단지를 회수했습니다!')),
+            const SnackBar(content: Text('포스트를 회수했습니다!')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전단지 회수에 실패했습니다: $e')),
+          SnackBar(content: Text('포스트 회수에 실패했습니다: $e')),
         );
       }
     }
   }
 
-  // 사용자가 전단지 수령
-  Future<void> _collectFlyer(PostModel flyer) async {
+  // 일반 사용자가 포스트 수령
+  Future<void> _collectUserPost(PostModel flyer) async {
     try {
       final currentUserId = userId;
       if (currentUserId != null) {
-        // TODO: 전단지 수령 로직 구현 (월렛에 추가, 리워드 지급 등)
+        await _postService.collectPost(
+          postId: flyer.flyerId,
+          userId: currentUserId,
+        );
         
         setState(() {
           _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
@@ -358,18 +361,19 @@ class _MapScreenState extends State<MapScreen> {
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('전단지를 수령했습니다! ${flyer.reward}원 리워드가 지급되었습니다.')),
+            SnackBar(content: Text('포스트를 수령했습니다! ${flyer.reward}원 리워드가 지급되었습니다.')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전단지 수령에 실패했습니다: $e')),
+          SnackBar(content: Text('포스트 수령에 실패했습니다: $e')),
         );
       }
     }
   }
+
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -667,7 +671,7 @@ class _MapScreenState extends State<MapScreen> {
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pop();
-                    _handleFlyerRecovery(item);
+                    _handlePostCollection(item);
                   },
                   child: const Text('수령'),
                 ),
@@ -687,7 +691,7 @@ class _MapScreenState extends State<MapScreen> {
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pop();
-                    _handleRecovery(item.id, item.data);
+                    _handlePostCollection(item); // 모든 마커에서 포스트 수령 가능
                   },
                   child: const Text('수령'),
                 ),
@@ -783,25 +787,76 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 전단지 수령 처리
-  void _handleFlyerRecovery(MarkerItem item) async {
+  // 포스트 수령 처리
+  void _handlePostCollection(MarkerItem item) async {
     try {
-      final flyerId = item.data['flyerId'] as String;
+      debugPrint('🔄 _handlePostCollection 호출: 마커 ID=${item.id}, 제목=${item.title}');
+      debugPrint('📊 마커 데이터: ${item.data}');
+      
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       
       if (currentUserId != null) {
-        // PostService를 통해 전단지 수령
-        await _postService.collectFlyer(
-          flyerId: flyerId,
-          userId: currentUserId,
-        );
+        // 마커 데이터에서 postId 또는 flyerId 가져오기
+        String? postId = item.data['postId'] ?? item.data['flyerId'];
+        
+        if (postId != null) {
+          // 기존 포스트가 있는 경우
+          debugPrint('📝 기존 포스트 수령: postId=$postId');
+          
+          try {
+            // PostService를 통해 포스트 수령
+            await _postService.collectPost(
+              postId: postId,
+              userId: currentUserId,
+            );
+            debugPrint('✅ PostService.collectPost 성공');
+          } catch (e) {
+            debugPrint('⚠️ 기존 포스트 수령 실패, 새 포스트 생성: $e');
+            // 기존 포스트가 없으면 새로 생성
+            postId = null;
+          }
+        }
+        
+        if (postId == null) {
+          // 새 포스트 생성
+          debugPrint('🆕 새 포스트 생성 중...');
+          
+          final newPost = {
+            'title': item.title,
+            'description': item.data['description'] ?? '마커에서 수령한 포스트',
+            'reward': int.parse(item.price),
+            'creatorId': item.data['userId'] ?? 'unknown',
+            'creatorName': item.data['creatorName'] ?? '알 수 없음',
+            'location': GeoPoint(item.position.latitude, item.position.longitude),
+            'address': item.data['address'] ?? '',
+            'targetGender': item.data['targetGender'] ?? 'all',
+            'targetAge': item.data['targetAge'] ?? [18, 65],
+            'canRespond': item.data['canRespond'] ?? false,
+            'canForward': item.data['canForward'] ?? false,
+            'canRequestReward': true,
+            'canUse': item.data['canUse'] ?? false,
+            'isDistributed': false,
+            'isCollected': true,
+            'collectedBy': currentUserId,
+            'collectedAt': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+            'expiresAt': item.expiryDate ?? Timestamp.fromDate(DateTime.now().add(Duration(days: 30))),
+          };
+          
+          final postRef = await FirebaseFirestore.instance.collection('posts').add(newPost);
+          postId = postRef.id;
+          debugPrint('✅ 새 포스트 생성 완료: $postId');
+        }
         
         // Firebase에서 마커 상태 업데이트
         await FirebaseFirestore.instance.collection('markers').doc(item.id).update({
           'isCollected': true,
           'collectedBy': currentUserId,
           'collectedAt': FieldValue.serverTimestamp(),
+          'postId': postId, // 생성된 포스트 ID 저장
         });
+        
+        debugPrint('✅ 마커 상태 업데이트 성공');
         
         // 마커 목록에서 제거
         setState(() {
@@ -814,17 +869,20 @@ class _MapScreenState extends State<MapScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('전단지를 수령했습니다!'),
+              content: Text('포스트를 수령했습니다!'),
               backgroundColor: Colors.green,
             ),
           );
         }
+        
+        debugPrint('🎉 포스트 수령 완료!');
       }
     } catch (e) {
+      debugPrint('❌ 포스트 수령 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('전단지 수령에 실패했습니다: $e'),
+            content: Text('포스트 수령에 실패했습니다: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1451,42 +1509,62 @@ class _MapScreenState extends State<MapScreen> {
           ? const Center(child: Text("현재 위치를 불러오는 중입니다..."))
           : Stack(
         children: [
-          GoogleMap(
-            key: mapWidgetKey,
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _currentPosition!,
-              zoom: 15.0,
-            ),
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            zoomGesturesEnabled: true,
-            scrollGesturesEnabled: true,
-            tiltGesturesEnabled: true,
-            rotateGesturesEnabled: true,
-            circles: _fogOfWarCircles,
-            onLongPress: (LatLng latLng) {
+          GestureDetector(
+            onSecondaryTapDown: (TapDownDetails details) {
+              // 크롬에서 오른쪽 클릭 시 포스트 뿌리기 메뉴 표시
+              final RenderBox renderBox = context.findRenderObject() as RenderBox;
+              final localPosition = renderBox.globalToLocal(details.globalPosition);
+              
+              // 지도 좌표로 변환 (대략적인 계산)
+              final mapWidth = renderBox.size.width;
+              final mapHeight = renderBox.size.height;
+              final latRatio = localPosition.dy / mapHeight;
+              final lngRatio = localPosition.dx / mapWidth;
+              
+              final lat = _currentPosition!.latitude + (0.01 * (0.5 - latRatio));
+              final lng = _currentPosition!.longitude + (0.01 * (lngRatio - 0.5));
+              
               setState(() {
-                _longPressedLatLng = latLng;
+                _longPressedLatLng = LatLng(lat, lng);
               });
             },
-            markers: {
-              ..._clusteredMarkers,
-              if (_longPressedLatLng != null)
-                Marker(
-                  markerId: const MarkerId('long_press_marker'),
-                  position: _longPressedLatLng!,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-                  infoWindow: const InfoWindow(title: "선택한 위치"),
-                ),
-            },
-            onCameraMove: (CameraPosition position) {
-              _currentZoom = position.zoom;
-            },
-            onCameraIdle: () {
-              _updateClustering();
-            },
+            child: GoogleMap(
+              key: mapWidgetKey,
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: CameraPosition(
+                target: _currentPosition!,
+                zoom: 15.0,
+              ),
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              zoomGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              rotateGesturesEnabled: true,
+              circles: _fogOfWarCircles,
+              onLongPress: (LatLng latLng) {
+                setState(() {
+                  _longPressedLatLng = latLng;
+                });
+              },
+              markers: {
+                ..._clusteredMarkers,
+                if (_longPressedLatLng != null)
+                  Marker(
+                    markerId: const MarkerId('long_press_marker'),
+                    position: _longPressedLatLng!,
+                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+                    infoWindow: const InfoWindow(title: "선택한 위치"),
+                  ),
+              },
+              onCameraMove: (CameraPosition position) {
+                _currentZoom = position.zoom;
+              },
+              onCameraIdle: () {
+                _updateClustering();
+              },
+            ),
           ),
                      // 상단 필터 바
            Positioned(

@@ -635,7 +635,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   // 받은 포스트 탭 (PRD에 맞게 수정)
   Widget _buildCollectedPostsTab() {
     return FutureBuilder<List<PostModel>>(
-      future: _postService.getCollectedFlyers(_currentUserId!),
+      future: _postService.getCollectedPosts(_currentUserId!),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
