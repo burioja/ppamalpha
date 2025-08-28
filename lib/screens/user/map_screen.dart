@@ -90,6 +90,24 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
+
+      final Set<Circle> circles = {};
+
+      // 1. 현재 위치 밝은 영역 (1km 반경)
+      if (_currentPosition != null) {
+        circles.add(
+          Circle(
+            circleId: const CircleId('current_location'),
+            center: _currentPosition!,
+            radius: 1000, // 1km 반경
+            strokeWidth: 2,
+            strokeColor: Colors.blue,
+            fillColor: Colors.transparent, // 밝게 표시 (투명)
+          ),
+        );
+      }
+
+      // 2. 최근 30일 방문 지역 (회색 불투명)
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -98,26 +116,32 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      // 빈원형(Fog) 초기화
-      final Set<Circle> circles = {};
-
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
-        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0; // 방문 빈도 가중치(옵션)
-
-        // 가중치에 따른 알파값(최대 0.5)
-        final double alpha = (0.15 + (weight * 0.07)).clamp(0.15, 0.5);
-        final Color color = Colors.orange.withOpacity(alpha);
 
         circles.add(
           Circle(
-            circleId: CircleId('fog_${doc.id}'),
+            circleId: CircleId('visited_${doc.id}'),
             center: LatLng(gp.latitude, gp.longitude),
-            radius: 80, // 약 80m 반경
+            radius: 1000, // 1km 반경
+            strokeWidth: 1,
+            strokeColor: Colors.grey.withOpacity(0.3),
+            fillColor: Colors.grey.withOpacity(0.2), // 회색 불투명
+          ),
+        );
+      }
+
+      // 3. 전체 화면을 덮는 검은 Fog (큰 반경으로 미방문 지역 표시)
+      if (_currentPosition != null) {
+        circles.add(
+          Circle(
+            circleId: const CircleId('fog_overlay'),
+            center: _currentPosition!,
+            radius: 50000, // 50km 반경 (넓은 지역을 검은색으로)
             strokeWidth: 0,
-            fillColor: color,
+            fillColor: Colors.black.withOpacity(0.7), // 검은 Fog
           ),
         );
       }
@@ -129,6 +153,8 @@ class _MapScreenState extends State<MapScreen> {
             ..addAll(circles);
         });
       }
+
+      debugPrint('Fog of War 로드 완료: ${circles.length}개 영역');
     } catch (e) {
       debugPrint('Fog of War 로드 오류: $e');
     }
@@ -1381,11 +1407,39 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void goToCurrentLocation() {
+  void goToCurrentLocation() async {
     if (_currentPosition != null) {
       mapController.animateCamera(
         CameraUpdate.newLatLng(_currentPosition!),
       );
+      
+      // 현재 위치 방문 기록 저장
+      await _recordCurrentLocationVisit();
+    }
+  }
+
+  /// 현재 위치 방문 기록 저장
+  Future<void> _recordCurrentLocationVisit() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || _currentPosition == null) return;
+
+      await FirebaseFirestore.instance
+          .collection('visits')
+          .doc(uid)
+          .collection('points')
+          .add({
+        'geo': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        'ts': Timestamp.now(),
+        'weight': 1.0,
+      });
+
+      // Fog of War 업데이트
+      await _loadVisitsAndBuildFog();
+      
+      debugPrint('현재 위치 방문 기록 저장 완료');
+    } catch (e) {
+      debugPrint('방문 기록 저장 오류: $e');
     }
   }
 
