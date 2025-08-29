@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/location_service.dart';
 import '../../services/post_service.dart';
@@ -40,6 +41,89 @@ class MarkerItem {
   });
 }
 
+// 포그오브워 페인터 클래스
+class FogOfWarPainter extends CustomPainter {
+  final GoogleMapController? mapController;
+  final LatLng? currentPosition;
+  final Set<LatLng> visitedPositions;
+  final double currentRadius;
+  final double visitedRadius;
+
+  FogOfWarPainter({
+    this.mapController,
+    this.currentPosition,
+    required this.visitedPositions,
+    this.currentRadius = 1000,
+    this.visitedRadius = 1000,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // mapController가 null이어도 렌더링 가능하도록 수정
+    
+    // 웹 플랫폼 체크 및 디버그 출력
+    if (kIsWeb) {
+      debugPrint('웹 환경에서 포그오브워 렌더링 중...');
+    }
+
+    // 전체 화면을 검은색으로 덮기
+    final fogPaint = Paint()
+      ..color = Colors.black.withOpacity(0.9)
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fogPaint);
+
+    // 방문한 지역들 - 회색 반투명으로 구멍 뚫기
+    final visitedPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.5)
+      ..style = PaintingStyle.fill
+      ..blendMode = BlendMode.srcOver;
+
+    for (final position in visitedPositions) {
+      _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
+    }
+
+    // 현재 위치 - 완전 투명으로 구멍 뚫기
+    if (currentPosition != null) {
+      final currentPaint = Paint()
+        ..color = Colors.transparent
+        ..style = PaintingStyle.fill
+        ..blendMode = BlendMode.clear;
+
+      _drawCircleHole(canvas, size, currentPosition!, currentRadius, currentPaint);
+      
+      // 현재 위치 테두리
+      final borderPaint = Paint()
+        ..color = Colors.blue.withOpacity(0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      
+      _drawCircleHole(canvas, size, currentPosition!, currentRadius, borderPaint);
+    }
+  }
+
+  void _drawCircleHole(Canvas canvas, Size size, LatLng position, double radius, Paint paint) {
+    // LatLng을 화면 좌표로 변환하는 로직
+    // 웹 환경에서는 브라우저의 렌더링 성능을 고려하여 최적화
+    
+    // 간단한 메르카토르 투영 사용
+    final screenX = (position.longitude + 180) / 360 * size.width;
+    final screenY = (1 - (position.latitude + 90) / 180) * size.height;
+    
+    // 웹에서는 DPI 스케일링 고려
+    final pixelRatio = kIsWeb ? 1.0 : ui.window.devicePixelRatio;
+    final screenRadius = (radius / 111000 * size.width / 360) * pixelRatio;
+    
+    canvas.drawCircle(Offset(screenX, screenY), screenRadius, paint);
+  }
+
+  @override
+  bool shouldRepaint(FogOfWarPainter oldDelegate) {
+    return currentPosition != oldDelegate.currentPosition ||
+           visitedPositions != oldDelegate.visitedPositions;
+  }
+}
+
 class MapScreen extends StatefulWidget {
   MapScreen({super.key});
   static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
@@ -66,6 +150,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
   final Set<Circle> _fogOfWarCircles = {};
+  final Set<LatLng> _visitedPositions = {}; // 방문한 위치들
 
   @override
   void initState() {
@@ -93,18 +178,7 @@ class _MapScreenState extends State<MapScreen> {
 
       final Set<Circle> circles = {};
 
-      // 1. 전체 화면을 덮는 검은 Fog (가장 먼저 - 뒤에 깔림)
-      if (_currentPosition != null) {
-        circles.add(
-          Circle(
-            circleId: const CircleId('fog_overlay'),
-            center: _currentPosition!,
-            radius: 1000, // 1km 반경 (현재 위치 주변만 검은색으로)
-            strokeWidth: 0,
-            fillColor: Colors.black.withOpacity(0.7), // 검은 Fog
-          ),
-        );
-      }
+      // 1. 전체 Fog는 이제 오버레이 위젯으로 처리
 
       // 2. 최근 30일 방문 지역 (회색 불투명 - 검은 Fog 위에)
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
@@ -115,24 +189,37 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
+      // 방문지역 중복 제거 및 오버레이용 데이터 수집
+      final visitedLocations = <String, bool>{};
+      _visitedPositions.clear();
+
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
 
+        // 중복 좌표 체크
+        final key = '${gp.latitude.toStringAsFixed(4)},${gp.longitude.toStringAsFixed(4)}';
+        if (visitedLocations.containsKey(key)) continue;
+        visitedLocations[key] = true;
+
+        final position = LatLng(gp.latitude, gp.longitude);
+        _visitedPositions.add(position);
+
+        // 기존 Circle 방식도 유지 (백업용)
         circles.add(
           Circle(
             circleId: CircleId('visited_${doc.id}'),
-            center: LatLng(gp.latitude, gp.longitude),
+            center: position,
             radius: 1000, // 1km 반경
-            strokeWidth: 1,
-            strokeColor: Colors.grey.withOpacity(0.3),
-            fillColor: Colors.grey.withOpacity(0.2), // 회색 불투명
+            strokeWidth: 0,
+            strokeColor: Colors.transparent,
+            fillColor: Colors.grey.withOpacity(0.5), // 회색 반투명 (지도 흐리게 보임)
           ),
         );
       }
 
-      // 3. 현재 위치 밝은 영역 (가장 위에 - 가장 밝게)
+      // 3. 현재 위치 완전히 밝은 영역 (투명하게 - 지도 완전히 보임)
       if (_currentPosition != null) {
         circles.add(
           Circle(
@@ -140,8 +227,8 @@ class _MapScreenState extends State<MapScreen> {
             center: _currentPosition!,
             radius: 1000, // 1km 반경
             strokeWidth: 2,
-            strokeColor: Colors.blue,
-            fillColor: Colors.transparent, // 밝게 표시 (투명)
+            strokeColor: Colors.blue.withOpacity(0.8),
+            fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
           ),
         );
       }
@@ -1528,7 +1615,9 @@ class _MapScreenState extends State<MapScreen> {
                 _longPressedLatLng = LatLng(lat, lng);
               });
             },
-            child: GoogleMap(
+            child: Stack(
+              children: [
+                GoogleMap(
               key: mapWidgetKey,
               onMapCreated: _onMapCreated,
               initialCameraPosition: CameraPosition(
@@ -1542,7 +1631,7 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              circles: _fogOfWarCircles,
+              // circles: _fogOfWarCircles, // 오버레이로 대체
               onLongPress: (LatLng latLng) {
                 setState(() {
                   _longPressedLatLng = latLng;
@@ -1564,6 +1653,18 @@ class _MapScreenState extends State<MapScreen> {
               onCameraIdle: () {
                 _updateClustering();
               },
+            ),
+                // 포그오브워 오버레이 (항상 표시)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: FogOfWarPainter(
+                      mapController: null, // mapController 불필요
+                      currentPosition: _currentPosition,
+                      visitedPositions: _visitedPositions,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
                      // 상단 필터 바

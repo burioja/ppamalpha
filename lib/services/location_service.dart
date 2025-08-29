@@ -1,22 +1,44 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:flutter/foundation.dart';
 
 class LocationService {
   // 현재 위치 가져오기
   static Future<Position?> getCurrentPosition() async {
     try {
+      // 웹 플랫폼에서는 HTTPS 요구사항 체크
+      if (kIsWeb) {
+        debugPrint('웹 환경에서 위치 요청 중... (HTTPS 필수)');
+      }
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) throw Exception('위치 서비스가 비활성화되었습니다.');
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw Exception('위치 권한이 거부되었습니다.');
+        if (permission == LocationPermission.denied) {
+          if (kIsWeb) {
+            throw Exception('브라우저에서 위치 권한이 거부되었습니다. 브라우저 설정을 확인해주세요.');
+          } else {
+            throw Exception('위치 권한이 거부되었습니다.');
+          }
+        }
       }
 
-      if (permission == LocationPermission.deniedForever) throw Exception('위치 권한이 영구적으로 거부되었습니다.');
+      if (permission == LocationPermission.deniedForever) {
+        if (kIsWeb) {
+          throw Exception('브라우저에서 위치 권한이 차단되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
+        } else {
+          throw Exception('위치 권한이 영구적으로 거부되었습니다.');
+        }
+      }
 
-      return await Geolocator.getCurrentPosition();
+      // geolocator 12.0.0에서는 LocationSettings 대신 직접 파라미터 사용
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
     } catch (e) {
       // 위치 가져오기 오류: $e
       return null;
