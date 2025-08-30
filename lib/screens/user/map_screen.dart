@@ -68,32 +68,47 @@ class FogOfWarPainter extends CustomPainter {
 
     // 현재 위치가 있는 경우에만 Fog of War 적용
     if (currentPosition != null) {
-      // 전체 화면을 검은색으로 덮기
-      final fogPaint = Paint()
-        ..color = Colors.black.withOpacity(0.9)
-        ..style = PaintingStyle.fill;
+      // 현재 위치 중심으로부터의 거리 계산을 위한 화면 좌표 변환
+      final centerX = (currentPosition!.longitude + 180) / 360 * size.width;
+      final centerY = (1 - (currentPosition!.latitude + 90) / 180) * size.height;
+      final pixelRatio = kIsWeb ? 1.0 : ui.window.devicePixelRatio;
+      final brightRadius = (1000.0 / 111000 * size.width / 360) * pixelRatio; // 1km를 픽셀로 변환
       
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fogPaint);
+      // 방사형 그라데이션으로 Fog of War 적용
+      final gradient = RadialGradient(
+        center: Alignment.center,
+        radius: 0.8,
+        colors: [
+          Colors.transparent,           // 중심: 완전 투명 (밝음)
+          Colors.transparent,           // 1km까지: 투명 유지
+          Colors.black.withOpacity(0.3), // 1.5km: 약간 어두워짐
+          Colors.black.withOpacity(0.7), // 2km: 더 어두워짐
+          Colors.black.withOpacity(0.9), // 가장자리: 거의 검은색
+        ],
+        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+      );
+      
+      // 현재 위치를 중심으로 하는 원형 그라데이션 적용
+      final gradientPaint = Paint()
+        ..shader = gradient.createShader(
+          Rect.fromCircle(
+            center: Offset(centerX, centerY),
+            radius: brightRadius * 3, // 3km 반경까지 그라데이션
+          ),
+        );
+      
+      // 전체 화면에 그라데이션 적용하되, 중심부는 투명하게
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), gradientPaint);
 
-      // 방문한 지역들 - 회색 반투명으로 구멍 뚫기
+      // 방문한 지역들 - 회색 반투명으로 표시
       final visitedPaint = Paint()
-        ..color = Colors.grey.withOpacity(0.5)
-        ..style = PaintingStyle.fill
-        ..blendMode = BlendMode.srcOver;
+        ..color = Colors.grey.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
 
       for (final position in visitedPositions) {
         _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
       }
 
-      // 현재 위치 - 완전 투명으로 구멍 뚫기 (1km 반경)
-      final currentPaint = Paint()
-        ..color = Colors.transparent
-        ..style = PaintingStyle.fill
-        ..blendMode = BlendMode.clear;
-
-      // 현재 위치 1km 반경을 완전히 밝게 표시
-      _drawCircleHole(canvas, size, currentPosition!, 1000.0, currentPaint);
-      
       // 현재 위치 테두리 (파란색)
       final borderPaint = Paint()
         ..color = Colors.blue.withOpacity(0.8)
