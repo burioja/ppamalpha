@@ -83,22 +83,23 @@ class FogOfWarPainter extends CustomPainter {
       _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
     }
 
-    // 현재 위치 - 완전 투명으로 구멍 뚫기
+    // 현재 위치 - 완전 투명으로 구멍 뚫기 (1km 반경)
     if (currentPosition != null) {
       final currentPaint = Paint()
         ..color = Colors.transparent
         ..style = PaintingStyle.fill
         ..blendMode = BlendMode.clear;
 
-      _drawCircleHole(canvas, size, currentPosition!, currentRadius, currentPaint);
+      // 현재 위치 1km 반경을 완전히 밝게 표시
+      _drawCircleHole(canvas, size, currentPosition!, 1000.0, currentPaint);
       
-      // 현재 위치 테두리
+      // 현재 위치 테두리 (파란색)
       final borderPaint = Paint()
         ..color = Colors.blue.withOpacity(0.8)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3;
       
-      _drawCircleHole(canvas, size, currentPosition!, currentRadius, borderPaint);
+      _drawCircleHole(canvas, size, currentPosition!, 1000.0, borderPaint);
     }
   }
 
@@ -155,13 +156,12 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _setInitialLocation();
     _loadMapStyle();
     _loadCustomMarker();
+    _setInitialLocation(); // 위치 설정 시 자동으로 Fog of War 업데이트됨
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
     _setupRealtimeListeners();
-    _loadVisitsAndBuildFog();
   }
 
   @override
@@ -266,14 +266,26 @@ class _MapScreenState extends State<MapScreen> {
             ? LatLng(position.latitude, position.longitude)
             : const LatLng(37.495872, 127.025046);
       });
+      
+      // 현재 위치가 설정되면 즉시 Fog of War 업데이트
+      if (_currentPosition != null) {
+        await _loadVisitsAndBuildFog();
+      }
     } catch (_) {
-      _currentPosition = const LatLng(37.492894, 127.012469);
+      setState(() {
+        _currentPosition = const LatLng(37.492894, 127.012469);
+      });
+      
+      // 기본 위치라도 Fog of War 업데이트
+      if (_currentPosition != null) {
+        await _loadVisitsAndBuildFog();
+      }
     }
   }
 
   Future<void> _loadCustomMarker() async {
     try {
-      final ByteData data = await rootBundle.load('assets/images/슽.png');
+      final ByteData data = await rootBundle.load('assets/images/ppam_work.png');
       final Uint8List bytes = data.buffer.asUint8List();
       
       final ui.Codec codec = await ui.instantiateImageCodec(bytes);
