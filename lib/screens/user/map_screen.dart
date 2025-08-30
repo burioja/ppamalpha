@@ -2011,7 +2011,15 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _recordCurrentLocationVisit() async {
     if (_currentPosition != null) {
       await _saveVisitedLocation(_currentPosition!);
-      await _loadVisitsAndBuildFog();
+      // 최적화된 Fog of War 업데이트
+      if (_fogController != null) {
+        _fogController!.onCameraIdle(current: _currentPosition!);
+        setState(() {
+          _fogOfWarPolygons
+            ..clear()
+            ..addAll(_fogController!.polygons);
+        });
+      }
       debugPrint('📍 현재 위치 방문 기록 저장 완료');
     }
   }
