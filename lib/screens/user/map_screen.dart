@@ -280,7 +280,16 @@ class FogOfWarController {
       ));
       final visited = deduped.take(600).toList(); // 폴리곤 수 제한
 
-      // 6) 폴리곤 생성 (3단계 구조)
+      // 6) 테스트용 더미 데이터 추가 (실제 데이터가 없을 때)
+      if (visited.isEmpty) {
+        debugPrint('🔄 방문 데이터가 없어서 테스트용 더미 데이터 생성');
+        visited.addAll([
+          LatLng(current.latitude + 0.001, current.longitude + 0.001), // 현재 위치 근처
+          LatLng(current.latitude - 0.001, current.longitude - 0.001), // 현재 위치 근처
+        ]);
+      }
+
+      // 7) 폴리곤 생성 (3단계 구조)
       final seg = _segmentsForZoom(zoom);
       await _buildPolygons(current, visited, seg);
 
@@ -351,6 +360,8 @@ class FogOfWarController {
 
   // 폴리곤 구축 (3단계 Fog of War)
   Future<void> _buildPolygons(LatLng current, List<LatLng> visited, int segments) async {
+    debugPrint('🎮 폴리곤 구축 시작: 현재위치=${current.latitude},${current.longitude}, 방문지=${visited.length}개, segments=$segments');
+    
     // 월드 폴리곤 (전체 지구 덮기)
     final world = <LatLng>[
       const LatLng(90, -180),   // 북극, 서쪽 끝
@@ -362,9 +373,12 @@ class FogOfWarController {
     // 구멍 생성 (현재 위치 + 방문지)
     final holes = <List<LatLng>>[];
     holes.add(_circlePath(current, _currentRadius, segments: segments));
+    debugPrint('🔵 현재 위치 구멍 생성: ${_currentRadius}m, ${segments}개 segments');
+    
     for (final p in visited) {
       holes.add(_circlePath(p, _visitedRadius, segments: segments));
     }
+    debugPrint('🔴 방문지 구멍 생성: ${visited.length}개 위치, 총 구멍 수=${holes.length}');
 
     final polys = <Polygon>{
       // 3단계: 검은 포그 (holes로 구멍 뚫기)
@@ -397,6 +411,8 @@ class FogOfWarController {
     polygons
       ..clear()
       ..addAll(polys);
+    
+    debugPrint('✅ Fog of War 폴리곤 생성 완료: ${polys.length}개 폴리곤 (검은포그 1개 + 방문지 ${visited.length}개)');
   }
 
   // === 유틸리티 메서드들 ===
