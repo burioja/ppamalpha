@@ -138,15 +138,15 @@ class _MapScreenState extends State<MapScreen> {
         final position = LatLng(gp.latitude, gp.longitude);
         _visitedPositions.add(position);
 
-        // 2단계: 회색 반투명 원 (지도 식별가능)
+        // 2단계: 완전 투명 원 (지도 완전히 식별가능)
         circles.add(
           Circle(
             circleId: CircleId('visited_${doc.id}'),
             center: position,
             radius: 1000, // 1km 반경
-            strokeWidth: 1,
-            strokeColor: Colors.grey.withOpacity(0.3),
-            fillColor: Colors.grey.withOpacity(0.2), // 회색 반투명 (지도 식별가능)
+            strokeWidth: 0, // 테두리 제거
+            strokeColor: Colors.transparent, // 테두리 투명
+            fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
           ),
         );
       }
