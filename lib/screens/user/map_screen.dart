@@ -759,14 +759,40 @@ class _MapScreenState extends State<MapScreen> {
       controller.setMapStyle(_mapStyle);
     }
     
-          // 🚨 임시로 Fog of War 비활성화 (무한루프 방지)
-      debugPrint('🗺️ 맵 생성 완료 (Fog of War 임시 비활성화)');
-      
-      // TODO: Fog of War 무한루프 해결 후 재활성화
-      // _fogController = FogOfWarController(controller);
-      // if (_currentPosition != null) {
-      //   _fogController!.onCameraIdle(current: _currentPosition!);
-      // }
+      // 🔥 1단계: 매우 단순한 검은 오버레이만 테스트
+      debugPrint('🗺️ 맵 생성 완료, 1단계 Fog of War 시작');
+      _createSimpleFogOfWar();
+  }
+
+  // 🔥 1단계: 매우 단순한 검은 오버레이만 생성
+  void _createSimpleFogOfWar() {
+    debugPrint('🔥 1단계: 단순 검은 오버레이 생성 시작');
+    
+    if (_currentPosition == null) {
+      debugPrint('❌ 현재 위치가 없어서 Fog of War 생성 불가');
+      return;
+    }
+    
+    // 전체 지구를 덮는 매우 단순한 검은 폴리곤 하나만
+    final worldPolygon = Polygon(
+      polygonId: const PolygonId('simple_fog'),
+      points: const [
+        LatLng(85, -180),   // 북서
+        LatLng(85, 180),    // 북동  
+        LatLng(-85, 180),   // 남동
+        LatLng(-85, -180),  // 남서
+      ],
+      strokeWidth: 0,
+      fillColor: Colors.black.withOpacity(0.7), // 투명도 낮춤
+      zIndex: 1,
+    );
+    
+    setState(() {
+      _fogOfWarPolygons.clear();
+      _fogOfWarPolygons.add(worldPolygon);
+    });
+    
+    debugPrint('✅ 1단계: 단순 검은 오버레이 생성 완료');
   }
 
   void _updateClustering() {
@@ -2082,7 +2108,7 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              polygons: const {}, // 🚨 Fog of War 임시 비활성화 (원래: _fogOfWarPolygons)
+              polygons: _fogOfWarPolygons, // 🔥 1단계: 기본 Fog of War 테스트
               onCameraMove: (CameraPosition position) {
                 _currentZoom = position.zoom;
                 _updateClustering(); // 줌 변경 시 클러스터링 업데이트
