@@ -151,15 +151,15 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
 
-      // 1단계: 현재 위치 밝은 영역 (완전 투명 - 지도 완전히 식별가능)
+      // 1단계: 현재 위치 밝은 영역 (완전 투명 - 지도만 보임, 테두리 없음)
       circles.add(
         Circle(
           circleId: const CircleId('current_location'),
           center: _currentPosition!,
           radius: 1000, // 1km 반경 원형
-          strokeWidth: 2,
-          strokeColor: Colors.blue.withOpacity(0.8), // 파란색 테두리
-          fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
+          strokeWidth: 0, // 테두리 제거
+          strokeColor: Colors.transparent, // 테두리 색상도 투명
+          fillColor: Colors.transparent, // 완전 투명 (지도만 보임)
         ),
       );
 
