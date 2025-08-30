@@ -14,6 +14,164 @@ import '../../models/post_model.dart';
 // import 'package:provider/provider.dart';
 // import '../../providers/map_filter_provider.dart';
 
+// ===== 지오해시 유틸리티 =====
+const _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+const _bits = [16, 8, 4, 2, 1];
+
+String geohashEncode(double lat, double lng, {int precision = 7}) {
+  var isEven = true;
+  var bit = 0;
+  var ch = 0;
+  String hash = '';
+
+  double latMin = -90.0, latMax = 90.0;
+  double lngMin = -180.0, lngMax = 180.0;
+
+  while (hash.length < precision) {
+    if (isEven) {
+      final mid = (lngMin + lngMax) / 2;
+      if (lng > mid) {
+        ch |= _bits[bit];
+        lngMin = mid;
+      } else {
+        lngMax = mid;
+      }
+    } else {
+      final mid = (latMin + latMax) / 2;
+      if (lat > mid) {
+        ch |= _bits[bit];
+        latMin = mid;
+      } else {
+        latMax = mid;
+      }
+    }
+
+    isEven = !isEven;
+    if (bit < 4) {
+      bit++;
+    } else {
+      hash += _base32[ch];
+      bit = 0;
+      ch = 0;
+    }
+  }
+  return hash;
+}
+
+class _LatLng { 
+  final double lat, lng; 
+  const _LatLng(this.lat, this.lng); 
+}
+
+class _BBox { 
+  final double minLat, maxLat, minLng, maxLng; 
+  const _BBox(this.minLat, this.maxLat, this.minLng, this.maxLng); 
+}
+
+class _CellSize { 
+  final double w, h; 
+  const _CellSize(this.w, this.h); 
+}
+
+// 지오해시 정밀도별 셀 크기 (미터)
+Map<int, _CellSize> _cellSizes = {
+  1: _CellSize(5009400, 4992600),
+  2: _CellSize(1252300, 624100),
+  3: _CellSize(156500, 156000),
+  4: _CellSize(39100, 19500),
+  5: _CellSize(4890, 4890),
+  6: _CellSize(1220, 610),
+  7: _CellSize(153, 153),
+  8: _CellSize(38, 19),
+  9: _CellSize(4.8, 4.8),
+  10: _CellSize(1.2, 0.6),
+};
+
+_CellSize cellSizeForPrecision(int p) => _cellSizes[p] ?? _CellSize(1.2, 0.6);
+
+class GeohashRange { 
+  final String start, end; 
+  GeohashRange(this.start, this.end); 
+}
+
+// 지오해시 범위 쿼리 최적화
+List<GeohashRange> rangesFromCells(List<String> cells) {
+  final set = cells.toSet().toList()..sort();
+  return set.map((c) => GeohashRange(c, '${c}\uf8ff')).toList();
+}
+
+// 반경에 맞는 최적 정밀도 선택
+int pickPrecisionForRadiusKm(double radiusKm) {
+  if (radiusKm > 250) return 3;        // ~156km
+  if (radiusKm > 60) return 4;         // ~39km
+  if (radiusKm > 8) return 5;          // ~4.9km
+  if (radiusKm > 2) return 6;          // ~1.2km
+  if (radiusKm > 0.5) return 7;        // ~153m
+  return 8;                             // ~38m
+}
+
+// 원 경계 → BBox 변환
+_BBox circleBBox(_LatLng c, double radiusMeters) {
+  const R = 6371000.0;
+  final d = radiusMeters / R;
+  final lat = c.lat * pi / 180.0;
+  final lng = c.lng * pi / 180.0;
+
+  final latMin = (lat - d) * 180.0 / pi;
+  final latMax = (lat + d) * 180.0 / pi;
+
+  final dLng = asin(sin(d) / cos(lat));
+  final lngMin = (lng - dLng) * 180.0 / pi;
+  final lngMax = (lng + dLng) * 180.0 / pi;
+
+  return _BBox(latMin, latMax, _wrapLng(lngMin), _wrapLng(lngMax));
+}
+
+double _wrapLng(double lng) {
+  while (lng > 180.0) lng -= 360.0;
+  while (lng < -180.0) lng += 360.0;
+  return lng;
+}
+
+bool _lngLe(double a, double b) {
+  if (b >= a) return a <= b;
+  return (a <= 180.0) || (_wrapLng(a) <= _wrapLng(b));
+}
+
+double _incLng(double lng, double step) {
+  lng += step;
+  if (lng > 180.0) lng -= 360.0;
+  return lng;
+}
+
+// BBox를 덮는 지오해시 셀 생성
+List<String> geohashCoverBBox(_BBox b, {int precision = 7}) {
+  final cs = cellSizeForPrecision(precision);
+  const mPerDegLat = 111320.0;
+  final centerLat = (b.minLat + b.maxLat) / 2.0;
+  final mPerDegLng = (mPerDegLat * cos(centerLat * pi / 180.0)).abs().clamp(1.0, mPerDegLat);
+
+  final dLat = cs.h / mPerDegLat;
+  final dLng = cs.w / mPerDegLng;
+
+  final cells = <String>{};
+  for (double lat = b.minLat; lat <= b.maxLat; lat += dLat) {
+    for (double lng = b.minLng; _lngLe(lng, b.maxLng); lng = _incLng(lng, dLng)) {
+      cells.add(geohashEncode(lat.clamp(-90.0, 90.0), _wrapLng(lng), precision: precision));
+    }
+  }
+  cells.add(geohashEncode(b.maxLat, b.maxLng, precision: precision));
+  return cells.toList();
+}
+
+// 주차 버킷 생성
+String _weekBucket(DateTime t) {
+  final y = t.year;
+  final first = DateTime(t.year, 1, 1);
+  final week = (t.difference(first).inDays / 7).floor() + 1;
+  return '$y-W$week';
+}
+
 /// 마커 아이템 클래스
 class MarkerItem {
   final String id;
@@ -41,7 +199,299 @@ class MarkerItem {
   });
 }
 
-// FogOfWarPainter 클래스 제거 - Google Maps Circle로 대체
+// ===== 고성능 Fog of War 컨트롤러 =====
+class FogOfWarController {
+  FogOfWarController(this._map);
+
+  final GoogleMapController _map;
+  final polygons = <Polygon>{};
+  Timer? _debounce;
+
+  // 캐시 시스템
+  final Map<String, List<LatLng>> _cellCache = {};
+  final Map<String, DateTime> _cellFetchedAt = {};
+  static const _ttl = Duration(minutes: 8);
+
+  // 최적화 파라미터
+  static const _days = 30;
+  static const _dedupMeters = 100.0;
+  static const _visitedRadius = 1000.0;
+  static const _currentRadius = 1000.0;
+  static const _debounceMs = 280;
+
+  // 외부에서 호출 (카메라 정지 시)
+  void onCameraIdle({required LatLng current}) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: _debounceMs), () async {
+      final bounds = await _map.getVisibleRegion();
+      final zoom = await _map.getZoomLevel();
+      await _rebuild(current: current, bounds: bounds, zoom: zoom);
+    });
+  }
+
+  Future<void> _rebuild({
+    required LatLng current,
+    required LatLngBounds bounds,
+    required double zoom,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      // 1) 뷰포트 중심과 최적 반경 계산
+      final center = LatLng(
+        (bounds.southwest.latitude + bounds.northeast.latitude) / 2,
+        _midLng(bounds.southwest.longitude, bounds.northeast.longitude),
+      );
+      final radiusKm = max(0.3, _radiusToCoverBoundsKm(bounds, center));
+
+      // 2) 최근 30일 주차 버킷 생성
+      final weekBuckets = _recentWeekBuckets(_days);
+
+      // 3) 지오해시 + 주차버킷 결합 쿼리
+      final docs = await _geoTsBucketQuery(
+        uid: uid,
+        centerLat: center.latitude,
+        centerLng: center.longitude,
+        radiusKm: radiusKm,
+        weekBuckets: weekBuckets,
+        hardLimitPerRange: 1000,
+      );
+
+      // 4) 클라이언트 최종 필터 (30일 + bounds)
+      final cutoff = DateTime.now().subtract(const Duration(days: _days));
+      final raw = <LatLng>[];
+      
+      for (final d in docs) {
+        final data = d.data();
+        final ts = (data['ts'] as Timestamp?)?.toDate();
+        final gp = data['position'] as GeoPoint?;
+        if (gp == null || ts == null || ts.isBefore(cutoff)) continue;
+        final p = LatLng(gp.latitude, gp.longitude);
+        if (!_inBounds(bounds, p)) continue;
+        raw.add(p);
+      }
+
+      // 5) 100m 격자 dedup (Isolate)
+      final deduped = await compute(_dedupGrid, _DedupInput(
+        points: raw, 
+        meters: _dedupMeters, 
+        bounds: bounds,
+      ));
+      final visited = deduped.take(600).toList(); // 폴리곤 수 제한
+
+      // 6) 폴리곤 생성 (3단계 구조)
+      final seg = _segmentsForZoom(zoom);
+      await _buildPolygons(current, visited, seg);
+
+    } catch (e) {
+      debugPrint('❌ Fog of War 오류: $e');
+    }
+  }
+
+  // 지오해시 + 주차버킷 결합 쿼리 (핵심 최적화)
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _geoTsBucketQuery({
+    required String uid,
+    required double centerLat,
+    required double centerLng,
+    required double radiusKm,
+    required List<String> weekBuckets,
+    int? hardLimitPerRange,
+  }) async {
+    final col = FirebaseFirestore.instance
+        .collection('visits').doc(uid).collection('points');
+
+    // 1) 원을 덮는 지오해시 셀 생성
+    final precision = pickPrecisionForRadiusKm(radiusKm);
+    final bbox = circleBBox(_LatLng(centerLat, centerLng), radiusKm * 1000.0);
+    final cells = geohashCoverBBox(bbox, precision: precision);
+    final ranges = rangesFromCells(cells);
+
+    final results = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+    // 2) 각 지오해시 범위 × 주차버킷 결합 쿼리
+    for (final r in ranges) {
+      try {
+        Query<Map<String, dynamic>> q = col
+            .where('geohash', isGreaterThanOrEqualTo: r.start)
+            .where('geohash', isLessThanOrEqualTo: r.end)
+            .where('tsW', whereIn: weekBuckets)
+            .orderBy('geohash');
+
+        if (hardLimitPerRange != null) {
+          q = q.limit(hardLimitPerRange);
+        }
+
+        final snap = await q.get();
+        results.addAll(snap.docs);
+      } catch (e) {
+        debugPrint('⚠️ 지오해시 쿼리 실패 (${r.start}): $e');
+        // 개별 쿼리 실패해도 전체는 계속 진행
+      }
+    }
+
+    return results;
+  }
+
+  // 폴리곤 구축 (3단계 Fog of War)
+  Future<void> _buildPolygons(LatLng current, List<LatLng> visited, int segments) async {
+    // 월드 폴리곤 (전체 지구 덮기)
+    final world = <LatLng>[
+      const LatLng(90, -180),   // 북극, 서쪽 끝
+      const LatLng(90, 180),    // 북극, 동쪽 끝  
+      const LatLng(-90, 180),   // 남극, 동쪽 끝
+      const LatLng(-90, -180),  // 남극, 서쪽 끝
+    ];
+
+    // 구멍 생성 (현재 위치 + 방문지)
+    final holes = <List<LatLng>>[];
+    holes.add(_circlePath(current, _currentRadius, segments: segments));
+    for (final p in visited) {
+      holes.add(_circlePath(p, _visitedRadius, segments: segments));
+    }
+
+    final polys = <Polygon>{
+      // 3단계: 검은 포그 (holes로 구멍 뚫기)
+      Polygon(
+        polygonId: const PolygonId('fog_black'),
+        points: world,
+        holes: holes,
+        strokeWidth: 0,
+        fillColor: Colors.black.withOpacity(0.95), // 거의 완전한 검은색
+        zIndex: 1,
+        consumeTapEvents: false,
+      ),
+    };
+
+    // 2단계: 방문지 회색 틴트 (현재 위치 제외)
+    for (int i = 0; i < visited.length; i++) {
+      polys.add(
+        Polygon(
+          polygonId: PolygonId('visited_gray_$i'),
+          points: _circlePath(visited[i], _visitedRadius, segments: segments),
+          strokeWidth: 0,
+          fillColor: Colors.transparent, // 완전 투명 (밝은 상태 유지)
+          zIndex: 2,
+          consumeTapEvents: false,
+        ),
+      );
+    }
+
+    // 결과 적용
+    polygons
+      ..clear()
+      ..addAll(polys);
+  }
+
+  // === 유틸리티 메서드들 ===
+
+  bool _inBounds(LatLngBounds b, LatLng p) {
+    final sw = b.southwest;
+    final ne = b.northeast;
+    final crosses = ne.longitude < sw.longitude; // antimeridian
+    final lngOk = crosses
+        ? (p.longitude >= sw.longitude || p.longitude <= ne.longitude)
+        : (p.longitude >= sw.longitude && p.longitude <= ne.longitude);
+    final latOk = p.latitude >= sw.latitude && p.latitude <= ne.latitude;
+    return latOk && lngOk;
+  }
+
+  double _radiusToCoverBoundsKm(LatLngBounds b, LatLng c) {
+    final corners = [
+      b.southwest,
+      LatLng(b.southwest.latitude, b.northeast.longitude),
+      b.northeast,
+      LatLng(b.northeast.latitude, b.southwest.longitude),
+    ];
+    var maxD = 0.0;
+    for (final v in corners) {
+      maxD = max(maxD, _haversineKm(c.latitude, c.longitude, v.latitude, v.longitude));
+    }
+    return maxD * 1.05; // 5% 여유
+  }
+
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371.0; // 지구 반지름 (km)
+    final dLat = _toRad(lat2 - lat1);
+    final dLon = _toRad(lon2 - lon1);
+    final a = sin(dLat/2)*sin(dLat/2) +
+        cos(_toRad(lat1))*cos(_toRad(lat2))*sin(dLon/2)*sin(dLon/2);
+    final c = 2 * atan2(sqrt(a), sqrt(1-a));
+    return R * c;
+  }
+
+  double _midLng(double a, double b) {
+    if (b < a) b += 360;
+    var m = (a + b) / 2;
+    if (m > 180) m -= 360;
+    return m;
+  }
+
+  int _segmentsForZoom(double z) {
+    if (z < 8) return 24;   // 낮은 줌: 적은 버텍스
+    if (z < 12) return 32;
+    if (z < 15) return 40;
+    return 48;              // 높은 줌: 많은 버텍스 (매끄러움)
+  }
+
+  List<LatLng> _circlePath(LatLng center, double radiusMeters, {int segments = 36}) {
+    const earth = 6378137.0;
+    final dByR = radiusMeters / earth;
+    final lat = _toRad(center.latitude);
+    final lng = _toRad(center.longitude);
+    final pts = <LatLng>[];
+    
+    for (int i = 0; i < segments; i++) {
+      final theta = 2 * pi * i / segments;
+      final latOffset = asin(sin(lat) * cos(dByR) + cos(lat) * sin(dByR) * cos(theta));
+      final lngOffset = lng + atan2(
+        sin(theta) * sin(dByR) * cos(lat),
+        cos(dByR) - sin(lat) * sin(latOffset),
+      );
+      pts.add(LatLng(_toDeg(latOffset), _toDeg(lngOffset)));
+    }
+    return pts;
+  }
+
+  double _toRad(double d) => d * pi / 180.0;
+  double _toDeg(double r) => r * 180.0 / pi;
+
+  List<String> _recentWeekBuckets(int days) {
+    final now = DateTime.now();
+    final start = now.subtract(Duration(days: days));
+    final set = <String>{};
+    DateTime t = start;
+    while (!t.isAfter(now)) {
+      set.add(_weekBucket(t));
+      t = t.add(const Duration(days: 7));
+    }
+    final list = set.toList()..sort();
+    return list.take(6).toList(); // 최대 6개 (whereIn 제한 고려)
+  }
+}
+
+// === Isolate용 dedup 입력/함수 ===
+class _DedupInput {
+  _DedupInput({required this.points, required this.meters, required this.bounds});
+  final List<LatLng> points;
+  final double meters;
+  final LatLngBounds bounds;
+}
+
+Future<List<LatLng>> _dedupGrid(_DedupInput input) async {
+  const mPerDegLat = 111320.0;
+  final centerLat = (input.bounds.southwest.latitude + input.bounds.northeast.latitude) / 2.0;
+  final mPerDegLng = (mPerDegLat * cos(centerLat * pi / 180.0)).abs().clamp(1.0, mPerDegLat);
+  final dLat = input.meters / mPerDegLat;
+  final dLng = input.meters / mPerDegLng;
+  
+  final seen = <String, LatLng>{};
+  for (final p in input.points) {
+    final ky = '${(p.latitude / dLat).floor()}:${(p.longitude / dLng).floor()}';
+    seen.putIfAbsent(ky, () => p);
+  }
+  return seen.values.toList(growable: false);
+}
 
 class MapScreen extends StatefulWidget {
   MapScreen({super.key});
@@ -68,19 +518,19 @@ class _MapScreenState extends State<MapScreen> {
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
-  final Set<Circle> _fogOfWarCircles = {};
-  final Set<Polygon> _fogOfWarPolygons = {}; // Polygon + holes 방식
-  final Set<LatLng> _visitedPositions = {}; // 방문한 위치들
-  LatLng? _lastTrackedPosition; // 마지막 추적된 위치
-  Timer? _movementTracker; // 이동 추적 타이머
-  static const double _movementThreshold = 50.0; // 50m 이동 시 업데이트
+  // 최적화된 Fog of War 시스템
+  FogOfWarController? _fogController;
+  final Set<Polygon> _fogOfWarPolygons = {};
+  LatLng? _lastTrackedPosition;
+  Timer? _movementTracker;
+  static const double _movementThreshold = 50.0;
 
   @override
   void initState() {
     super.initState();
     _loadMapStyle();
     _loadCustomMarker();
-    _setInitialLocation(); // 위치 설정 시 자동으로 Fog of War 업데이트됨
+    _setInitialLocation();
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
     _setupRealtimeListeners();
@@ -95,95 +545,85 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  Future<void> _loadVisitsAndBuildFog() async {
+  // 사용자 이동 추적 시작 (최적화된 버전)
+  void _startMovementTracking() {
+    _movementTracker?.cancel();
+    _movementTracker = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      await _trackUserMovement();
+    });
+  }
+
+  // 사용자 이동 감지 및 방문 위치 저장
+  Future<void> _trackUserMovement() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null || _currentPosition == null) return;
+      final currentPos = await LocationService.getCurrentPosition();
+      if (currentPos == null) return;
 
-      final Set<Polygon> polygons = {};
-      final cutoff = DateTime.now().subtract(const Duration(days: 30));
-      final snapshot = await FirebaseFirestore.instance
-          .collection('visits')
-          .doc(uid)
-          .collection('points')
-          .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-          .get();
-
-      // 방문지 dedup (100m 그리드)
-      final visited = <LatLng>[];
-      final dedup = <String>{};
-      _visitedPositions.clear();
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
-        if (gp == null) continue;
-        
-        final key = '${(gp.latitude * 100).round()},${(gp.longitude * 100).round()}';
-        if (!dedup.add(key)) continue;
-        
-        final position = LatLng(gp.latitude, gp.longitude);
-        visited.add(position);
-        _visitedPositions.add(position);
-      }
-
-      // 3단계: 검은 포그 (전체 지구를 덮는 거대한 폴리곤 + holes로 구멍 뚫기)
-      final world = <LatLng>[
-        const LatLng(90, -180),   // 북극, 서쪽 끝
-        const LatLng(90, 180),    // 북극, 동쪽 끝  
-        const LatLng(-90, 180),   // 남극, 동쪽 끝
-        const LatLng(-90, -180),  // 남극, 서쪽 끝
-      ];
-      final holes = <List<LatLng>>[];
-
-      // 현재 위치 1km 구멍
-      holes.add(_circlePath(_currentPosition!, 1000));
+      final current = LatLng(currentPos.latitude, currentPos.longitude);
       
-      // 방문지 1km 구멍들
-      for (final p in visited) {
-        holes.add(_circlePath(p, 1000));
-      }
-
-      polygons.add(
-        Polygon(
-          polygonId: const PolygonId('fog_black'),
-          points: world,
-          holes: holes, // 지도를 "뚫어줌"
-          strokeWidth: 0,
-          fillColor: Colors.black.withOpacity(0.95), // 거의 완전한 검은색
-          zIndex: 1,
-        ),
-      );
-
-      // 2단계: 방문지 회색 틴트 (지도 위에 살짝 덮음). 현재 위치는 제외
-      int idx = 0;
-      for (final p in visited) {
-        polygons.add(
-          Polygon(
-            polygonId: PolygonId('visited_gray_${idx++}'),
-            points: _circlePath(p, 1000),
-            strokeWidth: 0,
-            fillColor: Colors.grey.withOpacity(0.35), // 회색 투명
-            zIndex: 2,
-          ),
-        );
-      }
-
-      // 1단계: 현재 위치는 "밝음" → 아무 것도 올리지 않음 (이미 구멍으로 뚫림)
-
+      // 현재 위치 업데이트
       if (mounted) {
         setState(() {
-          _fogOfWarPolygons
-            ..clear()
-            ..addAll(polygons);
-          // 기존 Circle도 클리어
-          _fogOfWarCircles.clear();
+          _currentPosition = current;
         });
       }
 
-      debugPrint('🎮 Polygon Fog of War 로드 완료: ${polygons.length}개 폴리곤 (1단계: 현재위치 구멍, 2단계: ${visited.length}개 방문지역 회색틴트, 3단계: 검은 포그)');
+      // 이동 거리 체크 (50m 이상 이동 시에만 저장)
+      if (_lastTrackedPosition != null) {
+        final distance = Geolocator.distanceBetween(
+          _lastTrackedPosition!.latitude,
+          _lastTrackedPosition!.longitude,
+          current.latitude,
+          current.longitude,
+        );
+        
+        if (distance < _movementThreshold) return; // 거리 부족
+      }
+
+      // 방문 위치 저장 (지오해시 + 주차버킷 포함)
+      await _saveVisitedLocation(current);
+      _lastTrackedPosition = current;
+
+      // Fog of War 업데이트 (새로운 최적화된 컨트롤러 사용)
+      if (_fogController != null) {
+        _fogController!.onCameraIdle(current: current);
+        setState(() {
+          _fogOfWarPolygons
+            ..clear()
+            ..addAll(_fogController!.polygons);
+        });
+      }
+
+      debugPrint('🚶 사용자 이동 추적: ${current.latitude}, ${current.longitude}');
     } catch (e) {
-      debugPrint('❌ Fog of War 로드 오류: $e');
+      debugPrint('❌ 사용자 이동 추적 오류: $e');
+    }
+  }
+
+  // 최적화된 방문 저장 (지오해시 + 주차버킷 포함)
+  Future<void> _saveVisitedLocation(LatLng position) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final now = DateTime.now();
+      final geohash = geohashEncode(position.latitude, position.longitude, precision: 7);
+      final weekBucket = _weekBucket(now);
+
+      await FirebaseFirestore.instance
+          .collection('visits')
+          .doc(uid)
+          .collection('points')
+          .add({
+        'ts': Timestamp.fromDate(now),
+        'tsW': weekBucket,                    // 주차 버킷 (쿼리 최적화용)
+        'position': GeoPoint(position.latitude, position.longitude),
+        'geohash': geohash,                   // 지오해시 (범위 쿼리용)
+      });
+
+      debugPrint('✅ 방문 위치 저장: ${position.latitude}, ${position.longitude} (geohash: $geohash, week: $weekBucket)');
+    } catch (e) {
+      debugPrint('❌ 방문 위치 저장 실패: $e');
     }
   }
 
@@ -287,6 +727,14 @@ class _MapScreenState extends State<MapScreen> {
     mapController = controller;
     if (_mapStyle != null) {
       controller.setMapStyle(_mapStyle);
+    }
+    
+    // 최적화된 Fog of War 컨트롤러 초기화
+    _fogController = FogOfWarController(controller);
+    
+    // 초기 위치가 설정되어 있다면 즉시 Fog of War 업데이트
+    if (_currentPosition != null) {
+      _fogController!.onCameraIdle(current: _currentPosition!);
     }
   }
 
@@ -1664,7 +2112,22 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              polygons: _fogOfWarPolygons, // Fog of War Polygon + holes 오버레이
+              polygons: _fogOfWarPolygons, // 최적화된 Fog of War 폴리곤
+              onCameraMove: (CameraPosition position) {
+                _currentZoom = position.zoom;
+                _updateClustering(); // 줌 변경 시 클러스터링 업데이트
+              },
+              onCameraIdle: () {
+                // 카메라 정지 시 Fog of War 업데이트 (디바운스 포함)
+                if (_fogController != null && _currentPosition != null) {
+                  _fogController!.onCameraIdle(current: _currentPosition!);
+                  setState(() {
+                    _fogOfWarPolygons
+                      ..clear()
+                      ..addAll(_fogController!.polygons);
+                  });
+                }
+              },
               onLongPress: (LatLng latLng) {
                 setState(() {
                   _longPressedLatLng = latLng;
