@@ -1654,13 +1654,15 @@ class _MapScreenState extends State<MapScreen> {
                 _updateClustering();
               },
             ),
-                // 포그오브워 오버레이 (항상 표시)
+                // 포그오브워 오버레이 (항상 표시, 터치 이벤트 무시)
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: FogOfWarPainter(
-                      mapController: null, // mapController 불필요
-                      currentPosition: _currentPosition,
-                      visitedPositions: _visitedPositions,
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: FogOfWarPainter(
+                        mapController: null, // mapController 불필요
+                        currentPosition: _currentPosition,
+                        visitedPositions: _visitedPositions,
+                      ),
                     ),
                   ),
                 ),
