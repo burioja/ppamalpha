@@ -127,10 +127,12 @@ class _MapScreenState extends State<MapScreen> {
         _visitedPositions.add(position);
       }
 
-      // 3단계: 검은 포그 (외곽 큰 폴리곤 + holes로 구멍 뚫기)
+      // 3단계: 검은 포그 (전체 지구를 덮는 거대한 폴리곤 + holes로 구멍 뚫기)
       final world = <LatLng>[
-        const LatLng(85, -180), const LatLng(85, 180),
-        const LatLng(-85, 180), const LatLng(-85, -180),
+        const LatLng(90, -180),   // 북극, 서쪽 끝
+        const LatLng(90, 180),    // 북극, 동쪽 끝  
+        const LatLng(-90, 180),   // 남극, 동쪽 끝
+        const LatLng(-90, -180),  // 남극, 서쪽 끝
       ];
       final holes = <List<LatLng>>[];
 
@@ -148,7 +150,7 @@ class _MapScreenState extends State<MapScreen> {
           points: world,
           holes: holes, // 지도를 "뚫어줌"
           strokeWidth: 0,
-          fillColor: Colors.black.withOpacity(0.8),
+          fillColor: Colors.black.withOpacity(0.95), // 거의 완전한 검은색
           zIndex: 1,
         ),
       );
