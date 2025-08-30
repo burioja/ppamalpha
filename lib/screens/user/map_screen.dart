@@ -650,7 +650,15 @@ class _MapScreenState extends State<MapScreen> {
       // 현재 위치가 설정되면 즉시 Fog of War 업데이트
       if (_currentPosition != null) {
         _lastTrackedPosition = _currentPosition;
-        await _loadVisitsAndBuildFog();
+        // 최적화된 Fog of War 업데이트
+        if (_fogController != null) {
+          _fogController!.onCameraIdle(current: _currentPosition!);
+          setState(() {
+            _fogOfWarPolygons
+              ..clear()
+              ..addAll(_fogController!.polygons);
+          });
+        }
         _startMovementTracking();
       }
     } catch (_) {
@@ -661,7 +669,15 @@ class _MapScreenState extends State<MapScreen> {
       // 기본 위치라도 Fog of War 업데이트
       if (_currentPosition != null) {
         _lastTrackedPosition = _currentPosition;
-        await _loadVisitsAndBuildFog();
+        // 최적화된 Fog of War 업데이트
+        if (_fogController != null) {
+          _fogController!.onCameraIdle(current: _currentPosition!);
+          setState(() {
+            _fogOfWarPolygons
+              ..clear()
+              ..addAll(_fogController!.polygons);
+          });
+        }
         _startMovementTracking();
       }
     }
@@ -1985,80 +2001,11 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// 이동 추적 시작
-  void _startMovementTracking() {
-    _movementTracker?.cancel();
-    _movementTracker = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _trackUserMovement();
-    });
-  }
+  // 중복 함수 제거됨 - 위에 정의된 최적화된 버전 사용
 
-  /// 사용자 이동 추적 및 Fog of War 업데이트
-  Future<void> _trackUserMovement() async {
-    try {
-      final position = await LocationService.getCurrentPosition();
-      if (position == null) return;
+  // 중복 함수 제거됨 - 위에 정의된 최적화된 버전 사용
 
-      final newPosition = LatLng(position.latitude, position.longitude);
-      
-      // 이전 위치와 비교
-      if (_lastTrackedPosition != null) {
-        final distance = _haversineKm(_lastTrackedPosition!, newPosition) * 1000; // 미터로 변환
-        
-        // 50m 이상 이동했을 때만 업데이트
-        if (distance > _movementThreshold) {
-          debugPrint('🚶 사용자 이동 감지: ${distance.toInt()}m 이동');
-          
-          // 현재 위치 업데이트
-          setState(() {
-            _currentPosition = newPosition;
-          });
-          
-          // 방문 기록 저장
-          await _saveVisitedLocation(newPosition);
-          
-          // Fog of War 업데이트 (현재 위치 중심으로)
-          await _loadVisitsAndBuildFog();
-          
-          // 추적 위치 업데이트
-          _lastTrackedPosition = newPosition;
-        }
-      } else {
-        _lastTrackedPosition = newPosition;
-      }
-    } catch (e) {
-      debugPrint('❌ 이동 추적 오류: $e');
-    }
-  }
-
-  /// 방문 위치 저장
-  Future<void> _saveVisitedLocation(LatLng position) async {
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-
-      // 방문 기록을 격자 단위로 저장 (중복 방지)
-      final cellLat = (position.latitude * 1000).round() / 1000.0; // 약 100m 단위
-      final cellLng = (position.longitude * 1000).round() / 1000.0;
-      final cellId = '${cellLat}_${cellLng}';
-
-      await FirebaseFirestore.instance
-          .collection('visits')
-          .doc(uid)
-          .collection('points')
-          .doc(cellId)
-          .set({
-        'geo': GeoPoint(cellLat, cellLng),
-        'ts': Timestamp.now(),
-        'weight': FieldValue.increment(1), // 방문 횟수 증가
-        'last_visit': Timestamp.now(),
-      }, SetOptions(merge: true));
-
-      debugPrint('📍 방문 위치 저장: ($cellLat, $cellLng)');
-    } catch (e) {
-      debugPrint('❌ 방문 위치 저장 오류: $e');
-    }
-  }
+  // 중복 함수 제거됨 - 위에 정의된 최적화된 버전 사용
 
   /// 현재 위치 방문 기록 저장 (수동 호출용)
   Future<void> _recordCurrentLocationVisit() async {
@@ -2142,12 +2089,6 @@ class _MapScreenState extends State<MapScreen> {
                     icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
                     infoWindow: const InfoWindow(title: "선택한 위치"),
                   ),
-              },
-              onCameraMove: (CameraPosition position) {
-                _currentZoom = position.zoom;
-              },
-              onCameraIdle: () {
-                _updateClustering();
               },
             ),
                 // CustomPaint 오버레이 제거 - Google Maps Circle로 대체
