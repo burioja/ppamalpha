@@ -69,6 +69,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
   final Set<Circle> _fogOfWarCircles = {};
+  final Set<Polygon> _fogOfWarPolygons = {}; // Polygon + holes 방식
   final Set<LatLng> _visitedPositions = {}; // 방문한 위치들
   LatLng? _lastTrackedPosition; // 마지막 추적된 위치
   Timer? _movementTracker; // 이동 추적 타이머
@@ -99,20 +100,7 @@ class _MapScreenState extends State<MapScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null || _currentPosition == null) return;
 
-      final Set<Circle> circles = {};
-
-      // 1단계: 전체 지역을 어두운 포그로 덮기 (3단계 - 어두운단계)
-      circles.add(
-        Circle(
-          circleId: const CircleId('fog_overlay'),
-          center: _currentPosition!,
-          radius: 100000, // 충분히 넓게 설정 (100km)
-          strokeWidth: 0,
-          fillColor: Colors.black.withOpacity(0.8), // 완전 검은색 (지도 식별불가)
-        ),
-      );
-
-      // 2단계: 최근 30일 방문 지역 (회색 반투명 - 지도 식별가능)
+      final Set<Polygon> polygons = {};
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -121,57 +109,77 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      // 방문지역 중복 제거
-      final visitedLocations = <String, bool>{};
+      // 방문지 dedup (100m 그리드)
+      final visited = <LatLng>[];
+      final dedup = <String>{};
       _visitedPositions.clear();
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
-
-        // 중복 좌표 체크 (100m 단위로 그룹핑)
+        
         final key = '${(gp.latitude * 100).round()},${(gp.longitude * 100).round()}';
-        if (visitedLocations.containsKey(key)) continue;
-        visitedLocations[key] = true;
-
+        if (!dedup.add(key)) continue;
+        
         final position = LatLng(gp.latitude, gp.longitude);
+        visited.add(position);
         _visitedPositions.add(position);
+      }
 
-        // 2단계: 완전 투명 원 (지도 완전히 식별가능)
-        circles.add(
-          Circle(
-            circleId: CircleId('visited_${doc.id}'),
-            center: position,
-            radius: 1000, // 1km 반경
-            strokeWidth: 0, // 테두리 제거
-            strokeColor: Colors.transparent, // 테두리 투명
-            fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
+      // 3단계: 검은 포그 (외곽 큰 폴리곤 + holes로 구멍 뚫기)
+      final world = <LatLng>[
+        const LatLng(85, -180), const LatLng(85, 180),
+        const LatLng(-85, 180), const LatLng(-85, -180),
+      ];
+      final holes = <List<LatLng>>[];
+
+      // 현재 위치 1km 구멍
+      holes.add(_circlePath(_currentPosition!, 1000));
+      
+      // 방문지 1km 구멍들
+      for (final p in visited) {
+        holes.add(_circlePath(p, 1000));
+      }
+
+      polygons.add(
+        Polygon(
+          polygonId: const PolygonId('fog_black'),
+          points: world,
+          holes: holes, // 지도를 "뚫어줌"
+          strokeWidth: 0,
+          fillColor: Colors.black.withOpacity(0.8),
+          zIndex: 1,
+        ),
+      );
+
+      // 2단계: 방문지 회색 틴트 (지도 위에 살짝 덮음). 현재 위치는 제외
+      int idx = 0;
+      for (final p in visited) {
+        polygons.add(
+          Polygon(
+            polygonId: PolygonId('visited_gray_${idx++}'),
+            points: _circlePath(p, 1000),
+            strokeWidth: 0,
+            fillColor: Colors.grey.withOpacity(0.35), // 회색 투명
+            zIndex: 2,
           ),
         );
       }
 
-      // 1단계: 현재 위치 밝은 영역 (완전 투명 - 지도만 보임, 테두리 없음)
-      circles.add(
-        Circle(
-          circleId: const CircleId('current_location'),
-          center: _currentPosition!,
-          radius: 1000, // 1km 반경 원형
-          strokeWidth: 0, // 테두리 제거
-          strokeColor: Colors.transparent, // 테두리 색상도 투명
-          fillColor: Colors.transparent, // 완전 투명 (지도만 보임)
-        ),
-      );
+      // 1단계: 현재 위치는 "밝음" → 아무 것도 올리지 않음 (이미 구멍으로 뚫림)
 
       if (mounted) {
         setState(() {
-          _fogOfWarCircles
+          _fogOfWarPolygons
             ..clear()
-            ..addAll(circles);
+            ..addAll(polygons);
+          // 기존 Circle도 클리어
+          _fogOfWarCircles.clear();
         });
       }
 
-      debugPrint('🎮 Fog of War 로드 완료: ${circles.length}개 영역 (1단계: 현재위치, 2단계: ${_visitedPositions.length}개 방문지역, 3단계: 나머지)');
+      debugPrint('🎮 Polygon Fog of War 로드 완료: ${polygons.length}개 폴리곤 (1단계: 현재위치 구멍, 2단계: ${visited.length}개 방문지역 회색틴트, 3단계: 검은 포그)');
     } catch (e) {
       debugPrint('❌ Fog of War 로드 오류: $e');
     }
@@ -567,6 +575,24 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   double _deg2rad(double d) => d * (pi / 180.0);
+
+  /// 원을 다각형으로 근사하는 헬퍼 함수
+  List<LatLng> _circlePath(LatLng center, double radiusMeters, {int segments = 60}) {
+    const earthRadius = 6378137.0;
+    final lat = center.latitude * (pi / 180.0);
+    final lng = center.longitude * (pi / 180.0);
+    final dByR = radiusMeters / earthRadius;
+
+    final pts = <LatLng>[];
+    for (int i = 0; i < segments; i++) {
+      final theta = 2 * pi * i / segments;
+      final latOffset = asin(sin(lat) * cos(dByR) + cos(lat) * sin(dByR) * cos(theta));
+      final lngOffset = lng + atan2(sin(theta) * sin(dByR) * cos(lat),
+                                    cos(dByR) - sin(lat) * sin(latOffset));
+      pts.add(LatLng(latOffset * 180.0 / pi, lngOffset * 180.0 / pi));
+    }
+    return pts;
+  }
 
   Marker _createMarker(MarkerItem item) {
     // 전단지 타입인지 확인
@@ -1636,7 +1662,7 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              circles: _fogOfWarCircles, // Fog of War Circle 오버레이
+              polygons: _fogOfWarPolygons, // Fog of War Polygon + holes 오버레이
               onLongPress: (LatLng latLng) {
                 setState(() {
                   _longPressedLatLng = latLng;
