@@ -41,106 +41,7 @@ class MarkerItem {
   });
 }
 
-// 포그오브워 페인터 클래스
-class FogOfWarPainter extends CustomPainter {
-  final GoogleMapController? mapController;
-  final LatLng? currentPosition;
-  final Set<LatLng> visitedPositions;
-  final double currentRadius;
-  final double visitedRadius;
-
-  FogOfWarPainter({
-    this.mapController,
-    this.currentPosition,
-    required this.visitedPositions,
-    this.currentRadius = 1000,
-    this.visitedRadius = 1000,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // mapController가 null이어도 렌더링 가능하도록 수정
-    
-    // 웹 플랫폼 체크 및 디버그 출력
-    if (kIsWeb) {
-      debugPrint('웹 환경에서 포그오브워 렌더링 중...');
-    }
-
-    // 현재 위치가 있는 경우에만 Fog of War 적용
-    if (currentPosition != null) {
-      // 현재 위치 중심으로부터의 거리 계산을 위한 화면 좌표 변환
-      final centerX = (currentPosition!.longitude + 180) / 360 * size.width;
-      final centerY = (1 - (currentPosition!.latitude + 90) / 180) * size.height;
-      final pixelRatio = kIsWeb ? 1.0 : ui.window.devicePixelRatio;
-      final brightRadius = (1000.0 / 111000 * size.width / 360) * pixelRatio; // 1km를 픽셀로 변환
-      
-      // 방사형 그라데이션으로 Fog of War 적용
-      final gradient = RadialGradient(
-        center: Alignment.center,
-        radius: 0.8,
-        colors: [
-          Colors.transparent,           // 중심: 완전 투명 (밝음)
-          Colors.transparent,           // 1km까지: 투명 유지
-          Colors.black.withOpacity(0.3), // 1.5km: 약간 어두워짐
-          Colors.black.withOpacity(0.7), // 2km: 더 어두워짐
-          Colors.black.withOpacity(0.9), // 가장자리: 거의 검은색
-        ],
-        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
-      );
-      
-      // 현재 위치를 중심으로 하는 원형 그라데이션 적용
-      final gradientPaint = Paint()
-        ..shader = gradient.createShader(
-          Rect.fromCircle(
-            center: Offset(centerX, centerY),
-            radius: brightRadius * 3, // 3km 반경까지 그라데이션
-          ),
-        );
-      
-      // 전체 화면에 그라데이션 적용하되, 중심부는 투명하게
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), gradientPaint);
-
-      // 방문한 지역들 - 회색 반투명으로 표시
-      final visitedPaint = Paint()
-        ..color = Colors.grey.withOpacity(0.3)
-        ..style = PaintingStyle.fill;
-
-      for (final position in visitedPositions) {
-        _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
-      }
-
-      // 현재 위치 테두리 (파란색)
-      final borderPaint = Paint()
-        ..color = Colors.blue.withOpacity(0.8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
-      
-      _drawCircleHole(canvas, size, currentPosition!, 1000.0, borderPaint);
-    }
-    // currentPosition이 null이면 아무것도 그리지 않음 (지도가 그대로 보임)
-  }
-
-  void _drawCircleHole(Canvas canvas, Size size, LatLng position, double radius, Paint paint) {
-    // LatLng을 화면 좌표로 변환하는 로직
-    // 웹 환경에서는 브라우저의 렌더링 성능을 고려하여 최적화
-    
-    // 간단한 메르카토르 투영 사용
-    final screenX = (position.longitude + 180) / 360 * size.width;
-    final screenY = (1 - (position.latitude + 90) / 180) * size.height;
-    
-    // 웹에서는 DPI 스케일링 고려
-    final pixelRatio = kIsWeb ? 1.0 : ui.window.devicePixelRatio;
-    final screenRadius = (radius / 111000 * size.width / 360) * pixelRatio;
-    
-    canvas.drawCircle(Offset(screenX, screenY), screenRadius, paint);
-  }
-
-  @override
-  bool shouldRepaint(FogOfWarPainter oldDelegate) {
-    return currentPosition != oldDelegate.currentPosition ||
-           visitedPositions != oldDelegate.visitedPositions;
-  }
-}
+// FogOfWarPainter 클래스 제거 - Google Maps Circle로 대체
 
 class MapScreen extends StatefulWidget {
   MapScreen({super.key});
@@ -169,6 +70,9 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<QuerySnapshot>? _markersListener;
   final Set<Circle> _fogOfWarCircles = {};
   final Set<LatLng> _visitedPositions = {}; // 방문한 위치들
+  LatLng? _lastTrackedPosition; // 마지막 추적된 위치
+  Timer? _movementTracker; // 이동 추적 타이머
+  static const double _movementThreshold = 50.0; // 50m 이동 시 업데이트
 
   @override
   void initState() {
@@ -185,19 +89,30 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     // 실시간 리스너 정리
     _markersListener?.cancel();
+    // 이동 추적 타이머 정리
+    _movementTracker?.cancel();
     super.dispose();
   }
 
   Future<void> _loadVisitsAndBuildFog() async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
+      if (uid == null || _currentPosition == null) return;
 
       final Set<Circle> circles = {};
 
-      // 1. 전체 Fog는 이제 오버레이 위젯으로 처리
+      // 1단계: 전체 지역을 어두운 포그로 덮기 (3단계 - 어두운단계)
+      circles.add(
+        Circle(
+          circleId: const CircleId('fog_overlay'),
+          center: _currentPosition!,
+          radius: 100000, // 충분히 넓게 설정 (100km)
+          strokeWidth: 0,
+          fillColor: Colors.black.withOpacity(0.8), // 완전 검은색 (지도 식별불가)
+        ),
+      );
 
-      // 2. 최근 30일 방문 지역 (회색 불투명 - 검은 Fog 위에)
+      // 2단계: 최근 30일 방문 지역 (회색 반투명 - 지도 식별가능)
       final cutoff = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await FirebaseFirestore.instance
           .collection('visits')
@@ -206,7 +121,7 @@ class _MapScreenState extends State<MapScreen> {
           .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      // 방문지역 중복 제거 및 오버레이용 데이터 수집
+      // 방문지역 중복 제거
       final visitedLocations = <String, bool>{};
       _visitedPositions.clear();
 
@@ -215,40 +130,38 @@ class _MapScreenState extends State<MapScreen> {
         final gp = data['geo'] as GeoPoint? ?? data['position'] as GeoPoint?;
         if (gp == null) continue;
 
-        // 중복 좌표 체크
-        final key = '${gp.latitude.toStringAsFixed(4)},${gp.longitude.toStringAsFixed(4)}';
+        // 중복 좌표 체크 (100m 단위로 그룹핑)
+        final key = '${(gp.latitude * 100).round()},${(gp.longitude * 100).round()}';
         if (visitedLocations.containsKey(key)) continue;
         visitedLocations[key] = true;
 
         final position = LatLng(gp.latitude, gp.longitude);
         _visitedPositions.add(position);
 
-        // 기존 Circle 방식도 유지 (백업용)
+        // 2단계: 회색 반투명 원 (지도 식별가능)
         circles.add(
           Circle(
             circleId: CircleId('visited_${doc.id}'),
             center: position,
             radius: 1000, // 1km 반경
-            strokeWidth: 0,
-            strokeColor: Colors.transparent,
-            fillColor: Colors.grey.withOpacity(0.5), // 회색 반투명 (지도 흐리게 보임)
+            strokeWidth: 1,
+            strokeColor: Colors.grey.withOpacity(0.3),
+            fillColor: Colors.grey.withOpacity(0.2), // 회색 반투명 (지도 식별가능)
           ),
         );
       }
 
-      // 3. 현재 위치 완전히 밝은 영역 (투명하게 - 지도 완전히 보임)
-      if (_currentPosition != null) {
-        circles.add(
-          Circle(
-            circleId: const CircleId('current_location'),
-            center: _currentPosition!,
-            radius: 1000, // 1km 반경
-            strokeWidth: 2,
-            strokeColor: Colors.blue.withOpacity(0.8),
-            fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
-          ),
-        );
-      }
+      // 1단계: 현재 위치 밝은 영역 (완전 투명 - 지도 완전히 식별가능)
+      circles.add(
+        Circle(
+          circleId: const CircleId('current_location'),
+          center: _currentPosition!,
+          radius: 1000, // 1km 반경 원형
+          strokeWidth: 2,
+          strokeColor: Colors.blue.withOpacity(0.8), // 파란색 테두리
+          fillColor: Colors.transparent, // 완전 투명 (지도 완전히 보임)
+        ),
+      );
 
       if (mounted) {
         setState(() {
@@ -258,9 +171,9 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
 
-      debugPrint('Fog of War 로드 완료: ${circles.length}개 영역');
+      debugPrint('🎮 Fog of War 로드 완료: ${circles.length}개 영역 (1단계: 현재위치, 2단계: ${_visitedPositions.length}개 방문지역, 3단계: 나머지)');
     } catch (e) {
-      debugPrint('Fog of War 로드 오류: $e');
+      debugPrint('❌ Fog of War 로드 오류: $e');
     }
   }
 
@@ -286,7 +199,9 @@ class _MapScreenState extends State<MapScreen> {
       
       // 현재 위치가 설정되면 즉시 Fog of War 업데이트
       if (_currentPosition != null) {
+        _lastTrackedPosition = _currentPosition;
         await _loadVisitsAndBuildFog();
+        _startMovementTracking();
       }
     } catch (_) {
       setState(() {
@@ -295,7 +210,9 @@ class _MapScreenState extends State<MapScreen> {
       
       // 기본 위치라도 Fog of War 업데이트
       if (_currentPosition != null) {
+        _lastTrackedPosition = _currentPosition;
         await _loadVisitsAndBuildFog();
+        _startMovementTracking();
       }
     }
   }
@@ -1592,28 +1509,87 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// 현재 위치 방문 기록 저장
-  Future<void> _recordCurrentLocationVisit() async {
+  /// 이동 추적 시작
+  void _startMovementTracking() {
+    _movementTracker?.cancel();
+    _movementTracker = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _trackUserMovement();
+    });
+  }
+
+  /// 사용자 이동 추적 및 Fog of War 업데이트
+  Future<void> _trackUserMovement() async {
+    try {
+      final position = await LocationService.getCurrentPosition();
+      if (position == null) return;
+
+      final newPosition = LatLng(position.latitude, position.longitude);
+      
+      // 이전 위치와 비교
+      if (_lastTrackedPosition != null) {
+        final distance = _haversineKm(_lastTrackedPosition!, newPosition) * 1000; // 미터로 변환
+        
+        // 50m 이상 이동했을 때만 업데이트
+        if (distance > _movementThreshold) {
+          debugPrint('🚶 사용자 이동 감지: ${distance.toInt()}m 이동');
+          
+          // 현재 위치 업데이트
+          setState(() {
+            _currentPosition = newPosition;
+          });
+          
+          // 방문 기록 저장
+          await _saveVisitedLocation(newPosition);
+          
+          // Fog of War 업데이트 (현재 위치 중심으로)
+          await _loadVisitsAndBuildFog();
+          
+          // 추적 위치 업데이트
+          _lastTrackedPosition = newPosition;
+        }
+      } else {
+        _lastTrackedPosition = newPosition;
+      }
+    } catch (e) {
+      debugPrint('❌ 이동 추적 오류: $e');
+    }
+  }
+
+  /// 방문 위치 저장
+  Future<void> _saveVisitedLocation(LatLng position) async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null || _currentPosition == null) return;
+      if (uid == null) return;
+
+      // 방문 기록을 격자 단위로 저장 (중복 방지)
+      final cellLat = (position.latitude * 1000).round() / 1000.0; // 약 100m 단위
+      final cellLng = (position.longitude * 1000).round() / 1000.0;
+      final cellId = '${cellLat}_${cellLng}';
 
       await FirebaseFirestore.instance
           .collection('visits')
           .doc(uid)
           .collection('points')
-          .add({
-        'geo': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+          .doc(cellId)
+          .set({
+        'geo': GeoPoint(cellLat, cellLng),
         'ts': Timestamp.now(),
-        'weight': 1.0,
-      });
+        'weight': FieldValue.increment(1), // 방문 횟수 증가
+        'last_visit': Timestamp.now(),
+      }, SetOptions(merge: true));
 
-      // Fog of War 업데이트
-      await _loadVisitsAndBuildFog();
-      
-      debugPrint('현재 위치 방문 기록 저장 완료');
+      debugPrint('📍 방문 위치 저장: ($cellLat, $cellLng)');
     } catch (e) {
-      debugPrint('방문 기록 저장 오류: $e');
+      debugPrint('❌ 방문 위치 저장 오류: $e');
+    }
+  }
+
+  /// 현재 위치 방문 기록 저장 (수동 호출용)
+  Future<void> _recordCurrentLocationVisit() async {
+    if (_currentPosition != null) {
+      await _saveVisitedLocation(_currentPosition!);
+      await _loadVisitsAndBuildFog();
+      debugPrint('📍 현재 위치 방문 기록 저장 완료');
     }
   }
 
@@ -1660,7 +1636,7 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              // circles: _fogOfWarCircles, // 오버레이로 대체
+              circles: _fogOfWarCircles, // Fog of War Circle 오버레이
               onLongPress: (LatLng latLng) {
                 setState(() {
                   _longPressedLatLng = latLng;
@@ -1683,18 +1659,7 @@ class _MapScreenState extends State<MapScreen> {
                 _updateClustering();
               },
             ),
-                // 포그오브워 오버레이 (항상 표시, 터치 이벤트 무시)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: FogOfWarPainter(
-                        mapController: null, // mapController 불필요
-                        currentPosition: _currentPosition,
-                        visitedPositions: _visitedPositions,
-                      ),
-                    ),
-                  ),
-                ),
+                // CustomPaint 오버레이 제거 - Google Maps Circle로 대체
               ],
             ),
           ),
