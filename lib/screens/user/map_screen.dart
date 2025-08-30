@@ -330,6 +330,22 @@ class FogOfWarController {
       }
     }
 
+    // 3) 지오해시 쿼리가 실패했거나 결과가 없으면 기본 쿼리 fallback
+    if (results.isEmpty) {
+      debugPrint('🔄 지오해시 쿼리 결과 없음, 기본 시간 쿼리로 fallback');
+      try {
+        final cutoff = DateTime.now().subtract(const Duration(days: 30));
+        final fallbackSnap = await col
+            .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+            .orderBy('ts', descending: true)
+            .limit(1000)
+            .get();
+        results.addAll(fallbackSnap.docs);
+      } catch (e) {
+        debugPrint('❌ Fallback 쿼리도 실패: $e');
+      }
+    }
+
     return results;
   }
 
@@ -647,18 +663,9 @@ class _MapScreenState extends State<MapScreen> {
             : const LatLng(37.495872, 127.025046);
       });
       
-      // 현재 위치가 설정되면 즉시 Fog of War 업데이트
+      // 현재 위치가 설정되면 추적 시작 (Fog of War는 onMapCreated에서 처리)
       if (_currentPosition != null) {
         _lastTrackedPosition = _currentPosition;
-        // 최적화된 Fog of War 업데이트
-        if (_fogController != null) {
-          _fogController!.onCameraIdle(current: _currentPosition!);
-          setState(() {
-            _fogOfWarPolygons
-              ..clear()
-              ..addAll(_fogController!.polygons);
-          });
-        }
         _startMovementTracking();
       }
     } catch (_) {
@@ -666,18 +673,9 @@ class _MapScreenState extends State<MapScreen> {
         _currentPosition = const LatLng(37.492894, 127.012469);
       });
       
-      // 기본 위치라도 Fog of War 업데이트
+      // 기본 위치라도 추적 시작 (Fog of War는 onMapCreated에서 처리)
       if (_currentPosition != null) {
         _lastTrackedPosition = _currentPosition;
-        // 최적화된 Fog of War 업데이트
-        if (_fogController != null) {
-          _fogController!.onCameraIdle(current: _currentPosition!);
-          setState(() {
-            _fogOfWarPolygons
-              ..clear()
-              ..addAll(_fogController!.polygons);
-          });
-        }
         _startMovementTracking();
       }
     }
