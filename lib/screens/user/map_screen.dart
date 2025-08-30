@@ -759,26 +759,14 @@ class _MapScreenState extends State<MapScreen> {
       controller.setMapStyle(_mapStyle);
     }
     
-    // 최적화된 Fog of War 컨트롤러 초기화
-    _fogController = FogOfWarController(controller);
-    
-    // 초기 위치가 설정되어 있다면 즉시 Fog of War 업데이트
-    if (_currentPosition != null) {
-      debugPrint('🗺️ 맵 생성 완료, Fog of War 초기화 시작: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
-      _fogController!.onCameraIdle(current: _currentPosition!);
+          // 🚨 임시로 Fog of War 비활성화 (무한루프 방지)
+      debugPrint('🗺️ 맵 생성 완료 (Fog of War 임시 비활성화)');
       
-      // 약간의 지연 후 폴리곤 업데이트 (비동기 처리 완료 대기)
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted && _fogController != null) {
-          setState(() {
-            _fogOfWarPolygons
-              ..clear()
-              ..addAll(_fogController!.polygons);
-          });
-          debugPrint('🎮 Fog of War 폴리곤 업데이트 완료: ${_fogOfWarPolygons.length}개');
-        }
-      });
-    }
+      // TODO: Fog of War 무한루프 해결 후 재활성화
+      // _fogController = FogOfWarController(controller);
+      // if (_currentPosition != null) {
+      //   _fogController!.onCameraIdle(current: _currentPosition!);
+      // }
   }
 
   void _updateClustering() {
@@ -2094,28 +2082,19 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              polygons: _fogOfWarPolygons, // 최적화된 Fog of War 폴리곤
+              polygons: const {}, // 🚨 Fog of War 임시 비활성화 (원래: _fogOfWarPolygons)
               onCameraMove: (CameraPosition position) {
                 _currentZoom = position.zoom;
                 _updateClustering(); // 줌 변경 시 클러스터링 업데이트
               },
-              onCameraIdle: () async {
-                // 카메라 정지 시 Fog of War 업데이트 (디바운스 포함)
-                if (_fogController != null && _currentPosition != null) {
-                  debugPrint('📷 카메라 정지, Fog of War 업데이트 시작');
-                  _fogController!.onCameraIdle(current: _currentPosition!);
-                  
-                  // 디바운스 대기 후 폴리곤 업데이트
-                  await Future.delayed(const Duration(milliseconds: 300));
-                  if (mounted && _fogController != null) {
-                    setState(() {
-                      _fogOfWarPolygons
-                        ..clear()
-                        ..addAll(_fogController!.polygons);
-                    });
-                    debugPrint('🎮 카메라 이동 후 Fog of War 업데이트: ${_fogOfWarPolygons.length}개 폴리곤');
-                  }
-                }
+              onCameraIdle: () {
+                // 🚨 Fog of War 임시 비활성화 (무한루프 방지)
+                debugPrint('📷 카메라 정지 (Fog of War 비활성화됨)');
+                
+                // TODO: Fog of War 무한루프 해결 후 재활성화
+                // if (_fogController != null && _currentPosition != null) {
+                //   _fogController!.onCameraIdle(current: _currentPosition!);
+                // }
               },
               onLongPress: (LatLng latLng) {
                 setState(() {
