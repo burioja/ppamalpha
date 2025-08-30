@@ -66,25 +66,26 @@ class FogOfWarPainter extends CustomPainter {
       debugPrint('웹 환경에서 포그오브워 렌더링 중...');
     }
 
-    // 전체 화면을 검은색으로 덮기
-    final fogPaint = Paint()
-      ..color = Colors.black.withOpacity(0.9)
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fogPaint);
-
-    // 방문한 지역들 - 회색 반투명으로 구멍 뚫기
-    final visitedPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.5)
-      ..style = PaintingStyle.fill
-      ..blendMode = BlendMode.srcOver;
-
-    for (final position in visitedPositions) {
-      _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
-    }
-
-    // 현재 위치 - 완전 투명으로 구멍 뚫기 (1km 반경)
+    // 현재 위치가 있는 경우에만 Fog of War 적용
     if (currentPosition != null) {
+      // 전체 화면을 검은색으로 덮기
+      final fogPaint = Paint()
+        ..color = Colors.black.withOpacity(0.9)
+        ..style = PaintingStyle.fill;
+      
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fogPaint);
+
+      // 방문한 지역들 - 회색 반투명으로 구멍 뚫기
+      final visitedPaint = Paint()
+        ..color = Colors.grey.withOpacity(0.5)
+        ..style = PaintingStyle.fill
+        ..blendMode = BlendMode.srcOver;
+
+      for (final position in visitedPositions) {
+        _drawCircleHole(canvas, size, position, visitedRadius, visitedPaint);
+      }
+
+      // 현재 위치 - 완전 투명으로 구멍 뚫기 (1km 반경)
       final currentPaint = Paint()
         ..color = Colors.transparent
         ..style = PaintingStyle.fill
@@ -101,6 +102,7 @@ class FogOfWarPainter extends CustomPainter {
       
       _drawCircleHole(canvas, size, currentPosition!, 1000.0, borderPaint);
     }
+    // currentPosition이 null이면 아무것도 그리지 않음 (지도가 그대로 보임)
   }
 
   void _drawCircleHole(Canvas canvas, Size size, LatLng position, double radius, Paint paint) {
