@@ -11,6 +11,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
+import '../../services/fog_of_war_tile_provider.dart';
+import '../../services/fog_of_war_manager.dart';
+import '../../utils/tile_utils.dart';
 // import 'package:provider/provider.dart';
 // import '../../providers/map_filter_provider.dart';
 
@@ -550,7 +553,12 @@ class _MapScreenState extends State<MapScreen> {
   final Set<Marker> _clusteredMarkers = {};
   bool _isClustered = false;
   StreamSubscription<QuerySnapshot>? _markersListener;
-  // 최적화된 Fog of War 시스템
+  // 🔥 NEW: TileOverlay 기반 Fog of War 시스템
+  FogOfWarTileProvider? _fogTileProvider;
+  FogOfWarManager? _fogManager;
+  final Set<TileOverlay> _tileOverlays = {};
+  
+  // 기존 폴리곤 기반 시스템 (임시 비활성화)
   FogOfWarController? _fogController;
   final Set<Polygon> _fogOfWarPolygons = {};
   LatLng? _lastTrackedPosition;
@@ -562,14 +570,46 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _loadMapStyle();
     _loadCustomMarker();
+    _initializeFogOfWar(); // 🔥 NEW: TileOverlay 기반 Fog of War 초기화
     _setInitialLocation();
     _loadMarkersFromFirestore();
     _loadPostsFromFirestore();
     _setupRealtimeListeners();
   }
 
+  // 🔥 NEW: TileOverlay 기반 Fog of War 초기화
+  void _initializeFogOfWar() {
+    debugPrint('🚀 TileOverlay 기반 Fog of War 시스템 초기화');
+    
+    // TileProvider 생성
+    _fogTileProvider = FogOfWarTileProvider();
+    
+    // FogOfWarManager 생성 및 위치 추적 시작
+    _fogManager = FogOfWarManager();
+    _fogManager!.startTracking();
+    
+    // TileOverlay 생성
+    final tileOverlay = TileOverlay(
+      tileOverlayId: const TileOverlayId('fog_of_war'),
+      tileProvider: _fogTileProvider!,
+      zIndex: 100, // 마커보다 위에 표시
+      transparency: 0.0, // 투명도 없음 (타일 이미지에서 처리)
+    );
+    
+    setState(() {
+      _tileOverlays.clear();
+      _tileOverlays.add(tileOverlay);
+    });
+    
+    debugPrint('✅ TileOverlay 기반 Fog of War 초기화 완료');
+  }
+
   @override
   void dispose() {
+    // 🔥 NEW: TileOverlay 기반 Fog of War 정리
+    _fogManager?.dispose();
+    _fogTileProvider?.clearCache();
+    
     // 실시간 리스너 정리
     _markersListener?.cancel();
     // 이동 추적 타이머 정리
@@ -760,9 +800,9 @@ class _MapScreenState extends State<MapScreen> {
       controller.setMapStyle(_mapStyle);
     }
     
-    // 🔥 1단계: 매우 단순한 검은 오버레이만 테스트
-    debugPrint('🗺️ 맵 생성 완료, 1단계 Fog of War 시작');
-    _createSimpleFogOfWar();
+    // 🔥 TileOverlay 기반 Fog of War로 교체됨
+    debugPrint('🗺️ 맵 생성 완료 (TileOverlay 기반 Fog of War 사용)');
+    // _createSimpleFogOfWar(); // 폴리곤 방식 비활성화
   }
 
   // 🔥 1단계: 매우 단순한 검은 오버레이만 생성
@@ -2117,7 +2157,8 @@ class _MapScreenState extends State<MapScreen> {
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
               rotateGesturesEnabled: true,
-              polygons: _fogOfWarPolygons, // 🔥 1단계: 기본 Fog of War 테스트
+              tileOverlays: _tileOverlays, // 🔥 NEW: TileOverlay 기반 Fog of War
+              // polygons: const {}, // 🔥 기존 폴리곤 방식 비활성화
               onCameraMove: (CameraPosition position) {
                 _currentZoom = position.zoom;
                 _updateClustering(); // 줌 변경 시 클러스터링 업데이트
