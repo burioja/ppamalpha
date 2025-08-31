@@ -776,29 +776,31 @@ class _MapScreenState extends State<MapScreen> {
       // return; // 주석 처리하여 강제 진행
     }
     
-    // 🌍 전 지구를 덮는 검은 Fog of War 폴리곤
-    final globalFogPolygon = Polygon(
-      polygonId: const PolygonId('global_fog_of_war'),
+    // 🧪 중간 크기 테스트: 한국 전체를 덮는 폴리곤
+    final mediumFogPolygon = Polygon(
+      polygonId: const PolygonId('medium_fog_test'),
       points: const [
-        LatLng(85, -180),   // 북서 (북극 근처, 서쪽 끝)
-        LatLng(85, 180),    // 북동 (북극 근처, 동쪽 끝)
-        LatLng(-85, 180),   // 남동 (남극 근처, 동쪽 끝)
-        LatLng(-85, -180),  // 남서 (남극 근처, 서쪽 끝)
+        LatLng(38.5, 125.0),   // 북서 (북한 북쪽, 서해)
+        LatLng(38.5, 130.0),   // 북동 (북한 북쪽, 동해)
+        LatLng(33.0, 130.0),   // 남동 (제주도 남쪽, 동해)
+        LatLng(33.0, 125.0),   // 남서 (제주도 남쪽, 서해)
       ],
-      strokeWidth: 0, // 테두리 없음
-      fillColor: Colors.black.withOpacity(0.8), // 검은 오버레이 80% 투명도
-      zIndex: 50, // 마커 아래, 지도 위
-      consumeTapEvents: false, // 터치 이벤트 통과
+      strokeWidth: 2, // 테스트용 테두리
+      strokeColor: Colors.red, // 빨간 테두리로 확인
+      fillColor: Colors.black.withOpacity(0.8), // 검은 오버레이
+      zIndex: 50,
+      consumeTapEvents: false,
     );
     
-    debugPrint('🎯 전역 폴리곤 생성됨: ${globalFogPolygon.polygonId}, 색상: ${globalFogPolygon.fillColor}, zIndex: ${globalFogPolygon.zIndex}');
+    debugPrint('🎯 중간 폴리곤 생성됨: ${mediumFogPolygon.polygonId}, 색상: ${mediumFogPolygon.fillColor}, zIndex: ${mediumFogPolygon.zIndex}');
+    debugPrint('📍 폴리곤 좌표: ${mediumFogPolygon.points}');
     
     setState(() {
       _fogOfWarPolygons.clear();
-      _fogOfWarPolygons.add(globalFogPolygon);
+      _fogOfWarPolygons.add(mediumFogPolygon);
     });
     
-    debugPrint('✅ 전역 Fog of War 생성 완료 - 전 지구 덮음');
+    debugPrint('✅ 중간 크기 Fog of War 생성 완료 - 한국 전체 덮음');
     debugPrint('📊 _fogOfWarPolygons 상태: ${_fogOfWarPolygons.length}개 폴리곤');
   }
 
