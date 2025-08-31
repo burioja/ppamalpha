@@ -208,19 +208,19 @@ class FogOfWarTileProvider implements TileProvider {
     }
   }
   
-  /// 타일 이미지들을 메모리에 로드 (한 번만 실행)
+  /// 타일 이미지들을 메모리에 생성 (한 번만 실행)
   Future<void> _ensureTileImages() async {
     if (_blackTile != null && _grayTile != null && _transparentTile != null) {
-      return; // 이미 로드됨
+      return; // 이미 생성됨
     }
     
     debugPrint('🎨 타일 이미지 생성 중...');
     
     _blackTile = await _createColorTile(Colors.black.withOpacity(0.8));
-    _grayTile = await _createColorTile(Colors.grey.withOpacity(0.5));
+    _grayTile = await _createColorTile(Colors.grey.withOpacity(0.5)); 
     _transparentTile = await _createColorTile(Colors.transparent);
     
-    debugPrint('✅ 타일 이미지 생성 완료');
+    debugPrint('✅ 타일 이미지 생성 완료 (메모리)');
   }
   
   /// 단색 타일 이미지 생성
