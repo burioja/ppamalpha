@@ -776,30 +776,29 @@ class _MapScreenState extends State<MapScreen> {
       // return; // 주석 처리하여 강제 진행
     }
     
-    // 🧪 테스트용: 서울 근처의 작은 사각형 폴리곤
-    final testPolygon = Polygon(
-      polygonId: const PolygonId('simple_test_fog'),
+    // 🌍 전 지구를 덮는 검은 Fog of War 폴리곤
+    final globalFogPolygon = Polygon(
+      polygonId: const PolygonId('global_fog_of_war'),
       points: const [
-        LatLng(37.5, 126.9),   // 서울 근처 북서
-        LatLng(37.5, 127.1),   // 서울 근처 북동  
-        LatLng(37.4, 127.1),   // 서울 근처 남동
-        LatLng(37.4, 126.9),   // 서울 근처 남서
+        LatLng(85, -180),   // 북서 (북극 근처, 서쪽 끝)
+        LatLng(85, 180),    // 북동 (북극 근처, 동쪽 끝)
+        LatLng(-85, 180),   // 남동 (남극 근처, 동쪽 끝)
+        LatLng(-85, -180),  // 남서 (남극 근처, 서쪽 끝)
       ],
-      strokeWidth: 5, // 더 두꺼운 테두리
-      strokeColor: Colors.red, // 빨간 테두리
-      fillColor: Colors.black.withOpacity(0.8), // 검은 내부
-      zIndex: 100, // 매우 높은 z-index
+      strokeWidth: 0, // 테두리 없음
+      fillColor: Colors.black.withOpacity(0.8), // 검은 오버레이 80% 투명도
+      zIndex: 50, // 마커 아래, 지도 위
       consumeTapEvents: false, // 터치 이벤트 통과
     );
     
-    debugPrint('🎯 폴리곤 생성됨: ${testPolygon.polygonId}, 색상: ${testPolygon.fillColor}, zIndex: ${testPolygon.zIndex}');
+    debugPrint('🎯 전역 폴리곤 생성됨: ${globalFogPolygon.polygonId}, 색상: ${globalFogPolygon.fillColor}, zIndex: ${globalFogPolygon.zIndex}');
     
     setState(() {
       _fogOfWarPolygons.clear();
-      _fogOfWarPolygons.add(testPolygon);
+      _fogOfWarPolygons.add(globalFogPolygon);
     });
     
-    debugPrint('✅ 1단계: 단순 검은 오버레이 생성 완료');
+    debugPrint('✅ 전역 Fog of War 생성 완료 - 전 지구 덮음');
     debugPrint('📊 _fogOfWarPolygons 상태: ${_fogOfWarPolygons.length}개 폴리곤');
   }
 
