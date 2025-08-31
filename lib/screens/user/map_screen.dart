@@ -754,14 +754,15 @@ class _MapScreenState extends State<MapScreen> {
 
 
   void _onMapCreated(GoogleMapController controller) {
+    debugPrint('🚀 _onMapCreated 호출됨!');
     mapController = controller;
     if (_mapStyle != null) {
       controller.setMapStyle(_mapStyle);
     }
     
-      // 🔥 1단계: 매우 단순한 검은 오버레이만 테스트
-      debugPrint('🗺️ 맵 생성 완료, 1단계 Fog of War 시작');
-      _createSimpleFogOfWar();
+    // 🔥 1단계: 매우 단순한 검은 오버레이만 테스트
+    debugPrint('🗺️ 맵 생성 완료, 1단계 Fog of War 시작');
+    _createSimpleFogOfWar();
   }
 
   // 🔥 1단계: 매우 단순한 검은 오버레이만 생성
@@ -769,31 +770,33 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('🔥 1단계: 단순 검은 오버레이 생성 시작');
     debugPrint('📍 현재 위치: $_currentPosition');
     
+    // 🚨 테스트용: _currentPosition이 null이어도 강제로 폴리곤 생성
     if (_currentPosition == null) {
-      debugPrint('❌ 현재 위치가 없어서 Fog of War 생성 불가');
-      return;
+      debugPrint('⚠️ 현재 위치가 null이지만 테스트용으로 강제 진행');
+      // return; // 주석 처리하여 강제 진행
     }
     
-    // 전체 지구를 덮는 매우 단순한 검은 폴리곤 하나만
-    final worldPolygon = Polygon(
-      polygonId: const PolygonId('simple_fog'),
+    // 🧪 테스트용: 서울 근처의 작은 사각형 폴리곤
+    final testPolygon = Polygon(
+      polygonId: const PolygonId('simple_test_fog'),
       points: const [
-        LatLng(85, -180),   // 북서
-        LatLng(85, 180),    // 북동  
-        LatLng(-85, 180),   // 남동
-        LatLng(-85, -180),  // 남서
+        LatLng(37.5, 126.9),   // 서울 근처 북서
+        LatLng(37.5, 127.1),   // 서울 근처 북동  
+        LatLng(37.4, 127.1),   // 서울 근처 남동
+        LatLng(37.4, 126.9),   // 서울 근처 남서
       ],
-      strokeWidth: 2,
-      strokeColor: Colors.red, // 테스트용 빨간 테두리
-      fillColor: Colors.black.withOpacity(0.9), // 더 진한 검은색
-      zIndex: 10, // 더 높은 z-index
+      strokeWidth: 5, // 더 두꺼운 테두리
+      strokeColor: Colors.red, // 빨간 테두리
+      fillColor: Colors.black.withOpacity(0.8), // 검은 내부
+      zIndex: 100, // 매우 높은 z-index
+      consumeTapEvents: false, // 터치 이벤트 통과
     );
     
-    debugPrint('🎯 폴리곤 생성됨: ${worldPolygon.polygonId}, 색상: ${worldPolygon.fillColor}, zIndex: ${worldPolygon.zIndex}');
+    debugPrint('🎯 폴리곤 생성됨: ${testPolygon.polygonId}, 색상: ${testPolygon.fillColor}, zIndex: ${testPolygon.zIndex}');
     
     setState(() {
       _fogOfWarPolygons.clear();
-      _fogOfWarPolygons.add(worldPolygon);
+      _fogOfWarPolygons.add(testPolygon);
     });
     
     debugPrint('✅ 1단계: 단순 검은 오버레이 생성 완료');
