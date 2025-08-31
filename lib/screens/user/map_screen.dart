@@ -767,6 +767,7 @@ class _MapScreenState extends State<MapScreen> {
   // 🔥 1단계: 매우 단순한 검은 오버레이만 생성
   void _createSimpleFogOfWar() {
     debugPrint('🔥 1단계: 단순 검은 오버레이 생성 시작');
+    debugPrint('📍 현재 위치: $_currentPosition');
     
     if (_currentPosition == null) {
       debugPrint('❌ 현재 위치가 없어서 Fog of War 생성 불가');
@@ -782,10 +783,13 @@ class _MapScreenState extends State<MapScreen> {
         LatLng(-85, 180),   // 남동
         LatLng(-85, -180),  // 남서
       ],
-      strokeWidth: 0,
-      fillColor: Colors.black.withOpacity(0.7), // 투명도 낮춤
-      zIndex: 1,
+      strokeWidth: 2,
+      strokeColor: Colors.red, // 테스트용 빨간 테두리
+      fillColor: Colors.black.withOpacity(0.9), // 더 진한 검은색
+      zIndex: 10, // 더 높은 z-index
     );
+    
+    debugPrint('🎯 폴리곤 생성됨: ${worldPolygon.polygonId}, 색상: ${worldPolygon.fillColor}, zIndex: ${worldPolygon.zIndex}');
     
     setState(() {
       _fogOfWarPolygons.clear();
@@ -793,6 +797,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     
     debugPrint('✅ 1단계: 단순 검은 오버레이 생성 완료');
+    debugPrint('📊 _fogOfWarPolygons 상태: ${_fogOfWarPolygons.length}개 폴리곤');
   }
 
   void _updateClustering() {
