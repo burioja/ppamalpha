@@ -1,6 +1,4 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -24,9 +22,11 @@ class FogOfWarTileProvider implements TileProvider {
   final int _maxCacheSize = 100;
 
   @override
-  Future<Tile> getTile(int x, int y, int zoom) async {
+  Future<Tile> getTile(int x, int y, int? zoom) async {
+    // zoom이 null인 경우 기본값 사용
+    final actualZoom = zoom ?? 15;
     try {
-      final tileId = _getTileId(x, y, zoom);
+      final tileId = _getTileId(x, y, actualZoom);
       
       // 캐시 확인
       if (_tileCache.containsKey(tileId)) {
@@ -34,7 +34,7 @@ class FogOfWarTileProvider implements TileProvider {
         return _tileCache[tileId]!;
       }
       
-      debugPrint('🎯 타일 로드 요청: x=$x, y=$y, zoom=$zoom');
+      debugPrint('🎯 타일 로드 요청: x=$x, y=$y, zoom=$actualZoom');
       
       final userId = FirebaseAuth.instance.currentUser?.uid;
       

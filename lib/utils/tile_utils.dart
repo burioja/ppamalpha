@@ -1,6 +1,24 @@
 import 'dart:math' as math;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+/// 수학 유틸리티 함수들
+class MathUtils {
+  /// 하이퍼볼릭 사인 함수 (Dart math 라이브러리에 없음)
+  static double sinh(double x) {
+    return (math.exp(x) - math.exp(-x)) / 2.0;
+  }
+  
+  /// 하이퍼볼릭 코사인 함수
+  static double cosh(double x) {
+    return (math.exp(x) + math.exp(-x)) / 2.0;
+  }
+  
+  /// 하이퍼볼릭 탄젠트 함수
+  static double tanh(double x) {
+    return sinh(x) / cosh(x);
+  }
+}
+
 /// 타일 좌표 계산 유틸리티
 class TileUtils {
   /// 위도/경도를 타일 좌표로 변환
@@ -23,7 +41,7 @@ class TileUtils {
     final double n = math.pow(2.0, zoom).toDouble();
     
     final double lng = x / n * 360.0 - 180.0;
-    final double latRad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)));
+    final double latRad = math.atan(MathUtils.sinh(math.pi * (1 - 2 * y / n)));
     final double lat = latRad * (180.0 / math.pi);
     
     return LatLng(lat, lng);

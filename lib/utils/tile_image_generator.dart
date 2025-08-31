@@ -1,8 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// 타일 이미지 생성 유틸리티
 /// 
@@ -105,39 +103,24 @@ class TileImageGenerator {
     return byteData!.buffer.asUint8List();
   }
   
-  /// 디스크에 타일 이미지 저장 (개발/테스트용)
-  static Future<void> saveTileToFile(Uint8List imageData, String filename) async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/$filename');
-      await file.writeAsBytes(imageData);
-      debugPrint('✅ 타일 이미지 저장: ${file.path}');
-    } catch (e) {
-      debugPrint('❌ 타일 이미지 저장 오류: $e');
-    }
-  }
-  
-  /// 기본 타일 이미지들 생성 및 저장 (개발용)
-  static Future<void> generateBasicTiles() async {
+  /// 기본 타일 이미지들을 메모리에서 생성 (개발용)
+  static Future<Map<String, Uint8List>> generateBasicTiles() async {
     debugPrint('🎨 기본 타일 이미지 생성 시작...');
     
     try {
-      final blackTile = await createBlackTile();
-      await saveTileToFile(blackTile, 'black_tile.png');
+      final result = <String, Uint8List>{};
       
-      final grayTile = await createGrayTile();
-      await saveTileToFile(grayTile, 'gray_tile.png');
+      result['black'] = await createBlackTile();
+      result['gray'] = await createGrayTile();
+      result['transparent'] = await createTransparentTile();
+      result['test'] = await createTestTile();
       
-      final transparentTile = await createTransparentTile();
-      await saveTileToFile(transparentTile, 'transparent_tile.png');
-      
-      final testTile = await createTestTile();
-      await saveTileToFile(testTile, 'test_tile.png');
-      
-      debugPrint('✅ 기본 타일 이미지 생성 완료');
+      debugPrint('✅ 기본 타일 이미지 생성 완료: ${result.keys.join(', ')}');
+      return result;
       
     } catch (e) {
       debugPrint('❌ 타일 이미지 생성 오류: $e');
+      return {};
     }
   }
 }
