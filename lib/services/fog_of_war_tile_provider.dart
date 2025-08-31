@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,44 +26,45 @@ class FogOfWarTileProvider implements TileProvider {
   Future<Tile> getTile(int x, int y, int? zoom) async {
     // zoom이 null인 경우 기본값 사용
     final actualZoom = zoom ?? 15;
+    
+    debugPrint('🔥 [TEST] 타일 요청: x=$x, y=$y, zoom=$actualZoom');
+    
     try {
-      final tileId = _getTileId(x, y, actualZoom);
-      
-      // 캐시 확인
-      if (_tileCache.containsKey(tileId)) {
-        debugPrint('🔄 타일 캐시 히트: $tileId');
-        return _tileCache[tileId]!;
-      }
-      
-      debugPrint('🎯 타일 로드 요청: x=$x, y=$y, zoom=$actualZoom');
-      
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      
-      // 타일 이미지 준비
+      // 🧪 임시 테스트: 모든 타일을 반투명 빨간색으로 표시
       await _ensureTileImages();
       
-      if (userId == null) {
-        debugPrint('❌ 사용자 인증 없음 - 검은 타일 반환');
-        final tile = Tile(tileSize, tileSize, _blackTile!);
-        _cacheTile(tileId, tile);
-        return tile;
-      }
+      // 간단한 테스트 타일 생성 (빨간색 반투명)
+      final testTile = await _createTestTile();
       
-      // Firestore에서 방문 기록 조회
-      final fogLevel = await _getFogLevel(userId, tileId);
-      final tile = _createTileByLevel(fogLevel);
+      debugPrint('✅ [TEST] 테스트 타일 생성 완료: x=$x, y=$y');
+      return Tile(tileSize, tileSize, testTile);
       
-      debugPrint('✅ 타일 생성 완료: $tileId, fogLevel=$fogLevel');
-      _cacheTile(tileId, tile);
-      
-      return tile;
+      // TODO: 나중에 실제 Fog of War 로직으로 교체
       
     } catch (e) {
-      debugPrint('❌ 타일 로드 오류: $e');
-      // 오류 시 검은 타일 반환
+      debugPrint('❌ [TEST] 타일 생성 오류: $e');
+      // 오류 시 투명 타일 반환
       await _ensureTileImages();
-      return Tile(tileSize, tileSize, _blackTile!);
+      return Tile(tileSize, tileSize, _transparentTile!);
     }
+  }
+  
+  /// 테스트용 빨간색 반투명 타일 생성
+  Future<Uint8List> _createTestTile() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = Colors.red.withOpacity(0.3);
+    
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, tileSize.toDouble(), tileSize.toDouble()),
+      paint,
+    );
+    
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(tileSize, tileSize);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    
+    return byteData!.buffer.asUint8List();
   }
   
   /// 타일 ID 생성
