@@ -131,10 +131,15 @@ class _MapScreenState extends State<MapScreen> {
       
       // 현재 위치가 있으면 FogOfWarManager와 TileProvider에 설정
       if (_currentPosition != null) {
+        debugPrint('📍 FogOfWarManager에 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
         _fogManager?.setCurrentLocation(_currentPosition!);
+        
+        debugPrint('📍 FogOfWarTileProvider에 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
         _fogTileProvider?.setCurrentLocation(_currentPosition!);
         _fogTileProvider?.setRevealRadius(0.3); // 300m 반경
-        debugPrint('📍 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+        debugPrint('📍 현재 위치 설정 완료: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      } else {
+        debugPrint('❌ 현재 위치가 null이므로 FogOfWar 시스템에 설정하지 않음');
       }
       
       // 4. 타일 업데이트 시 캐시 무효화 연동

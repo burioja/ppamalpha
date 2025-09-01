@@ -70,12 +70,19 @@ class FogOfWarTileProvider implements TileProvider {
       final tileCenter = _getTileCenter(x, y, actualZoom);
       final distance = TileUtils.calculateDistance(_currentLocation!, tileCenter);
       
+      debugPrint('🗺️ 타일 ${tileId}: 현재위치까지 ${distance.toStringAsFixed(3)}km, 반경: ${_revealRadius}km');
+      
       // 현재 위치 주변 300m는 항상 투명
       if (distance <= _revealRadius) {
+        debugPrint('✅ 타일 ${tileId}: 투명 처리 (거리: ${distance.toStringAsFixed(3)}km)');
         final tile = await _getTransparentTile();
         _cacheTile(tileId, tile);
         return tile;
+      } else {
+        debugPrint('❌ 타일 ${tileId}: 투명 범위 밖 (거리: ${distance.toStringAsFixed(3)}km)');
       }
+    } else {
+      debugPrint('⚠️ 타일 ${tileId}: 현재 위치 정보 없음');
     }
     
     // 2. 방문 기록 확인 (현재 위치 주변 300m는 제외)
