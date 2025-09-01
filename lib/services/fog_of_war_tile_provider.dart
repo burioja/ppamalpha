@@ -1,10 +1,9 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../utils/tile_utils.dart';
 
 /// 타일 경계 정보 클래스
 class TileBounds {
@@ -69,7 +68,7 @@ class FogOfWarTileProvider implements TileProvider {
     // 1. 현재 위치 주변 확인 (가장 우선순위)
     if (_currentLocation != null) {
       final tileCenter = _getTileCenter(x, y, actualZoom);
-      final distance = _calculateDistance(_currentLocation!, tileCenter);
+      final distance = TileUtils.calculateDistance(_currentLocation!, tileCenter);
       
       // 현재 위치 주변 300m는 항상 투명
       if (distance <= _revealRadius) {
@@ -131,28 +130,13 @@ class FogOfWarTileProvider implements TileProvider {
   /// 타일 중심점 계산
   LatLng _getTileCenter(int x, int y, int zoom) {
     final n = 1 << zoom;
-    final lon_deg = x / n * 360.0 - 180.0;
-    final lat_rad = atan(sinh(pi * (1 - 2 * y / n)));
-    final lat_deg = lat_rad * 180.0 / pi;
-    return LatLng(lat_deg, lon_deg);
+    final lonDeg = x / n * 360.0 - 180.0;
+    final latRad = atan((pow(e, pi * (1 - 2 * y / n)) - pow(e, -pi * (1 - 2 * y / n))) / 2);
+    final latDeg = latRad * 180.0 / pi;
+    return LatLng(latDeg, lonDeg);
   }
   
-  /// 두 지점 간의 거리 계산 (킬로미터)
-  double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371.0; // 지구 반지름 (킬로미터)
-    
-    final lat1Rad = point1.latitude * pi / 180.0;
-    final lat2Rad = point2.latitude * pi / 180.0;
-    final deltaLatRad = (point2.latitude - point1.latitude) * pi / 180.0;
-    final deltaLonRad = (point2.longitude - point1.longitude) * pi / 180.0;
-    
-    final a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
-              cos(lat1Rad) * cos(lat2Rad) *
-              sin(deltaLonRad / 2) * sin(deltaLonRad / 2);
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    
-    return earthRadius * c;
-  }
+
   
 
   
@@ -234,7 +218,7 @@ class FogOfWarTileProvider implements TileProvider {
   
   /// 리소스 정리
   void dispose() {
-    _httpClient.close();
     _tileCache.clear();
+    _visitedTilesCache.clear();
   }
 }

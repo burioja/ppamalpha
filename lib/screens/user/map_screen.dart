@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../../services/location_service.dart';
 import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
 import '../../services/fog_of_war_tile_provider.dart';
 import '../../services/fog_of_war_manager.dart';
+import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -302,23 +301,15 @@ class _MapScreenState extends State<MapScreen> {
     const double clusterRadius = 0.001; // 클러스터링 반경 (도 단위)
     final Map<String, List<dynamic>> clusters = {};
     
-    final bool couponsOnly = false;
-    final bool myPostsOnly = false;
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 마커 아이템들 클러스터링
     for (final item in _markerItems) {
-      // 쿠폰만 필터
-      if (couponsOnly && item.data['type'] != 'post_place') continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && item.userId != currentUserId) continue;
-      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
         final clusterCenter = _parseLatLng(clusterKey);
-        final distance = _calculateDistance(clusterCenter, item.position);
+        final distance = TileUtils.calculateDistance(clusterCenter, item.position);
         
         if (distance <= clusterRadius) {
           clusters[clusterKey]!.add(item);
@@ -335,18 +326,12 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포스트들 클러스터링
     for (final post in _posts) {
-      // 쿠폰만 필터
-      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && post.creatorId != currentUserId) continue;
-      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
         final clusterCenter = _parseLatLng(clusterKey);
         final postLatLng = LatLng(post.location.latitude, post.location.longitude);
-        final distance = _calculateDistance(clusterCenter, postLatLng);
+        final distance = TileUtils.calculateDistance(clusterCenter, postLatLng);
         
         if (distance <= clusterRadius) {
           clusters[clusterKey]!.add(post);
@@ -388,30 +373,16 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final Set<Marker> newMarkers = {};
-    final bool couponsOnly = false;
-    final bool myPostsOnly = false;
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
-      // 쿠폰만 필터
-      if (couponsOnly && item.data['type'] != 'post_place') continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && item.userId != currentUserId) continue;
-      
       newMarkers.add(_createMarker(item));
       debugPrint('마커 추가됨: ${item.title} at ${item.position}');
     }
     
     // 포스트 마커들 추가
     for (final post in _posts) {
-      // 쿠폰만 필터
-      if (couponsOnly && !(post.canUse || post.canRequestReward)) continue;
-      
-      // 내 포스트만 필터
-      if (myPostsOnly && post.creatorId != currentUserId) continue;
-      
       newMarkers.add(_createPostMarker(post));
       debugPrint('포스트 마커 추가됨: ${post.title} at ${post.location.latitude}, ${post.location.longitude}');
     }
@@ -430,9 +401,7 @@ class _MapScreenState extends State<MapScreen> {
     return LatLng(double.parse(parts[0]), double.parse(parts[1]));
   }
 
-  double _calculateDistance(LatLng pos1, LatLng pos2) {
-    return sqrt(pow(pos1.latitude - pos2.latitude, 2) + pow(pos1.longitude - pos2.longitude, 2));
-  }
+
 
   Marker _createMarker(MarkerItem item) {
     // 전단지 타입인지 확인
