@@ -81,7 +81,7 @@ class FogOfWarTileProvider implements TileProvider {
   Future<Tile> _getDefaultDarkTile() async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final paint = Paint()..color = Colors.black.withOpacity(0.8);
+    final paint = Paint()..color = Colors.black; // 완전 불투명
     
     canvas.drawRect(
       Rect.fromLTWH(0, 0, tileSize.toDouble(), tileSize.toDouble()),

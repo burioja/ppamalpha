@@ -116,8 +116,8 @@ class TileHandler(BaseHTTPRequestHandler):
             # 어두운 회색 (70% 불투명)
             draw.rectangle([0, 0, size, size], fill=(64, 64, 64, 179))
         elif fog_level == 'dark':
-            # 검은 포그 (90% 불투명)
-            draw.rectangle([0, 0, size, size], fill=(0, 0, 0, 230))
+            # 검은 포그 (100% 불투명 - 지도 완전히 안 보임)
+            draw.rectangle([0, 0, size, size], fill=(0, 0, 0, 255))
         elif fog_level == 'test':
             # 테스트용 빨간색 격자
             draw.rectangle([0, 0, size, size], fill=(255, 0, 0, 100))
