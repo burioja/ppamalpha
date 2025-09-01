@@ -56,7 +56,7 @@ class FogOfWarTileProvider implements TileProvider {
   }
 
   @override
-  Future<Tile?> getTile(int x, int y, int? zoom) async {
+  Future<Tile> getTile(int x, int y, int? zoom) async {
     final actualZoom = zoom ?? 15;
     final tileId = '${actualZoom}_${x}_${y}';
     
@@ -76,10 +76,13 @@ class FogOfWarTileProvider implements TileProvider {
       debugPrint('🗺️ 타일 ${tileId} (${x},${y}): 현재위치까지 ${distance.toStringAsFixed(3)}km, 반경: ${_revealRadius}km');
       debugPrint('📍 현재 위치 타일: ${currentTile.x},${currentTile.y}');
       
-      // 현재 위치 주변 300m는 타일을 아예 반환하지 않음 (완전히 투명한 구멍)
+      // 현재 위치 주변 300m는 완전히 투명한 타일 반환 (지도가 그대로 보이는 구멍)
       if (distance <= _revealRadius) {
-        debugPrint('✅ 타일 ${tileId}: 구멍 생성 (거리: ${distance.toStringAsFixed(3)}km) - 타일 반환 안함');
-        return null; // 타일을 반환하지 않으면 해당 영역이 투명해짐
+        debugPrint('✅ 타일 ${tileId}: 투명 구멍 생성 (거리: ${distance.toStringAsFixed(3)}km)');
+        // 완전히 투명한 타일 반환 (지도가 그대로 보임)
+        final tile = await _getCompletelyTransparentTile();
+        _cacheTile(tileId, tile);
+        return tile;
       } else {
         debugPrint('❌ 타일 ${tileId}: 투명 범위 밖 (거리: ${distance.toStringAsFixed(3)}km)');
       }
