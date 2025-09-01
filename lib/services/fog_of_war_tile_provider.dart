@@ -78,15 +78,15 @@ class FogOfWarTileProvider implements TileProvider {
       }
     }
     
-    // 2. 방문 기록 확인
+    // 2. 방문 기록 확인 (현재 위치 주변 300m는 제외)
     final fogLevel = await _getTileFogLevel(tileId);
     Tile tile;
     
     switch (fogLevel) {
-      case 1: // 완전 밝음 (투명)
+      case 1: // 완전 밝음 (투명) - 현재는 사용하지 않음
         tile = await _getTransparentTile();
         break;
-      case 2: // 회색 (반투명)
+      case 2: // 회색 (반투명) - 방문한 지역
         tile = await _getGrayTile();
         break;
       default: // 3 또는 없음 - 완전 어둠 (검은색)
@@ -103,6 +103,12 @@ class FogOfWarTileProvider implements TileProvider {
     // 캐시 확인
     if (_visitedTilesCache.containsKey(tileId)) {
       return _visitedTilesCache[tileId]!;
+    }
+    
+    // 현재 위치가 없으면 완전 어둠
+    if (_currentLocation == null) {
+      _visitedTilesCache[tileId] = 3;
+      return 3;
     }
     
     try {

@@ -150,11 +150,10 @@ class FogOfWarManager {
         final distanceToCenter = TileUtils.calculateDistance(location, tileBounds.center);
         
         // 거리에 따른 fog level 결정
+        // 현재 위치 주변 300m는 실시간으로 처리되므로 Firestore에 저장하지 않음
         int fogLevel;
-        if (distanceToCenter <= 0.1) { // 100m 이내
-          fogLevel = 1; // 완전 밝음
-        } else if (distanceToCenter <= 0.3) { // 300m 이내
-          fogLevel = 2; // 회색
+        if (distanceToCenter <= 0.3) { // 300m 이내는 실시간 처리
+          continue; // 이 타일은 건너뛰기
         } else {
           fogLevel = 2; // 회색 (방문한 지역)
         }
