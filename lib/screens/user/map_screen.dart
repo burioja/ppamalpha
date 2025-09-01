@@ -78,6 +78,27 @@ class _MapScreenState extends State<MapScreen> {
     _initializeFogOfWar(); // TileOverlay 기반 Fog of War 초기화
   }
 
+  /// TileOverlay 새로고침 (캐시 무효화 후 재생성)
+  void _refreshTileOverlay() {
+    if (_fogTileProvider == null) return;
+    
+    debugPrint('🔄 TileOverlay 새로고침');
+    
+    // 새로운 TileOverlay 생성 (강제 새로고침)
+    final newTileOverlay = TileOverlay(
+      tileOverlayId: TileOverlayId('fog_of_war_${DateTime.now().millisecondsSinceEpoch}'),
+      tileProvider: _fogTileProvider!,
+      transparency: 0.0,
+      visible: true,
+      zIndex: 10,
+    );
+    
+    setState(() {
+      _tileOverlays.clear();
+      _tileOverlays.add(newTileOverlay);
+    });
+  }
+
   @override
   void dispose() {
     // HTTP 기반 TileOverlay Fog of War 정리
@@ -106,6 +127,13 @@ class _MapScreenState extends State<MapScreen> {
       // FogOfWarManager 생성 및 위치 추적 시작 (선택적)
       _fogManager = FogOfWarManager();
       _fogManager?.setRevealRadius(0.3); // 300m 원형 반경 설정
+      
+      // 타일 업데이트 시 캐시 무효화 연동
+      _fogManager?.setTileUpdateCallback(() {
+        _fogTileProvider?.clearCache();
+        _refreshTileOverlay();
+      });
+      
       _fogManager?.startTracking();
       
       // TileOverlay 생성

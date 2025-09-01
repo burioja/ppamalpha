@@ -23,6 +23,9 @@ class FogOfWarManager {
   bool _isTracking = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
+  // 타일 업데이트 콜백 (FogOfWarTileProvider와 연동용)
+  Function()? _onTileUpdate;
+  
   /// 위치 추적 시작
   Future<void> startTracking() async {
     if (_isTracking) return;
@@ -74,6 +77,17 @@ class FogOfWarManager {
   
   /// 현재 탐색 반경 반환
   double get currentRevealRadius => _currentRevealRadius;
+  
+  /// 타일 업데이트 콜백 설정
+  void setTileUpdateCallback(Function() callback) {
+    _onTileUpdate = callback;
+  }
+  
+  /// 타일 업데이트 알림
+  void _notifyTileUpdate() {
+    _onTileUpdate?.call();
+    debugPrint('🔄 타일 캐시 무효화 요청');
+  }
   
   /// 현재 위치 업데이트
   Future<void> _updateCurrentLocation() async {
@@ -149,6 +163,9 @@ class FogOfWarManager {
       
       await batch.commit();
       debugPrint('✅ 방문 타일 기록 완료');
+      
+      // 타일 캐시 무효화 (새로운 방문 정보 반영)
+      _notifyTileUpdate();
       
     } catch (e) {
       debugPrint('❌ 방문 타일 기록 오류: $e');
