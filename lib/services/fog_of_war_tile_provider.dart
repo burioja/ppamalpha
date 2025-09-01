@@ -74,17 +74,26 @@ class FogOfWarTileProvider implements TileProvider {
       final currentTile = TileUtils.latLngToTile(_currentLocation!.latitude, _currentLocation!.longitude, actualZoom);
       
       debugPrint('🗺️ 타일 ${tileId} (${x},${y}): 현재위치까지 ${distance.toStringAsFixed(3)}km, 반경: ${_revealRadius}km');
-      debugPrint('📍 현재 위치 타일: ${currentTile.x},${currentTile.y}');
+      debugPrint('📍 현재 위치 타일: ${currentTile.x},${currentTile.y} (줌: ${actualZoom})');
       
-      // 현재 위치 주변 300m는 완전히 투명한 타일 반환 (지도가 그대로 보이는 구멍)
-      if (distance <= _revealRadius) {
-        debugPrint('✅ 타일 ${tileId}: 투명 구멍 생성 (거리: ${distance.toStringAsFixed(3)}km)');
+      // 현재 위치와 요청된 타일의 좌표 차이 계산
+      final tileDiffX = (x - currentTile.x).abs();
+      final tileDiffY = (y - currentTile.y).abs();
+      debugPrint('📍 타일 차이: X=${tileDiffX}, Y=${tileDiffY}');
+      
+      // 현재 위치 주변 타일들을 타일 좌표 기준으로 판단
+      final tileDiffX = (x - currentTile.x).abs();
+      final tileDiffY = (y - currentTile.y).abs();
+      
+      // 현재 위치 타일과 인접한 타일들 (3x3 영역)을 투명하게 처리
+      if (tileDiffX <= 1 && tileDiffY <= 1) {
+        debugPrint('✅ 타일 ${tileId}: 투명 구멍 생성 (타일 거리: X=${tileDiffX}, Y=${tileDiffY})');
         // 완전히 투명한 타일 반환 (지도가 그대로 보임)
         final tile = await _getCompletelyTransparentTile();
         _cacheTile(tileId, tile);
         return tile;
       } else {
-        debugPrint('❌ 타일 ${tileId}: 투명 범위 밖 (거리: ${distance.toStringAsFixed(3)}km)');
+        debugPrint('❌ 타일 ${tileId}: 투명 범위 밖 (타일 거리: X=${tileDiffX}, Y=${tileDiffY})');
       }
     } else {
       debugPrint('⚠️ 타일 ${tileId}: 현재 위치 정보 없음');
