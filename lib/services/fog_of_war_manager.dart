@@ -83,6 +83,12 @@ class FogOfWarManager {
     _onTileUpdate = callback;
   }
   
+  /// 현재 위치 설정
+  void setCurrentLocation(LatLng location) {
+    _lastTrackedPosition = location;
+    debugPrint('📍 FogOfWarManager 현재 위치 설정: ${location.latitude}, ${location.longitude}');
+  }
+  
   /// 타일 업데이트 알림
   void _notifyTileUpdate() {
     _onTileUpdate?.call();

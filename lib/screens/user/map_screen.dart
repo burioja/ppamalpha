@@ -75,7 +75,7 @@ class _MapScreenState extends State<MapScreen> {
     userId = FirebaseAuth.instance.currentUser?.uid;
     _loadMapStyle();
     _loadCustomMarkerIcon();
-    _initializeFogOfWar(); // TileOverlay 기반 Fog of War 초기화
+    _initializeLocationAndFogOfWar(); // 위치 서비스와 Fog of War 초기화
   }
 
   /// TileOverlay 새로고침 (캐시 무효화 후 재생성)
@@ -107,36 +107,47 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  // HTTP 기반 TileOverlay Fog of War 초기화
-  void _initializeFogOfWar() {
-    debugPrint('🚀 HTTP 기반 TileOverlay Fog of War 시스템 초기화');
+  // 위치 서비스와 Fog of War 초기화
+  Future<void> _initializeLocationAndFogOfWar() async {
+    debugPrint('🚀 위치 서비스와 Fog of War 시스템 초기화');
     
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
-        debugPrint('❌ 사용자 인증 없음 - Fog of War 초기화 건너뜀');
+        debugPrint('❌ 사용자 인증 없음 - 초기화 건너뜀');
         return;
       }
       
-      // HTTP 기반 TileProvider 생성
+      // 1. 위치 권한 확인 및 현재 위치 가져오기
+      await _getCurrentLocation();
+      
+      // 2. Firestore 기반 TileProvider 생성
       _fogTileProvider = FogOfWarTileProvider(
         userId: uid,
-        baseUrl: 'http://localhost:8080', // 테스트 서버 URL
       );
       
-      // FogOfWarManager 생성 및 위치 추적 시작 (선택적)
+      // 3. FogOfWarManager 생성 및 현재 위치 설정
       _fogManager = FogOfWarManager();
       _fogManager?.setRevealRadius(0.3); // 300m 원형 반경 설정
       
-      // 타일 업데이트 시 캐시 무효화 연동
+      // 현재 위치가 있으면 FogOfWarManager와 TileProvider에 설정
+      if (_currentPosition != null) {
+        _fogManager?.setCurrentLocation(_currentPosition!);
+        _fogTileProvider?.setCurrentLocation(_currentPosition!);
+        _fogTileProvider?.setRevealRadius(0.3); // 300m 반경
+        debugPrint('📍 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      }
+      
+      // 4. 타일 업데이트 시 캐시 무효화 연동
       _fogManager?.setTileUpdateCallback(() {
         _fogTileProvider?.clearCache();
         _refreshTileOverlay();
       });
       
+      // 5. 위치 추적 시작
       _fogManager?.startTracking();
       
-      // TileOverlay 생성
+      // 6. TileOverlay 생성
       final tileOverlay = TileOverlay(
         tileOverlayId: const TileOverlayId('fog_of_war'),
         tileProvider: _fogTileProvider!,
@@ -145,15 +156,51 @@ class _MapScreenState extends State<MapScreen> {
         zIndex: 10,
       );
       
-        setState(() {
+      setState(() {
         _tileOverlays.clear();
         _tileOverlays.add(tileOverlay);
-        });
+      });
 
-      debugPrint('✅ HTTP 기반 TileOverlay Fog of War 초기화 완료');
+      debugPrint('✅ 위치 서비스와 Fog of War 초기화 완료');
       
     } catch (e) {
-      debugPrint('❌ Fog of War 초기화 오류: $e');
+      debugPrint('❌ 초기화 오류: $e');
+    }
+  }
+
+  // 현재 위치 가져오기
+  Future<void> _getCurrentLocation() async {
+    try {
+      debugPrint('📍 현재 위치 가져오기 시작');
+      
+      // 위치 권한 확인
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('❌ 위치 권한 거부됨');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('❌ 위치 권한 영구 거부됨');
+        return;
+      }
+      
+      // 현재 위치 가져오기
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      
+      setState(() {
+        _currentPosition = LatLng(position.latitude, position.longitude);
+      });
+      
+      debugPrint('✅ 현재 위치 가져오기 완료: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      
+    } catch (e) {
+      debugPrint('❌ 현재 위치 가져오기 실패: $e');
     }
   }
 
@@ -224,7 +271,16 @@ class _MapScreenState extends State<MapScreen> {
     if (_mapStyle != null) {
       controller.setMapStyle(_mapStyle);
     }
-    debugPrint('🗺️ 맵 생성 완료 (TileOverlay 기반 Fog of War 사용)');
+    
+    // 현재 위치가 있으면 해당 위치로 이동
+    if (_currentPosition != null) {
+      controller.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentPosition!, 15.0),
+      );
+      debugPrint('🗺️ 맵 생성 완료 - 현재 위치로 이동: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    } else {
+      debugPrint('🗺️ 맵 생성 완료 (현재 위치 없음)');
+    }
   }
 
   void _updateClustering() {
@@ -574,8 +630,8 @@ class _MapScreenState extends State<MapScreen> {
       if (currentUserId != null) {
             await _postService.collectPost(
           postId: flyer.flyerId,
-              userId: currentUserId,
-            );
+          userId: currentUserId,
+        );
         
         setState(() {
           _posts.removeWhere((f) => f.flyerId == flyer.flyerId);
@@ -622,7 +678,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: GoogleMap(
-              onMapCreated: _onMapCreated,
+            onMapCreated: _onMapCreated,
         initialCameraPosition: const CameraPosition(
           target: LatLng(37.4969433, 127.0311633),
           zoom: 13.0,
@@ -630,12 +686,12 @@ class _MapScreenState extends State<MapScreen> {
         markers: _isClustered ? _clusteredMarkers : _markers.union(_clusteredMarkers),
         circles: _circles,
         tileOverlays: _tileOverlays, // TileOverlay 기반 Fog of War
-              onCameraMove: (CameraPosition position) {
-                _currentZoom = position.zoom;
-              },
-              onCameraIdle: () {
-                _updateClustering();
-              },
+            onCameraMove: (CameraPosition position) {
+              _currentZoom = position.zoom;
+            },
+            onCameraIdle: () {
+              _updateClustering();
+            },
         myLocationEnabled: true,
         myLocationButtonEnabled: true,
         zoomControlsEnabled: false,

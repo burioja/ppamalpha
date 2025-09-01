@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// 타일 경계 정보 클래스
@@ -18,66 +19,184 @@ class TileBounds {
   });
 }
 
-/// Firebase Storage 기반 Fog of War 타일 제공자
+/// Firestore 기반 Fog of War 타일 제공자
 /// 
-/// CDN/Firebase Storage에서 사용자별 타일 PNG를 불러와서
-/// Google Maps TileOverlay로 Fog of War 효과를 제공합니다.
+/// 현재 위치 주변은 실시간으로 투명하게 만들고,
+/// 방문한 지역은 Firestore에서 읽어서 처리합니다.
 class FogOfWarTileProvider implements TileProvider {
   final int tileSize;
   final String userId;
-  final String baseUrl;
-  final http.Client _httpClient = http.Client();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   // 타일 캐시 (성능 최적화)
   final Map<String, Tile> _tileCache = {};
   final int _maxCacheSize = 100;
+  
+  // 현재 위치 정보 (투명 영역 계산용)
+  LatLng? _currentLocation;
+  double _revealRadius = 0.3; // 킬로미터 단위
+  
+  // 방문 기록 캐시
+  final Map<String, int> _visitedTilesCache = {};
 
   FogOfWarTileProvider({
     required this.userId,
-    required this.baseUrl,
     this.tileSize = 256,
   });
+  
+  /// 현재 위치 설정
+  void setCurrentLocation(LatLng location) {
+    _currentLocation = location;
+    debugPrint('📍 FogOfWarTileProvider 현재 위치 설정: ${location.latitude}, ${location.longitude}');
+  }
+  
+  /// 탐색 반경 설정
+  void setRevealRadius(double radiusKm) {
+    _revealRadius = radiusKm;
+    debugPrint('🎯 FogOfWarTileProvider 탐색 반경 설정: ${radiusKm}km');
+  }
 
   @override
   Future<Tile> getTile(int x, int y, int? zoom) async {
     final actualZoom = zoom ?? 15;
     final tileId = '${actualZoom}_${x}_${y}';
     
-    debugPrint('🎯 Fog of War 타일 요청: x=$x, y=$y, zoom=$actualZoom');
-    
     // 캐시 확인
     if (_tileCache.containsKey(tileId)) {
-      debugPrint('🔄 타일 캐시 히트: $tileId');
       return _tileCache[tileId]!;
     }
     
-    try {
-      final url = _buildTileUrl(x, y, actualZoom);
-      final response = await _httpClient.get(Uri.parse(url));
+    // 1. 현재 위치 주변 확인 (가장 우선순위)
+    if (_currentLocation != null) {
+      final tileCenter = _getTileCenter(x, y, actualZoom);
+      final distance = _calculateDistance(_currentLocation!, tileCenter);
       
-      if (response.statusCode == 200) {
-        debugPrint('✅ 타일 로드 성공: $url');
-        final tile = Tile(tileSize, tileSize, response.bodyBytes);
+      // 현재 위치 주변 300m는 항상 투명
+      if (distance <= _revealRadius) {
+        final tile = await _getTransparentTile();
         _cacheTile(tileId, tile);
         return tile;
-      } else {
-        debugPrint('⚠️ 타일 로드 실패 (${response.statusCode}): $url');
       }
-    } catch (e) {
-      debugPrint('❌ 타일 로드 오류: $e');
     }
     
-    // 기본 검은 타일 반환
-    return await _getDefaultDarkTile();
+    // 2. 방문 기록 확인
+    final fogLevel = await _getTileFogLevel(tileId);
+    Tile tile;
+    
+    switch (fogLevel) {
+      case 1: // 완전 밝음 (투명)
+        tile = await _getTransparentTile();
+        break;
+      case 2: // 회색 (반투명)
+        tile = await _getGrayTile();
+        break;
+      default: // 3 또는 없음 - 완전 어둠 (검은색)
+        tile = await _getDefaultDarkTile();
+        break;
+    }
+    
+    _cacheTile(tileId, tile);
+    return tile;
   }
   
-  /// 타일 URL 생성
-  String _buildTileUrl(int x, int y, int zoom) {
-    // 예시: https://your-cdn.com/tiles/user123/15/12345/67890.png
-    return '$baseUrl/tiles/$userId/$zoom/$x/$y.png';
+  /// 타일의 Fog Level 가져오기 (Firestore에서)
+  Future<int> _getTileFogLevel(String tileId) async {
+    // 캐시 확인
+    if (_visitedTilesCache.containsKey(tileId)) {
+      return _visitedTilesCache[tileId]!;
+    }
+    
+    try {
+      final doc = await _firestore
+          .collection('visits_tiles')
+          .doc(userId)
+          .collection('visited')
+          .doc(tileId)
+          .get();
+      
+      if (doc.exists) {
+        final fogLevel = doc.data()?['fogLevel'] as int? ?? 3;
+        _visitedTilesCache[tileId] = fogLevel;
+        return fogLevel;
+      }
+    } catch (e) {
+      debugPrint('❌ Firestore 읽기 오류: $e');
+    }
+    
+    // 기본값: 완전 어둠
+    _visitedTilesCache[tileId] = 3;
+    return 3;
   }
   
-  /// 기본 검은 타일 생성 (HTTP 실패 시 사용)
+  /// 타일 중심점 계산
+  LatLng _getTileCenter(int x, int y, int zoom) {
+    final n = 1 << zoom;
+    final lon_deg = x / n * 360.0 - 180.0;
+    final lat_rad = atan(sinh(pi * (1 - 2 * y / n)));
+    final lat_deg = lat_rad * 180.0 / pi;
+    return LatLng(lat_deg, lon_deg);
+  }
+  
+  /// 두 지점 간의 거리 계산 (킬로미터)
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadius = 6371.0; // 지구 반지름 (킬로미터)
+    
+    final lat1Rad = point1.latitude * pi / 180.0;
+    final lat2Rad = point2.latitude * pi / 180.0;
+    final deltaLatRad = (point2.latitude - point1.latitude) * pi / 180.0;
+    final deltaLonRad = (point2.longitude - point1.longitude) * pi / 180.0;
+    
+    final a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
+              cos(lat1Rad) * cos(lat2Rad) *
+              sin(deltaLonRad / 2) * sin(deltaLonRad / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    
+    return earthRadius * c;
+  }
+  
+
+  
+  /// 투명 타일 생성 (지도가 보이는 영역)
+  Future<Tile> _getTransparentTile() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    
+    // 투명한 배경 (지도가 그대로 보임)
+    final paint = Paint()..color = Colors.transparent;
+    
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, tileSize.toDouble(), tileSize.toDouble()),
+      paint,
+    );
+    
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(tileSize, tileSize);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    
+    return Tile(tileSize, tileSize, byteData!.buffer.asUint8List());
+  }
+  
+  /// 회색 타일 생성 (방문한 지역 - 반투명)
+  Future<Tile> _getGrayTile() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    
+    // 반투명 회색 배경 (지도가 흐리게 보임)
+    final paint = Paint()..color = Colors.grey.withOpacity(0.5);
+    
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, tileSize.toDouble(), tileSize.toDouble()),
+      paint,
+    );
+    
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(tileSize, tileSize);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    
+    return Tile(tileSize, tileSize, byteData!.buffer.asUint8List());
+  }
+  
+  /// 기본 검은 타일 생성 (지도가 안 보이는 영역)
   Future<Tile> _getDefaultDarkTile() async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -109,7 +228,8 @@ class FogOfWarTileProvider implements TileProvider {
   /// 캐시 클리어
   void clearCache() {
     _tileCache.clear();
-    debugPrint('🗑️ 타일 캐시 클리어됨');
+    _visitedTilesCache.clear();
+    debugPrint('🗑️ 타일 캐시 및 방문 기록 캐시 클리어됨');
   }
   
   /// 리소스 정리
