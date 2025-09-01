@@ -105,6 +105,7 @@ class _MapScreenState extends State<MapScreen> {
       
       // FogOfWarManager 생성 및 위치 추적 시작 (선택적)
       _fogManager = FogOfWarManager();
+      _fogManager?.setRevealRadius(0.3); // 300m 원형 반경 설정
       _fogManager?.startTracking();
       
       // TileOverlay 생성

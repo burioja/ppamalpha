@@ -13,10 +13,12 @@ class FogOfWarManager {
   static const int _defaultZoom = 15; // 타일 추적용 기본 줌 레벨
   static const double _minMovementDistance = 50.0; // 최소 이동 거리 (미터)
   static const Duration _locationUpdateInterval = Duration(seconds: 30); // 위치 업데이트 간격
+  static const double _revealRadiusKm = 0.3; // 원형 탐색 반경 (킬로미터)
   
   StreamSubscription<Position>? _positionStream;
   LatLng? _lastTrackedPosition;
   Timer? _updateTimer;
+  double _currentRevealRadius = _revealRadiusKm; // 동적 반경 조정 가능
   
   bool _isTracking = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -64,6 +66,15 @@ class FogOfWarManager {
     _isTracking = false;
   }
   
+  /// 탐색 반경 설정 (킬로미터)
+  void setRevealRadius(double radiusKm) {
+    _currentRevealRadius = radiusKm;
+    debugPrint('🎯 Fog of War 탐색 반경 변경: ${radiusKm}km');
+  }
+  
+  /// 현재 탐색 반경 반환
+  double get currentRevealRadius => _currentRevealRadius;
+  
   /// 현재 위치 업데이트
   Future<void> _updateCurrentLocation() async {
     try {
@@ -99,8 +110,8 @@ class FogOfWarManager {
     }
     
     try {
-      // 현재 위치 중심으로 반경 500m 내의 타일들 계산
-      final tiles = TileUtils.getTilesAroundLocation(location, _defaultZoom, 0.5);
+      // 현재 위치 중심으로 원형 반경 내의 타일들 계산
+      final tiles = TileUtils.getTilesAroundLocation(location, _defaultZoom, _currentRevealRadius);
       
       debugPrint('💾 방문 타일 기록: ${tiles.length}개 타일');
       

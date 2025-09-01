@@ -82,7 +82,14 @@ class TileUtils {
         
         // 타일 좌표 유효성 검사
         if (x >= 0 && x < math.pow(2, zoom) && y >= 0 && y < math.pow(2, zoom)) {
-          tiles.add(TileCoordinate(x: x, y: y, zoom: zoom));
+          // 원형 반경 체크: 타일 중심점과 사용자 위치 간의 실제 거리 계산
+          final tileBounds = getTileBounds(x, y, zoom);
+          final distanceToCenter = calculateDistance(center, tileBounds.center);
+          
+          // 반경 내에 있는 타일만 추가 (원형)
+          if (distanceToCenter <= radiusKm) {
+            tiles.add(TileCoordinate(x: x, y: y, zoom: zoom));
+          }
         }
       }
     }
