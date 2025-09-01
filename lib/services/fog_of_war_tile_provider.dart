@@ -70,7 +70,11 @@ class FogOfWarTileProvider implements TileProvider {
       final tileCenter = _getTileCenter(x, y, actualZoom);
       final distance = TileUtils.calculateDistance(_currentLocation!, tileCenter);
       
-      debugPrint('🗺️ 타일 ${tileId}: 현재위치까지 ${distance.toStringAsFixed(3)}km, 반경: ${_revealRadius}km');
+      // 현재 위치의 타일 좌표 계산 (디버그용)
+      final currentTile = TileUtils.latLngToTile(_currentLocation!.latitude, _currentLocation!.longitude, actualZoom);
+      
+      debugPrint('🗺️ 타일 ${tileId} (${x},${y}): 현재위치까지 ${distance.toStringAsFixed(3)}km, 반경: ${_revealRadius}km');
+      debugPrint('📍 현재 위치 타일: ${currentTile.x},${currentTile.y}');
       
       // 현재 위치 주변 300m는 항상 투명
       if (distance <= _revealRadius) {
@@ -135,7 +139,7 @@ class FogOfWarTileProvider implements TileProvider {
       debugPrint('❌ Firestore 읽기 오류: $e');
     }
     
-    // 기본값: 완전 어둠
+    // 기본값: 완전 어둠 (방문하지 않은 지역)
     _visitedTilesCache[tileId] = 3;
     return 3;
   }
