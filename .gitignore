@@ -72,3 +72,8 @@ node_modules/
 # Task files
 # tasks.json
 # tasks/ 
+
+# Firebase service account keys (never commit secrets)
+**/serviceAccountKey.json
+scripts/serviceAccountKey.json
+lib/services/serviceAccountKey.json
