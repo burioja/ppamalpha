@@ -123,7 +123,7 @@ class FogOfWarTileProvider {
   LatLng _tileToLatLng(int z, int x, int y) {
     final n = pow(2.0, z);
     final lonDeg = x / n * 360.0 - 180.0;
-    final latRad = atan(sinh(pi * (1 - 2 * y / n)));
+    final latRad = atan((exp(pi * (1 - 2 * y / n)) - exp(-pi * (1 - 2 * y / n))) / 2);
     final latDeg = latRad * 180.0 / pi;
     return LatLng(latDeg, lonDeg);
   }
@@ -262,7 +262,8 @@ class FogOfWarTileProvider {
   TileCoordinate _latLngToTile(LatLng point, int zoom) {
     final n = pow(2.0, zoom);
     final x = ((point.longitude + 180.0) / 360.0 * n).floor();
-    final y = ((1.0 - asinh(tan(point.latitude * pi / 180.0)) / pi) / 2.0 * n).floor();
+    final latRad = point.latitude * pi / 180.0;
+    final y = ((1.0 - log(tan(latRad) + 1 / cos(latRad)) / pi) / 2.0 * n).floor();
     return TileCoordinate(zoom, x, y);
   }
 

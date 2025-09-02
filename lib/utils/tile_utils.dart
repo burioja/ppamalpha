@@ -13,7 +13,8 @@ class TileUtils {
   static TileCoordinate latLngToTile(LatLng point, int zoom) {
     final n = pow(2.0, zoom);
     final x = ((point.longitude + 180.0) / 360.0 * n).floor();
-    final y = ((1.0 - asinh(tan(point.latitude * pi / 180.0)) / pi) / 2.0 * n).floor();
+    final latRad = point.latitude * pi / 180.0;
+    final y = ((1.0 - log(tan(latRad) + 1 / cos(latRad)) / pi) / 2.0 * n).floor();
     return TileCoordinate(zoom, x, y);
   }
 
@@ -21,7 +22,7 @@ class TileUtils {
   static LatLng tileToLatLng(int z, int x, int y) {
     final n = pow(2.0, z);
     final lonDeg = x / n * 360.0 - 180.0;
-    final latRad = atan(sinh(pi * (1 - 2 * y / n)));
+    final latRad = atan((exp(pi * (1 - 2 * y / n)) - exp(-pi * (1 - 2 * y / n))) / 2);
     final latDeg = latRad * 180.0 / pi;
     return LatLng(latDeg, lonDeg);
   }
@@ -88,16 +89,16 @@ class TileUtils {
     return TileBounds(nw, se);
   }
 
-  /// 타일이 화면에 보이는지 확인
-  static bool isTileVisible(TileCoordinate tile, LatLngBounds viewport) {
-    final tileBounds = getTileBounds(tile.z, tile.x, tile.y);
-    
-    // 타일이 뷰포트와 겹치는지 확인
-    return !(tileBounds.northwest.longitude > viewport.east ||
-             tileBounds.southeast.longitude < viewport.west ||
-             tileBounds.southeast.latitude > viewport.north ||
-             tileBounds.northwest.latitude < viewport.south);
-  }
+  // 타일이 화면에 보이는지 확인 - 임시 비활성화
+  // static bool isTileVisible(TileCoordinate tile, Bounds<LatLng> viewport) {
+  //   final tileBounds = getTileBounds(tile.z, tile.x, tile.y);
+  //   
+  //   // 타일이 뷰포트와 겹치는지 확인
+  //   return !(tileBounds.northwest.longitude > viewport.east ||
+  //            tileBounds.southeast.longitude < viewport.west ||
+  //            tileBounds.southeast.latitude > viewport.north ||
+  //            tileBounds.northwest.latitude < viewport.south);
+  // }
 }
 
 /// 타일 좌표 클래스

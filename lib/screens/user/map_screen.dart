@@ -12,7 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 import '../../services/fog_of_war_tile_provider.dart';
 import '../../services/fog_of_war_manager.dart';
-import '../../services/fog_tile_provider.dart';
+import '../../services/fog_tile_provider_v2.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -322,19 +322,21 @@ class _MapScreenState extends State<MapScreen> {
       point: item.position,
       width: 40.0,
       height: 40.0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isPostPlace ? Colors.red : Colors.blue,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-        child: Icon(
-          isPostPlace ? Icons.description : Icons.location_on,
-          color: Colors.white,
-          size: 20,
+      child: GestureDetector(
+        onTap: () => _showMarkerInfo(item),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isPostPlace ? Colors.red : Colors.blue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Icon(
+            isPostPlace ? Icons.description : Icons.location_on,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
       ),
-      onTap: () => _showMarkerInfo(item),
     );
   }
 
@@ -343,19 +345,21 @@ class _MapScreenState extends State<MapScreen> {
       point: LatLng(flyer.location.latitude, flyer.location.longitude),
       width: 40.0,
       height: 40.0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.red,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-        child: const Icon(
-          Icons.description,
-          color: Colors.white,
-          size: 20,
+      child: GestureDetector(
+        onTap: () => _showPostInfo(flyer),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: const Icon(
+            Icons.description,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
       ),
-      onTap: () => _showPostInfo(flyer),
     );
   }
 
@@ -364,24 +368,26 @@ class _MapScreenState extends State<MapScreen> {
       point: position,
       width: 50.0,
       height: 50.0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.blue,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-        child: Center(
-          child: Text(
-            count.toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+      child: GestureDetector(
+        onTap: () => _showClusterInfo(position, count),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Center(
+            child: Text(
+              count.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
         ),
       ),
-      onTap: () => _showClusterInfo(position, count),
     );
   }
 

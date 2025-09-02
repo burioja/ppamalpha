@@ -18,7 +18,7 @@ class FogOfWarManager {
   
   // 설정값
   static const Duration _locationUpdateInterval = Duration(seconds: 5);
-  static const double _locationUpdateDistance = 10.0; // 10m 이동 시 업데이트
+  static const int _locationUpdateDistance = 10; // 10m 이동 시 업데이트
   static const Duration _visitRetention = Duration(days: 30);
 
   /// 현재 위치 설정
@@ -152,7 +152,8 @@ class FogOfWarManager {
   TileCoordinate _latLngToTile(LatLng point, int zoom) {
     final n = pow(2.0, zoom);
     final x = ((point.longitude + 180.0) / 360.0 * n).floor();
-    final y = ((1.0 - asinh(tan(point.latitude * pi / 180.0)) / pi) / 2.0 * n).floor();
+    final latRad = point.latitude * pi / 180.0;
+    final y = ((1.0 - log(tan(latRad) + 1 / cos(latRad)) / pi) / 2.0 * n).floor();
     return TileCoordinate(zoom, x, y);
   }
 
@@ -160,7 +161,7 @@ class FogOfWarManager {
   LatLng _tileToLatLng(int z, int x, int y) {
     final n = pow(2.0, z);
     final lonDeg = x / n * 360.0 - 180.0;
-    final latRad = atan(sinh(pi * (1 - 2 * y / n)));
+    final latRad = atan((exp(pi * (1 - 2 * y / n)) - exp(-pi * (1 - 2 * y / n))) / 2);
     final latDeg = latRad * 180.0 / pi;
     return LatLng(latDeg, lonDeg);
   }
