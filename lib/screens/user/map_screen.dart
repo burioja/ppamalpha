@@ -4,13 +4,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 import '../../services/fog_of_war_tile_provider.dart';
 import '../../services/fog_of_war_manager.dart';
+import '../../services/fog_tile_provider.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -49,58 +51,44 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  GoogleMapController? mapController;
+  MapController? mapController;
   LatLng? _currentPosition;
-  final Set<Marker> _markers = {};
-  final Set<Circle> _circles = {};
-  final Set<Marker> _clusteredMarkers = {};
+  final List<Marker> _markers = [];
+  final List<CircleMarker> _circles = [];
+  final List<Marker> _clusteredMarkers = [];
   bool _isClustered = false;
   double _currentZoom = 13.0;
-  String? _mapStyle;
   List<MarkerItem> _markerItems = [];
   List<PostModel> _posts = [];
-  BitmapDescriptor? _customMarkerIcon;
   String? userId;
   final PostService _postService = PostService();
   
-  // 🔥 TileOverlay 기반 Fog of War 시스템
-  FogOfWarTileProvider? _fogTileProvider;
+  // 🔥 OSM 기반 Fog of War 시스템
+  FogTileProvider? _fogTileProvider;
   FogOfWarManager? _fogManager;
-  final Set<TileOverlay> _tileOverlays = {};
 
   @override
   void initState() {
     super.initState();
     userId = FirebaseAuth.instance.currentUser?.uid;
-    _loadMapStyle();
-    _loadCustomMarkerIcon();
+    mapController = MapController();
     _initializeLocationAndFogOfWar(); // 위치 서비스와 Fog of War 초기화
   }
 
-  /// TileOverlay 새로고침 (캐시 무효화 후 재생성)
-  void _refreshTileOverlay() {
+  /// 포그 오브 워 타일 새로고침
+  void _refreshFogOfWar() {
     if (_fogTileProvider == null) return;
     
-    debugPrint('🔄 TileOverlay 새로고침');
-    
-    // 새로운 TileOverlay 생성 (강제 새로고침)
-    final newTileOverlay = TileOverlay(
-      tileOverlayId: TileOverlayId('fog_of_war_${DateTime.now().millisecondsSinceEpoch}'),
-      tileProvider: _fogTileProvider!,
-      transparency: 0.0,
-      visible: true,
-      zIndex: 10,
-    );
-    
+    debugPrint('🔄 포그 오브 워 타일 새로고침');
+    _fogTileProvider!.clearCache();
     setState(() {
-      _tileOverlays.clear();
-      _tileOverlays.add(newTileOverlay);
+      // 상태 업데이트로 타일 재렌더링 트리거
     });
   }
 
   @override
   void dispose() {
-    // HTTP 기반 TileOverlay Fog of War 정리
+    // OSM 기반 Fog of War 정리
     _fogManager?.dispose();
     _fogTileProvider?.dispose();
     super.dispose();
@@ -120,23 +108,24 @@ class _MapScreenState extends State<MapScreen> {
       // 1. 위치 권한 확인 및 현재 위치 가져오기
       await _getCurrentLocation();
       
-      // 2. Firestore 기반 TileProvider 생성
-      _fogTileProvider = FogOfWarTileProvider(
+      // 2. OSM 기반 FogTileProvider 생성
+      _fogTileProvider = FogTileProvider(
         userId: uid,
+        mapController: mapController!,
       );
       
       // 3. FogOfWarManager 생성 및 현재 위치 설정
       _fogManager = FogOfWarManager();
-      _fogManager?.setRevealRadius(0.3); // 300m 원형 반경 설정
+      _fogManager?.setRevealRadius(1.0); // 1km 원형 반경 설정
       
       // 현재 위치가 있으면 FogOfWarManager와 TileProvider에 설정
       if (_currentPosition != null) {
         debugPrint('📍 FogOfWarManager에 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
         _fogManager?.setCurrentLocation(_currentPosition!);
         
-        debugPrint('📍 FogOfWarTileProvider에 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+        debugPrint('📍 FogTileProvider에 현재 위치 설정: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
         _fogTileProvider?.setCurrentLocation(_currentPosition!);
-        _fogTileProvider?.setRevealRadius(0.3); // 300m 반경
+        _fogTileProvider?.setRevealRadius(1.0); // 1km 반경
         debugPrint('📍 현재 위치 설정 완료: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
       } else {
         debugPrint('❌ 현재 위치가 null이므로 FogOfWar 시스템에 설정하지 않음');
@@ -145,25 +134,11 @@ class _MapScreenState extends State<MapScreen> {
       // 4. 타일 업데이트 시 캐시 무효화 연동
       _fogManager?.setTileUpdateCallback(() {
         _fogTileProvider?.clearCache();
-        _refreshTileOverlay();
+        _refreshFogOfWar();
       });
       
       // 5. 위치 추적 시작
       _fogManager?.startTracking();
-      
-      // 6. TileOverlay 생성
-      final tileOverlay = TileOverlay(
-        tileOverlayId: const TileOverlayId('fog_of_war'),
-        tileProvider: _fogTileProvider!,
-        transparency: 0.0,
-        visible: true,
-        zIndex: 10,
-      );
-      
-      setState(() {
-        _tileOverlays.clear();
-        _tileOverlays.add(tileOverlay);
-      });
 
       debugPrint('✅ 위치 서비스와 Fog of War 초기화 완료');
       
@@ -208,79 +183,10 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _loadMapStyle() async {
-    try {
-      _mapStyle = await rootBundle.loadString('assets/map_style.json');
-    } catch (e) {
-      debugPrint('맵 스타일 로드 실패: $e');
-    }
-  }
-
-  Future<void> _loadCustomMarkerIcon() async {
-    try {
-      final ByteData bytes = await rootBundle.load('assets/images/icon_search.png');
-      final Uint8List list = bytes.buffer.asUint8List();
-      
-      final ui.Codec codec = await ui.instantiateImageCodec(list);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ui.Image image = frameInfo.image;
-      
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(recorder);
-      
-      const double targetSize = 48.0;
-      
-      final double imageRatio = image.width / image.height;
-      final double targetRatio = targetSize / targetSize;
-      
-      double drawWidth = targetSize;
-      double drawHeight = targetSize;
-      double offsetX = 0;
-      double offsetY = 0;
-      
-      if (imageRatio > targetRatio) {
-        drawHeight = targetSize;
-        drawWidth = targetSize * imageRatio;
-        offsetX = (targetSize - drawWidth) / 2;
-      } else {
-        drawWidth = targetSize;
-        drawHeight = targetSize / imageRatio;
-        offsetY = (targetSize - drawHeight) / 2;
-      }
-      
-      canvas.drawImageRect(
-        image,
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight),
-        Paint(),
-      );
-      
-      final ui.Picture picture = recorder.endRecording();
-      final ui.Image resizedImage = await picture.toImage(targetSize.toInt(), targetSize.toInt());
-      final ByteData? resizedBytes = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (resizedBytes != null) {
-        final Uint8List resizedUint8List = resizedBytes.buffer.asUint8List();
-        setState(() {
-          _customMarkerIcon = BitmapDescriptor.fromBytes(resizedUint8List);
-        });
-      }
-    } catch (e) {
-      // 커스텀 마커 로드 실패 시 기본 마커 사용
-    }
-  }
-
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
-    if (_mapStyle != null) {
-      controller.setMapStyle(_mapStyle);
-    }
-    
+  void _onMapReady() {
     // 현재 위치가 있으면 해당 위치로 이동
     if (_currentPosition != null) {
-      controller.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentPosition!, 15.0),
-      );
+      mapController?.move(_currentPosition!, 15.0);
       debugPrint('🗺️ 맵 생성 완료 - 현재 위치로 이동: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
     } else {
       debugPrint('🗺️ 맵 생성 완료 (현재 위치 없음)');
@@ -351,7 +257,7 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
     
-    final Set<Marker> newMarkers = {};
+    final List<Marker> newMarkers = [];
     
     clusters.forEach((key, items) {
       if (items.length == 1) {
@@ -377,7 +283,7 @@ class _MapScreenState extends State<MapScreen> {
   void _showIndividualMarkers() {
     debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
-    final Set<Marker> newMarkers = {};
+    final List<Marker> newMarkers = [];
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 기존 마커들 추가
@@ -413,15 +319,20 @@ class _MapScreenState extends State<MapScreen> {
     final isPostPlace = item.data['type'] == 'post_place';
     
     return Marker(
-      markerId: MarkerId(item.id),
-      position: item.position,
-      icon: _customMarkerIcon ?? 
-            (isPostPlace 
-              ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed)
-              : BitmapDescriptor.defaultMarker),
-      infoWindow: InfoWindow(
-        title: item.title,
-        snippet: isPostPlace ? '${item.price}원' : item.amount,
+      point: item.position,
+      width: 40.0,
+      height: 40.0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isPostPlace ? Colors.red : Colors.blue,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: Icon(
+          isPostPlace ? Icons.description : Icons.location_on,
+          color: Colors.white,
+          size: 20,
+        ),
       ),
       onTap: () => _showMarkerInfo(item),
     );
@@ -429,12 +340,20 @@ class _MapScreenState extends State<MapScreen> {
 
   Marker _createPostMarker(PostModel flyer) {
     return Marker(
-      markerId: MarkerId(flyer.markerId),
-      position: LatLng(flyer.location.latitude, flyer.location.longitude),
-      icon: _customMarkerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow: InfoWindow(
-        title: flyer.title,
-        snippet: '${flyer.reward}원 - ${flyer.creatorName}',
+      point: LatLng(flyer.location.latitude, flyer.location.longitude),
+      width: 40.0,
+      height: 40.0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: const Icon(
+          Icons.description,
+          color: Colors.white,
+          size: 20,
+        ),
       ),
       onTap: () => _showPostInfo(flyer),
     );
@@ -442,12 +361,25 @@ class _MapScreenState extends State<MapScreen> {
 
   Marker _createClusterMarker(LatLng position, int count) {
     return Marker(
-      markerId: MarkerId('cluster_${position.latitude}_${position.longitude}'),
-      position: position,
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      infoWindow: InfoWindow(
-        title: '클러스터',
-        snippet: '$count개의 마커',
+      point: position,
+      width: 50.0,
+      height: 50.0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.blue,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: Center(
+          child: Text(
+            count.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
       ),
       onTap: () => _showClusterInfo(position, count),
     );
@@ -651,26 +583,50 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GoogleMap(
-            onMapCreated: _onMapCreated,
-        initialCameraPosition: const CameraPosition(
-          target: LatLng(37.4969433, 127.0311633),
-          zoom: 13.0,
-        ),
-        markers: _isClustered ? _clusteredMarkers : _markers.union(_clusteredMarkers),
-        circles: _circles,
-        tileOverlays: _tileOverlays, // TileOverlay 기반 Fog of War
-            onCameraMove: (CameraPosition position) {
-              _currentZoom = position.zoom;
-            },
-            onCameraIdle: () {
+      body: FlutterMap(
+        mapController: mapController,
+        options: MapOptions(
+          initialCenter: _currentPosition ?? const LatLng(37.4969433, 127.0311633),
+          initialZoom: 13.0,
+          onMapReady: _onMapReady,
+          onPositionChanged: (MapPosition position, bool hasGesture) {
+            _currentZoom = position.zoom ?? 13.0;
+            if (hasGesture) {
               _updateClustering();
-            },
-        myLocationEnabled: true,
-        myLocationButtonEnabled: true,
-        zoomControlsEnabled: false,
-        mapToolbarEnabled: false,
-        compassEnabled: false,
+            }
+          },
+        ),
+        children: [
+          // OSM 기본 타일 레이어
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.ppamproto',
+            maxZoom: 18,
+          ),
+          // 포그 오브 워 타일 레이어
+          if (_fogTileProvider != null)
+            TileLayer(
+              tileProvider: _fogTileProvider!,
+              maxZoom: 18,
+            ),
+          // 마커 레이어
+          MarkerLayer(
+            markers: _isClustered ? _clusteredMarkers : _markers,
+          ),
+          // 원형 레이어 (현재 위치 표시)
+          if (_currentPosition != null)
+            CircleLayer(
+              circles: [
+                CircleMarker(
+                  point: _currentPosition!,
+                  radius: 1000, // 1km 반경
+                  color: Colors.blue.withOpacity(0.1),
+                  borderColor: Colors.blue.withOpacity(0.3),
+                  borderStrokeWidth: 2,
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

@@ -1,284 +1,232 @@
 import 'dart:async';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
-import '../utils/tile_utils.dart';
 
-/// Fog of War 매니저
-/// 
-/// 사용자의 위치 변경을 감지하고 Firestore에 방문 타일 정보를 저장합니다.
+/// 포그 오브 워 매니저 - 위치 추적 및 방문 기록 관리
 class FogOfWarManager {
-  static const int _defaultZoom = 15; // 타일 추적용 기본 줌 레벨
-  static const double _minMovementDistance = 50.0; // 최소 이동 거리 (미터)
-  static const Duration _locationUpdateInterval = Duration(seconds: 30); // 위치 업데이트 간격
-  static const double _revealRadiusKm = 0.3; // 원형 탐색 반경 (킬로미터)
-  
+  // 위치 추적
   StreamSubscription<Position>? _positionStream;
-  LatLng? _lastTrackedPosition;
-  Timer? _updateTimer;
-  double _currentRevealRadius = _revealRadiusKm; // 동적 반경 조정 가능
+  LatLng? _currentLocation;
+  double _revealRadius = 1.0; // 1km 반경
   
-  bool _isTracking = false;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // 콜백 함수
+  VoidCallback? _onTileUpdate;
   
-  // 타일 업데이트 콜백 (FogOfWarTileProvider와 연동용)
-  Function()? _onTileUpdate;
-  
-  /// 위치 추적 시작
-  Future<void> startTracking() async {
-    if (_isTracking) return;
-    
-    debugPrint('🎯 Fog of War 위치 추적 시작');
-    
-    try {
-      // 위치 권한 확인
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        final requested = await Geolocator.requestPermission();
-        if (requested == LocationPermission.denied) {
-          debugPrint('❌ 위치 권한이 거부됨');
-          return;
-        }
-      }
-      
-      _isTracking = true;
-      
-      // 주기적 위치 업데이트 설정
-      _updateTimer = Timer.periodic(_locationUpdateInterval, (timer) async {
-        await _updateCurrentLocation();
-      });
-      
-      // 즉시 한 번 실행
-      await _updateCurrentLocation();
-      
-    } catch (e) {
-      debugPrint('❌ 위치 추적 시작 오류: $e');
-    }
-  }
-  
-  /// 위치 추적 중지
-  void stopTracking() {
-    if (!_isTracking) return;
-    
-    debugPrint('🛑 Fog of War 위치 추적 중지');
-    
-    _positionStream?.cancel();
-    _updateTimer?.cancel();
-    _isTracking = false;
-  }
-  
-  /// 탐색 반경 설정 (킬로미터)
-  void setRevealRadius(double radiusKm) {
-    _currentRevealRadius = radiusKm;
-    debugPrint('🎯 Fog of War 탐색 반경 변경: ${radiusKm}km');
-  }
-  
-  /// 현재 탐색 반경 반환
-  double get currentRevealRadius => _currentRevealRadius;
-  
-  /// 타일 업데이트 콜백 설정
-  void setTileUpdateCallback(Function() callback) {
-    _onTileUpdate = callback;
-  }
-  
+  // 설정값
+  static const Duration _locationUpdateInterval = Duration(seconds: 5);
+  static const double _locationUpdateDistance = 10.0; // 10m 이동 시 업데이트
+  static const Duration _visitRetention = Duration(days: 30);
+
   /// 현재 위치 설정
   void setCurrentLocation(LatLng location) {
-    _lastTrackedPosition = location;
-    debugPrint('📍 FogOfWarManager 현재 위치 설정: ${location.latitude}, ${location.longitude}');
+    _currentLocation = location;
+    debugPrint('📍 FogOfWarManager 위치 설정: ${location.latitude}, ${location.longitude}');
   }
-  
-  /// 타일 업데이트 알림
-  void _notifyTileUpdate() {
-    _onTileUpdate?.call();
-    debugPrint('🔄 타일 캐시 무효화 요청');
+
+  /// 반경 설정 (km)
+  void setRevealRadius(double radius) {
+    _revealRadius = radius;
+    debugPrint('📍 FogOfWarManager 반경 설정: ${radius}km');
   }
-  
-  /// 현재 위치 업데이트
-  Future<void> _updateCurrentLocation() async {
-    try {
-      final position = await Geolocator.getCurrentPosition();
-      final currentLocation = LatLng(position.latitude, position.longitude);
-      
-      debugPrint('📍 현재 위치: ${currentLocation.latitude}, ${currentLocation.longitude}');
-      
-      // 최소 이동 거리 체크
-      if (_lastTrackedPosition != null) {
-        final distance = TileUtils.calculateDistance(_lastTrackedPosition!, currentLocation) * 1000; // km -> m
-        if (distance < _minMovementDistance) {
-          debugPrint('⏭️ 최소 이동 거리 미만 ($distance m < $_minMovementDistance m)');
-          return;
-        }
-      }
-      
-      // 현재 위치의 타일 정보 저장
-      await _recordVisitedTiles(currentLocation);
-      _lastTrackedPosition = currentLocation;
-      
-    } catch (e) {
-      debugPrint('❌ 위치 업데이트 오류: $e');
-    }
+
+  /// 타일 업데이트 콜백 설정
+  void setTileUpdateCallback(VoidCallback callback) {
+    _onTileUpdate = callback;
   }
-  
-  /// 방문한 타일들을 Firestore에 기록
-  Future<void> _recordVisitedTiles(LatLng location) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      debugPrint('❌ 사용자 인증 없음');
-      return;
-    }
+
+  /// 위치 추적 시작
+  void startTracking() {
+    debugPrint('🚀 FogOfWarManager 위치 추적 시작');
     
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: _locationUpdateDistance,
+      ),
+    ).listen(
+      _onLocationUpdate,
+      onError: (error) {
+        debugPrint('❌ 위치 추적 오류: $error');
+      },
+    );
+  }
+
+  /// 위치 업데이트 처리
+  void _onLocationUpdate(Position position) {
+    final newLocation = LatLng(position.latitude, position.longitude);
+    
+    // 위치가 변경되었는지 확인
+    if (_currentLocation != null) {
+      final distance = _calculateDistance(_currentLocation!, newLocation);
+      if (distance < _locationUpdateDistance / 1000.0) { // km 단위로 변환
+        return; // 거의 이동하지 않았으면 무시
+      }
+    }
+
+    _currentLocation = newLocation;
+    debugPrint('📍 위치 업데이트: ${newLocation.latitude}, ${newLocation.longitude}');
+    
+    // 방문 기록 업데이트
+    _recordVisit(newLocation);
+    
+    // 타일 업데이트 콜백 호출
+    _onTileUpdate?.call();
+  }
+
+  /// 방문 기록 저장
+  Future<void> _recordVisit(LatLng location) async {
     try {
-      // 현재 위치 중심으로 원형 반경 내의 타일들 계산
-      final tiles = TileUtils.getTilesAroundLocation(location, _defaultZoom, _currentRevealRadius);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      // 현재 줌 레벨에서 주변 타일들 계산 (기본 줌 13)
+      final tiles = _getTilesInRadius(location, _revealRadius, 13);
       
-      debugPrint('💾 방문 타일 기록: ${tiles.length}개 타일');
-      
-      final batch = _firestore.batch();
-      final now = Timestamp.now();
-      
+      final batch = FirebaseFirestore.instance.batch();
+      final now = DateTime.now();
+
       for (final tile in tiles) {
-        final tileRef = _firestore
-            .collection('visits_tiles')
-            .doc(userId)
-            .collection('visited')
-            .doc(tile.id);
+        final tileKey = '${tile.z}_${tile.x}_${tile.y}';
         
-        // 타일 중심점과 현재 위치의 거리 계산
-        final tileBounds = TileUtils.getTileBounds(tile.x, tile.y, tile.zoom);
-        final distanceToCenter = TileUtils.calculateDistance(location, tileBounds.center);
+        final docRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('visited_tiles')
+            .doc(tileKey);
         
-        // 거리에 따른 fog level 결정
-        // 현재 위치 주변 300m는 실시간으로 처리되므로 Firestore에 저장하지 않음
-        int fogLevel;
-        if (distanceToCenter <= 0.3) { // 300m 이내는 실시간 처리
-          continue; // 이 타일은 건너뛰기
-        } else {
-          fogLevel = 2; // 회색 (방문한 지역)
-        }
-        
-        batch.set(tileRef, {
-          'visitedAt': now,
-          'fogLevel': fogLevel,
+        batch.set(docRef, {
+          'timestamp': Timestamp.fromDate(now),
+          'z': tile.z,
+          'x': tile.x,
+          'y': tile.y,
           'location': GeoPoint(location.latitude, location.longitude),
-          'distance': distanceToCenter,
         }, SetOptions(merge: true));
       }
-      
+
       await batch.commit();
-      debugPrint('✅ 방문 타일 기록 완료');
-      
-      // 타일 캐시 무효화 (새로운 방문 정보 반영)
-      _notifyTileUpdate();
-      
+      debugPrint('✅ 방문 기록 저장 완료: ${tiles.length}개 타일');
     } catch (e) {
-      debugPrint('❌ 방문 타일 기록 오류: $e');
+      debugPrint('❌ 방문 기록 저장 오류: $e');
     }
   }
-  
-  /// 특정 위치를 수동으로 기록 (테스트용)
-  Future<void> recordLocationManually(LatLng location, {int fogLevel = 1}) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+
+  /// 반경 내의 타일들 계산
+  List<TileCoordinate> _getTilesInRadius(LatLng center, double radiusKm, int zoom) {
+    final tiles = <TileCoordinate>[];
     
-    try {
-      final tile = TileUtils.latLngToTile(location.latitude, location.longitude, _defaultZoom);
-      
-      await _firestore
-          .collection('visits_tiles')
-          .doc(userId)
-          .collection('visited')
-          .doc(tile.id)
-          .set({
-        'visitedAt': Timestamp.now(),
-        'fogLevel': fogLevel,
-        'location': GeoPoint(location.latitude, location.longitude),
-        'manual': true,
-      }, SetOptions(merge: true));
-      
-      debugPrint('✅ 수동 위치 기록 완료: ${tile.id}');
-      
-    } catch (e) {
-      debugPrint('❌ 수동 위치 기록 오류: $e');
+    // 반경을 도 단위로 변환 (대략적)
+    final radiusDeg = radiusKm / 111.0; // 1도 ≈ 111km
+    
+    // 타일 크기 계산
+    final tileSize = 360.0 / pow(2, zoom);
+    
+    // 중심 타일
+    final centerTile = _latLngToTile(center, zoom);
+    
+    // 반경 내 타일들 계산
+    final tileRadius = (radiusDeg / tileSize).ceil();
+    
+    for (int dx = -tileRadius; dx <= tileRadius; dx++) {
+      for (int dy = -tileRadius; dy <= tileRadius; dy++) {
+        final tileX = centerTile.x + dx;
+        final tileY = centerTile.y + dy;
+        
+        // 타일 중심점 계산
+        final tileCenter = _tileToLatLng(zoom, tileX, tileY);
+        
+        // 거리 확인
+        if (_calculateDistance(center, tileCenter) <= radiusKm) {
+          tiles.add(TileCoordinate(zoom, tileX, tileY));
+        }
+      }
     }
+    
+    return tiles;
   }
-  
-  /// 오래된 방문 기록 정리 (30일 이상)
+
+  /// LatLng를 타일 좌표로 변환
+  TileCoordinate _latLngToTile(LatLng point, int zoom) {
+    final n = pow(2.0, zoom);
+    final x = ((point.longitude + 180.0) / 360.0 * n).floor();
+    final y = ((1.0 - asinh(tan(point.latitude * pi / 180.0)) / pi) / 2.0 * n).floor();
+    return TileCoordinate(zoom, x, y);
+  }
+
+  /// 타일 좌표를 LatLng로 변환
+  LatLng _tileToLatLng(int z, int x, int y) {
+    final n = pow(2.0, z);
+    final lonDeg = x / n * 360.0 - 180.0;
+    final latRad = atan(sinh(pi * (1 - 2 * y / n)));
+    final latDeg = latRad * 180.0 / pi;
+    return LatLng(latDeg, lonDeg);
+  }
+
+  /// 두 점 사이의 거리 계산 (km)
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Kilometer, point1, point2);
+  }
+
+  /// 오래된 방문 기록 정리
   Future<void> cleanupOldVisits() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-    
     try {
-      final cutoffDate = DateTime.now().subtract(const Duration(days: 30));
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final cutoffDate = DateTime.now().subtract(_visitRetention);
       
-      final oldVisits = await _firestore
-          .collection('visits_tiles')
-          .doc(userId)
-          .collection('visited')
-          .where('visitedAt', isLessThan: Timestamp.fromDate(cutoffDate))
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('visited_tiles')
+          .where('timestamp', isLessThan: Timestamp.fromDate(cutoffDate))
           .get();
-      
-      if (oldVisits.docs.isEmpty) {
-        debugPrint('🗑️ 정리할 오래된 방문 기록 없음');
-        return;
+
+      if (query.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in query.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        debugPrint('✅ 오래된 방문 기록 정리 완료: ${query.docs.length}개');
       }
-      
-      final batch = _firestore.batch();
-      
-      for (final doc in oldVisits.docs) {
-        // 완전 삭제하지 않고 fog level만 변경
-        batch.update(doc.reference, {'fogLevel': 2}); // 회색으로 변경
-      }
-      
-      await batch.commit();
-      debugPrint('✅ 오래된 방문 기록 정리 완료: ${oldVisits.docs.length}개');
-      
     } catch (e) {
       debugPrint('❌ 방문 기록 정리 오류: $e');
     }
   }
-  
-  /// 사용자의 방문 통계 조회
-  Future<Map<String, dynamic>> getVisitStats() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return {};
-    
-    try {
-      final visits = await _firestore
-          .collection('visits_tiles')
-          .doc(userId)
-          .collection('visited')
-          .get();
-      
-      int brightTiles = 0;
-      int grayTiles = 0;
-      int totalTiles = visits.docs.length;
-      
-      for (final doc in visits.docs) {
-        final fogLevel = doc.data()['fogLevel'] as int? ?? 3;
-        if (fogLevel == 1) {
-          brightTiles++;
-        } else if (fogLevel == 2) {
-          grayTiles++;
-        }
-      }
-      
-      return {
-        'totalTiles': totalTiles,
-        'brightTiles': brightTiles,
-        'grayTiles': grayTiles,
-        'explorationPercent': totalTiles > 0 ? (brightTiles + grayTiles) / totalTiles * 100 : 0,
-      };
-      
-    } catch (e) {
-      debugPrint('❌ 방문 통계 조회 오류: $e');
-      return {};
-    }
-  }
-  
+
   /// 리소스 정리
   void dispose() {
-    stopTracking();
+    _positionStream?.cancel();
+    _positionStream = null;
+    _onTileUpdate = null;
   }
+}
+
+/// 타일 좌표 클래스
+class TileCoordinate {
+  final int z;
+  final int x;
+  final int y;
+
+  TileCoordinate(this.z, this.x, this.y);
+
+  @override
+  String toString() => 'Tile($z, $x, $y)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TileCoordinate &&
+          runtimeType == other.runtimeType &&
+          z == other.z &&
+          x == other.x &&
+          y == other.y;
+
+  @override
+  int get hashCode => z.hashCode ^ x.hashCode ^ y.hashCode;
 }

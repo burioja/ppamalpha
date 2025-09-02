@@ -37,8 +37,11 @@ dependencies:
   firebase_auth: ^5.3.1   # Firebase 인증을 위한 패키지
   firebase_storage: ^12.3.6
   cloud_firestore: ^5.4.4
-  google_maps_flutter: ^2.9.0
-  google_maps_flutter_web: ^0.5.8+1  # 웹 지원
+  # OSM 기반 지도 시스템
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  # 캐싱을 위한 패키지
+  flutter_cache_manager: ^3.4.1
   geolocator: ^12.0.0
   geolocator_android: 4.5.5
   # geolocator_web은 geolocator에 포함되어 있음
