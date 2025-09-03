@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 // import '../../services/fog_of_war_tile_provider.dart';
 // import '../../services/fog_of_war_manager.dart';
-// import '../../services/fog_tile_provider_v2.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -60,7 +59,7 @@ class _MapScreenState extends State<MapScreen> {
   final PostService _postService = PostService();
   
   // 🔥 OSM 기반 Fog of War 시스템 - 임시 비활성화
-  // FogTileProvider? _fogTileProvider;
+  // FogOfWarTileProvider? _fogTileProvider;
   // FogOfWarManager? _fogManager;
 
   // 사용자가 길게 눌러 추가한 마커들 (구글맵 시절 기능 대체)
@@ -137,6 +136,12 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
       });
+      
+      // 포그 오브 워 업데이트 - 임시 비활성화
+      // if (_fogManager != null) {
+      //   _fogManager!.setCurrentLocation(_currentPosition!);
+      //   debugPrint('🌫️ 포그 오브 워 위치 업데이트: $_currentPosition');
+      // }
       
       debugPrint('✅ 현재 위치 가져오기 완료: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
       
@@ -746,7 +751,37 @@ class _MapScreenState extends State<MapScreen> {
           MarkerLayer(
             markers: _userMarkers,
           ),
-          // 원형 레이어 (현재 위치 표시)
+          // 현재 위치 마커
+          if (_currentPosition != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _currentPosition!,
+                  width: 40,
+                  height: 40,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.my_location,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          // 원형 레이어 (현재 위치 반경 표시)
           if (_currentPosition != null)
             CircleLayer(
               circles: [

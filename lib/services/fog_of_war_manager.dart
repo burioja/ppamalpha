@@ -8,6 +8,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// 포그 오브 워 매니저 - 위치 추적 및 방문 기록 관리
 class FogOfWarManager {
+  final String userId;
+  final VoidCallback? onTileUpdate;
+  
   // 위치 추적
   StreamSubscription<Position>? _positionStream;
   LatLng? _currentLocation;
@@ -15,6 +18,11 @@ class FogOfWarManager {
   
   // 콜백 함수
   VoidCallback? _onTileUpdate;
+  
+  FogOfWarManager({
+    required this.userId,
+    this.onTileUpdate,
+  }) : _onTileUpdate = onTileUpdate;
   
   // 설정값
 
