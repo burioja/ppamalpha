@@ -90,10 +90,13 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// 포그 오브 워 시스템 초기화
-  void _initializeFogOfWarSystem() {
+  void _initializeFogOfWarSystem() async {
     _fogTileProvider = FogTileProvider();
     _locationManager = LocationManager();
     _visitManager = VisitManager();
+    
+    // 포그 오브 워 시스템 초기화
+    await _fogTileProvider!.initialize();
     
     // 위치 변경 콜백 설정
     _locationManager!.onPositionChanged = (LatLng position) {
@@ -121,6 +124,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     // OSM 기반 Fog of War 정리
     _locationManager?.dispose();
+    _fogTileProvider?.dispose();
     super.dispose();
   }
 

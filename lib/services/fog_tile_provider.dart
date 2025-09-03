@@ -7,11 +7,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/fog_level.dart';
 import '../utils/tile_utils.dart';
+import 'tile_cache_manager.dart';
+import 'performance_monitor.dart';
+import 'firebase_functions_service.dart';
 
 /// 포그 오브 워 타일 제공자
 class FogTileProvider extends TileProvider {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final TileCacheManager _cacheManager = TileCacheManager();
+  final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
+  final FirebaseFunctionsService _functionsService = FirebaseFunctionsService();
   
   // 캐시된 포그 레벨 (메모리 캐시)
   final Map<String, FogLevel> _fogLevelCache = {};
@@ -21,6 +27,10 @@ class FogTileProvider extends TileProvider {
   
   // 현재 줌 레벨
   int _currentZoom = 13;
+  
+  // 배치 요청 큐
+  final List<String> _pendingTileRequests = [];
+  Timer? _batchTimer;
   
   /// 현재 위치 설정
   void setCurrentPosition(LatLng position) {
@@ -41,7 +51,20 @@ class FogTileProvider extends TileProvider {
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     final coords = Coords(coordinates.x, coordinates.y);
+    final tileKey = TileUtils.generateTileKey(_currentZoom, coords.x, coords.y);
+    
+    // 성능 모니터링 시작
+    _performanceMonitor.startTileLoadTimer(tileKey);
+    
+    // 포그 레벨 결정
     final fogLevel = _getFogLevelForTile(coords);
+    
+    // 배치 요청에 추가
+    _addToBatchRequest(tileKey);
+    
+    // 성능 모니터링 완료
+    _performanceMonitor.endTileLoadTimer(tileKey, fogLevel, false);
+    
     return _getImageForFogLevel(fogLevel);
   }
   
@@ -147,5 +170,56 @@ class FogTileProvider extends TileProvider {
       debugPrint('Error checking visited tile: $e');
       return false;
     }
+  }
+  
+  /// 배치 요청에 타일 추가
+  void _addToBatchRequest(String tileKey) {
+    if (!_pendingTileRequests.contains(tileKey)) {
+      _pendingTileRequests.add(tileKey);
+    }
+    
+    // 배치 타이머 시작 (100ms 후 실행)
+    _batchTimer?.cancel();
+    _batchTimer = Timer(const Duration(milliseconds: 100), () {
+      _processBatchRequests();
+    });
+  }
+  
+  /// 배치 요청 처리
+  Future<void> _processBatchRequests() async {
+    if (_pendingTileRequests.isEmpty) return;
+    
+    try {
+      final tileKeys = List<String>.from(_pendingTileRequests);
+      _pendingTileRequests.clear();
+      
+      // Firebase Functions를 통한 배치 조회
+      final fogLevels = await _functionsService.getBatchFogLevels(tileKeys);
+      
+      // 캐시 업데이트
+      for (final entry in fogLevels.entries) {
+        _fogLevelCache[entry.key] = entry.value;
+        await _cacheManager.cacheFogTile(entry.key, entry.value);
+      }
+      
+      debugPrint('✅ 배치 포그 레벨 처리: ${fogLevels.length}개 타일');
+      
+    } catch (e) {
+      debugPrint('❌ 배치 요청 처리 오류: $e');
+    }
+  }
+  
+  /// 시스템 초기화
+  Future<void> initialize() async {
+    await _cacheManager.initialize();
+    _performanceMonitor.startPeriodicMetricsSending();
+    debugPrint('✅ 포그 오브 워 시스템 초기화 완료');
+  }
+  
+  /// 리소스 정리
+  void dispose() {
+    _batchTimer?.cancel();
+    _cacheManager.dispose();
+    _performanceMonitor.dispose();
   }
 }
