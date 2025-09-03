@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
 // import '../../services/fog_of_war_tile_provider.dart';
 // import '../../services/fog_of_war_manager.dart';
@@ -68,6 +69,13 @@ class _MapScreenState extends State<MapScreen> {
   
   // 롱프레스 위치 저장 (포스트 배포용)
   LatLng? _longPressedLatLng;
+  
+  // 필터 상태
+  bool _showCouponsOnly = false;
+  bool _showMyPostsOnly = false;
+  
+  // 커스텀 마커 아이콘
+  Widget? _customMarkerIcon;
 
   @override
   void initState() {
@@ -75,6 +83,7 @@ class _MapScreenState extends State<MapScreen> {
     userId = FirebaseAuth.instance.currentUser?.uid;
     mapController = MapController();
     _initializeLocation(); // 위치 서비스 초기화
+    _loadCustomMarker(); // 커스텀 마커 로드
   }
 
   // /// 포그 오브 워 타일 새로고침 - 임시 비활성화
@@ -136,7 +145,7 @@ class _MapScreenState extends State<MapScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
       
-      setState(() {
+        setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
       });
       
@@ -163,6 +172,38 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // 커스텀 마커 아이콘 로드
+  Future<void> _loadCustomMarker() async {
+    try {
+      setState(() {
+        _customMarkerIcon = Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.location_on,
+            color: Colors.white,
+            size: 24,
+          ),
+        );
+      });
+      debugPrint('✅ 커스텀 마커 아이콘 로드 완료');
+    } catch (e) {
+      debugPrint('❌ 커스텀 마커 아이콘 로드 실패: $e');
+    }
+  }
+
   void _updateClustering() {
     // 줌 레벨에 따라 클러스터링 결정
     if (_currentZoom < 12.0) {
@@ -182,10 +223,16 @@ class _MapScreenState extends State<MapScreen> {
     const double clusterRadius = 0.001; // 클러스터링 반경 (도 단위)
     final Map<String, List<dynamic>> clusters = {};
     
-    // final String? currentUserId = FirebaseAuth.instance.currentUser?.uid; // 사용되지 않음
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 마커 아이템들 클러스터링
     for (final item in _markerItems) {
+      // 쿠폰만 필터
+      if (_showCouponsOnly && item.data['type'] != 'post_place') continue;
+      
+      // 내 포스트만 필터
+      if (_showMyPostsOnly && item.userId != currentUserId) continue;
+      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -207,6 +254,12 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포스트들 클러스터링
     for (final post in _posts) {
+      // 쿠폰만 필터
+      if (_showCouponsOnly && !(post.canUse || post.canRequestReward)) continue;
+      
+      // 내 포스트만 필터
+      if (_showMyPostsOnly && post.creatorId != currentUserId) continue;
+      
       bool addedToCluster = false;
       
       for (final clusterKey in clusters.keys) {
@@ -254,16 +307,28 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final List<Marker> newMarkers = [];
-    // final String? currentUserId = FirebaseAuth.instance.currentUser?.uid; // 사용되지 않음
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
+      // 쿠폰만 필터
+      if (_showCouponsOnly && item.data['type'] != 'post_place') continue;
+      
+      // 내 포스트만 필터
+      if (_showMyPostsOnly && item.userId != currentUserId) continue;
+      
       newMarkers.add(_createMarker(item));
       debugPrint('마커 추가됨: ${item.title} at ${item.position}');
     }
     
     // 포스트 마커들 추가
     for (final post in _posts) {
+      // 쿠폰만 필터
+      if (_showCouponsOnly && !(post.canUse || post.canRequestReward)) continue;
+      
+      // 내 포스트만 필터
+      if (_showMyPostsOnly && post.creatorId != currentUserId) continue;
+      
       newMarkers.add(_createPostMarker(post));
       debugPrint('포스트 마커 추가됨: ${post.title} at ${post.location.latitude}, ${post.location.longitude}');
     }
@@ -290,11 +355,11 @@ class _MapScreenState extends State<MapScreen> {
     
     return Marker(
       point: item.position,
-      width: 40.0,
-      height: 40.0,
+      width: 48.0,
+      height: 48.0,
       child: GestureDetector(
         onTap: () => _showMarkerInfo(item),
-        child: Container(
+        child: _customMarkerIcon ?? Container(
           decoration: BoxDecoration(
             color: isPostPlace ? Colors.red : Colors.blue,
             shape: BoxShape.circle,
@@ -313,11 +378,11 @@ class _MapScreenState extends State<MapScreen> {
   Marker _createPostMarker(PostModel flyer) {
     return Marker(
       point: LatLng(flyer.location.latitude, flyer.location.longitude),
-      width: 40.0,
-      height: 40.0,
+      width: 48.0,
+      height: 48.0,
       child: GestureDetector(
         onTap: () => _showPostInfo(flyer),
-        child: Container(
+        child: _customMarkerIcon ?? Container(
           decoration: BoxDecoration(
             color: Colors.red,
             shape: BoxShape.circle,
@@ -339,7 +404,7 @@ class _MapScreenState extends State<MapScreen> {
       width: 50.0,
       height: 50.0,
       child: GestureDetector(
-        onTap: () => _showClusterInfo(position, count),
+      onTap: () => _showClusterInfo(position, count),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.blue,
@@ -587,9 +652,9 @@ class _MapScreenState extends State<MapScreen> {
   // 마지막에 추가된 사용자 마커 제거
   void _removeLastUserMarker() {
     if (_userMarkers.isNotEmpty) {
-      setState(() {
+        setState(() {
         _userMarkers.removeLast();
-      });
+        });
     }
   }
 
@@ -602,7 +667,7 @@ class _MapScreenState extends State<MapScreen> {
 
   // 모든 사용자 마커 제거
   void _clearAllUserMarkers() {
-    setState(() {
+        setState(() {
       _userMarkers.clear();
       _userMarkerIdCounter = 0;
     });
@@ -856,63 +921,63 @@ class _MapScreenState extends State<MapScreen> {
   // 포스트 배포 화면으로 이동 (위치 기반)
   void _navigateToPostDeploy() async {
     if (_longPressedLatLng != null) {
-      final result = await Navigator.pushNamed(
-        context, 
-        '/post-deploy',
-        arguments: {
-          'location': _longPressedLatLng,
-          'type': 'location',
-          'address': null,
-        },
-      );
-      
-      setState(() {
-        _longPressedLatLng = null;
-      });
-      
-      _handlePostDeployResult(result);
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng,
+        'type': 'location',
+        'address': null,
+      },
+    );
+    
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
+    _handlePostDeployResult(result);
     }
   }
 
   // 포스트 배포 화면으로 이동 (주소 기반)
   void _navigateToPostDeployWithAddress() async {
     if (_longPressedLatLng != null) {
-      final result = await Navigator.pushNamed(
-        context, 
-        '/post-deploy',
-        arguments: {
-          'location': _longPressedLatLng,
-          'type': 'address',
-          'address': null,
-        },
-      );
-      
-      setState(() {
-        _longPressedLatLng = null;
-      });
-      
-      _handlePostDeployResult(result);
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng,
+        'type': 'address',
+        'address': null,
+      },
+    );
+    
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
+    _handlePostDeployResult(result);
     }
   }
 
   // 포스트 배포 화면으로 이동 (업종 기반)
   void _navigateToPostDeployByCategory() async {
     if (_longPressedLatLng != null) {
-      final result = await Navigator.pushNamed(
-        context, 
-        '/post-deploy',
-        arguments: {
-          'location': _longPressedLatLng,
-          'type': 'category',
-          'address': null,
-        },
-      );
-      
-      setState(() {
-        _longPressedLatLng = null;
-      });
-      
-      _handlePostDeployResult(result);
+    final result = await Navigator.pushNamed(
+      context, 
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng,
+        'type': 'category',
+        'address': null,
+      },
+    );
+    
+    setState(() {
+      _longPressedLatLng = null;
+    });
+    
+    _handlePostDeployResult(result);
     }
   }
 
@@ -965,6 +1030,28 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+    // 현재 위치 방문 기록 저장
+  Future<void> _recordCurrentLocationVisit() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || _currentPosition == null) return;
+
+      await FirebaseFirestore.instance
+          .collection('visits')
+          .doc(uid)
+          .collection('points')
+          .add({
+        'geo': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        'ts': Timestamp.now(),
+        'weight': 1.0,
+      });
+
+      debugPrint('✅ 현재 위치 방문 기록 저장 완료');
+    } catch (e) {
+      debugPrint('❌ 방문 기록 저장 오류: $e');
+    }
+  }
+
   // 포스트 배포 결과 처리
   void _handlePostDeployResult(dynamic result) async {
     if (result != null && result is Map<String, dynamic>) {
@@ -1010,14 +1097,14 @@ class _MapScreenState extends State<MapScreen> {
             // 생성된 포스트 위치로 카메라 이동
             mapController?.move(location, 15.0);
             
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('포스트가 성공적으로 배포되었습니다!'),
                   backgroundColor: Colors.green,
-                ),
-              );
-            }
+              ),
+            );
+          }
           }
         } catch (e) {
           if (mounted) {
@@ -1038,7 +1125,26 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          FlutterMap(
+          GestureDetector(
+            onSecondaryTapDown: (TapDownDetails details) {
+              // 크롬에서 오른쪽 클릭 시 포스트 뿌리기 메뉴 표시
+              final RenderBox renderBox = context.findRenderObject() as RenderBox;
+              final localPosition = renderBox.globalToLocal(details.globalPosition);
+              
+              // 지도 좌표로 변환 (대략적인 계산)
+              final mapWidth = renderBox.size.width;
+              final mapHeight = renderBox.size.height;
+              final latRatio = localPosition.dy / mapHeight;
+              final lngRatio = localPosition.dx / mapWidth;
+              
+              final lat = _currentPosition!.latitude + (0.01 * (0.5 - latRatio));
+              final lng = _currentPosition!.longitude + (0.01 * (lngRatio - 0.5));
+              
+              setState(() {
+                _longPressedLatLng = LatLng(lat, lng);
+              });
+            },
+            child: FlutterMap(
         mapController: mapController,
         options: MapOptions(
           initialCenter: _currentPosition ?? const LatLng(37.4969433, 127.0311633),
@@ -1077,7 +1183,7 @@ class _MapScreenState extends State<MapScreen> {
             markers: _userMarkers,
           ),
           // 롱프레스 마커 (포스트 배포용)
-          if (_longPressedLatLng != null)
+              if (_longPressedLatLng != null)
             MarkerLayer(
               markers: [
                 Marker(
@@ -1114,8 +1220,8 @@ class _MapScreenState extends State<MapScreen> {
                   point: _currentPosition!,
                   width: 40,
                   height: 40,
-                  child: Container(
-                    decoration: BoxDecoration(
+             child: Container(
+               decoration: BoxDecoration(
                       color: Colors.blue,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 3),
@@ -1129,7 +1235,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                     child: const Icon(
                       Icons.my_location,
-                      color: Colors.white,
+                 color: Colors.white,
                       size: 20,
                     ),
                   ),
@@ -1150,6 +1256,61 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
         ],
+            ),
+          ),
+          // 상단 필터 바
+          Positioned(
+            top: 16,
+            left: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('쿠폰만'),
+                    selected: _showCouponsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showCouponsOnly = selected;
+                      });
+                      _updateClustering();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('내 포스트'),
+                    selected: _showMyPostsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showMyPostsOnly = selected;
+                      });
+                      _updateClustering();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  if (_showCouponsOnly || _showMyPostsOnly)
+                    FilterChip(
+                      label: const Text('필터 초기화'),
+                      selected: false,
+                      onSelected: (_) {
+                        setState(() {
+                          _showCouponsOnly = false;
+                          _showMyPostsOnly = false;
+                        });
+                        _updateClustering();
+                      },
+                    ),
+                ],
+              ),
+            ),
           ),
           // 롱프레스 팝업 위젯
           if (_longPressedLatLng != null)
@@ -1158,7 +1319,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
-        children: [
+                 children: [
           // 모든 마커 삭제 버튼
           if (_userMarkers.isNotEmpty)
             FloatingActionButton(
@@ -1252,9 +1413,11 @@ class _MapScreenState extends State<MapScreen> {
           // 현재 위치로 이동 버튼
           FloatingActionButton(
             heroTag: "current_location",
-            onPressed: () {
+            onPressed: () async {
               if (_currentPosition != null) {
                 mapController?.move(_currentPosition!, 15.0);
+                // 현재 위치 방문 기록 저장
+                await _recordCurrentLocationVisit();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('현재 위치로 이동했습니다')),
                 );
