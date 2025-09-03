@@ -21,9 +21,9 @@ class PostPlaceScreen extends StatefulWidget {
   final PlaceModel place;
   
   const PostPlaceScreen({
-    Key? key,
+    super.key,
     required this.place,
-  }) : super(key: key);
+  });
 
   @override
   State<PostPlaceScreen> createState() => _PostPlaceScreenState();
@@ -60,8 +60,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   String _soundFileName = '';
   
   // 크로스 플랫폼 이미지 저장
-  List<dynamic> _selectedImages = []; // File 또는 Uint8List
-  List<String> _imageNames = []; // 이미지 이름 저장
+  final List<dynamic> _selectedImages = []; // File 또는 Uint8List
+  final List<String> _imageNames = []; // 이미지 이름 저장
   
   // 로딩 상태
   bool _isLoading = false;
@@ -800,7 +800,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   Widget _buildFunctionDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedFunction,
+      initialValue: _selectedFunction,
       decoration: const InputDecoration(
         labelText: '기능',
         border: OutlineInputBorder(),
@@ -984,7 +984,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

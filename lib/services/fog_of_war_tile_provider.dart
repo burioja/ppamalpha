@@ -3,9 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 /// 포그 오브 워 타일 레벨 정의
@@ -71,7 +69,7 @@ class FogOfWarTileProvider {
 
   /// 타일의 포그 레벨 계산
   Future<FogLevel> getFogLevelForTile(int z, int x, int y) async {
-    final tileKey = '${z}_${x}_${y}';
+    final tileKey = '${z}_$x_$y';
     
     // 캐시 확인
     if (_tileCache.containsKey(tileKey)) {
@@ -136,7 +134,7 @@ class FogOfWarTileProvider {
 
   /// 방문한 타일인지 확인
   Future<bool> _isVisitedTile(int z, int x, int y) async {
-    final tileKey = '${z}_${x}_${y}';
+    final tileKey = '${z}_$x_$y';
     
     // 로컬 캐시 확인
     if (_visitedTiles.containsKey(tileKey)) {

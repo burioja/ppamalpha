@@ -154,7 +154,7 @@ class _TrackConnectionScreenState extends State<TrackConnectionScreen> {
         }).toList();
       }
     } catch (e) {
-      print('Error fetching user list: $e');
+      debugPrint('Error fetching user list: $e');
       return [];
     }
   }

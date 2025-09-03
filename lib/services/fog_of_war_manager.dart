@@ -17,7 +17,7 @@ class FogOfWarManager {
   VoidCallback? _onTileUpdate;
   
   // 설정값
-  static const Duration _locationUpdateInterval = Duration(seconds: 5);
+
   static const int _locationUpdateDistance = 10; // 10m 이동 시 업데이트
   static const Duration _visitRetention = Duration(days: 30);
 

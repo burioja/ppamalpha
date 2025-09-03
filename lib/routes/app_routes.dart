@@ -55,7 +55,7 @@ class AppRoutes {
     login: (context) => const LoginScreen(),
     signup: (context) => const SignupScreen(),
     main: (context) => const MainScreen(),
-    map: (context) => MapScreen(),
+    map: (context) => const MapScreen(),
 
     budget: (context) => const BudgetScreen(),
     search: (context) => const SearchScreen(),

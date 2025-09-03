@@ -5,7 +5,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/location_service.dart';
 
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({Key? key}) : super(key: key);
+  const LocationPickerScreen({super.key});
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();

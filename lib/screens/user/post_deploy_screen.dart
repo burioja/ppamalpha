@@ -10,9 +10,9 @@ class PostDeployScreen extends StatefulWidget {
   final Map<String, dynamic> arguments;
 
   const PostDeployScreen({
-    Key? key,
+    super.key,
     required this.arguments,
-  }) : super(key: key);
+  });
 
   @override
   State<PostDeployScreen> createState() => _PostDeployScreenState();
@@ -389,7 +389,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
           },
           child: Container(
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF4D4DFF).withOpacity(0.1) : Colors.white,
+              color: isSelected ? const Color(0xFF4D4DFF).withValues(alpha: 0.1) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected ? const Color(0xFF4D4DFF) : Colors.grey.shade300,
@@ -526,7 +526,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF4D4DFF).withOpacity(0.1),
+            color: const Color(0xFF4D4DFF).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF4D4DFF)),
           ),

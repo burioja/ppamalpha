@@ -27,7 +27,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _widgetOptions = [
-      MapScreen(),
+      const MapScreen(),
       const InboxScreen(),
     ];
     _loadCurrentAddress();
@@ -142,7 +142,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildCustomNavBar() {
-    final Color accentColor = const Color(0xFF4D4DFF);
+    const Color accentColor = Color(0xFF4D4DFF);
 
     return Container(
       padding: const EdgeInsets.only(top: 5, bottom: 15, left: 8, right: 8),
@@ -165,7 +165,7 @@ class _MainScreenState extends State<MainScreen> {
                     _onItemTapped(index);
                   }
                 },
-                child: Container(
+                child: SizedBox(
                   height: 60,
                   child: Center(
                     child: Column(

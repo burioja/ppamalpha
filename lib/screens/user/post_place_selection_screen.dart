@@ -3,7 +3,7 @@ import '../../models/place_model.dart';
 import '../../services/place_service.dart';
 
 class PostPlaceSelectionScreen extends StatefulWidget {
-  const PostPlaceSelectionScreen({Key? key}) : super(key: key);
+  const PostPlaceSelectionScreen({super.key});
 
   @override
   State<PostPlaceSelectionScreen> createState() => _PostPlaceSelectionScreenState();

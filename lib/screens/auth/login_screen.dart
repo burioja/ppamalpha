@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 4),
                       TextField(
                         controller: _emailController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: '이메일을 입력하세요',
                           hintStyle: TextStyle(color: Colors.grey),
                           enabledBorder: UnderlineInputBorder(
@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: '비밀번호를 입력하세요',
                           hintStyle: TextStyle(color: Colors.grey),
                           enabledBorder: UnderlineInputBorder(
