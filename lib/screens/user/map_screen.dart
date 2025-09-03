@@ -5,9 +5,11 @@ import 'package:latlong2/latlong.dart';
 import '../../services/post_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
-// 포그 오브 워 관련 import 제거됨 (임시 비활성화)
+// 포그 오브 워 시스템 import
+import '../../services/fog_tile_provider.dart';
+import '../../services/visit_manager.dart';
+import '../../services/location_manager.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -58,9 +60,10 @@ class _MapScreenState extends State<MapScreen> {
   String? userId;
   final PostService _postService = PostService();
   
-  // 🔥 OSM 기반 Fog of War 시스템 - 임시 비활성화
-  // FogOfWarTileProvider? _fogTileProvider;
-  // FogOfWarManager? _fogManager;
+  // 🔥 OSM 기반 Fog of War 시스템
+  FogTileProvider? _fogTileProvider;
+  LocationManager? _locationManager;
+  VisitManager? _visitManager;
 
   // 사용자가 길게 눌러 추가한 마커들 (구글맵 시절 기능 대체)
   final List<Marker> _userMarkers = [];
@@ -81,26 +84,43 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     userId = FirebaseAuth.instance.currentUser?.uid;
     mapController = MapController();
+    _initializeFogOfWarSystem(); // 포그 오브 워 시스템 초기화
     _initializeLocation(); // 위치 서비스 초기화
     _loadCustomMarker(); // 커스텀 마커 로드
   }
 
-  // /// 포그 오브 워 타일 새로고침 - 임시 비활성화
-  // void _refreshFogOfWar() {
-  //   if (_fogTileProvider == null) return;
-  //   
-  //   debugPrint('🔄 포그 오브 워 타일 새로고침');
-  //   _fogTileProvider!.clearCache();
-  //   setState(() {
-  //     // 상태 업데이트로 타일 재렌더링 트리거
-  //   });
-  // }
+  /// 포그 오브 워 시스템 초기화
+  void _initializeFogOfWarSystem() {
+    _fogTileProvider = FogTileProvider();
+    _locationManager = LocationManager();
+    _visitManager = VisitManager();
+    
+    // 위치 변경 콜백 설정
+    _locationManager!.onPositionChanged = (LatLng position) {
+      _fogTileProvider!.setCurrentPosition(position);
+      _currentPosition = position;
+      _refreshFogOfWar();
+    };
+    
+    _locationManager!.onLocationUpdate = (LatLng position) {
+      _visitManager!.recordVisit(position, _currentZoom.round());
+    };
+  }
+  
+  /// 포그 오브 워 타일 새로고침
+  void _refreshFogOfWar() {
+    if (_fogTileProvider == null) return;
+    
+    debugPrint('🔄 포그 오브 워 타일 새로고침');
+        setState(() {
+      // 상태 업데이트로 타일 재렌더링 트리거
+    });
+  }
 
   @override
   void dispose() {
-    // OSM 기반 Fog of War 정리 - 임시 비활성화
-    // _fogManager?.dispose();
-    // _fogTileProvider?.dispose();
+    // OSM 기반 Fog of War 정리
+    _locationManager?.dispose();
     super.dispose();
   }
 
@@ -111,6 +131,11 @@ class _MapScreenState extends State<MapScreen> {
     try {
       // 위치 권한 확인 및 현재 위치 가져오기
       await _getCurrentLocation();
+      
+      // 포그 오브 워 시스템 위치 추적 시작
+      if (_locationManager != null) {
+        await _locationManager!.startLocationTracking();
+      }
       
       debugPrint('✅ 위치 서비스 초기화 완료');
       
@@ -148,11 +173,11 @@ class _MapScreenState extends State<MapScreen> {
         _currentPosition = LatLng(position.latitude, position.longitude);
       });
       
-      // 포그 오브 워 업데이트 - 임시 비활성화
-      // if (_fogManager != null) {
-      //   _fogManager!.setCurrentLocation(_currentPosition!);
-      //   debugPrint('🌫️ 포그 오브 워 위치 업데이트: $_currentPosition');
-      // }
+      // 포그 오브 워 업데이트
+      if (_fogTileProvider != null) {
+        _fogTileProvider!.setCurrentPosition(_currentPosition!);
+        debugPrint('🌫️ 포그 오브 워 위치 업데이트: $_currentPosition');
+      }
       
       debugPrint('✅ 현재 위치 가져오기 완료: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
       
@@ -1036,20 +1061,13 @@ class _MapScreenState extends State<MapScreen> {
     // 현재 위치 방문 기록 저장
   Future<void> _recordCurrentLocationVisit() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null || _currentPosition == null) return;
-
-      await FirebaseFirestore.instance
-          .collection('visits')
-          .doc(uid)
-          .collection('points')
-          .add({
-        'geo': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        'ts': Timestamp.now(),
-        'weight': 1.0,
-      });
-
-      debugPrint('✅ 현재 위치 방문 기록 저장 완료');
+      if (_currentPosition == null) return;
+      
+      // VisitManager를 통해 방문 기록 저장
+      if (_visitManager != null) {
+        await _visitManager!.recordCurrentLocationVisit(_currentPosition!, _currentZoom.round());
+        debugPrint('✅ 현재 위치 방문 기록 저장 완료');
+      }
     } catch (e) {
       debugPrint('❌ 방문 기록 저장 오류: $e');
     }
@@ -1155,6 +1173,12 @@ class _MapScreenState extends State<MapScreen> {
           onMapReady: _onMapReady,
           onPositionChanged: (position, hasGesture) {
               _currentZoom = position.zoom;
+              
+              // 포그 오브 워 시스템에 줌 레벨 전달
+              if (_fogTileProvider != null) {
+                _fogTileProvider!.setCurrentZoom(_currentZoom.round());
+              }
+              
             if (hasGesture) {
               _updateClustering();
             }
@@ -1171,12 +1195,12 @@ class _MapScreenState extends State<MapScreen> {
             userAgentPackageName: 'com.example.ppamproto',
             maxZoom: 18,
           ),
-          // 포그 오브 워 타일 레이어 - 임시 비활성화
-          // if (_fogTileProvider != null)
-          //   TileLayer(
-          //     tileProvider: _fogTileProvider!,
-          //     maxZoom: 18,
-          //   ),
+          // 포그 오브 워 타일 레이어
+          if (_fogTileProvider != null)
+            TileLayer(
+              tileProvider: _fogTileProvider!,
+              maxZoom: 18,
+            ),
           // 기존 마커/클러스터 레이어
           MarkerLayer(
             markers: _isClustered ? _clusteredMarkers : _markers,
