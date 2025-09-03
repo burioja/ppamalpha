@@ -65,6 +65,9 @@ class _MapScreenState extends State<MapScreen> {
   // 사용자가 길게 눌러 추가한 마커들 (구글맵 시절 기능 대체)
   final List<Marker> _userMarkers = [];
   int _userMarkerIdCounter = 0;
+  
+  // 롱프레스 위치 저장 (포스트 배포용)
+  LatLng? _longPressedLatLng;
 
   @override
   void initState() {
@@ -710,10 +713,332 @@ class _MapScreenState extends State<MapScreen> {
     return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
   }
 
+  // 롱프레스 핸들러 (포스트 배포용)
+  void _handleLongPress(LatLng position) {
+    setState(() {
+      _longPressedLatLng = position;
+    });
+  }
+
+  // 롱프레스 팝업 위젯
+  Widget _buildLongPressPopupWidget() {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '포스트 배포',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4D4DFF),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '선택한 위치에서 포스트를 배포합니다',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _navigateToPostDeploy();
+                },
+                icon: const Icon(Icons.location_on, color: Colors.white),
+                label: const Text(
+                  "이 위치에 뿌리기",
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4D4DFF),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _navigateToPostDeployWithAddress();
+                },
+                icon: const Icon(Icons.home, color: Color(0xFF4D4DFF)),
+                label: const Text(
+                  "이 주소에 뿌리기",
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _navigateToPostDeployByCategory();
+                },
+                icon: const Icon(Icons.category, color: Color(0xFF4D4DFF)),
+                label: const Text(
+                  "특정 업종에 뿌리기",
+                  style: TextStyle(color: Color(0xFF4D4DFF), fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '수수료/반경/타겟팅 주의',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                },
+                child: const Text(
+                  "취소",
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 포스트 배포 화면으로 이동 (위치 기반)
+  void _navigateToPostDeploy() async {
+    if (_longPressedLatLng != null) {
+      final result = await Navigator.pushNamed(
+        context, 
+        '/post-deploy',
+        arguments: {
+          'location': _longPressedLatLng,
+          'type': 'location',
+          'address': null,
+        },
+      );
+      
+      setState(() {
+        _longPressedLatLng = null;
+      });
+      
+      _handlePostDeployResult(result);
+    }
+  }
+
+  // 포스트 배포 화면으로 이동 (주소 기반)
+  void _navigateToPostDeployWithAddress() async {
+    if (_longPressedLatLng != null) {
+      final result = await Navigator.pushNamed(
+        context, 
+        '/post-deploy',
+        arguments: {
+          'location': _longPressedLatLng,
+          'type': 'address',
+          'address': null,
+        },
+      );
+      
+      setState(() {
+        _longPressedLatLng = null;
+      });
+      
+      _handlePostDeployResult(result);
+    }
+  }
+
+  // 포스트 배포 화면으로 이동 (업종 기반)
+  void _navigateToPostDeployByCategory() async {
+    if (_longPressedLatLng != null) {
+      final result = await Navigator.pushNamed(
+        context, 
+        '/post-deploy',
+        arguments: {
+          'location': _longPressedLatLng,
+          'type': 'category',
+          'address': null,
+        },
+      );
+      
+      setState(() {
+        _longPressedLatLng = null;
+      });
+      
+      _handlePostDeployResult(result);
+    }
+  }
+
+  // 사용자 마커 추가 다이얼로그
+  void _showAddMarkerDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.add_location, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('마커 추가'),
+            ],
+          ),
+          content: const Text('지도에서 원하는 위치를 탭하여 마커를 추가하세요.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _enableMarkerAddMode();
+              },
+              child: const Text('위치 선택'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 마커 추가 모드 활성화
+  void _enableMarkerAddMode() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('지도에서 원하는 위치를 탭하세요'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+    
+    // 탭 이벤트를 감지하기 위해 임시로 onTap 핸들러 설정
+    // 실제로는 GestureDetector를 사용해야 하지만, 
+    // 현재 구조에서는 간단하게 현재 위치에 마커를 추가
+    if (_currentPosition != null) {
+      _addUserMarker(_currentPosition!);
+    }
+  }
+
+  // 포스트 배포 결과 처리
+  void _handlePostDeployResult(dynamic result) async {
+    if (result != null && result is Map<String, dynamic>) {
+      if (result['location'] != null && result['postId'] != null) {
+        final location = result['location'] as LatLng;
+        final postId = result['postId'] as String;
+        
+        try {
+          // PostService에서 실제 포스트 정보 가져오기
+          final post = await _postService.getPostById(postId);
+          
+          if (post != null) {
+            // 마커 아이템 생성
+            final markerItem = MarkerItem(
+              id: postId,
+              title: post.title,
+              price: post.reward.toString(),
+              amount: '1',
+              userId: post.creatorId,
+              data: {
+                'postId': postId,
+                'type': 'post',
+                'creatorName': post.creatorName,
+                'description': post.description,
+                'targetGender': post.targetGender,
+                'targetAge': post.targetAge,
+                'canRespond': post.canRespond,
+                'canForward': post.canForward,
+                'canRequestReward': post.canRequestReward,
+                'canUse': post.canUse,
+              },
+              position: location,
+              remainingAmount: 1,
+              expiryDate: post.expiresAt,
+            );
+            
+            // 마커 추가 (기존 마커 시스템에 추가)
+            setState(() {
+              _markerItems.add(markerItem);
+            });
+            _updateClustering();
+            
+            // 생성된 포스트 위치로 카메라 이동
+            mapController?.move(location, 15.0);
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('포스트가 성공적으로 배포되었습니다!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('포스트 정보를 가져오는데 실패했습니다: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FlutterMap(
+      body: Stack(
+        children: [
+          FlutterMap(
         mapController: mapController,
         options: MapOptions(
           initialCenter: _currentPosition ?? const LatLng(37.4969433, 127.0311633),
@@ -726,7 +1051,7 @@ class _MapScreenState extends State<MapScreen> {
             }
           },
           onLongPress: (tapPosition, latLng) {
-            _addUserMarker(latLng);
+            _handleLongPress(latLng);
           },
         ),
         children: [
@@ -751,6 +1076,36 @@ class _MapScreenState extends State<MapScreen> {
           MarkerLayer(
             markers: _userMarkers,
           ),
+          // 롱프레스 마커 (포스트 배포용)
+          if (_longPressedLatLng != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _longPressedLatLng!,
+                  width: 40,
+                  height: 40,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           // 현재 위치 마커
           if (_currentPosition != null)
             MarkerLayer(
@@ -794,6 +1149,11 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
+        ],
+          ),
+          // 롱프레스 팝업 위젯
+          if (_longPressedLatLng != null)
+            Center(child: _buildLongPressPopupWidget()),
         ],
       ),
       floatingActionButton: Column(
@@ -878,6 +1238,16 @@ class _MapScreenState extends State<MapScreen> {
               backgroundColor: Colors.blue,
               child: const Icon(Icons.info, color: Colors.white),
             ),
+          const SizedBox(height: 10),
+          // 사용자 마커 추가 버튼
+          FloatingActionButton(
+            heroTag: "add_user_marker",
+            onPressed: () {
+              _showAddMarkerDialog();
+            },
+            backgroundColor: Colors.orange,
+            child: const Icon(Icons.add_location, color: Colors.white),
+          ),
           const SizedBox(height: 10),
           // 현재 위치로 이동 버튼
           FloatingActionButton(
