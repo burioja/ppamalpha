@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/post_service.dart';
@@ -10,6 +11,7 @@ import '../../models/post_model.dart';
 import '../../services/fog_tile_provider.dart';
 import '../../services/visit_manager.dart';
 import '../../services/location_manager.dart';
+import '../../services/production_service.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -98,6 +100,11 @@ class _MapScreenState extends State<MapScreen> {
     // 포그 오브 워 시스템 초기화
     await _fogTileProvider!.initialize();
     
+    // 프로덕션 서비스 초기화 (개발 환경에서는 비활성화)
+    if (kReleaseMode) {
+      await ProductionService().initializeProductionMode();
+    }
+    
     // 위치 변경 콜백 설정
     _locationManager!.onPositionChanged = (LatLng position) {
       _fogTileProvider!.setCurrentPosition(position);
@@ -125,6 +132,12 @@ class _MapScreenState extends State<MapScreen> {
     // OSM 기반 Fog of War 정리
     _locationManager?.dispose();
     _fogTileProvider?.dispose();
+    
+    // 프로덕션 서비스 정리
+    if (kReleaseMode) {
+      ProductionService().shutdownProductionMode();
+    }
+    
     super.dispose();
   }
 
