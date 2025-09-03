@@ -7,8 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
-// import '../../services/fog_of_war_tile_provider.dart';
-// import '../../services/fog_of_war_manager.dart';
+// 포그 오브 워 관련 import 제거됨 (임시 비활성화)
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
@@ -1015,18 +1014,22 @@ class _MapScreenState extends State<MapScreen> {
 
   // 마커 추가 모드 활성화
   void _enableMarkerAddMode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('지도에서 원하는 위치를 탭하세요'),
-        duration: Duration(seconds: 3),
-      ),
-    );
-    
-    // 탭 이벤트를 감지하기 위해 임시로 onTap 핸들러 설정
-    // 실제로는 GestureDetector를 사용해야 하지만, 
-    // 현재 구조에서는 간단하게 현재 위치에 마커를 추가
+    // 현재 위치에 마커 추가 (간단한 구현)
     if (_currentPosition != null) {
       _addUserMarker(_currentPosition!);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('현재 위치에 마커가 추가되었습니다'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('현재 위치를 찾을 수 없습니다'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 

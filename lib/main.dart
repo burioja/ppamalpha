@@ -23,14 +23,7 @@ void main() async {
     await dotenv.load(fileName: '.env');
   } catch (_) {}
 
-  // 웹에서 google_maps_flutter_web이 읽을 수 있도록 메타 태그에 주입
-  try {
-    final apiKey = dotenv.env['GOOGLE_API_KEY'];
-    if (apiKey != null && apiKey.isNotEmpty) {
-      setMetaContent('google_maps_api_key', apiKey);
-      await loadGoogleMapsScript(apiKey);
-    }
-  } catch (_) {}
+  // 구글맵 관련 코드 제거됨 (OSM 사용)
 
   setFirebaseLocale();
 
