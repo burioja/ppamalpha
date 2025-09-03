@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 import '../../services/post_service.dart';
-import '../../providers/user_provider.dart';
-import 'package:provider/provider.dart';
+
 
 class PostDeployScreen extends StatefulWidget {
   final Map<String, dynamic> arguments;

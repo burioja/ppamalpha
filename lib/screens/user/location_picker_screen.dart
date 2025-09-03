@@ -15,7 +15,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   MapController? _mapController;
   LatLng? _current;
   LatLng? _picked;
-  String? _pickedAddress;
+  // String? _pickedAddress; // 사용되지 않음
   final TextEditingController _addressController = TextEditingController();
   List<Location> _searchResults = [];
   bool _loadingLocation = false;

@@ -1,9 +1,5 @@
-import 'dart:ui' as ui;
-import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/post_service.dart';
@@ -54,7 +50,7 @@ class _MapScreenState extends State<MapScreen> {
   MapController? mapController;
   LatLng? _currentPosition;
   final List<Marker> _markers = [];
-  final List<CircleMarker> _circles = [];
+  // final List<CircleMarker> _circles = []; // 사용되지 않음
   final List<Marker> _clusteredMarkers = [];
   bool _isClustered = false;
   double _currentZoom = 13.0;
@@ -178,7 +174,7 @@ class _MapScreenState extends State<MapScreen> {
     const double clusterRadius = 0.001; // 클러스터링 반경 (도 단위)
     final Map<String, List<dynamic>> clusters = {};
     
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    // final String? currentUserId = FirebaseAuth.instance.currentUser?.uid; // 사용되지 않음
     
     // 마커 아이템들 클러스터링
     for (final item in _markerItems) {
@@ -250,7 +246,7 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('개별 마커 표시 시작: 마커 아이템 ${_markerItems.length}개, 포스트 ${_posts.length}개');
     
     final List<Marker> newMarkers = [];
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    // final String? currentUserId = FirebaseAuth.instance.currentUser?.uid; // 사용되지 않음
     
     // 기존 마커들 추가
     for (final item in _markerItems) {
@@ -719,7 +715,7 @@ class _MapScreenState extends State<MapScreen> {
           initialZoom: 13.0,
           onMapReady: _onMapReady,
           onPositionChanged: (position, hasGesture) {
-            _currentZoom = position.zoom ?? 13.0;
+            _currentZoom = position.zoom;
             if (hasGesture) {
               _updateClustering();
             }
@@ -831,7 +827,7 @@ class _MapScreenState extends State<MapScreen> {
                                 style: const TextStyle(fontSize: 12),
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                       actions: [

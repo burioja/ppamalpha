@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'dart:convert';
 
 import '../../models/place_model.dart';

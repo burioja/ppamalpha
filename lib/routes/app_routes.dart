@@ -24,7 +24,7 @@ import '../screens/place/create_place_screen.dart';
 import '../screens/place/place_detail_screen.dart';
 import '../screens/place/place_image_viewer_screen.dart';
 import '../screens/place/place_search_screen.dart';
-import 'package:latlong2/latlong.dart';
+
 
 class AppRoutes {
   static const String login = '/login';
