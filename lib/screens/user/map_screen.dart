@@ -69,6 +69,7 @@ class _MapScreenState extends State<MapScreen> {
 
   // 사용자가 길게 눌러 추가한 마커들 (구글맵 시절 기능 대체)
   final List<Marker> _userMarkers = [];
+  int _userMarkerIdCounter = 0;
 
   @override
   void initState() {
@@ -531,34 +532,159 @@ class _MapScreenState extends State<MapScreen> {
 
   // 길게 누른 위치에 사용자 마커 추가
   void _addUserMarker(LatLng position) {
+    final markerId = 'user_marker_${++_userMarkerIdCounter}';
+    
     setState(() {
       _userMarkers.add(
         Marker(
+          key: ValueKey(markerId),
           point: position,
-          width: 44,
-          height: 44,
+          width: 50,
+          height: 50,
           child: GestureDetector(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('사용자 마커')),
-              );
-            },
+            onTap: () => _showUserMarkerOptions(position, markerId),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.green,
+                color: Colors.blue,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Icon(
-                Icons.place,
+                Icons.add_location,
                 color: Colors.white,
-                size: 22,
+                size: 24,
               ),
             ),
           ),
         ),
       );
     });
+    
+    // 사용자에게 피드백 제공
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('마커가 추가되었습니다 (${_userMarkers.length}개)'),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: '실행취소',
+          onPressed: () => _removeLastUserMarker(),
+        ),
+      ),
+    );
+  }
+
+  // 마지막에 추가된 사용자 마커 제거
+  void _removeLastUserMarker() {
+    if (_userMarkers.isNotEmpty) {
+      setState(() {
+        _userMarkers.removeLast();
+      });
+    }
+  }
+
+  // 특정 마커 제거
+  void _removeUserMarker(String markerId) {
+    setState(() {
+      _userMarkers.removeWhere((marker) => marker.key == ValueKey(markerId));
+    });
+  }
+
+  // 모든 사용자 마커 제거
+  void _clearAllUserMarkers() {
+    setState(() {
+      _userMarkers.clear();
+      _userMarkerIdCounter = 0;
+    });
+  }
+
+  // 사용자 마커 옵션 다이얼로그 표시
+  void _showUserMarkerOptions(LatLng position, String markerId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('마커 옵션'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('위치: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}'),
+              const SizedBox(height: 16),
+              const Text('이 마커로 무엇을 하시겠습니까?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _removeUserMarker(markerId);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('마커가 삭제되었습니다')),
+                );
+              },
+              child: const Text('삭제'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showUserMarkerInfo(position, markerId);
+              },
+              child: const Text('정보 보기'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // 여기에 마커 편집 기능 추가 가능
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('마커 편집 기능은 준비 중입니다')),
+                );
+              },
+              child: const Text('편집'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 사용자 마커 정보 표시
+  void _showUserMarkerInfo(LatLng position, String markerId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('마커 정보'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('마커 ID: $markerId'),
+              const SizedBox(height: 8),
+              Text('위도: ${position.latitude.toStringAsFixed(8)}'),
+              Text('경도: ${position.longitude.toStringAsFixed(8)}'),
+              const SizedBox(height: 8),
+              Text('추가 시간: ${DateTime.now().toString().substring(0, 19)}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showClusterInfo(LatLng position, int count) {
@@ -637,6 +763,109 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // 모든 마커 삭제 버튼
+          if (_userMarkers.isNotEmpty)
+            FloatingActionButton(
+              heroTag: "clear_markers",
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('모든 마커 삭제'),
+                      content: Text('추가한 ${_userMarkers.length}개의 마커를 모두 삭제하시겠습니까?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _clearAllUserMarkers();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('모든 마커가 삭제되었습니다')),
+                            );
+                          },
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+              backgroundColor: Colors.red,
+              child: const Icon(Icons.clear_all, color: Colors.white),
+            ),
+          const SizedBox(height: 10),
+          // 마커 정보 버튼
+          if (_userMarkers.isNotEmpty)
+            FloatingActionButton(
+              heroTag: "marker_info",
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('마커 정보'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('총 마커 개수: ${_userMarkers.length}개'),
+                          const SizedBox(height: 8),
+                          const Text('마커 목록:'),
+                          const SizedBox(height: 4),
+                          ..._userMarkers.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final marker = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Text(
+                                '${index + 1}. ${marker.point.latitude.toStringAsFixed(4)}, ${marker.point.longitude.toStringAsFixed(4)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('확인'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+              backgroundColor: Colors.blue,
+              child: const Icon(Icons.info, color: Colors.white),
+            ),
+          const SizedBox(height: 10),
+          // 현재 위치로 이동 버튼
+          FloatingActionButton(
+            heroTag: "current_location",
+            onPressed: () {
+              if (_currentPosition != null) {
+                mapController?.move(_currentPosition!, 15.0);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('현재 위치로 이동했습니다')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('현재 위치를 찾을 수 없습니다')),
+                );
+              }
+            },
+            backgroundColor: Colors.green,
+            child: const Icon(Icons.my_location, color: Colors.white),
+          ),
         ],
       ),
     );
