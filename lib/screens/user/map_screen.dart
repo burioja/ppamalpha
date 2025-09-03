@@ -357,7 +357,7 @@ class _MapScreenState extends State<MapScreen> {
       width: 48.0,
       height: 48.0,
       child: GestureDetector(
-        onTap: () => _showMarkerInfo(item),
+      onTap: () => _showMarkerInfo(item),
         child: _customMarkerIcon ?? Container(
           decoration: BoxDecoration(
             color: isPostPlace ? Colors.red : Colors.blue,
@@ -380,7 +380,7 @@ class _MapScreenState extends State<MapScreen> {
       width: 48.0,
       height: 48.0,
       child: GestureDetector(
-        onTap: () => _showPostInfo(flyer),
+      onTap: () => _showPostInfo(flyer),
         child: _customMarkerIcon ?? Container(
           decoration: BoxDecoration(
             color: Colors.red,
@@ -1055,7 +1055,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 포스트 배포 결과 처리
+    // 포스트 배포 결과 처리
   void _handlePostDeployResult(dynamic result) async {
     if (result != null && result is Map<String, dynamic>) {
       if (result['location'] != null && result['postId'] != null) {
@@ -1154,7 +1154,7 @@ class _MapScreenState extends State<MapScreen> {
           initialZoom: 13.0,
           onMapReady: _onMapReady,
           onPositionChanged: (position, hasGesture) {
-            _currentZoom = position.zoom;
+              _currentZoom = position.zoom;
             if (hasGesture) {
               _updateClustering();
             }
@@ -1261,60 +1261,60 @@ class _MapScreenState extends State<MapScreen> {
         ],
             ),
           ),
-          // 상단 필터 바
-          Positioned(
-            top: 16,
-            left: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: const Text('쿠폰만'),
+                     // 상단 필터 바
+           Positioned(
+             top: 16,
+             left: 12,
+             right: 12,
+             child: Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+               decoration: BoxDecoration(
+                 color: Colors.white,
+                 borderRadius: BorderRadius.circular(12),
+                 boxShadow: const [
+                   BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2)),
+                 ],
+               ),
+               child: Row(
+                 children: [
+                   FilterChip(
+                     label: const Text('쿠폰만'),
                     selected: _showCouponsOnly,
                     onSelected: (selected) {
                       setState(() {
                         _showCouponsOnly = selected;
                       });
-                      _updateClustering();
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('내 포스트'),
+                       _updateClustering();
+                     },
+                   ),
+                   const SizedBox(width: 8),
+                   FilterChip(
+                     label: const Text('내 포스트'),
                     selected: _showMyPostsOnly,
                     onSelected: (selected) {
                       setState(() {
                         _showMyPostsOnly = selected;
                       });
-                      _updateClustering();
-                    },
-                  ),
-                  const SizedBox(width: 8),
+                       _updateClustering();
+                     },
+                   ),
+                   const SizedBox(width: 8),
                   if (_showCouponsOnly || _showMyPostsOnly)
-                    FilterChip(
-                      label: const Text('필터 초기화'),
-                      selected: false,
-                      onSelected: (_) {
+                     FilterChip(
+                       label: const Text('필터 초기화'),
+                       selected: false,
+                       onSelected: (_) {
                         setState(() {
                           _showCouponsOnly = false;
                           _showMyPostsOnly = false;
                         });
-                        _updateClustering();
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
+                         _updateClustering();
+                       },
+                     ),
+                 ],
+               ),
+             ),
+           ),
           // 롱프레스 팝업 위젯
           if (_longPressedLatLng != null)
             Center(child: _buildLongPressPopupWidget()),
