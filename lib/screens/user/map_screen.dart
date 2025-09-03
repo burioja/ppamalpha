@@ -67,6 +67,9 @@ class _MapScreenState extends State<MapScreen> {
   // FogTileProvider? _fogTileProvider;
   // FogOfWarManager? _fogManager;
 
+  // 사용자가 길게 눌러 추가한 마커들 (구글맵 시절 기능 대체)
+  final List<Marker> _userMarkers = [];
+
   @override
   void initState() {
     super.initState();
@@ -526,6 +529,38 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // 길게 누른 위치에 사용자 마커 추가
+  void _addUserMarker(LatLng position) {
+    setState(() {
+      _userMarkers.add(
+        Marker(
+          point: position,
+          width: 44,
+          height: 44,
+          child: GestureDetector(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('사용자 마커')),
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: const Icon(
+                Icons.place,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   void _showClusterInfo(LatLng position, int count) {
     showDialog(
       context: context,
@@ -563,11 +598,15 @@ class _MapScreenState extends State<MapScreen> {
               _updateClustering();
             }
           },
+          onLongPress: (tapPosition, latLng) {
+            _addUserMarker(latLng);
+          },
         ),
         children: [
-          // OSM 기본 타일 레이어
+          // 라벨이 없는 CartoDB 타일 (지역명/도로명 텍스트 제거)
           TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
             userAgentPackageName: 'com.example.ppamproto',
             maxZoom: 18,
           ),
@@ -577,9 +616,13 @@ class _MapScreenState extends State<MapScreen> {
           //     tileProvider: _fogTileProvider!,
           //     maxZoom: 18,
           //   ),
-          // 마커 레이어
+          // 기존 마커/클러스터 레이어
           MarkerLayer(
             markers: _isClustered ? _clusteredMarkers : _markers,
+          ),
+          // 사용자 마커 레이어 (길게 누르면 추가)
+          MarkerLayer(
+            markers: _userMarkers,
           ),
           // 원형 레이어 (현재 위치 표시)
           if (_currentPosition != null)
