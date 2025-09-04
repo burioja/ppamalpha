@@ -108,7 +108,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: "성별"),
-                    value: _selectedGender,
+                    initialValue: _selectedGender,
                     items: const [
                       DropdownMenuItem(value: "남성", child: Text("남성")),
                       DropdownMenuItem(value: "여성", child: Text("여성")),

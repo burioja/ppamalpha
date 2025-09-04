@@ -444,7 +444,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   Widget _buildFunctionDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedFunction,
+      initialValue: _selectedFunction,
       decoration: const InputDecoration(
         labelText: '기능',
         border: OutlineInputBorder(),

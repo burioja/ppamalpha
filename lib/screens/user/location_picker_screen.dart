@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../services/location_service.dart';
 
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({Key? key}) : super(key: key);
+  const LocationPickerScreen({super.key});
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  GoogleMapController? _mapController;
+  MapController? _mapController;
   LatLng? _current;
   LatLng? _picked;
-  String? _pickedAddress;
+  // String? _pickedAddress; // 사용되지 않음
   final TextEditingController _addressController = TextEditingController();
   List<Location> _searchResults = [];
   bool _loadingLocation = false;
@@ -22,6 +23,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
+    _mapController = MapController();
     _initCurrentLocation();
   }
 
@@ -148,9 +150,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         _searchResults = [];
                         _addressController.clear();
                       });
-                      _mapController?.animateCamera(
-                        CameraUpdate.newLatLng(_picked!),
-                      );
+                      _mapController?.move(_picked!, 15.0);
                     },
                   );
                 },
@@ -159,16 +159,43 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           Expanded(
             child: _current == null
                 ? const Center(child: Text('지도를 초기화하는 중...'))
-                : GoogleMap(
-                    onMapCreated: (c) => _mapController = c,
-                    initialCameraPosition: CameraPosition(target: _current!, zoom: 15),
-                    myLocationEnabled: true,
-                    onTap: (latLng) {
-                      setState(() => _picked = latLng);
-                    },
-                    markers: {
-                      if (_picked != null) Marker(markerId: const MarkerId('picked'), position: _picked!),
-                    },
+                : FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: _current!,
+                      initialZoom: 15.0,
+                      onTap: (tapPosition, point) {
+                        setState(() => _picked = point);
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.ppamproto',
+                      ),
+                      if (_picked != null)
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: _picked!,
+                              width: 40.0,
+                              height: 40.0,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
           ),
         ],

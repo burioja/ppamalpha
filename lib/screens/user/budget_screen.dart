@@ -35,7 +35,7 @@ class BudgetScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    ButtonBar(
+                    OverflowBar(
                       alignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton(onPressed: (){}, child: const Text('충전')),

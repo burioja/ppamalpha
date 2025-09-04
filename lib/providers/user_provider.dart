@@ -6,7 +6,7 @@ class UserProvider with ChangeNotifier {
   String? _email;
   String? _phoneNumber;
   String? _address;
-  List<Map<String, String>> _workPlaces = [];
+  final List<Map<String, String>> _workPlaces = [];
   bool _isLoggedIn = false;
 
   String? get userId => _userId;

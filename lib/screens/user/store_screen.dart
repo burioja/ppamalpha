@@ -49,14 +49,14 @@ class StoreScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           // 기본 정보
-          Row(
+          const Row(
             children: [
-              const CircleAvatar(radius: 26, child: Icon(Icons.store)),
-              const SizedBox(width: 12),
+              CircleAvatar(radius: 26, child: Icon(Icons.store)),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text('가게명', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     SizedBox(height: 4),
                     Text('서울시 어딘가 123', style: TextStyle(color: Colors.grey)),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+// import 'dart:html' as html; // 임시 비활성화
 
 Widget buildNetworkImage(String url) {
   // Chrome/Safari에서 이미지 캐시/헤더 문제 회피를 위해 nocache 쿼리 추가

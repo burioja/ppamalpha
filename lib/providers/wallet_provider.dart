@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class WalletProvider with ChangeNotifier {
   double _balance = 0.0;
-  List<Transaction> _transactions = [];
+  final List<Transaction> _transactions = [];
 
   double get balance => _balance;
   List<Transaction> get transactions => _transactions;

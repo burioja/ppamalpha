@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'app.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'utils/web_dom_stub.dart'
-    if (dart.library.html) 'utils/web_dom.dart';
+// import 'utils/web_dom_stub.dart'
+//     if (dart.library.html) 'utils/web_dom.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,14 +23,9 @@ void main() async {
     await dotenv.load(fileName: '.env');
   } catch (_) {}
 
-  // 웹에서 google_maps_flutter_web이 읽을 수 있도록 메타 태그에 주입
-  try {
-    final apiKey = dotenv.env['GOOGLE_API_KEY'];
-    if (apiKey != null && apiKey.isNotEmpty) {
-      setMetaContent('google_maps_api_key', apiKey);
-      await loadGoogleMapsScript(apiKey);
-    }
-  } catch (_) {}
+  // 구글맵 관련 코드 제거됨 (OSM 사용)
+  // setMetaContent('google_maps_api_key', apiKey);
+  // await loadGoogleMapsScript(apiKey);
 
   setFirebaseLocale();
 

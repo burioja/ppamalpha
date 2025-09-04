@@ -24,7 +24,7 @@ import '../screens/place/create_place_screen.dart';
 import '../screens/place/place_detail_screen.dart';
 import '../screens/place/place_image_viewer_screen.dart';
 import '../screens/place/place_search_screen.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 
 class AppRoutes {
   static const String login = '/login';
@@ -55,7 +55,7 @@ class AppRoutes {
     login: (context) => const LoginScreen(),
     signup: (context) => const SignupScreen(),
     main: (context) => const MainScreen(),
-    map: (context) => MapScreen(),
+    map: (context) => const MapScreen(),
 
     budget: (context) => const BudgetScreen(),
     search: (context) => const SearchScreen(),
