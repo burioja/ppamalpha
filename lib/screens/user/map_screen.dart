@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/post_model.dart';
 import '../../services/post_service.dart';
+import '../../services/marker_service.dart';
 // OSM 기반 Fog of War 시스템
 import '../../services/osm_fog_service.dart';
 import '../../services/nominatim_service.dart';
@@ -68,6 +69,7 @@ class _MapScreenState extends State<MapScreen> {
   
   // 포스트 관련
   List<PostModel> _posts = [];
+  List<MarkerData> _markers = [];
   bool _isLoading = false;
   String? _errorMessage;
   
@@ -89,6 +91,7 @@ class _MapScreenState extends State<MapScreen> {
     _initializeLocation();
     _loadCustomMarker();
     _loadPosts();
+    _loadMarkers();
   }
 
   void _loadCustomMarker() {
@@ -163,6 +166,10 @@ class _MapScreenState extends State<MapScreen> {
       
       // 주소 업데이트
       _updateCurrentAddress();
+      
+      // 포스트 및 마커 로드
+      _loadPosts();
+      _loadMarkers();
       
       // 현재 위치 마커 생성
       _createCurrentLocationMarker(newPosition);
@@ -249,10 +256,29 @@ class _MapScreenState extends State<MapScreen> {
       
       _updateMarkers();
     } catch (e) {
-      setState(() {
+    setState(() {
         _errorMessage = '포스트를 불러오는 중 오류가 발생했습니다: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMarkers() async {
+    if (_currentPosition == null) return;
+
+    try {
+      final markers = await MarkerService.getMarkersInRadius(
+        center: _currentPosition!,
+        radiusInKm: _maxDistance / 1000.0,
+      );
+    
+    setState(() {
+        _markers = markers;
+      });
+      
+      _updateMarkers();
+    } catch (e) {
+      print('마커 로드 중 오류: $e');
     }
   }
 
@@ -307,9 +333,104 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
+    // 사용자 마커들 (ppam_work 이미지) - 모든 사용자에게 보임
+    for (final marker in _markers) {
+      final position = marker.position;
+      
+      // 거리 확인
+      if (_currentPosition != null) {
+        final distance = _calculateDistance(_currentPosition!, position);
+        if (distance > _maxDistance) continue;
+      }
+      
+      final markerWidget = Marker(
+      point: position,
+        width: 35,
+        height: 35,
+      child: GestureDetector(
+          onTap: () => _showMarkerDetail(marker),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/ppam_work.png',
+                width: 31,
+                height: 31,
+                fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      ),
+    );
+      
+      markers.add(markerWidget);
+    }
+
     setState(() {
       _userMarkers = markers;
     });
+  }
+
+  void _showMarkerDetail(MarkerData marker) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final isOwner = marker.userId == currentUserId;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(marker.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Text('설명: ${marker.description}'),
+            Text('생성일: ${marker.createdAt.toString().split(' ')[0]}'),
+            if (marker.expiryDate != null)
+              Text('만료일: ${marker.expiryDate!.toString().split(' ')[0]}'),
+            if (isOwner) 
+              Text('배포자: 본인', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          actions: [
+            TextButton(
+            onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
+            ),
+          if (isOwner)
+                TextButton(
+                  onPressed: () {
+                Navigator.pop(context);
+                _deleteMarker(marker);
+              },
+              child: const Text('삭제', style: TextStyle(color: Colors.red)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteMarker(MarkerData marker) async {
+    try {
+      await MarkerService.deleteMarker(marker.id);
+      _loadMarkers(); // 마커 목록 새로고침
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('마커가 삭제되었습니다.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('마커 삭제 중 오류가 발생했습니다: $e')),
+      );
+    }
   }
 
   bool _matchesFilter(PostModel post) {
@@ -324,82 +445,6 @@ class _MapScreenState extends State<MapScreen> {
     return true;
   }
 
-    void _showPostDetail(PostModel post) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(post.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Text('리워드: ${post.reward}원'),
-            Text('설명: ${post.description}'),
-            Text('만료일: ${post.expiresAt.toString().split(' ')[0]}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-            onPressed: () => Navigator.pop(context),
-              child: const Text('닫기'),
-            ),
-                TextButton(
-                  onPressed: () {
-              Navigator.pop(context);
-              _collectPost(post);
-                  },
-            child: const Text('수집'),
-                ),
-          ],
-      ),
-    );
-  }
-
-  void _showPostDetail(PostModel post) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final isOwner = post.creatorId == currentUserId;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(post.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Text('리워드: ${post.reward}원'),
-            Text('설명: ${post.description}'),
-            Text('만료일: ${post.expiresAt.toString().split(' ')[0]}'),
-            if (isOwner) 
-              Text('배포자: 본인', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          actions: [
-            TextButton(
-            onPressed: () => Navigator.pop(context),
-              child: const Text('닫기'),
-            ),
-          if (isOwner)
-              TextButton(
-                onPressed: () {
-                Navigator.pop(context);
-                _removePost(post);
-              },
-              child: const Text('회수', style: TextStyle(color: Colors.red)),
-            )
-          else
-              TextButton(
-                onPressed: () {
-                Navigator.pop(context);
-                _collectPost(post);
-              },
-              child: const Text('수집'),
-            ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _collectPost(PostModel post) async {
     try {
       await PostService().collectPost(
@@ -407,11 +452,11 @@ class _MapScreenState extends State<MapScreen> {
         userId: FirebaseAuth.instance.currentUser!.uid
       );
       _loadPosts(); // 포스트 목록 새로고침
-      ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 수집했습니다!')),
-      );
+          );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 수집 중 오류가 발생했습니다: $e')),
       );
     }
@@ -421,11 +466,11 @@ class _MapScreenState extends State<MapScreen> {
     try {
       await PostService().deletePost(post.flyerId);
       _loadPosts(); // 포스트 목록 새로고침
-      ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다!')),
-      );
+          );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 회수 중 오류가 발생했습니다: $e')),
       );
     }
@@ -806,6 +851,27 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+                  // 마커 생성 버튼
+            SizedBox(
+              width: double.infinity,
+                    height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                        Navigator.pop(context);
+                        _showCreateMarkerDialog();
+                      },
+                      icon: const Icon(Icons.add_location),
+                      label: const Text('마커 생성'),
+                style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
                   const SizedBox(height: 12),
                   // 취소 버튼
             SizedBox(
@@ -856,17 +922,92 @@ class _MapScreenState extends State<MapScreen> {
   void _navigateToPostAddress() {
     // 주소 기반 포스트 배포 화면으로 이동
     Navigator.pushNamed(context, '/post-deploy', arguments: {
-      'location': _longPressedLatLng,
-      'type': 'address',
+        'location': _longPressedLatLng,
+        'type': 'address',
     });
   }
 
   void _navigateToPostBusiness() {
     // 업종 기반 포스트 배포 화면으로 이동
     Navigator.pushNamed(context, '/post-deploy', arguments: {
-      'location': _longPressedLatLng,
-      'type': 'category',
+        'location': _longPressedLatLng,
+        'type': 'category',
     });
+  }
+
+  void _showCreateMarkerDialog() {
+    if (_longPressedLatLng == null) return;
+
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('마커 생성'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+            children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: '제목',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: descriptionController,
+              decoration: const InputDecoration(
+                labelText: '설명',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+          actions: [
+            TextButton(
+            onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+          TextButton(
+            onPressed: () async {
+              if (titleController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('제목을 입력해주세요.')),
+                );
+                return;
+              }
+
+              try {
+                await MarkerService.createMarker(
+                  title: titleController.text.trim(),
+                  description: descriptionController.text.trim(),
+                  position: _longPressedLatLng!,
+                  additionalData: {
+                    'type': 'user_marker',
+                    'createdAt': DateTime.now().toIso8601String(),
+                  },
+                  expiryDate: DateTime.now().add(const Duration(days: 30)),
+                );
+
+                Navigator.pop(context);
+                _loadMarkers(); // 마커 목록 새로고침
+      ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('마커가 생성되었습니다!')),
+      );
+              } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('마커 생성 중 오류가 발생했습니다: $e')),
+                );
+              }
+            },
+            child: const Text('생성'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onMapReady() {
