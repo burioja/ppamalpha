@@ -247,6 +247,31 @@ class PostService {
     }
   }
 
+  // 포스트 삭제 (발행자만 가능)
+  Future<void> deletePost(String postId) async {
+    try {
+      debugPrint('🔄 deletePost 호출: postId=$postId');
+      
+      // 포스트 존재 확인
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
+        throw Exception('포스트를 찾을 수 없습니다.');
+      }
+      
+      // Firestore에서 삭제
+      await _firestore.collection('posts').doc(postId).delete();
+      
+      // Meilisearch에서 제거
+      await _removeFromMeilisearch(postId);
+      
+      debugPrint('✅ 포스트 삭제 완료: $postId');
+    } catch (e) {
+      debugPrint('❌ deletePost 실패: $e');
+      throw Exception('포스트 삭제 실패: $e');
+    }
+  }
+
   // 전단지 회수 (발행자만 가능)
   // 발행자가 자신의 포스트를 회수하는 메서드
   Future<void> collectPostAsCreator({

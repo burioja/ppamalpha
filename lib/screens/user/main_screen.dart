@@ -27,7 +27,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _widgetOptions = [
-      const MapScreen(),
+      MapScreen(onAddressChanged: _onAddressChanged),
       const InboxScreen(),
     ];
     _loadCurrentAddress();
@@ -59,6 +59,14 @@ class _MainScreenState extends State<MainScreen> {
           _currentLocation = '주소를 가져올 수 없습니다.';
         });
       }
+    }
+  }
+
+  void _onAddressChanged(String address) {
+    if (mounted) {
+      setState(() {
+        _currentLocation = address;
+      });
     }
   }
 

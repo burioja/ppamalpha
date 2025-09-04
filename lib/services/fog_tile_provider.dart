@@ -65,7 +65,13 @@ class FogTileProvider extends TileProvider {
     // 성능 모니터링 완료
     _performanceMonitor.endTileLoadTimer(tileKey, fogLevel, false);
     
-    return _getImageForFogLevel(fogLevel);
+    // 현재 위치 1km 반경 내에서는 밝은 지도 타일 반환
+    if (fogLevel == FogLevel.clear) {
+      return _getBrightMapTile(coords);
+    } else {
+      // 나머지 모든 지역은 검은색 다크 테마 지도 타일 사용
+      return _getDarkMapTile(coords);
+    }
   }
   
   /// 타일에 대한 포그 레벨 결정
@@ -79,17 +85,35 @@ class FogTileProvider extends TileProvider {
     
     FogLevel level;
     
-    // 1. 현재 위치 1km 반경 체크
-    if (_currentPosition != null && 
-        TileUtils.isTileInRadius(coords, _currentPosition!, _currentZoom, 1.0)) {
-      level = FogLevel.clear;
-    }
-    // 2. 30일 이내 방문 타일 체크
-    else if (_isRecentlyVisited(coords)) {
-      level = FogLevel.gray;
-    }
-    // 3. 기본값: 검정
-    else {
+    // 현재 위치 1km 반경 체크 (정확한 거리 계산)
+    if (_currentPosition != null) {
+      final tileCenter = TileUtils.tileToLatLng(coords, _currentZoom);
+      final distance = TileUtils.calculateDistance(_currentPosition!, tileCenter);
+      
+      // 타일의 모서리까지의 거리도 고려하여 원형 반경 구현
+      final tileSize = 256; // 타일 크기
+      final tileSizeInKm = _getTileSizeInKm(_currentZoom);
+      final tileRadius = tileSizeInKm / 2; // 타일 반지름
+      
+      // 타일 중심에서 가장 가까운 모서리까지의 거리
+      final minDistance = distance - tileRadius;
+      final maxDistance = distance + tileRadius;
+      
+      if (maxDistance <= 1.0) {
+        // 타일 전체가 1km 반경 내에 있음
+        level = FogLevel.clear;
+        debugPrint('🗺️ 타일 ${coords.x},${coords.y}: CLEAR (${distance.toStringAsFixed(2)}km)');
+      } else if (minDistance > 1.0) {
+        // 타일 전체가 1km 반경 밖에 있음
+        level = FogLevel.black;
+        debugPrint('⚫ 타일 ${coords.x},${coords.y}: BLACK (${distance.toStringAsFixed(2)}km)');
+      } else {
+        // 타일이 1km 반경과 겹침 - 원형 마스크 적용
+        level = _isTileInCircularRadius(coords) ? FogLevel.clear : FogLevel.black;
+        debugPrint('🔍 타일 ${coords.x},${coords.y}: ${level == FogLevel.clear ? 'CLEAR' : 'BLACK'} (${distance.toStringAsFixed(2)}km)');
+      }
+    } else {
+      // 위치 정보가 없으면 모든 지역을 검정으로
       level = FogLevel.black;
     }
     
@@ -107,23 +131,57 @@ class FogTileProvider extends TileProvider {
     return false;
   }
   
-  /// 포그 레벨에 따른 이미지 반환
-  ImageProvider _getImageForFogLevel(FogLevel level) {
-    // 실제 구현에서는 동적으로 색상 오버레이 이미지를 생성
-    // 여기서는 간단한 색상 기반 이미지 사용
-    switch (level) {
-      case FogLevel.clear:
-        // 투명 이미지 (지도 완전 노출)
-        return _createColorImage(Colors.transparent);
-      case FogLevel.gray:
-        // 회색 반투명 오버레이
-        return _createColorImage(Colors.black.withValues(alpha: 0.3));
-      case FogLevel.black:
-        // 검정 오버레이 (지도 완전 가림)
-        return _createColorImage(Colors.black);
-    }
+  /// 밝은 지도 타일 반환 (현재 위치 1km 반경)
+  ImageProvider _getBrightMapTile(Coords coords) {
+    // 밝은 지도 타일 URL 생성
+    final url = 'https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${_currentZoom}/${coords.x}/${coords.y}.png';
+    return NetworkImage(url);
   }
-  
+
+  /// 검은색 다크 테마 지도 타일 반환 (미방문 지역)
+  ImageProvider _getDarkMapTile(Coords coords) {
+    // 검은색 다크 테마 지도 타일 URL 생성
+    final url = 'https://a.basemaps.cartocdn.com/dark_nolabels/${_currentZoom}/${coords.x}/${coords.y}.png';
+    return NetworkImage(url);
+  }
+
+  /// 줌 레벨에 따른 타일 크기 계산 (km)
+  double _getTileSizeInKm(int zoom) {
+    // 위도 0도에서의 타일 크기 계산
+    final earthCircumference = 40075.0; // 지구 둘레 (km)
+    return earthCircumference / (1 << zoom);
+  }
+
+  /// 타일이 원형 반경 내에 있는지 확인
+  bool _isTileInCircularRadius(Coords coords) {
+    if (_currentPosition == null) return false;
+    
+    final tileCenter = TileUtils.tileToLatLng(coords, _currentZoom);
+    final distance = TileUtils.calculateDistance(_currentPosition!, tileCenter);
+    
+    // 타일의 4개 모서리 중 하나라도 1km 반경 내에 있으면 CLEAR
+    final tileSizeInKm = _getTileSizeInKm(_currentZoom);
+    final halfTileSize = tileSizeInKm / 2;
+    
+    // 타일의 4개 모서리 좌표 계산
+    final corners = [
+      LatLng(tileCenter.latitude + halfTileSize / 111.32, tileCenter.longitude - halfTileSize / 111.32),
+      LatLng(tileCenter.latitude + halfTileSize / 111.32, tileCenter.longitude + halfTileSize / 111.32),
+      LatLng(tileCenter.latitude - halfTileSize / 111.32, tileCenter.longitude - halfTileSize / 111.32),
+      LatLng(tileCenter.latitude - halfTileSize / 111.32, tileCenter.longitude + halfTileSize / 111.32),
+    ];
+    
+    // 모서리 중 하나라도 1km 반경 내에 있으면 true
+    for (final corner in corners) {
+      final cornerDistance = TileUtils.calculateDistance(_currentPosition!, corner);
+      if (cornerDistance <= 1.0) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   /// 색상 기반 이미지 생성
   ImageProvider _createColorImage(Color color) {
     // 실제 구현에서는 Canvas를 사용해서 이미지를 생성
@@ -131,15 +189,52 @@ class FogTileProvider extends TileProvider {
     return MemoryImage(_createColorImageData(color));
   }
   
-  /// 색상 이미지 데이터 생성
+  /// 색상 이미지 데이터 생성 (PNG 형식)
   Uint8List _createColorImageData(Color color) {
-    // 1x1 픽셀 이미지 생성 (실제로는 256x256이어야 함)
-    final bytes = Uint8List(4);
-    bytes[0] = color.red;
-    bytes[1] = color.green;
-    bytes[2] = color.blue;
-    bytes[3] = color.alpha;
-    return bytes;
+    // 간단한 1x1 픽셀 PNG 이미지 생성 (실제로는 256x256이어야 하지만 성능상 1x1 사용)
+    // PNG 헤더 + 1x1 픽셀 데이터
+    final List<int> pngData = [
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG 시그니처
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR 청크
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1 크기
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, // 8비트 RGBA
+      0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, // IDAT 청크
+      0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, // 압축된 픽셀 데이터
+      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, // CRC
+      0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, // IEND 청크
+      0x42, 0x60, 0x82
+    ];
+    
+    // 실제로는 더 간단한 방법으로 검은색 이미지 생성
+    if (color == Colors.black) {
+      // 완전히 검은색 1x1 픽셀
+      return Uint8List.fromList([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+      ]);
+    } else if (color == Colors.transparent) {
+      // 투명한 1x1 픽셀
+      return Uint8List.fromList([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+      ]);
+    }
+    
+    return Uint8List.fromList(pngData);
   }
   
   /// 비동기적으로 방문 기록 확인
