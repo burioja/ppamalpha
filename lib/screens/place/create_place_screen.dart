@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -198,7 +198,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
               
               // 메인 카테고리
               DropdownButtonFormField<String>(
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 decoration: const InputDecoration(
                   labelText: '메인 카테고리',
                   border: OutlineInputBorder(),
@@ -223,7 +223,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
               // 서브 카테고리
               if (_selectedCategory != null)
                 DropdownButtonFormField<String>(
-                  value: _selectedSubCategory,
+                  initialValue: _selectedSubCategory,
                   decoration: const InputDecoration(
                     labelText: '서브 카테고리',
                     border: OutlineInputBorder(),

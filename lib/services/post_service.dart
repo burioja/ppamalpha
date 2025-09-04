@@ -247,63 +247,152 @@ class PostService {
     }
   }
 
+  // 포스트 삭제 (발행자만 가능)
+  Future<void> deletePost(String postId) async {
+    try {
+      debugPrint('🔄 deletePost 호출: postId=$postId');
+      
+      // 포스트 존재 확인
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
+        throw Exception('포스트를 찾을 수 없습니다.');
+      }
+      
+      // Firestore에서 삭제
+      await _firestore.collection('posts').doc(postId).delete();
+      
+      // Meilisearch에서 제거
+      await _removeFromMeilisearch(postId);
+      
+      debugPrint('✅ 포스트 삭제 완료: $postId');
+    } catch (e) {
+      debugPrint('❌ deletePost 실패: $e');
+      throw Exception('포스트 삭제 실패: $e');
+    }
+  }
+
   // 전단지 회수 (발행자만 가능)
-  Future<void> collectFlyer({
-    required String flyerId,
+  // 발행자가 자신의 포스트를 회수하는 메서드
+  Future<void> collectPostAsCreator({
+    required String postId,
     required String userId,
   }) async {
     try {
       // 발행자 확인
-      final flyerDoc = await _firestore.collection('posts').doc(flyerId).get();
-      if (!flyerDoc.exists) {
-        throw Exception('전단지를 찾을 수 없습니다.');
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        throw Exception('포스트를 찾을 수 없습니다.');
       }
       
-      final flyer = PostModel.fromFirestore(flyerDoc);
-      if (flyer.creatorId != userId) {
-        throw Exception('발행자만 전단지를 회수할 수 있습니다.');
+      final post = PostModel.fromFirestore(postDoc);
+      if (post.creatorId != userId) {
+        throw Exception('발행자만 포스트를 회수할 수 있습니다.');
       }
       
       // 회수 처리
-      await _firestore.collection('posts').doc(flyerId).update({
+      await _firestore.collection('posts').doc(postId).update({
         'isCollected': true,
         'collectedBy': userId,
         'collectedAt': Timestamp.now(),
       });
       
       // Meilisearch에서 제거
-      await _removeFromMeilisearch(flyerId);
+      await _removeFromMeilisearch(postId);
+      
     } catch (e) {
-      throw Exception('전단지 회수 실패: $e');
+      debugPrint('포스트 회수 중 오류: $e');
+      rethrow;
+    }
+  }
+
+  // 일반 사용자가 다른 사용자의 포스트를 수령하는 메서드
+  Future<void> collectPost({
+    required String postId,
+    required String userId,
+  }) async {
+    try {
+      debugPrint('🔄 collectPost 호출: postId=$postId, userId=$userId');
+      
+      // 포스트 존재 확인
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
+        throw Exception('포스트를 찾을 수 없습니다.');
+      }
+      
+      final post = PostModel.fromFirestore(postDoc);
+      debugPrint('📝 포스트 정보: ${post.title}, creatorId: ${post.creatorId}');
+      
+      // 이미 수령된 포스트인지 확인
+      if (post.isCollected) {
+        debugPrint('❌ 이미 수령된 포스트: $postId');
+        throw Exception('이미 수령된 포스트입니다.');
+      }
+      
+      // 자신의 포스트는 수령할 수 없음
+      if (post.creatorId == userId) {
+        debugPrint('❌ 자신의 포스트는 수령할 수 없음: creatorId=${post.creatorId}, userId=$userId');
+        throw Exception('자신의 포스트는 수령할 수 없습니다.');
+      }
+      
+      debugPrint('✅ 수령 조건 확인 완료, 수령 처리 시작');
+      
+      // 수령 처리
+      await _firestore.collection('posts').doc(postId).update({
+        'isCollected': true,
+        'collectedBy': userId,
+        'collectedAt': Timestamp.now(),
+      });
+      
+      debugPrint('✅ 포스트 수령 완료: $postId, 수령자: $userId');
+      
+      // Meilisearch에서 제거
+      await _removeFromMeilisearch(postId);
+    } catch (e) {
+      debugPrint('❌ collectPost 실패: $e');
+      throw Exception('포스트 수령 실패: $e');
     }
   }
 
   // Meilisearch에서 제거
-  Future<void> _removeFromMeilisearch(String flyerId) async {
+  Future<void> _removeFromMeilisearch(String postId) async {
     try {
       // TODO: Meilisearch 클라이언트 구현
-      // await meilisearchClient.index('posts').deleteDocument(flyerId);
-      debugPrint('Meilisearch에서 제거: $flyerId');
+      // await meilisearchClient.index('posts').deleteDocument(postId);
+      debugPrint('Meilisearch에서 제거: $postId');
     } catch (e) {
       debugPrint('Meilisearch 제거 실패: $e');
     }
   }
 
-  // 사용자가 회수한 전단지 조회 (주운 포스트 탭용)
-  Future<List<PostModel>> getCollectedFlyers(String userId) async {
+  // 사용자가 수령한 포스트 조회 (받은 포스트 탭용)
+  Future<List<PostModel>> getCollectedPosts(String userId) async {
     try {
+      debugPrint('🔍 getCollectedPosts 호출: userId=$userId');
+      
       final querySnapshot = await _firestore
           .collection('posts')
           .where('collectedBy', isEqualTo: userId)
           .orderBy('collectedAt', descending: true)
           .get();
 
-      return querySnapshot.docs
+      debugPrint('📊 수령된 포스트 조회 결과: ${querySnapshot.docs.length}개');
+      
+      final posts = querySnapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
+          
+      for (final post in posts) {
+        debugPrint('📝 수령된 포스트: ${post.title} (${post.flyerId}) - 수령일: ${post.collectedAt}');
+      }
+
+      return posts;
     } on FirebaseException catch (e) {
+      debugPrint('⚠️ FirebaseException: ${e.code} - ${e.message}');
       // 인덱스 빌드 전(failed-precondition) 임시 우회: 서버 정렬 없이 가져와 클라이언트에서 정렬
       if (e.code == 'failed-precondition') {
+        debugPrint('🔄 폴백 처리: 인덱스 없이 조회 후 클라이언트 정렬');
         final fallbackSnapshot = await _firestore
             .collection('posts')
             .where('collectedBy', isEqualTo: userId)
@@ -316,29 +405,32 @@ class PostService {
           final bTime = b.collectedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           return bTime.compareTo(aTime); // DESC
         });
+        
+        debugPrint('📊 폴백 처리 결과: ${items.length}개');
         return items;
       }
       rethrow;
     } catch (e) {
-      throw Exception('주운 전단지 조회 실패: $e');
+      debugPrint('❌ getCollectedPosts 에러: $e');
+      throw Exception('수령한 포스트 조회 실패: $e');
     }
   }
 
-  // 주운 포스트의 사용 상태 조회 (향후 확장용)
+  // 수령한 포스트의 사용 상태 조회 (향후 확장용)
   Future<Map<String, bool>> getCollectedPostUsageStatus(String userId) async {
     try {
-      final collectedFlyers = await getCollectedFlyers(userId);
+      final collectedPosts = await getCollectedPosts(userId);
       final Map<String, bool> usageStatus = {};
       
-      for (final flyer in collectedFlyers) {
+      for (final post in collectedPosts) {
         // TODO: 향후 PostClaim 모델 구현 시 실제 사용 상태 확인
         // 현재는 collectedAt이 있으면 수집된 것으로 간주
-        usageStatus[flyer.flyerId] = flyer.collectedAt != null;
+        usageStatus[post.flyerId] = post.collectedAt != null;
       }
       
       return usageStatus;
     } catch (e) {
-      throw Exception('주운 포스트 사용 상태 조회 실패: $e');
+      throw Exception('수령한 포스트 사용 상태 조회 실패: $e');
     }
   }
 

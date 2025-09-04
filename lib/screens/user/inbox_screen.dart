@@ -339,7 +339,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 상태 필터
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         value: _statusFilter,
+                         initialValue: _statusFilter,
                          decoration: const InputDecoration(
                            labelText: '상태',
                            border: OutlineInputBorder(),
@@ -360,7 +360,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 기간 필터
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         value: _periodFilter,
+                         initialValue: _periodFilter,
                          decoration: const InputDecoration(
                            labelText: '기간',
                            border: OutlineInputBorder(),
@@ -384,7 +384,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 정렬 기준
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         value: _sortBy,
+                         initialValue: _sortBy,
                          decoration: const InputDecoration(
                            labelText: '정렬 기준',
                            border: OutlineInputBorder(),
@@ -405,7 +405,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 정렬 순서
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         value: _sortOrder,
+                         initialValue: _sortOrder,
                          decoration: const InputDecoration(
                            labelText: '정렬 순서',
                            border: OutlineInputBorder(),
@@ -532,9 +532,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -635,7 +635,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   // 받은 포스트 탭 (PRD에 맞게 수정)
   Widget _buildCollectedPostsTab() {
     return FutureBuilder<List<PostModel>>(
-      future: _postService.getCollectedFlyers(_currentUserId!),
+      future: _postService.getCollectedPosts(_currentUserId!),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -665,9 +665,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
