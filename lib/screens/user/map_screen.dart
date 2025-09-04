@@ -445,6 +445,51 @@ class _MapScreenState extends State<MapScreen> {
     return true;
   }
 
+  void _showPostDetail(PostModel post) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final isOwner = post.creatorId == currentUserId;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(post.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Text('리워드: ${post.reward}원'),
+            Text('설명: ${post.description}'),
+            Text('만료일: ${post.expiresAt.toString().split(' ')[0]}'),
+            if (isOwner)
+              Text('배포자: 본인', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          actions: [
+            TextButton(
+            onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
+            ),
+          if (isOwner)
+              TextButton(
+                onPressed: () {
+                Navigator.pop(context);
+                _removePost(post); // Only owner can remove
+              },
+              child: const Text('회수', style: TextStyle(color: Colors.red)),
+            )
+          else
+              TextButton(
+                onPressed: () {
+                Navigator.pop(context);
+                _collectPost(post); // Others can collect
+              },
+              child: const Text('수집'),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _collectPost(PostModel post) async {
     try {
       await PostService().collectPost(
