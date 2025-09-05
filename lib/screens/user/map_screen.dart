@@ -78,6 +78,8 @@ class _MapScreenState extends State<MapScreen> {
   String _selectedCategory = 'all';
   double _maxDistance = 1000.0;
   int _minReward = 0;
+  bool _showCouponsOnly = false;
+  bool _showMyPostsOnly = false;
   
   // 클러스터링 관련
   List<Marker> _clusteredMarkers = [];
@@ -434,6 +436,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   bool _matchesFilter(PostModel post) {
+    // 쿠폰만 보기 필터
+    if (_showCouponsOnly && !post.canUse) return false;
+    
+    // 내 포스트만 보기 필터
+    if (_showMyPostsOnly) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || post.creatorId != currentUser.uid) return false;
+    }
+    
     // 카테고리 필터 (현재는 모든 포스트 허용)
     if (_selectedCategory != 'all') {
       // 카테고리 필터링 로직 구현
@@ -952,6 +963,8 @@ class _MapScreenState extends State<MapScreen> {
       _selectedCategory = 'all';
       _maxDistance = 1000.0;
       _minReward = 0;
+      _showCouponsOnly = false;
+      _showMyPostsOnly = false;
     });
     _updateMarkers();
   }
@@ -1181,29 +1194,77 @@ class _MapScreenState extends State<MapScreen> {
             const Center(
               child: CircularProgressIndicator(),
             ),
-          // 필터 버튼 (우상단)
+          // 필터 버튼들 (상단)
           Positioned(
             top: 60,
+            left: 16,
             right: 16,
-             child: Container(
-               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-              child: IconButton(
-                onPressed: _showFilterDialog,
-                icon: const Icon(Icons.tune, color: Colors.blue),
-                iconSize: 24,
+            child: Row(
+              children: [
+                // 내 포스트 필터
+                Expanded(
+                  child: FilterChip(
+                    label: const Text('내 포스트'),
+                    selected: _showMyPostsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showMyPostsOnly = selected;
+                        if (selected) _showCouponsOnly = false;
+                      });
+                      _updateMarkers();
+                    },
+                    selectedColor: Colors.blue.withOpacity(0.2),
+                    checkmarkColor: Colors.blue,
+                    backgroundColor: Colors.white,
+                    side: BorderSide(
+                      color: _showMyPostsOnly ? Colors.blue : Colors.grey.shade300,
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                // 쿠폰 필터
+                Expanded(
+                  child: FilterChip(
+                    label: const Text('쿠폰'),
+                    selected: _showCouponsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showCouponsOnly = selected;
+                        if (selected) _showMyPostsOnly = false;
+                      });
+                      _updateMarkers();
+                    },
+                    selectedColor: Colors.green.withOpacity(0.2),
+                    checkmarkColor: Colors.green,
+                    backgroundColor: Colors.white,
+                    side: BorderSide(
+                      color: _showCouponsOnly ? Colors.green : Colors.grey.shade300,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 필터 초기화 버튼
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.refresh, color: Colors.grey),
+                    iconSize: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
           // 현위치 버튼 (우하단)
            Positioned(
             bottom: 80,
