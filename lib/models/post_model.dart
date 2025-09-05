@@ -84,8 +84,12 @@ class PostModel {
       creatorName: data['creatorName'] ?? '',
       location: data['location'] ?? const GeoPoint(0, 0),
       radius: data['radius'] ?? 1000,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      expiresAt: (data['expiresAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null 
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+      expiresAt: data['expiresAt'] != null 
+          ? (data['expiresAt'] as Timestamp).toDate()
+          : DateTime.now().add(const Duration(days: 30)),
       reward: data['reward'] ?? 0,
       targetAge: List<int>.from(data['targetAge'] ?? [20, 30]),
       targetGender: data['targetGender'] ?? 'all',
@@ -104,10 +108,16 @@ class PostModel {
       isActive: data['isActive'] ?? true,
       isCollected: data['isCollected'] ?? false,
       collectedBy: data['collectedBy'],
-      collectedAt: data['collectedAt']?.toDate(),
-      updatedAt: data['updatedAt']?.toDate(),
+      collectedAt: data['collectedAt'] != null 
+          ? (data['collectedAt'] as Timestamp).toDate()
+          : null,
+      updatedAt: data['updatedAt'] != null 
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
       isDistributed: data['isDistributed'] ?? false,
-      distributedAt: data['distributedAt']?.toDate(),
+      distributedAt: data['distributedAt'] != null 
+          ? (data['distributedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
