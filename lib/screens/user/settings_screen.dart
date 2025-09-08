@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../providers/user_provider.dart';
+import '../../services/nominatim_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,6 +14,28 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _auth = FirebaseAuth.instance;
+  final _formKey = GlobalKey<FormState>();
+  
+  // 개인정보 컨트롤러들
+  final TextEditingController _nicknameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _secondAddressController = TextEditingController();
+  final TextEditingController _accountController = TextEditingController();
+  final TextEditingController _birthController = TextEditingController();
+  
+  // 상태 변수들
+  String? _selectedGender;
+  bool _allowSexualContent = false;
+  bool _allowViolentContent = false;
+  bool _allowHateContent = false;
+  
+  // 워크플레이스 관련
+  final List<Map<String, String>> _workplaces = [];
+  final TextEditingController _workplaceNameController = TextEditingController();
+  final TextEditingController _workplaceAddressController = TextEditingController();
+  
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -19,19 +43,143 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadUserData();
   }
 
+  @override
+  void dispose() {
+    _nicknameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _secondAddressController.dispose();
+    _accountController.dispose();
+    _birthController.dispose();
+    _workplaceNameController.dispose();
+    _workplaceAddressController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadUserData() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    await userProvider.fetchUserData();
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        
+        setState(() {
+          _nicknameController.text = userData['nickname'] ?? '';
+          _phoneController.text = userData['phone'] ?? '';
+          _addressController.text = userData['address'] ?? '';
+          _secondAddressController.text = userData['secondAddress'] ?? '';
+          _accountController.text = userData['account'] ?? '';
+          _birthController.text = userData['birthDate'] ?? '';
+          _selectedGender = userData['gender'] ?? 'male';
+          _allowSexualContent = userData['allowSexualContent'] ?? false;
+          _allowViolentContent = userData['allowViolentContent'] ?? false;
+          _allowHateContent = userData['allowHateContent'] ?? false;
+          
+          // 워크플레이스 로드
+          final workplaces = userData['workplaces'] as List<dynamic>?;
+          if (workplaces != null) {
+            _workplaces.clear();
+            for (final workplace in workplaces) {
+              final workplaceMap = workplace as Map<String, dynamic>;
+              _workplaces.add({
+                'name': workplaceMap['name'] ?? '',
+                'address': workplaceMap['address'] ?? '',
+              });
+            }
+          }
+        });
+      }
+    } catch (e) {
+      _showToast('사용자 정보를 불러오는 중 오류가 발생했습니다: $e');
+    }
   }
 
   Future<void> _saveUserData() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    await userProvider.updateUserData();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정보가 성공적으로 저장되었습니다.')),
-      );
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'nickname': _nicknameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'secondAddress': _secondAddressController.text.trim(),
+        'account': _accountController.text.trim(),
+        'birthDate': _birthController.text.trim(),
+        'gender': _selectedGender,
+        'allowSexualContent': _allowSexualContent,
+        'allowViolentContent': _allowViolentContent,
+        'allowHateContent': _allowHateContent,
+        'workplaces': _workplaces,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      _showToast('개인정보가 성공적으로 저장되었습니다');
+    } catch (e) {
+      _showToast('저장 중 오류가 발생했습니다: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+  Future<void> _pickAddress() async {
+    final result = await Navigator.pushNamed(context, '/address-search');
+    if (result != null) {
+      setState(() {
+        _addressController.text = result.toString();
+      });
+    }
+  }
+
+  Future<void> _pickWorkplaceAddress() async {
+    final result = await Navigator.pushNamed(context, '/address-search');
+    if (result != null) {
+      setState(() {
+        _workplaceAddressController.text = result.toString();
+      });
+    }
+  }
+
+  void _addWorkplace() {
+    if (_workplaceNameController.text.trim().isEmpty || 
+        _workplaceAddressController.text.trim().isEmpty) {
+      _showToast('근무지명과 주소를 모두 입력해주세요');
+      return;
+    }
+
+    setState(() {
+      _workplaces.add({
+        'name': _workplaceNameController.text.trim(),
+        'address': _workplaceAddressController.text.trim(),
+      });
+      _workplaceNameController.clear();
+      _workplaceAddressController.clear();
+    });
+
+    _showToast('근무지가 추가되었습니다');
+  }
+
+  void _removeWorkplace(int index) {
+    setState(() {
+      _workplaces.removeAt(index);
+    });
   }
 
   Future<void> _logout() async {
@@ -41,141 +189,334 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final userProvider = Provider.of<UserProvider>(context);
-
     return Scaffold(
-      appBar: AppBar(title: const Text("개인정보 설정")),
-      body: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: MediaQuery.of(context).size.height,
-          ),
-          child: IntrinsicHeight(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 이메일 (수정 불가)
-                  TextField(
-                    controller: TextEditingController(text: userProvider.email),
-                    decoration: const InputDecoration(
-                      labelText: '이메일',
-                      border: OutlineInputBorder(),
+      appBar: AppBar(
+        title: const Text("개인정보 설정"),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 기본 정보 섹션
+                    _buildSectionTitle("기본 정보"),
+                    const SizedBox(height: 16),
+                    
+                    // 닉네임
+                    TextFormField(
+                      controller: _nicknameController,
+                      decoration: const InputDecoration(
+                        labelText: '닉네임 *',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return '닉네임을 입력해주세요';
+                        }
+                        return null;
+                      },
                     ),
-                    enabled: false,
-                  ),
-                  const SizedBox(height: 10),
-
-                  // 전화번호
-                  TextField(
-                    controller: TextEditingController(text: userProvider.phoneNumber),
-                    decoration: const InputDecoration(
-                      labelText: '전화번호',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    
+                    // 전화번호
+                    TextFormField(
+                      controller: _phoneController,
+                      decoration: const InputDecoration(
+                        labelText: '전화번호 *',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return '전화번호를 입력해주세요';
+                        }
+                        return null;
+                      },
                     ),
-                    onChanged: userProvider.setPhoneNumber,
-                  ),
-                  const SizedBox(height: 10),
-
-                  // 주소
-                  TextField(
-                    controller: TextEditingController(text: userProvider.address),
-                    decoration: const InputDecoration(
-                      labelText: '주소',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    
+                    // 생년월일
+                    TextFormField(
+                      controller: _birthController,
+                      decoration: const InputDecoration(
+                        labelText: '생년월일 * (YYYY-MM-DD)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.datetime,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return '생년월일을 입력해주세요';
+                        }
+                        return null;
+                      },
                     ),
-                    onChanged: userProvider.setAddress,
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Workplace 입력
-                  Column(
-                    children: List.generate(userProvider.workPlaces.length, (index) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: TextEditingController(
-                                  text: userProvider.workPlaces[index]['workplaceinput']),
-                              decoration: const InputDecoration(labelText: '워크플레이스'),
-                              onChanged: (value) {
-                                userProvider.updateWorkPlace(index, 'workplaceinput', value);
-                              },
+                    const SizedBox(height: 16),
+                    
+                    // 성별
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: "성별 *",
+                        border: OutlineInputBorder(),
+                      ),
+                      value: _selectedGender,
+                      items: const [
+                        DropdownMenuItem(value: "male", child: Text("남성")),
+                        DropdownMenuItem(value: "female", child: Text("여성")),
+                      ],
+                      onChanged: (value) => setState(() => _selectedGender = value),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return '성별을 선택해주세요';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // 주소 정보 섹션
+                    _buildSectionTitle("주소 정보"),
+                    const SizedBox(height: 16),
+                    
+                    // 주소
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _addressController,
+                            decoration: const InputDecoration(
+                              labelText: '주소 *',
+                              border: OutlineInputBorder(),
                             ),
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: TextEditingController(
-                                  text: userProvider.workPlaces[index]['workplaceadd']),
-                              decoration: const InputDecoration(labelText: '워크플레이스 주소'),
-                              onChanged: (value) {
-                                userProvider.updateWorkPlace(index, 'workplaceadd', value);
-                              },
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () {
-                              userProvider.removeWorkPlace(index);
+                            readOnly: true,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return '주소를 입력해주세요';
+                              }
+                              return null;
                             },
                           ),
-                        ],
-                      );
-                    }),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: userProvider.addWorkPlace,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 저장/로그아웃 버튼
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _saveUserData,
-                        child: const Text("저장"),
-                      ),
-                      ElevatedButton(
-                        onPressed: _logout,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text("로그아웃"),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 30),
-                  
-                  // 개발자 옵션
-                  const Text(
-                    '개발자 옵션',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  
-                  // 마이그레이션 버튼
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/migration');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text("데이터베이스 마이그레이션"),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _pickAddress,
+                          child: const Text('주소 검색'),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    
+                    // 상세주소
+                    TextFormField(
+                      controller: _secondAddressController,
+                      decoration: const InputDecoration(
+                        labelText: '상세주소',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // 계정 정보 섹션
+                    _buildSectionTitle("계정 정보"),
+                    const SizedBox(height: 16),
+                    
+                    // 계좌번호
+                    TextFormField(
+                      controller: _accountController,
+                      decoration: const InputDecoration(
+                        labelText: '계좌번호 * (리워드 지급용)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return '계좌번호를 입력해주세요';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // 근무지 섹션
+                    _buildSectionTitle("근무지"),
+                    const SizedBox(height: 16),
+                    
+                    // 근무지 추가
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _workplaceNameController,
+                            decoration: const InputDecoration(
+                              hintText: '근무지명',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _workplaceAddressController,
+                            decoration: const InputDecoration(
+                              hintText: '주소',
+                              border: OutlineInputBorder(),
+                            ),
+                            readOnly: true,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _pickWorkplaceAddress,
+                          child: const Text('주소 검색'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _addWorkplace,
+                        child: const Text('근무지 추가'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // 근무지 목록
+                    ..._workplaces.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final workplace = entry.value;
+                      return Card(
+                        child: ListTile(
+                          title: Text(workplace['name']!),
+                          subtitle: Text(workplace['address']!),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => _removeWorkplace(index),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // 콘텐츠 필터 섹션
+                    _buildSectionTitle("콘텐츠 필터 설정"),
+                    const SizedBox(height: 16),
+                    
+                    // 선정적인 자료
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('선정적인 자료'),
+                        Switch(
+                          value: _allowSexualContent,
+                          onChanged: (value) => setState(() => _allowSexualContent = value),
+                        ),
+                      ],
+                    ),
+                    
+                    // 폭력적인 자료
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('폭력적인 자료'),
+                        Switch(
+                          value: _allowViolentContent,
+                          onChanged: (value) => setState(() => _allowViolentContent = value),
+                        ),
+                      ],
+                    ),
+                    
+                    // 혐오 자료
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('혐오 자료'),
+                        Switch(
+                          value: _allowHateContent,
+                          onChanged: (value) => setState(() => _allowHateContent = value),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // 저장/로그아웃 버튼
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _saveUserData,
+                            child: _isLoading 
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text('저장'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _logout,
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                            child: const Text('로그아웃'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // 개발자 옵션
+                    const Text(
+                      '개발자 옵션',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // 마이그레이션 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/migration');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("데이터베이스 마이그레이션"),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Colors.blue,
       ),
     );
   }
