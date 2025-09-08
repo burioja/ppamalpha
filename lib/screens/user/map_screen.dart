@@ -226,27 +226,29 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _rebuildFogWithUserLocations(LatLng currentPosition) {
-    final fogPolygons = <Polygon>[];
+    final allPositions = <LatLng>[currentPosition];
     final ringCircles = <CircleMarker>[];
 
     // 현재 위치
-    fogPolygons.add(OSMFogService.createFogPolygon(currentPosition));
     ringCircles.add(OSMFogService.createRingCircle(currentPosition));
 
     // 집 위치
     if (_homeLocation != null) {
-      fogPolygons.add(OSMFogService.createFogPolygon(_homeLocation!));
+      allPositions.add(_homeLocation!);
       ringCircles.add(OSMFogService.createRingCircle(_homeLocation!));
     }
 
     // 일터 위치들
     for (final workLocation in _workLocations) {
-      fogPolygons.add(OSMFogService.createFogPolygon(workLocation));
+      allPositions.add(workLocation);
       ringCircles.add(OSMFogService.createRingCircle(workLocation));
     }
 
+    // 모든 위치에 대해 하나의 통합된 폴리곤 생성
+    final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
+
     setState(() {
-      _fogPolygons = fogPolygons;
+      _fogPolygons = [fogPolygon];
       _ringCircles = ringCircles;
     });
   }
