@@ -281,37 +281,37 @@ class _MapScreenState extends State<MapScreen> {
         } else {
           print('집주소가 없거나 비어있음');
         }
-      }
 
-      // 워크플레이스 정보 가져오기 (회원가입에서 저장한 구조)
-      final workplaces = userData?['workplaces'] as List<dynamic>?;
-      final workLocations = <LatLng>[];
-      
-      if (workplaces != null) {
-        print('워크플레이스 개수: ${workplaces.length}');
-        for (final workplace in workplaces) {
-          final workplaceMap = workplace as Map<String, dynamic>?;
-          final workplaceAddress = workplaceMap?['address'] as String?;
-          
-          if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
-            print('워크플레이스 주소 로드 시도: $workplaceAddress');
-            // 워크플레이스 주소를 좌표로 변환
-            final workCoords = await NominatimService.geocode(workplaceAddress);
-            if (workCoords != null) {
-              print('워크플레이스 좌표 변환 성공: ${workCoords.latitude}, ${workCoords.longitude}');
-              workLocations.add(workCoords);
-            } else {
-              print('워크플레이스 좌표 변환 실패');
+        // 워크플레이스 정보 가져오기 (회원가입에서 저장한 구조)
+        final workplaces = userData?['workplaces'] as List<dynamic>?;
+        final workLocations = <LatLng>[];
+        
+        if (workplaces != null) {
+          print('워크플레이스 개수: ${workplaces.length}');
+          for (final workplace in workplaces) {
+            final workplaceMap = workplace as Map<String, dynamic>?;
+            final workplaceAddress = workplaceMap?['address'] as String?;
+            
+            if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
+              print('워크플레이스 주소 로드 시도: $workplaceAddress');
+              // 워크플레이스 주소를 좌표로 변환
+              final workCoords = await NominatimService.geocode(workplaceAddress);
+              if (workCoords != null) {
+                print('워크플레이스 좌표 변환 성공: ${workCoords.latitude}, ${workCoords.longitude}');
+                workLocations.add(workCoords);
+              } else {
+                print('워크플레이스 좌표 변환 실패');
+              }
             }
           }
+        } else {
+          print('워크플레이스 정보가 없음');
         }
-      } else {
-        print('워크플레이스 정보가 없음');
-      }
 
-      setState(() {
-        _workLocations = workLocations;
-      });
+        setState(() {
+          _workLocations = workLocations;
+        });
+      }
 
       // 포그 오브 워 업데이트
       if (_currentPosition != null) {
