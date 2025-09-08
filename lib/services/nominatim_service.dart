@@ -81,4 +81,21 @@ class NominatimService {
       return [];
     }
   }
+
+  /// 주소를 좌표로 변환 (정지오코딩)
+  static Future<LatLng?> geocode(String address) async {
+    try {
+      final results = await searchAddress(address);
+      if (results.isNotEmpty) {
+        final lat = double.tryParse(results.first['lat']?.toString() ?? '');
+        final lon = double.tryParse(results.first['lon']?.toString() ?? '');
+        if (lat != null && lon != null) {
+          return LatLng(lat, lon);
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
 }
