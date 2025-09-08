@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/auth/address_search_screen.dart';
 import '../screens/user/main_screen.dart';
 import '../screens/user/map_screen.dart';
 import '../models/post_model.dart';
@@ -29,6 +30,7 @@ import '../screens/place/place_search_screen.dart';
 class AppRoutes {
   static const String login = '/login';
   static const String signup = '/signup';
+  static const String addressSearch = '/address-search';
   static const String main = '/main';
   static const String map = '/map';
 
@@ -54,6 +56,7 @@ class AppRoutes {
   static Map<String, WidgetBuilder> get routes => {
     login: (context) => const LoginScreen(),
     signup: (context) => const SignupScreen(),
+    addressSearch: (context) => const AddressSearchScreen(),
     main: (context) => const MainScreen(),
     map: (context) => const MapScreen(),
 
