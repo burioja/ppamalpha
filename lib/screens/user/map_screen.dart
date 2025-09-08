@@ -260,8 +260,6 @@ class _MapScreenState extends State<MapScreen> {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .collection('profile')
-          .doc('info')
           .get();
 
       if (userDoc.exists) {
@@ -269,35 +267,46 @@ class _MapScreenState extends State<MapScreen> {
         final address = userData?['address'] as String?;
         
         if (address != null && address.isNotEmpty) {
+          print('집주소 로드 시도: $address');
           // 주소를 좌표로 변환
           final homeCoords = await NominatimService.geocode(address);
           if (homeCoords != null) {
+            print('집주소 좌표 변환 성공: ${homeCoords.latitude}, ${homeCoords.longitude}');
             setState(() {
               _homeLocation = homeCoords;
             });
+          } else {
+            print('집주소 좌표 변환 실패');
           }
+        } else {
+          print('집주소가 없거나 비어있음');
         }
       }
 
-      // 워크플레이스 정보 가져오기
-      final workplacesSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('workplaces')
-          .get();
-
+      // 워크플레이스 정보 가져오기 (회원가입에서 저장한 구조)
+      final workplaces = userData?['workplaces'] as List<dynamic>?;
       final workLocations = <LatLng>[];
-      for (final doc in workplacesSnapshot.docs) {
-        final workplaceData = doc.data();
-        final workplaceAddress = workplaceData['workplaceadd'] as String?;
-        
-        if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
-          // 워크플레이스 주소를 좌표로 변환
-          final workCoords = await NominatimService.geocode(workplaceAddress);
-          if (workCoords != null) {
-            workLocations.add(workCoords);
+      
+      if (workplaces != null) {
+        print('워크플레이스 개수: ${workplaces.length}');
+        for (final workplace in workplaces) {
+          final workplaceMap = workplace as Map<String, dynamic>?;
+          final workplaceAddress = workplaceMap?['address'] as String?;
+          
+          if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
+            print('워크플레이스 주소 로드 시도: $workplaceAddress');
+            // 워크플레이스 주소를 좌표로 변환
+            final workCoords = await NominatimService.geocode(workplaceAddress);
+            if (workCoords != null) {
+              print('워크플레이스 좌표 변환 성공: ${workCoords.latitude}, ${workCoords.longitude}');
+              workLocations.add(workCoords);
+            } else {
+              print('워크플레이스 좌표 변환 실패');
+            }
           }
         }
+      } else {
+        print('워크플레이스 정보가 없음');
       }
 
       setState(() {
