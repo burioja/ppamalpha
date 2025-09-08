@@ -1000,27 +1000,6 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-                  // 마커 생성 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                        Navigator.pop(context);
-                        _showCreateMarkerDialog();
-                      },
-                      icon: const Icon(Icons.add_location),
-                      label: const Text('마커 생성'),
-                style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
                   const SizedBox(height: 12),
                   // 취소 버튼
             SizedBox(
@@ -1086,80 +1065,6 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  void _showCreateMarkerDialog() {
-    if (_longPressedLatLng == null) return;
-
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('마커 생성'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-            children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: '제목',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              decoration: const InputDecoration(
-                labelText: '설명',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-          actions: [
-            TextButton(
-            onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-          TextButton(
-            onPressed: () async {
-              if (titleController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('제목을 입력해주세요.')),
-                );
-                return;
-              }
-
-              try {
-                await MarkerService.createMarker(
-                  title: titleController.text.trim(),
-                  description: descriptionController.text.trim(),
-                  position: _longPressedLatLng!,
-                  additionalData: {
-                    'type': 'user_marker',
-                    'createdAt': DateTime.now().toIso8601String(),
-                  },
-                  expiryDate: DateTime.now().add(const Duration(days: 30)),
-                );
-
-                Navigator.pop(context);
-                _loadMarkers(); // 마커 목록 새로고침
-      ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('마커가 생성되었습니다!')),
-      );
-              } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('마커 생성 중 오류가 발생했습니다: $e')),
-                );
-              }
-            },
-            child: const Text('생성'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _onMapReady() {
     // 현재 위치로 지도 이동
