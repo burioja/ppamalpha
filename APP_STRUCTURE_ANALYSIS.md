@@ -41,7 +41,6 @@ PPAMPROTO는 Flutter 기반의 위치 기반 앱으로, Firebase 백엔드를 �
 │   │   ├── location_service.dart   # 위치 서비스 (56 lines)
 │   │   ├── user_service.dart       # 사용자 서비스
 │   │   ├── track_service.dart      # 트랙 서비스
-│   │   └── database_migration_service.dart # 데이터베이스 마이그레이션
 │   └── widgets/           # 재사용 가능한 UI 컴포넌트
 │       ├── user_status_widget.dart     # 사용자 상태 (84 lines)
 │       ├── mode_switcher.dart          # 모드 전환 (60 lines)

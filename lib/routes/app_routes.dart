@@ -18,7 +18,6 @@ import '../screens/user/location_picker_screen.dart';
 import '../screens/user/post_detail_screen.dart';
 import '../screens/user/post_edit_screen.dart';
 import '../screens/user/post_deploy_screen.dart';
-import '../screens/shared/migration_screen.dart';
 import '../screens/shared/debug_screen.dart';
 import '../models/place_model.dart';
 import '../screens/place/create_place_screen.dart';
@@ -50,7 +49,6 @@ class AppRoutes {
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
-  static const String migration = '/migration';
   static const String debug = '/debug';
 
   static Map<String, WidgetBuilder> get routes => {
@@ -127,7 +125,6 @@ class AppRoutes {
       final index = args?['index'] as int? ?? 0;
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
-    migration: (context) => const MigrationScreen(),
     debug: (context) => const DebugScreen(),
   };
 } 
