@@ -59,6 +59,10 @@ class _MapScreenState extends State<MapScreen> {
   List<Marker> _currentMarkers = [];
   List<Marker> _userMarkers = [];
   
+  // 사용자 위치 정보
+  LatLng? _homeLocation;
+  List<LatLng> _workLocations = [];
+  
   // 기본 상태
   MapController? _mapController;
   LatLng? _currentPosition;
@@ -94,6 +98,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadCustomMarker();
     _loadPosts();
     _loadMarkers();
+    _loadUserLocations();
   }
 
   void _loadCustomMarker() {
@@ -164,7 +169,7 @@ class _MapScreenState extends State<MapScreen> {
       });
 
       // OSM Fog of War 재구성
-      _rebuildFog(newPosition);
+      _rebuildFogWithUserLocations(newPosition);
       
       // 주소 업데이트
       _updateCurrentAddress();
@@ -218,6 +223,94 @@ class _MapScreenState extends State<MapScreen> {
       _fogPolygons = [fogPolygon];
       _ringCircles = [ringCircle];
     });
+  }
+
+  void _rebuildFogWithUserLocations(LatLng currentPosition) {
+    final fogPolygons = <Polygon>[];
+    final ringCircles = <CircleMarker>[];
+
+    // 현재 위치
+    fogPolygons.add(OSMFogService.createFogPolygon(currentPosition));
+    ringCircles.add(OSMFogService.createRingCircle(currentPosition));
+
+    // 집 위치
+    if (_homeLocation != null) {
+      fogPolygons.add(OSMFogService.createFogPolygon(_homeLocation!));
+      ringCircles.add(OSMFogService.createRingCircle(_homeLocation!));
+    }
+
+    // 일터 위치들
+    for (final workLocation in _workLocations) {
+      fogPolygons.add(OSMFogService.createFogPolygon(workLocation));
+      ringCircles.add(OSMFogService.createRingCircle(workLocation));
+    }
+
+    setState(() {
+      _fogPolygons = fogPolygons;
+      _ringCircles = ringCircles;
+    });
+  }
+
+  Future<void> _loadUserLocations() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 사용자 프로필에서 집주소 가져오기
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('profile')
+          .doc('info')
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final address = userData?['address'] as String?;
+        
+        if (address != null && address.isNotEmpty) {
+          // 주소를 좌표로 변환
+          final homeCoords = await NominatimService.geocode(address);
+          if (homeCoords != null) {
+            setState(() {
+              _homeLocation = homeCoords;
+            });
+          }
+        }
+      }
+
+      // 워크플레이스 정보 가져오기
+      final workplacesSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('workplaces')
+          .get();
+
+      final workLocations = <LatLng>[];
+      for (final doc in workplacesSnapshot.docs) {
+        final workplaceData = doc.data();
+        final workplaceAddress = workplaceData['workplaceadd'] as String?;
+        
+        if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
+          // 워크플레이스 주소를 좌표로 변환
+          final workCoords = await NominatimService.geocode(workplaceAddress);
+          if (workCoords != null) {
+            workLocations.add(workCoords);
+          }
+        }
+      }
+
+      setState(() {
+        _workLocations = workLocations;
+      });
+
+      // 포그 오브 워 업데이트
+      if (_currentPosition != null) {
+        _rebuildFogWithUserLocations(_currentPosition!);
+      }
+    } catch (e) {
+      debugPrint('사용자 위치 로드 실패: $e');
+    }
   }
 
   Future<void> _updateCurrentAddress() async {
@@ -1147,6 +1240,44 @@ class _MapScreenState extends State<MapScreen> {
                 PolygonLayer(polygons: _fogPolygons),
                 // 1km 경계선
                 CircleLayer(circles: _ringCircles),
+                // 사용자 위치 마커들
+                MarkerLayer(
+                  markers: [
+                    // 집 위치 마커
+                    if (_homeLocation != null)
+                      Marker(
+                        point: _homeLocation!,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.home,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    // 일터 위치 마커들
+                    ..._workLocations.map((workLocation) => Marker(
+                      point: workLocation,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.work,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    )),
+                  ],
+                ),
                 // 현재 위치 마커
                 MarkerLayer(markers: _currentMarkers),
                 // 사용자 마커
