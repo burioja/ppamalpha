@@ -99,6 +99,24 @@ class _MapScreenState extends State<MapScreen> {
     _loadPosts();
     _loadMarkers();
     _loadUserLocations();
+    _setupUserDataListener();
+  }
+
+  void _setupUserDataListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // 사용자 데이터 변경을 실시간으로 감지
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        print('사용자 데이터 변경 감지됨');
+        _loadUserLocations();
+      }
+    });
   }
 
   void _loadCustomMarker() {
@@ -123,9 +141,9 @@ class _MapScreenState extends State<MapScreen> {
           height: 36,
           fit: BoxFit.cover,
         ),
-      ),
-    );
-  }
+          ),
+        );
+      }
 
   Future<void> _initializeLocation() async {
     try {
@@ -133,23 +151,23 @@ class _MapScreenState extends State<MapScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() {
-            _errorMessage = '위치 권한이 거부되었습니다.';
-          });
-          return;
-        }
-      }
-      
-      if (permission == LocationPermission.deniedForever) {
         setState(() {
-          _errorMessage = '위치 권한이 영구적으로 거부되었습니다. 설정에서 권한을 허용해주세요.';
+            _errorMessage = '위치 권한이 거부되었습니다.';
         });
+          return;
+    }
+  }
+
+      if (permission == LocationPermission.deniedForever) {
+      setState(() {
+          _errorMessage = '위치 권한이 영구적으로 거부되었습니다. 설정에서 권한을 허용해주세요.';
+      });
         return;
-      }
-      
+  }
+
       await _getCurrentLocation();
     } catch (e) {
-        setState(() {
+      setState(() {
         _errorMessage = '위치를 가져오는 중 오류가 발생했습니다: $e';
       });
     }
@@ -185,7 +203,7 @@ class _MapScreenState extends State<MapScreen> {
       _mapController?.move(newPosition, _currentZoom);
       
     } catch (e) {
-    setState(() {
+        setState(() {
         _errorMessage = '현재 위치를 가져올 수 없습니다: $e';
       });
     }
@@ -208,9 +226,9 @@ class _MapScreenState extends State<MapScreen> {
           size: 16,
         ),
       ),
-    );
+        );
         
-    setState(() {
+        setState(() {
       _currentMarkers = [marker];
     });
   }
@@ -219,7 +237,7 @@ class _MapScreenState extends State<MapScreen> {
     final fogPolygon = OSMFogService.createFogPolygon(currentPosition);
     final ringCircle = OSMFogService.createRingCircle(currentPosition);
         
-    setState(() {
+        setState(() {
       _fogPolygons = [fogPolygon];
       _ringCircles = [ringCircle];
     });
@@ -229,6 +247,11 @@ class _MapScreenState extends State<MapScreen> {
     final allPositions = <LatLng>[currentPosition];
     final ringCircles = <CircleMarker>[];
 
+    print('포그 오브 워 재구성 시작');
+    print('현재 위치: ${currentPosition.latitude}, ${currentPosition.longitude}');
+    print('집 위치: ${_homeLocation?.latitude}, ${_homeLocation?.longitude}');
+    print('근무지 개수: ${_workLocations.length}');
+
     // 현재 위치
     ringCircles.add(OSMFogService.createRingCircle(currentPosition));
 
@@ -236,13 +259,18 @@ class _MapScreenState extends State<MapScreen> {
     if (_homeLocation != null) {
       allPositions.add(_homeLocation!);
       ringCircles.add(OSMFogService.createRingCircle(_homeLocation!));
+      print('집 위치 추가됨');
     }
 
     // 일터 위치들
-    for (final workLocation in _workLocations) {
+    for (int i = 0; i < _workLocations.length; i++) {
+      final workLocation = _workLocations[i];
       allPositions.add(workLocation);
       ringCircles.add(OSMFogService.createRingCircle(workLocation));
+      print('근무지 $i 추가됨: ${workLocation.latitude}, ${workLocation.longitude}');
     }
+
+    print('총 밝은 영역 개수: ${allPositions.length}');
 
     // 모든 위치에 대해 하나의 통합된 폴리곤 생성
     final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
@@ -251,6 +279,8 @@ class _MapScreenState extends State<MapScreen> {
       _fogPolygons = [fogPolygon];
       _ringCircles = ringCircles;
     });
+
+    print('포그 오브 워 재구성 완료');
   }
 
   Future<void> _loadUserLocations() async {
@@ -313,11 +343,18 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _workLocations = workLocations;
         });
+
+        print('최종 워크플레이스 좌표 개수: ${workLocations.length}');
+        for (int i = 0; i < workLocations.length; i++) {
+          print('워크플레이스 $i: ${workLocations[i].latitude}, ${workLocations[i].longitude}');
+        }
       }
 
       // 포그 오브 워 업데이트
       if (_currentPosition != null) {
+        print('포그 오브 워 업데이트 시작');
         _rebuildFogWithUserLocations(_currentPosition!);
+        print('포그 오브 워 업데이트 완료');
       }
     } catch (e) {
       debugPrint('사용자 위치 로드 실패: $e');
@@ -512,7 +549,7 @@ class _MapScreenState extends State<MapScreen> {
             onPressed: () => Navigator.pop(context),
               child: const Text('닫기'),
             ),
-          if (isOwner)
+              if (isOwner)
                 TextButton(
                   onPressed: () {
                 Navigator.pop(context);
@@ -529,11 +566,11 @@ class _MapScreenState extends State<MapScreen> {
     try {
       await MarkerService.deleteMarker(marker.id);
       _loadMarkers(); // 마커 목록 새로고침
-      ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('마커가 삭제되었습니다.')),
-      );
+          );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('마커 삭제 중 오류가 발생했습니다: $e')),
       );
     }
@@ -823,23 +860,23 @@ class _MapScreenState extends State<MapScreen> {
                                   onTap: () => setState(() {}),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(vertical: 12),
-                                    decoration: BoxDecoration(
+                decoration: BoxDecoration(
                                       color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                                     child: const Text(
                                       '최신순',
-                                      textAlign: TextAlign.center,
+                  textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: Colors.black,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ],
-                          ),
+                ),
+              ),
+            ],
+          ),
                         ),
                       ],
                     ),
@@ -1163,15 +1200,15 @@ class _MapScreenState extends State<MapScreen> {
                     if (_homeLocation != null)
                       Marker(
                         point: _homeLocation!,
-                        child: Container(
-                          decoration: BoxDecoration(
+             child: Container(
+               decoration: BoxDecoration(
                             color: Colors.green,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2),
                           ),
                           child: const Icon(
                             Icons.home,
-                            color: Colors.white,
+                 color: Colors.white,
                             size: 20,
                           ),
                         ),
@@ -1246,8 +1283,8 @@ class _MapScreenState extends State<MapScreen> {
             top: 60,
             left: 16,
             right: 16,
-            child: Row(
-              children: [
+               child: Row(
+                 children: [
                 // 내 포스트 필터
                 Expanded(
                   child: FilterChip(
@@ -1267,8 +1304,8 @@ class _MapScreenState extends State<MapScreen> {
                       color: _showMyPostsOnly ? Colors.blue : Colors.grey.shade300,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                   ),
+                   const SizedBox(width: 8),
                 // 쿠폰 필터
                 Expanded(
                   child: FilterChip(
@@ -1288,8 +1325,8 @@ class _MapScreenState extends State<MapScreen> {
                       color: _showCouponsOnly ? Colors.green : Colors.grey.shade300,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                   ),
+                   const SizedBox(width: 8),
                 // 필터 초기화 버튼
                 Container(
                   decoration: BoxDecoration(
@@ -1300,9 +1337,9 @@ class _MapScreenState extends State<MapScreen> {
                         color: Colors.black.withOpacity(0.1),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
+                     ),
+                 ],
+               ),
                   child: IconButton(
                     onPressed: _resetFilters,
                     icon: const Icon(Icons.refresh, color: Colors.grey),
