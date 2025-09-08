@@ -178,6 +178,16 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  Future<void> _pickWorkplaceAddress() async {
+    // 근무지 주소 검색 화면으로 이동
+    final result = await Navigator.pushNamed(context, '/address-search');
+    if (result != null) {
+      setState(() {
+        _workplaceAddressController.text = result.toString();
+      });
+    }
+  }
+
   Future<void> _addWorkplace() async {
     if (_workplaceNameController.text.trim().isEmpty || _workplaceAddressController.text.trim().isEmpty) {
       _showToast('근무지명과 주소를 모두 입력해주세요');
@@ -319,6 +329,7 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
       body: PageView(
         controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(), // 스크롤로 페이지 넘어가는 것 방지
         onPageChanged: (index) {
           setState(() {
             _currentStep = index;
@@ -716,12 +727,24 @@ class _SignupScreenState extends State<SignupScreen> {
                     hintText: '주소',
                     border: OutlineInputBorder(),
                   ),
+                  readOnly: true,
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: _addWorkplace,
-                child: const Text('추가'),
+                onPressed: _pickWorkplaceAddress,
+                child: const Text('주소 검색'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _addWorkplace,
+                  child: const Text('근무지 추가'),
+                ),
               ),
             ],
           ),
