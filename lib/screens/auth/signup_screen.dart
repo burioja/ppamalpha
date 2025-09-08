@@ -14,18 +14,44 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _profileImage;
+  
+  // 기본 정보
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _nicknameController = TextEditingController();
+  final TextEditingController _phoneNumberController = TextEditingController();
+  
+  // 개인 정보
   String? _selectedGender;
+  final TextEditingController _birthController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _secondAddressController = TextEditingController();
+  
+  // 계정 정보
+  final TextEditingController _accountController = TextEditingController();
+  
+  // 워크플레이스 정보
+  final List<Map<String, String>> _workplaces = [];
+  final TextEditingController _workplaceNameController = TextEditingController();
+  final TextEditingController _workplaceAddressController = TextEditingController();
+  
   int _currentStep = 0;
   final List<bool> _isChecked = List.generate(5, (index) => false);
 
   @override
   void dispose() {
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _emailController.dispose();
+    _nicknameController.dispose();
+    _phoneNumberController.dispose();
+    _birthController.dispose();
+    _addressController.dispose();
+    _secondAddressController.dispose();
+    _accountController.dispose();
+    _workplaceNameController.dispose();
+    _workplaceAddressController.dispose();
     super.dispose();
   }
 
@@ -61,7 +87,7 @@ class _SignupScreenState extends State<SignupScreen> {
         child: Stepper(
           currentStep: _currentStep,
           onStepContinue: () {
-            if (_currentStep < 2) {
+            if (_currentStep < 4) {
               setState(() {
                 _currentStep++;
               });
@@ -79,6 +105,7 @@ class _SignupScreenState extends State<SignupScreen> {
               title: const Text("기본 정보"),
               content: Column(
                 children: [
+                  // 프로필 이미지
                   GestureDetector(
                     onTap: _pickImage,
                     child: CircleAvatar(
@@ -91,49 +118,216 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
+                  
+                  // 이메일 (필수)
+                  TextFormField(
                     controller: _emailController,
-                    decoration: const InputDecoration(labelText: '이메일'),
+                    decoration: const InputDecoration(
+                      labelText: '이메일 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '이메일을 입력해주세요';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        return '올바른 이메일 형식을 입력해주세요';
+                      }
+                      return null;
+                    },
                     onChanged: userProvider.setEmail,
                   ),
-                  TextField(
+                  const SizedBox(height: 16),
+                  
+                  // 비밀번호 (필수)
+                  TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: '비밀번호'),
+                    decoration: const InputDecoration(
+                      labelText: '비밀번호 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '비밀번호를 입력해주세요';
+                      }
+                      if (value.length < 6) {
+                        return '비밀번호는 6자 이상이어야 합니다';
+                      }
+                      return null;
+                    },
                   ),
-                  TextField(
+                  const SizedBox(height: 16),
+                  
+                  // 비밀번호 확인 (필수)
+                  TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: '비밀번호 확인'),
-                  ),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: "성별"),
-                    initialValue: _selectedGender,
-                    items: const [
-                      DropdownMenuItem(value: "남성", child: Text("남성")),
-                      DropdownMenuItem(value: "여성", child: Text("여성")),
-                    ],
-                    onChanged: (value) => setState(() => _selectedGender = value),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _validatePasswords(),
-                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    decoration: const InputDecoration(
+                      labelText: '비밀번호 확인 *',
+                      border: OutlineInputBorder(),
                     ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '비밀번호 확인을 입력해주세요';
+                      }
+                      if (value != _passwordController.text) {
+                        return '비밀번호가 일치하지 않습니다';
+                      }
+                      return null;
+                    },
                   ),
                 ],
               ),
               isActive: _currentStep >= 0,
             ),
             Step(
-              title: const Text("추가 정보"),
-              content: TextField(
-                decoration: const InputDecoration(labelText: '닉네임'),
-                onChanged: userProvider.setNickName,
+              title: const Text("개인 정보"),
+              content: Column(
+                children: [
+                  // 닉네임 (필수)
+                  TextFormField(
+                    controller: _nicknameController,
+                    decoration: const InputDecoration(
+                      labelText: '닉네임 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '닉네임을 입력해주세요';
+                      }
+                      if (value.length < 2) {
+                        return '닉네임은 2자 이상이어야 합니다';
+                      }
+                      return null;
+                    },
+                    onChanged: userProvider.setNickName,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // 전화번호 (필수)
+                  TextFormField(
+                    controller: _phoneNumberController,
+                    decoration: const InputDecoration(
+                      labelText: '전화번호 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '전화번호를 입력해주세요';
+                      }
+                      if (!RegExp(r'^01[0-9]-?[0-9]{4}-?[0-9]{4}$').hasMatch(value.replaceAll('-', ''))) {
+                        return '올바른 전화번호 형식을 입력해주세요 (예: 010-1234-5678)';
+                      }
+                      return null;
+                    },
+                    onChanged: userProvider.setPhoneNumber,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // 성별 (필수)
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: "성별 *",
+                      border: OutlineInputBorder(),
+                    ),
+                    value: _selectedGender,
+                    items: const [
+                      DropdownMenuItem(value: "male", child: Text("남성")),
+                      DropdownMenuItem(value: "female", child: Text("여성")),
+                    ],
+                    onChanged: (value) => setState(() => _selectedGender = value),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return '성별을 선택해주세요';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // 생년월일 (필수)
+                  TextFormField(
+                    controller: _birthController,
+                    decoration: const InputDecoration(
+                      labelText: '생년월일 * (YYYY-MM-DD)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.datetime,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '생년월일을 입력해주세요';
+                      }
+                      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+                        return '올바른 형식으로 입력해주세요 (예: 1990-01-01)';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
               ),
               isActive: _currentStep >= 1,
+            ),
+            Step(
+              title: const Text("주소 정보"),
+              content: Column(
+                children: [
+                  // 주소 (필수)
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: const InputDecoration(
+                      labelText: '주소 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '주소를 입력해주세요';
+                      }
+                      return null;
+                    },
+                    onChanged: userProvider.setAddress,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // 상세주소 (선택)
+                  TextFormField(
+                    controller: _secondAddressController,
+                    decoration: const InputDecoration(
+                      labelText: '상세주소',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              isActive: _currentStep >= 2,
+            ),
+            Step(
+              title: const Text("계정 정보"),
+              content: Column(
+                children: [
+                  // 계좌번호 (필수)
+                  TextFormField(
+                    controller: _accountController,
+                    decoration: const InputDecoration(
+                      labelText: '계좌번호 * (리워드 지급용)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '계좌번호를 입력해주세요';
+                      }
+                      if (!RegExp(r'^\d{10,20}$').hasMatch(value.replaceAll('-', ''))) {
+                        return '올바른 계좌번호를 입력해주세요';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+              isActive: _currentStep >= 3,
             ),
             Step(
               title: const Text("약관 동의"),
@@ -150,7 +344,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       () => _updateCheckState(index),
                 )),
               ),
-              isActive: _currentStep >= 2,
+              isActive: _currentStep >= 4,
             ),
           ],
         ),
