@@ -13,6 +13,9 @@ class MarkerData {
   final DateTime createdAt;
   final DateTime? expiryDate;
   final Map<String, dynamic> data;
+  final bool isCollected;
+  final String? collectedBy;
+  final DateTime? collectedAt;
 
   MarkerData({
     required this.id,
@@ -23,6 +26,9 @@ class MarkerData {
     required this.createdAt,
     this.expiryDate,
     required this.data,
+    this.isCollected = false,
+    this.collectedBy,
+    this.collectedAt,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -35,6 +41,9 @@ class MarkerData {
       'createdAt': Timestamp.fromDate(createdAt),
       'expiryDate': expiryDate != null ? Timestamp.fromDate(expiryDate!) : null,
       'data': data,
+      'isCollected': isCollected,
+      'collectedBy': collectedBy,
+      'collectedAt': collectedAt != null ? Timestamp.fromDate(collectedAt!) : null,
     };
   }
 
@@ -54,6 +63,11 @@ class MarkerData {
           ? (data['expiryDate'] as Timestamp).toDate() 
           : null,
       data: Map<String, dynamic>.from(data['data'] ?? {}),
+      isCollected: data['isCollected'] ?? false,
+      collectedBy: data['collectedBy'],
+      collectedAt: data['collectedAt'] != null 
+          ? (data['collectedAt'] as Timestamp).toDate() 
+          : null,
     );
   }
 }
@@ -161,6 +175,56 @@ class MarkerService {
     } catch (e) {
       throw Exception('마커 삭제 중 오류가 발생했습니다: $e');
     }
+  }
+
+  /// 마커 수집 (타겟 사용자만 가능)
+  static Future<void> collectMarker(String markerId) async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        throw Exception('사용자가 로그인되지 않았습니다.');
+      }
+
+      await _firestore.collection(_collection).doc(markerId).update({
+        'isCollected': true,
+        'collectedBy': userId,
+        'collectedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('마커 수집 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 실시간 마커 리스너
+  static Stream<List<MarkerData>> getMarkersStream({
+    required LatLng center,
+    required double radiusInKm,
+  }) {
+    const double latRange = 0.01; // 약 1km
+    const double lngRange = 0.01; // 약 1km
+
+    return _firestore
+        .collection(_collection)
+        .where('position', isGreaterThan: GeoPoint(
+          center.latitude - latRange,
+          center.longitude - lngRange,
+        ))
+        .where('position', isLessThan: GeoPoint(
+          center.latitude + latRange,
+          center.longitude + lngRange,
+        ))
+        .snapshots()
+        .map((snapshot) {
+      final markers = snapshot.docs
+          .map((doc) => MarkerData.fromFirestore(doc))
+          .toList();
+
+      // 정확한 거리 계산으로 필터링
+      return markers.where((marker) {
+        final distance = _calculateDistance(center, marker.position);
+        return distance <= radiusInKm;
+      }).toList();
+    });
   }
 
   /// 거리 계산 (km)

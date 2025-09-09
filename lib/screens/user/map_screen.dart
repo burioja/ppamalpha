@@ -74,6 +74,7 @@ class _MapScreenState extends State<MapScreen> {
   // 포스트 관련
   List<PostModel> _posts = [];
   List<MarkerData> _markers = [];
+  List<MarkerData> _userMarkers = []; // 사용자가 배치한 마커들
   bool _isLoading = false;
   String? _errorMessage;
   
@@ -100,6 +101,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadMarkers();
     _loadUserLocations();
     _setupUserDataListener();
+    _setupMarkerListener();
   }
 
   void _setupUserDataListener() {
@@ -130,6 +132,31 @@ class _MapScreenState extends State<MapScreen> {
       }
     }, onError: (error) {
       print('사용자 데이터 리스너 오류: $error');
+    });
+  }
+
+  void _setupMarkerListener() {
+    if (_currentPosition == null) return;
+
+    print('마커 리스너 설정 시작');
+
+    // 실시간 마커 리스너
+    MarkerService.getMarkersStream(
+      center: _currentPosition!,
+      radiusInKm: _maxDistance / 1000.0,
+    ).listen((markers) {
+      print('마커 업데이트 감지됨: ${markers.length}개');
+      
+      setState(() {
+        _markers = markers.where((marker) => !marker.isCollected).toList();
+        _userMarkers = markers.where((marker) => 
+          marker.userId == FirebaseAuth.instance.currentUser?.uid
+        ).toList();
+      });
+      
+      _updateMarkers();
+    }, onError: (error) {
+      print('마커 리스너 오류: $error');
     });
   }
 
@@ -490,7 +517,7 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    // 사용자 마커들 (ppam_work 이미지) - 모든 사용자에게 보임
+    // 일반 마커들 (파란색) - 모든 사용자에게 보임
     for (final marker in _markers) {
       final position = marker.position;
       
@@ -533,9 +560,214 @@ class _MapScreenState extends State<MapScreen> {
       markers.add(markerWidget);
     }
 
+    // 사용자 마커들 (초록색) - 배포자만 회수 가능
+    for (final marker in _userMarkers) {
+      final position = marker.position;
+      
+      // 거리 확인
+      if (_currentPosition != null) {
+        final distance = _calculateDistance(_currentPosition!, position);
+        if (distance > _maxDistance) continue;
+      }
+      
+      final markerWidget = Marker(
+        point: position,
+        width: 35,
+        height: 35,
+        child: GestureDetector(
+          onTap: () => _showUserMarkerDetail(marker),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.place,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        ),
+      );
+      
+      markers.add(markerWidget);
+    }
+
     setState(() {
-      _userMarkers = markers;
+      _clusteredMarkers = markers;
     });
+  }
+
+  void _showUserMarkerDetail(MarkerData marker) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final isOwner = marker.userId == currentUserId;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.4,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 핸들 바
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // 마커 정보
+              Text(
+                marker.title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              if (marker.description.isNotEmpty) ...[
+                Text(
+                  marker.description,
+                  style: const TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              // 배치자 정보
+              Text(
+                '배치자: ${marker.userId}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              Text(
+                '배치일: ${marker.createdAt.toString().split(' ')[0]}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // 액션 버튼들
+              if (isOwner) ...[
+                // 배포자만 회수 가능
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _collectMarker(marker),
+                    icon: const Icon(Icons.delete),
+                    label: const Text('마커 회수'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                // 타겟 사용자는 수집 가능
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _collectMarker(marker),
+                    icon: const Icon(Icons.check),
+                    label: const Text('마커 수집'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              
+              const SizedBox(height: 12),
+              
+              // 닫기 버튼
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('닫기'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _collectMarker(MarkerData marker) async {
+    try {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId == null) return;
+
+      final isOwner = marker.userId == currentUserId;
+
+      if (isOwner) {
+        // 배포자: 마커 삭제
+        await MarkerService.deleteMarker(marker.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('마커가 회수되었습니다')),
+        );
+      } else {
+        // 타겟 사용자: 마커 수집
+        await MarkerService.collectMarker(marker.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('마커를 수집했습니다')),
+        );
+      }
+
+      Navigator.pop(context); // 상세 화면 닫기
+    } catch (e) {
+      print('마커 처리 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('마커 처리 실패: $e')),
+      );
+    }
   }
 
   void _showMarkerDetail(MarkerData marker) {
@@ -1062,6 +1294,27 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+                  // 마커 배치 버튼
+            SizedBox(
+              width: double.infinity,
+                    height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                        Navigator.pop(context);
+                        _placeMarker();
+                      },
+                      icon: const Icon(Icons.place),
+                      label: const Text('마커 배치'),
+                style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
                   const SizedBox(height: 12),
                   // 취소 버튼
             SizedBox(
@@ -1125,6 +1378,87 @@ class _MapScreenState extends State<MapScreen> {
         'location': _longPressedLatLng,
         'type': 'category',
     });
+  }
+
+  Future<void> _placeMarker() async {
+    if (_longPressedLatLng == null) return;
+
+    try {
+      // 마커 제목과 설명 입력받기
+      final titleController = TextEditingController();
+      final descriptionController = TextEditingController();
+
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('마커 배치'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: '마커 제목',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: '마커 설명',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.trim().isNotEmpty) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: const Text('배치'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == true) {
+        // 마커 생성
+        final markerId = await MarkerService.createMarker(
+          title: titleController.text.trim(),
+          description: descriptionController.text.trim(),
+          position: _longPressedLatLng!,
+          additionalData: {
+            'type': 'user_marker',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+        );
+
+        print('마커 배치 완료: $markerId');
+        
+        // 롱프레스 위치 초기화
+        setState(() {
+          _longPressedLatLng = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('마커가 성공적으로 배치되었습니다')),
+        );
+      }
+    } catch (e) {
+      print('마커 배치 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('마커 배치 실패: $e')),
+      );
+    }
   }
 
 
