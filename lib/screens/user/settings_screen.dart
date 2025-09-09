@@ -111,6 +111,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      print('사용자 데이터 저장 시작');
+      print('저장할 근무지 개수: ${_workplaces.length}');
+      for (int i = 0; i < _workplaces.length; i++) {
+        print('근무지 $i: ${_workplaces[i]}');
+      }
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -129,8 +135,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      print('사용자 데이터 저장 완료');
       _showToast('개인정보가 성공적으로 저장되었습니다');
     } catch (e) {
+      print('사용자 데이터 저장 실패: $e');
       _showToast('저장 중 오류가 발생했습니다: $e');
     } finally {
       setState(() {
@@ -164,15 +172,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
+    final workplaceName = _workplaceNameController.text.trim();
+    final workplaceAddress = _workplaceAddressController.text.trim();
+    
+    print('근무지 추가 시도: $workplaceName, $workplaceAddress');
+
     setState(() {
       _workplaces.add({
-        'name': _workplaceNameController.text.trim(),
-        'address': _workplaceAddressController.text.trim(),
+        'name': workplaceName,
+        'address': workplaceAddress,
       });
       _workplaceNameController.clear();
       _workplaceAddressController.clear();
     });
 
+    print('근무지 목록에 추가됨. 총 개수: ${_workplaces.length}');
+
+    // 근무지 추가 후 즉시 저장
+    _saveUserData();
     _showToast('근무지가 추가되었습니다');
   }
 
@@ -180,6 +197,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _workplaces.removeAt(index);
     });
+    
+    // 근무지 삭제 후 즉시 저장
+    _saveUserData();
+    _showToast('근무지가 삭제되었습니다');
   }
 
   Future<void> _logout() async {

@@ -104,7 +104,12 @@ class _MapScreenState extends State<MapScreen> {
 
   void _setupUserDataListener() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('사용자 데이터 리스너 설정 실패: 사용자가 로그인하지 않음');
+      return;
+    }
+
+    print('사용자 데이터 리스너 설정 시작: ${user.uid}');
 
     // 사용자 데이터 변경을 실시간으로 감지
     FirebaseFirestore.instance
@@ -113,9 +118,18 @@ class _MapScreenState extends State<MapScreen> {
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
-        print('사용자 데이터 변경 감지됨');
+        print('사용자 데이터 변경 감지됨 - 타임스탬프: ${DateTime.now()}');
+        final data = snapshot.data();
+        if (data != null) {
+          final workplaces = data['workplaces'] as List<dynamic>?;
+          print('변경된 근무지 개수: ${workplaces?.length ?? 0}');
+        }
         _loadUserLocations();
+      } else {
+        print('사용자 데이터가 존재하지 않음');
       }
+    }, onError: (error) {
+      print('사용자 데이터 리스너 오류: $error');
     });
   }
 
