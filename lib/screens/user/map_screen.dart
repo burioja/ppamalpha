@@ -1297,27 +1297,6 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-                  // 마커 배치 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                        Navigator.pop(context);
-                        _placeMarker();
-                      },
-                      icon: const Icon(Icons.place),
-                      label: const Text('마커 배치'),
-                style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
                   const SizedBox(height: 12),
                   // 취소 버튼
             SizedBox(
@@ -1383,86 +1362,6 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<void> _placeMarker() async {
-    if (_longPressedLatLng == null) return;
-
-    try {
-      // 마커 제목과 설명 입력받기
-      final titleController = TextEditingController();
-      final descriptionController = TextEditingController();
-
-      final result = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('마커 배치'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: '마커 제목',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: '마커 설명',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.trim().isNotEmpty) {
-                  Navigator.pop(context, true);
-                }
-              },
-              child: const Text('배치'),
-            ),
-          ],
-        ),
-      );
-
-      if (result == true) {
-        // 마커 생성
-        final markerId = await MarkerService.createMarker(
-          title: titleController.text.trim(),
-          description: descriptionController.text.trim(),
-          position: _longPressedLatLng!,
-          additionalData: {
-            'type': 'user_marker',
-            'createdAt': DateTime.now().toIso8601String(),
-          },
-        );
-
-        print('마커 배치 완료: $markerId');
-        
-        // 롱프레스 위치 초기화
-        setState(() {
-          _longPressedLatLng = null;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마커가 성공적으로 배치되었습니다')),
-        );
-      }
-    } catch (e) {
-      print('마커 배치 실패: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('마커 배치 실패: $e')),
-      );
-    }
-  }
 
 
   void _onMapReady() {
