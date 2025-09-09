@@ -57,7 +57,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Polygon> _fogPolygons = [];
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
-  List<Marker> _userMarkers = [];
+  List<Marker> _userMarkerWidgets = [];
   
   // 사용자 위치 정보
   LatLng? _homeLocation;
@@ -560,7 +560,9 @@ class _MapScreenState extends State<MapScreen> {
       markers.add(markerWidget);
     }
 
-    // 사용자 마커들 (초록색) - 배포자만 회수 가능
+
+    // 사용자 마커 위젯들을 별도로 저장
+    final userMarkerWidgets = <Marker>[];
     for (final marker in _userMarkers) {
       final position = marker.position;
       
@@ -598,11 +600,12 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       
-      markers.add(markerWidget);
+      userMarkerWidgets.add(markerWidget);
     }
 
     setState(() {
       _clusteredMarkers = markers;
+      _userMarkerWidgets = userMarkerWidgets;
     });
   }
 
@@ -1582,7 +1585,7 @@ class _MapScreenState extends State<MapScreen> {
                 // 현재 위치 마커
                 MarkerLayer(markers: _currentMarkers),
                 // 사용자 마커
-                MarkerLayer(markers: _userMarkers),
+                MarkerLayer(markers: _userMarkerWidgets),
                 // 롱프레스 마커
               if (_longPressedLatLng != null)
             MarkerLayer(
