@@ -43,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadUserData();
   }
 
+
   @override
   void dispose() {
     _nicknameController.dispose();
@@ -83,8 +84,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           // 워크플레이스 로드
           final workplaces = userData['workplaces'] as List<dynamic>?;
-          if (workplaces != null) {
-            _workplaces.clear();
+          _workplaces.clear(); // 항상 초기화
+          if (workplaces != null && workplaces.isNotEmpty) {
             for (final workplace in workplaces) {
               final workplaceMap = workplace as Map<String, dynamic>;
               _workplaces.add({
@@ -92,6 +93,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'address': workplaceMap['address'] ?? '',
               });
             }
+            print('로드된 근무지 개수: ${_workplaces.length}');
+          } else {
+            print('저장된 근무지가 없음');
           }
         });
       }
@@ -147,6 +151,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _saveWorkplacesOnly() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      print('근무지만 저장 시작');
+      print('저장할 근무지 개수: ${_workplaces.length}');
+      for (int i = 0; i < _workplaces.length; i++) {
+        print('근무지 $i: ${_workplaces[i]}');
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'workplaces': _workplaces,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('근무지 저장 완료');
+    } catch (e) {
+      print('근무지 저장 실패: $e');
+      _showToast('근무지 저장 중 오류가 발생했습니다: $e');
+    }
+  }
+
   Future<void> _pickAddress() async {
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
@@ -165,7 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _addWorkplace() {
+  void _addWorkplace() async {
     if (_workplaceNameController.text.trim().isEmpty || 
         _workplaceAddressController.text.trim().isEmpty) {
       _showToast('근무지명과 주소를 모두 입력해주세요');
@@ -177,29 +207,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     
     print('근무지 추가 시도: $workplaceName, $workplaceAddress');
 
+    // 근무지 추가
+    _workplaces.add({
+      'name': workplaceName,
+      'address': workplaceAddress,
+    });
+    
+    print('근무지 목록에 추가됨. 총 개수: ${_workplaces.length}');
+
+    // UI 업데이트
     setState(() {
-      _workplaces.add({
-        'name': workplaceName,
-        'address': workplaceAddress,
-      });
       _workplaceNameController.clear();
       _workplaceAddressController.clear();
     });
 
-    print('근무지 목록에 추가됨. 총 개수: ${_workplaces.length}');
-
-    // 근무지 추가 후 즉시 저장
-    _saveUserData();
+    // 근무지 추가 후 즉시 저장 (폼 검증 없이)
+    await _saveWorkplacesOnly();
     _showToast('근무지가 추가되었습니다');
   }
 
-  void _removeWorkplace(int index) {
-    setState(() {
-      _workplaces.removeAt(index);
-    });
+  void _removeWorkplace(int index) async {
+    _workplaces.removeAt(index);
     
-    // 근무지 삭제 후 즉시 저장
-    _saveUserData();
+    // UI 업데이트
+    setState(() {});
+    
+    // 근무지 삭제 후 즉시 저장 (폼 검증 없이)
+    await _saveWorkplacesOnly();
     _showToast('근무지가 삭제되었습니다');
   }
 
