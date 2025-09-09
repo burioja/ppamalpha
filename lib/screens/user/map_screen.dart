@@ -69,6 +69,7 @@ class _MapScreenState extends State<MapScreen> {
   double _currentZoom = 15.0;
   String _currentAddress = '위치 불러오는 중...';
   LatLng? _longPressedLatLng;
+  List<LatLng> _longPressedLocations = []; // 모든 롱프레스 위치 저장
   Widget? _customMarkerIcon;
   
   // 포스트 관련
@@ -1338,28 +1339,53 @@ class _MapScreenState extends State<MapScreen> {
     _updateMarkers();
   }
 
-  void _navigateToPostPlace() {
+  Future<void> _navigateToPostPlace() async {
     // 위치 기반 포스트 배포 화면으로 이동
-    Navigator.pushNamed(context, '/post-deploy', arguments: {
+    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
       'location': _longPressedLatLng,
       'type': 'location',
     });
+    
+    // 포스트 배포 완료 후 롱프레스 위치 유지
+    if (result != null) {
+      print('포스트 배포 완료: $result');
+      // 롱프레스 위치는 유지하고 팝업만 닫기
+      setState(() {
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+    }
   }
 
-  void _navigateToPostAddress() {
+  Future<void> _navigateToPostAddress() async {
     // 주소 기반 포스트 배포 화면으로 이동
-    Navigator.pushNamed(context, '/post-deploy', arguments: {
+    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
         'location': _longPressedLatLng,
         'type': 'address',
     });
+    
+    // 포스트 배포 완료 후 롱프레스 위치 유지
+    if (result != null) {
+      print('포스트 배포 완료: $result');
+      setState(() {
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+    }
   }
 
-  void _navigateToPostBusiness() {
+  Future<void> _navigateToPostBusiness() async {
     // 업종 기반 포스트 배포 화면으로 이동
-    Navigator.pushNamed(context, '/post-deploy', arguments: {
+    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
         'location': _longPressedLatLng,
         'type': 'category',
     });
+    
+    // 포스트 배포 완료 후 롱프레스 위치 유지
+    if (result != null) {
+      print('포스트 배포 완료: $result');
+      setState(() {
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+    }
   }
 
 
@@ -1427,6 +1453,11 @@ class _MapScreenState extends State<MapScreen> {
                 onLongPress: (tapPosition, point) {
                   setState(() {
                     _longPressedLatLng = point;
+                    // 롱프레스 위치를 리스트에 추가 (중복 방지)
+                    if (!_longPressedLocations.any((loc) => 
+                        loc.latitude == point.latitude && loc.longitude == point.longitude)) {
+                      _longPressedLocations.add(point);
+                    }
                   });
                   // 롱프레스 시 즉시 마커 설치 다이얼로그 표시
                   _showMarkerInstallDialog();
@@ -1485,26 +1516,21 @@ class _MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: _currentMarkers),
                 // 사용자 마커
                 MarkerLayer(markers: _userMarkerWidgets),
-                // 롱프레스 마커
-              if (_longPressedLatLng != null)
+                // 롱프레스 마커들 (모든 롱프레스 위치 표시)
+                if (_longPressedLocations.isNotEmpty)
             MarkerLayer(
-              markers: [
-                Marker(
-                  point: _longPressedLatLng!,
+              markers: _longPressedLocations.map((location) => Marker(
+                  point: location,
                   width: 40,
                   height: 40,
-                        child: _customMarkerIcon ??
-                            const Icon(
-                              Icons.add_location,
-                      color: Colors.blue,
-                              size: 40,
-                  ),
-                        ),
-                      ],
-                    ),
-                      ],
-                    ),
-          ),
+                  child: _customMarkerIcon ??
+                      const Icon(
+                        Icons.add_location,
+                        color: Colors.blue,
+                        size: 40,
+                      ),
+                )).toList(),
+            ),
           // 에러 메시지
           if (_errorMessage != null)
            Positioned(
