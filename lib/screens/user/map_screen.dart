@@ -1461,8 +1461,8 @@ class _MapScreenState extends State<MapScreen> {
                   });
                   // 롱프레스 시 즉시 마커 설치 다이얼로그 표시
                   _showMarkerInstallDialog();
-          },
-        ),
+                },
+              ),
         children: [
                 // OSM 기본 타일
           TileLayer(
