@@ -70,6 +70,26 @@ class OSMFogService {
     );
   }
 
+  /// 회색 영역 폴리곤 생성 (과거 방문 위치들)
+  static List<Polygon> createGrayAreas(List<LatLng> visitedPositions) {
+    final grayPolygons = <Polygon>[];
+    
+    for (final position in visitedPositions) {
+      final circleHole = makeCircleHole(position, 1000); // 1km
+      
+      grayPolygons.add(Polygon(
+        points: _worldCoverRect,
+        holePointsList: [circleHole], // 원형 홀
+        isFilled: true,
+        color: Colors.grey.withOpacity(0.7), // 회색 반투명
+        borderColor: Colors.transparent,
+        borderStrokeWidth: 0,
+      ));
+    }
+    
+    return grayPolygons;
+  }
+
   /// 줌 레벨에 따른 그리드 간격 계산 (미터)
   static double gridMetersForZoom(double zoom) {
     if (zoom >= 16) return 100;

@@ -13,7 +13,6 @@ import '../../services/marker_service.dart';
 // OSM 기반 Fog of War 시스템
 import '../../services/osm_fog_service.dart';
 import '../../services/visit_tile_service.dart';
-import '../../services/custom_tile_provider.dart';
 import '../../services/nominatim_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/tile_utils.dart';
@@ -58,6 +57,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   // OSM 기반 Fog of War 상태
   List<Polygon> _fogPolygons = [];
+  List<Polygon> _grayPolygons = []; // 회색 영역들 (과거 방문 위치)
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
   List<Marker> _userMarkerWidgets = [];
@@ -74,8 +74,6 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _longPressedLatLng;
   Widget? _customMarkerIcon;
   
-  // Custom TileProvider (Fog of War)
-  late final CustomTileProvider _customTileProvider;
   
   // 포스트 관련
   List<PostModel> _posts = [];
@@ -102,10 +100,6 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _mapController = MapController();
     
-    // Custom TileProvider 초기화
-    _customTileProvider = CustomTileProvider(
-      baseUrl: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
-    );
     
     _initializeLocation();
     _loadCustomMarker();
@@ -251,11 +245,6 @@ class _MapScreenState extends State<MapScreen> {
         newPosition.longitude
       );
       
-      // Custom TileProvider Fog Level 업데이트
-      await _customTileProvider.updateTileFogLevels(
-        newPosition.latitude, 
-        newPosition.longitude
-      );
       
       // 포스트 및 마커 로드
       _loadPosts();
@@ -305,6 +294,7 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
       _fogPolygons = [fogPolygon];
       _ringCircles = [ringCircle];
+      // 회색 영역은 _loadVisitedLocations에서 로드되므로 여기서는 유지
     });
   }
 
@@ -369,7 +359,7 @@ class _MapScreenState extends State<MapScreen> {
           final homeCoords = await NominatimService.geocode(address);
           if (homeCoords != null) {
             print('집주소 좌표 변환 성공: ${homeCoords.latitude}, ${homeCoords.longitude}');
-            setState(() {
+        setState(() {
               _homeLocation = homeCoords;
             });
           } else {
@@ -404,7 +394,7 @@ class _MapScreenState extends State<MapScreen> {
         } else {
           print('워크플레이스 정보가 없음');
         }
-
+        
         setState(() {
           _workLocations = workLocations;
         });
@@ -415,6 +405,9 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
 
+      // 과거 방문 위치 로드
+      await _loadVisitedLocations();
+
       // 포그 오브 워 업데이트
       if (_currentPosition != null) {
         print('포그 오브 워 업데이트 시작');
@@ -423,6 +416,46 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       debugPrint('사용자 위치 로드 실패: $e');
+    }
+  }
+
+  Future<void> _loadVisitedLocations() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 30일 이내 방문 기록 가져오기
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      
+      final visitedTiles = await FirebaseFirestore.instance
+          .collection('visited_tiles')
+          .where('userId', isEqualTo: user.uid)
+          .where('visitedAt', isGreaterThan: thirtyDaysAgo)
+          .get();
+
+      final visitedPositions = <LatLng>[];
+      
+      for (final doc in visitedTiles.docs) {
+        final data = doc.data();
+        final lat = data['latitude'] as double?;
+        final lng = data['longitude'] as double?;
+        
+        if (lat != null && lng != null) {
+          visitedPositions.add(LatLng(lat, lng));
+        }
+      }
+
+      print('과거 방문 위치 개수: ${visitedPositions.length}');
+      
+      // 회색 영역 생성
+      final grayPolygons = OSMFogService.createGrayAreas(visitedPositions);
+      
+      setState(() {
+        _grayPolygons = grayPolygons;
+      });
+      
+    } catch (e) {
+      debugPrint('방문 위치 로드 실패: $e');
     }
   }
 
@@ -485,13 +518,13 @@ class _MapScreenState extends State<MapScreen> {
       final filteredMarkers = <MarkerData>[];
       for (final marker in markers) {
         final tileId = getTileId(marker.position.latitude, marker.position.longitude);
-        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
+        final fogLevel = await VisitTileService.getFogLevelForTile(tileId, currentPosition: _currentPosition);
         
         // Level 1 (밝은 영역) 또는 Level 2 (회색 영역)에서만 마커 표시
         if (fogLevel == 1 || fogLevel == 2) {
           filteredMarkers.add(marker);
         }
-      }
+    }
     
     setState(() {
         _markers = filteredMarkers;
@@ -673,7 +706,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: Container(
                   width: 40,
                   height: 4,
-                  decoration: BoxDecoration(
+                decoration: BoxDecoration(
                     color: Colors.grey[300],
                     borderRadius: BorderRadius.circular(2),
                   ),
@@ -682,11 +715,11 @@ class _MapScreenState extends State<MapScreen> {
               const SizedBox(height: 20),
               
               // 마커 정보
-              Text(
+                    Text(
                 marker.title,
                 style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
@@ -737,7 +770,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-              ] else ...[
+            ] else ...[
                 // 타겟 사용자는 수집 가능
                 SizedBox(
                   width: double.infinity,
@@ -770,10 +803,10 @@ class _MapScreenState extends State<MapScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('닫기'),
+              child: const Text('닫기'),
                 ),
-              ),
-            ],
+            ),
+          ],
           ),
         ),
       ),
@@ -790,7 +823,7 @@ class _MapScreenState extends State<MapScreen> {
       if (isOwner) {
         // 배포자: 마커 삭제
         await MarkerService.deleteMarker(marker.id);
-        ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('마커가 회수되었습니다')),
         );
       } else {
@@ -804,14 +837,14 @@ class _MapScreenState extends State<MapScreen> {
       Navigator.pop(context); // 상세 화면 닫기
     } catch (e) {
       print('마커 처리 실패: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('마커 처리 실패: $e')),
-      );
+        );
     }
   }
 
   void _showMarkerDetail(MarkerData marker) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final isOwner = marker.userId == currentUserId;
     
     showDialog(
@@ -952,7 +985,7 @@ class _MapScreenState extends State<MapScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다!')),
           );
-    } catch (e) {
+      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 회수 중 오류가 발생했습니다: $e')),
       );
@@ -974,7 +1007,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
         child: Column(
-          children: [
+            children: [
             // 핸들 바
             Container(
               width: 40,
@@ -1001,7 +1034,7 @@ class _MapScreenState extends State<MapScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
-                  children: [
+            children: [
                     const SizedBox(height: 20),
                     // 일반/쿠폰 토글
                     Row(
@@ -1037,23 +1070,23 @@ class _MapScreenState extends State<MapScreen> {
                                   onTap: () => setState(() => _selectedCategory = 'coupon'),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(vertical: 12),
-                                    decoration: BoxDecoration(
+                decoration: BoxDecoration(
                                       color: _selectedCategory == 'coupon' ? Colors.blue : Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                                     child: const Text(
                                       '쿠폰만',
-                                      textAlign: TextAlign.center,
+                  textAlign: TextAlign.center,
                                       style: TextStyle(
                 color: Colors.white,
                                         fontWeight: FontWeight.w500,
               ),
             ),
           ),
-        ),
-                              ),
-                            ],
-                          ),
+                ),
+              ),
+            ],
+          ),
                         ),
                       ],
                     ),
@@ -1074,10 +1107,10 @@ class _MapScreenState extends State<MapScreen> {
                                 max: 5000,
                                 divisions: 49,
                                 onChanged: (value) {
-        setState(() {
+                setState(() {
                                     _maxDistance = value;
-                                  });
-                                },
+                });
+              },
                               ),
                             ],
                           ),
@@ -1105,16 +1138,16 @@ class _MapScreenState extends State<MapScreen> {
                                     _minReward = value.toInt();
                                   });
                                 },
-                              ),
-                            ],
-                          ),
+            ),
+          ],
+        ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 30),
                     // 정렬 옵션
                     Row(
-            children: [
+          children: [
                         const Text('정렬:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                         const SizedBox(width: 20),
                         Expanded(
@@ -1132,7 +1165,7 @@ class _MapScreenState extends State<MapScreen> {
                                     child: const Text(
                                       '가까운순',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(
+              style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -1145,20 +1178,20 @@ class _MapScreenState extends State<MapScreen> {
                                 child: GestureDetector(
                                   onTap: () => setState(() {}),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                                       color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                                     child: const Text(
                                       '최신순',
                   textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: Colors.black,
                                         fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
+                ),
+              ),
+            ),
                 ),
               ),
             ],
@@ -1177,13 +1210,13 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-              onPressed: () {
+                onPressed: () {
                         Navigator.pop(context);
                         _resetFilters();
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
+                  shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -1193,7 +1226,7 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-              onPressed: () {
+                onPressed: () {
                         Navigator.pop(context);
                         _updateMarkers();
                       },
@@ -1232,15 +1265,15 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _navigateToPostPlace() async {
     // 위치 기반 포스트 배포 화면으로 이동
     final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
-      'location': _longPressedLatLng,
-      'type': 'location',
+        'location': _longPressedLatLng,
+        'type': 'location',
     });
     
     // 포스트 배포 완료 후 마커 새로고침
     if (result != null) {
       print('포스트 배포 완료: $result');
       await _loadMarkers(); // 마커 목록 새로고침
-      setState(() {
+    setState(() {
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }
@@ -1256,7 +1289,7 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 롱프레스 위치 유지
     if (result != null) {
       print('포스트 배포 완료: $result');
-      setState(() {
+    setState(() {
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }
@@ -1272,10 +1305,175 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 롱프레스 위치 유지
     if (result != null) {
       print('포스트 배포 완료: $result');
-      setState(() {
+    setState(() {
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }
+  }
+
+  void _showLongPressMenu() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.4,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 핸들 바
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // 제목
+              const Text(
+                '포스트 배포',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              // 설명
+              const Text(
+                '이 위치에 포스트를 배포하세요',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // 메뉴 옵션들
+              Expanded(
+                child: Column(
+                  children: [
+                    // 이 위치에 뿌리기
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _navigateToPostPlace();
+                        },
+                        icon: const Icon(Icons.location_on, color: Colors.white),
+                        label: const Text(
+                          '이 위치에 뿌리기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4D4DFF),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 이 주소에 뿌리기
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _navigateToPostAddress();
+                        },
+                        icon: const Icon(Icons.home, color: Colors.white),
+                        label: const Text(
+                          '이 주소에 뿌리기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 근처 업종에 뿌리기
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _navigateToPostBusiness();
+                        },
+                        icon: const Icon(Icons.business, color: Colors.white),
+                        label: const Text(
+                          '근처 업종에 뿌리기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // 취소 버튼
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('취소'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
 
@@ -1344,16 +1542,19 @@ class _MapScreenState extends State<MapScreen> {
                   setState(() {
                     _longPressedLatLng = point;
                   });
-                  // 롱프레스 시 포스트 배포 화면으로 이동
-                  _navigateToPostPlace();
+                  // 롱프레스 시 메뉴 표시
+                  _showLongPressMenu();
                 },
               ),
         children: [
-                // Custom TileProvider (Fog of War)
+                // 기본 OSM 타일
                 TileLayer(
-                  tileProvider: _customTileProvider,
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                 ),
+                // 회색 영역들 (과거 방문 위치)
+                PolygonLayer(polygons: _grayPolygons),
                 // Fog of War 마스크 (전세계 검정 + 1km 원형 홀)
                 PolygonLayer(polygons: _fogPolygons),
                 // 1km 경계선

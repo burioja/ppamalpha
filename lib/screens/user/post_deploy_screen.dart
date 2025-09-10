@@ -153,7 +153,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     // Fog Level 체크 (Level 1,2 영역에서만 배포 허용)
     if (_selectedLocation != null) {
       final tileId = getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude);
-      final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
+      // 현재 위치를 null로 전달 (MapScreen에서 처리)
+      final fogLevel = await VisitTileService.getFogLevelForTile(tileId, currentPosition: null);
       
       if (fogLevel == 3) {
         ScaffoldMessenger.of(context).showSnackBar(
