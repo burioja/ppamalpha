@@ -1,85 +1,67 @@
-import 'dart:math';
 import 'package:latlong2/latlong.dart';
 
-/// 타일 좌표 클래스
-class Coords {
-  final int x;
-  final int y;
-  
-  const Coords(this.x, this.y);
-  
-  @override
-  String toString() => 'Coords($x, $y)';
-  
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Coords && runtimeType == other.runtimeType && x == other.x && y == other.y;
-  
-  @override
-  int get hashCode => x.hashCode ^ y.hashCode;
-}
-
-/// 타일 관련 유틸리티 클래스
+/// 1km 타일 기반 Fog of War 시스템을 위한 유틸리티
 class TileUtils {
-  /// Slippy Map Tile System (Z/X/Y) 기반 타일 키 생성
-  static String generateTileKey(int z, int x, int y) {
-    return '${z}_${x}_$y';
+  // 1km = 약 0.009도 (위도 기준)
+  static const double _tileSize = 0.009;
+  
+  /// 위도, 경도를 1km 타일 ID로 변환
+  static String getTileId(double latitude, double longitude) {
+    final tileLat = (latitude / _tileSize).floor();
+    final tileLng = (longitude / _tileSize).floor();
+    return 'tile_${tileLat}_${tileLng}';
   }
   
-  /// GPS 좌표를 타일 좌표로 변환
-  static Coords latLngToTile(LatLng latLng, int zoom) {
-    final x = ((latLng.longitude + 180) / 360 * pow(2, zoom)).floor();
-    final y = ((1 - log(tan(latLng.latitude * pi / 180) + 
-        1 / cos(latLng.latitude * pi / 180)) / pi) / 2 * pow(2, zoom)).floor();
-    return Coords(x, y);
+  /// 타일 ID를 타일 중심점으로 변환
+  static LatLng getTileCenter(String tileId) {
+    final parts = tileId.split('_');
+    final tileLat = int.parse(parts[1]);
+    final tileLng = int.parse(parts[2]);
+    return LatLng(
+      tileLat * _tileSize + (_tileSize / 2), // 타일 중심
+      tileLng * _tileSize + (_tileSize / 2),
+    );
   }
   
-  /// 타일 좌표를 GPS 좌표로 변환
-  static LatLng tileToLatLng(Coords coords, int zoom) {
-    final n = pow(2, zoom);
-    final lonDeg = coords.x / n * 360.0 - 180.0;
-    // sinh 대신 다른 방법 사용
-    final latRad = atan((exp(pi * (1 - 2 * coords.y / n)) - exp(-pi * (1 - 2 * coords.y / n))) / 2);
-    final latDeg = latRad * 180.0 / pi;
-    return LatLng(latDeg, lonDeg);
-  }
-  
-  /// 1km 반경 내 타일들 계산
-  static List<Coords> getTilesInRadius(LatLng center, int zoom, double radiusKm) {
-    final tiles = <Coords>[];
-    final centerTile = latLngToTile(center, zoom);
+  /// 현재 위치가 속한 타일과 주변 8개 타일 ID 목록 반환
+  static List<String> getSurroundingTiles(double latitude, double longitude) {
+    final centerTile = getTileId(latitude, longitude);
+    final parts = centerTile.split('_');
+    final centerLat = int.parse(parts[1]);
+    final centerLng = int.parse(parts[2]);
     
-    // 반경 내 타일들 계산 (간단한 사각형 근사)
-    // 1도 ≈ 111.32km
-    final tileRadius = (radiusKm / 111.32 * pow(2, zoom)).ceil();
-    
-    for (int dx = -tileRadius; dx <= tileRadius; dx++) {
-      for (int dy = -tileRadius; dy <= tileRadius; dy++) {
-        final tile = Coords(centerTile.x + dx, centerTile.y + dy);
-        
-        // 실제 거리 체크 (정확한 원형 반경)
-        final tileCenter = tileToLatLng(tile, zoom);
-        final distance = Distance().as(LengthUnit.Kilometer, center, tileCenter);
-        
-        if (distance <= radiusKm) {
-          tiles.add(tile);
-        }
+    final tiles = <String>[];
+    for (int latOffset = -1; latOffset <= 1; latOffset++) {
+      for (int lngOffset = -1; lngOffset <= 1; lngOffset++) {
+        final tileLat = centerLat + latOffset;
+        final tileLng = centerLng + lngOffset;
+        tiles.add('tile_${tileLat}_${tileLng}');
       }
     }
-    
     return tiles;
   }
   
-  /// 두 GPS 좌표 간의 거리 계산 (km)
-  static double calculateDistance(LatLng point1, LatLng point2) {
-    return Distance().as(LengthUnit.Kilometer, point1, point2);
+  /// 타일 ID에서 위도, 경도 범위 계산
+  static Map<String, double> getTileBounds(String tileId) {
+    final parts = tileId.split('_');
+    final tileLat = int.parse(parts[1]);
+    final tileLng = int.parse(parts[2]);
+    
+    return {
+      'minLat': tileLat * _tileSize,
+      'maxLat': (tileLat + 1) * _tileSize,
+      'minLng': tileLng * _tileSize,
+      'maxLng': (tileLng + 1) * _tileSize,
+    };
   }
-  
-  /// 타일이 특정 반경 내에 있는지 확인
-  static bool isTileInRadius(Coords tile, LatLng center, int zoom, double radiusKm) {
-    final tileCenter = tileToLatLng(tile, zoom);
-    final distance = calculateDistance(center, tileCenter);
-    return distance <= radiusKm;
-  }
+}
+
+/// 전역 함수로 getTileId 제공 (기존 코드 호환성)
+String getTileId(double latitude, double longitude) {
+  return TileUtils.getTileId(latitude, longitude);
+}
+
+/// 전역 함수로 getTileCenter 제공 (기존 코드 호환성)
+LatLng getTileCenter(String tileId) {
+  return TileUtils.getTileCenter(tileId);
 }

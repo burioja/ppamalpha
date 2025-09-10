@@ -12,8 +12,11 @@ import '../../services/post_service.dart';
 import '../../services/marker_service.dart';
 // OSM 기반 Fog of War 시스템
 import '../../services/osm_fog_service.dart';
+import '../../services/visit_tile_service.dart';
+import '../../services/custom_tile_provider.dart';
 import '../../services/nominatim_service.dart';
 import '../../services/location_service.dart';
+import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -69,8 +72,10 @@ class _MapScreenState extends State<MapScreen> {
   double _currentZoom = 15.0;
   String _currentAddress = '위치 불러오는 중...';
   LatLng? _longPressedLatLng;
-  List<LatLng> _longPressedLocations = []; // 모든 롱프레스 위치 저장
   Widget? _customMarkerIcon;
+  
+  // Custom TileProvider (Fog of War)
+  late final CustomTileProvider _customTileProvider;
   
   // 포스트 관련
   List<PostModel> _posts = [];
@@ -82,7 +87,7 @@ class _MapScreenState extends State<MapScreen> {
   // 필터 관련
   bool _showFilter = false;
   String _selectedCategory = 'all';
-  double _maxDistance = 1000.0;
+  double _maxDistance = 10000.0; // 10km로 확장
   int _minReward = 0;
   bool _showCouponsOnly = false;
   bool _showMyPostsOnly = false;
@@ -96,6 +101,12 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _mapController = MapController();
+    
+    // Custom TileProvider 초기화
+    _customTileProvider = CustomTileProvider(
+      baseUrl: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+    );
+    
     _initializeLocation();
     _loadCustomMarker();
     _loadPosts();
@@ -233,6 +244,18 @@ class _MapScreenState extends State<MapScreen> {
       
       // 주소 업데이트
       _updateCurrentAddress();
+      
+      // 타일 방문 기록 업데이트 (새로운 기능)
+      await VisitTileService.updateCurrentTileVisit(
+        newPosition.latitude, 
+        newPosition.longitude
+      );
+      
+      // Custom TileProvider Fog Level 업데이트
+      await _customTileProvider.updateTileFogLevels(
+        newPosition.latitude, 
+        newPosition.longitude
+      );
       
       // 포스트 및 마커 로드
       _loadPosts();
@@ -452,13 +475,26 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition == null) return;
 
     try {
+      // Fog Level 기반 마커 로딩 (Level 1,2 영역에서만)
       final markers = await MarkerService.getMarkersInRadius(
         center: _currentPosition!,
         radiusInKm: _maxDistance / 1000.0,
       );
     
+      // Fog Level 필터링 적용
+      final filteredMarkers = <MarkerData>[];
+      for (final marker in markers) {
+        final tileId = getTileId(marker.position.latitude, marker.position.longitude);
+        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
+        
+        // Level 1 (밝은 영역) 또는 Level 2 (회색 영역)에서만 마커 표시
+        if (fogLevel == 1 || fogLevel == 2) {
+          filteredMarkers.add(marker);
+        }
+      }
+    
     setState(() {
-        _markers = markers;
+        _markers = filteredMarkers;
       });
       
       _updateMarkers();
@@ -1180,158 +1216,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-      void _showMarkerInstallDialog() {
-    if (_longPressedLatLng == null) return;
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.4,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          children: [
-            // 핸들 바
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // 제목
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Text(
-                '이 위치에 뿌리기',
-              style: TextStyle(
-                  fontSize: 20,
-                fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            // 설명
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                '수수료: 무료\n반경: 1km\n타겟팅: 설정 가능',
-              style: TextStyle(
-                fontSize: 14,
-                  color: Colors.grey[600],
-              ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            // 버튼들
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  // 이 위치에 뿌리기 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                        Navigator.pop(context);
-                        _navigateToPostPlace();
-                      },
-                      icon: const Icon(Icons.location_on),
-                      label: const Text('이 위치에 뿌리기'),
-                style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-                  // 이 주소에 뿌리기 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                        Navigator.pop(context);
-                        _navigateToPostAddress();
-                      },
-                      icon: const Icon(Icons.home),
-                      label: const Text('이 주소에 뿌리기'),
-                style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-                  // 특정 업종에 뿌리기 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                        Navigator.pop(context);
-                        _navigateToPostBusiness();
-                      },
-                      icon: const Icon(Icons.business),
-                      label: const Text('특정 업종에 뿌리기'),
-                style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-                  const SizedBox(height: 12),
-                  // 취소 버튼
-            SizedBox(
-              width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                onPressed: () {
-                        Navigator.pop(context);
-                  setState(() {
-                    _longPressedLatLng = null;
-                  });
-                },
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('취소'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
 
   void _resetFilters() {
     setState(() {
       _selectedCategory = 'all';
-      _maxDistance = 1000.0;
+      _maxDistance = 10000.0; // 10km로 확장
       _minReward = 0;
       _showCouponsOnly = false;
       _showMyPostsOnly = false;
@@ -1346,10 +1236,10 @@ class _MapScreenState extends State<MapScreen> {
       'type': 'location',
     });
     
-    // 포스트 배포 완료 후 롱프레스 위치 유지
+    // 포스트 배포 완료 후 마커 새로고침
     if (result != null) {
       print('포스트 배포 완료: $result');
-      // 롱프레스 위치는 유지하고 팝업만 닫기
+      await _loadMarkers(); // 마커 목록 새로고침
       setState(() {
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
@@ -1453,21 +1343,15 @@ class _MapScreenState extends State<MapScreen> {
                 onLongPress: (tapPosition, point) {
                   setState(() {
                     _longPressedLatLng = point;
-                    // 롱프레스 위치를 리스트에 추가 (중복 방지)
-                    if (!_longPressedLocations.any((loc) => 
-                        loc.latitude == point.latitude && loc.longitude == point.longitude)) {
-                      _longPressedLocations.add(point);
-                    }
                   });
-                  // 롱프레스 시 즉시 마커 설치 다이얼로그 표시
-                  _showMarkerInstallDialog();
+                  // 롱프레스 시 포스트 배포 화면으로 이동
+                  _navigateToPostPlace();
                 },
               ),
         children: [
-                // OSM 기본 타일
-          TileLayer(
-            urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
+                // Custom TileProvider (Fog of War)
+                TileLayer(
+                  tileProvider: _customTileProvider,
                   userAgentPackageName: 'com.ppamalpha.app',
                 ),
                 // Fog of War 마스크 (전세계 검정 + 1km 원형 홀)
@@ -1514,23 +1398,10 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 // 현재 위치 마커
                 MarkerLayer(markers: _currentMarkers),
+                // Firebase 마커들 (포스트 + 사용자 생성 마커)
+                MarkerLayer(markers: _clusteredMarkers),
                 // 사용자 마커
                 MarkerLayer(markers: _userMarkerWidgets),
-                // 롱프레스 마커들 (모든 롱프레스 위치 표시)
-                if (_longPressedLocations.isNotEmpty)
-            MarkerLayer(
-              markers: _longPressedLocations.map((location) => Marker(
-                  point: location,
-                  width: 40,
-                  height: 40,
-                  child: _customMarkerIcon ??
-                      const Icon(
-                        Icons.add_location,
-                        color: Colors.blue,
-                        size: 40,
-                      ),
-                )).toList(),
-            ),
           // 에러 메시지
           if (_errorMessage != null)
            Positioned(
