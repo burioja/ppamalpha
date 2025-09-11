@@ -3,6 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 
+/// 마커 타입 열거형
+enum MarkerType {
+  post,        // 일반 포스트
+  superPost,   // 슈퍼포스트 (검은 영역에서도 표시)
+  user,        // 사용자 마커
+}
+
 /// 마커 데이터 모델
 class MarkerData {
   final String id;
@@ -16,6 +23,7 @@ class MarkerData {
   final bool isCollected;
   final String? collectedBy;
   final DateTime? collectedAt;
+  final MarkerType type; // 마커 타입 추가
 
   MarkerData({
     required this.id,
@@ -29,6 +37,7 @@ class MarkerData {
     this.isCollected = false,
     this.collectedBy,
     this.collectedAt,
+    this.type = MarkerType.post, // 기본값은 일반 포스트
   });
 
   Map<String, dynamic> toFirestore() {

@@ -1,7 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/post_model.dart';
+import 'visit_tile_service.dart';
+import '../utils/tile_utils.dart';
 
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -26,8 +30,12 @@ class PostService {
     required bool canRequestReward,
     required bool canUse,
     required DateTime expiresAt,
+    bool isSuperPost = false, // 슈퍼포스트 여부
   }) async {
     try {
+      // 타일 ID 자동 계산
+      final tileId = TileUtils.getTileId(location.latitude, location.longitude);
+      
       final flyer = PostModel(
         flyerId: '',
         creatorId: creatorId,
@@ -49,6 +57,8 @@ class PostService {
         canForward: canForward,
         canRequestReward: canRequestReward,
         canUse: canUse,
+        tileId: tileId, // 타일 ID 자동 설정
+        isSuperPost: isSuperPost, // 슈퍼포스트 여부
       );
 
       // Firestore에 저장
@@ -76,6 +86,50 @@ class PostService {
     } catch (e) {
       throw Exception('포스트 생성 실패: $e');
     }
+  }
+
+  // 🚀 슈퍼포스트 생성 메서드
+  Future<String> createSuperPost({
+    required String creatorId,
+    required String creatorName,
+    required GeoPoint location,
+    required int radius,
+    required int reward,
+    required List<int> targetAge,
+    required String targetGender,
+    required List<String> targetInterest,
+    required List<String> targetPurchaseHistory,
+    required List<String> mediaType,
+    required List<String> mediaUrl,
+    required String title,
+    required String description,
+    required bool canRespond,
+    required bool canForward,
+    required bool canRequestReward,
+    required bool canUse,
+    required DateTime expiresAt,
+  }) async {
+    return await createFlyer(
+      creatorId: creatorId,
+      creatorName: creatorName,
+      location: location,
+      radius: radius,
+      reward: reward,
+      targetAge: targetAge,
+      targetGender: targetGender,
+      targetInterest: targetInterest,
+      targetPurchaseHistory: targetPurchaseHistory,
+      mediaType: mediaType,
+      mediaUrl: mediaUrl,
+      title: title,
+      description: description,
+      canRespond: canRespond,
+      canForward: canForward,
+      canRequestReward: canRequestReward,
+      canUse: canUse,
+      expiresAt: expiresAt,
+      isSuperPost: true, // 슈퍼포스트로 생성
+    );
   }
 
   // 포스트 업데이트
@@ -149,7 +203,7 @@ class PostService {
     }
   }
 
-  // 위치 기반 전단지 조회 (GeoFlutterFire 사용)
+  // 위치 기반 전단지 조회 (GeoFlutterFire 사용) - 기존 방식
   Future<List<PostModel>> getFlyersNearLocation({
     required GeoPoint location,
     required double radiusInKm,
@@ -197,6 +251,245 @@ class PostService {
     } catch (e) {
       throw Exception('전단지 조회 실패: $e');
     }
+  }
+
+  // 🚀 성능 최적화: 포그레벨 1단계 포스트만 조회
+  Future<List<PostModel>> getFlyersInFogLevel1({
+    required GeoPoint location,
+    required double radiusInKm,
+    String? userGender,
+    int? userAge,
+    List<String>? userInterests,
+    List<String>? userPurchaseHistory,
+  }) async {
+    try {
+      // 1. 현재 위치 기준으로 포그레벨 1단계 타일들 계산
+      final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+      
+      if (fogLevel1Tiles.isEmpty) {
+        return []; // 포그레벨 1단계 타일이 없으면 빈 리스트 반환
+      }
+
+      // 2. 해당 타일들에 있는 포스트만 조회 (서버 사이드 필터링)
+      final querySnapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
+          .where('tileId', whereIn: fogLevel1Tiles) // 타일 ID로 필터링
+          .get();
+
+      List<PostModel> flyers = [];
+      for (var doc in querySnapshot.docs) {
+        final flyer = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (flyer.isExpired()) continue;
+        
+        // 거리 확인 (반경을 km로 변환) - 추가 안전장치
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          flyer.location.latitude, flyer.location.longitude,
+        );
+        if (distance > radiusInKm * 1000) continue;
+        
+        // 3. 타겟 조건 필터링 (임시로 비활성화하여 모든 flyer 표시)
+        // if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
+        //   if (!flyer.matchesTargetConditions(
+        //     userAge: userAge,
+        //     userGender: userGender,
+        //     userInterests: userInterests,
+        //     userPurchaseHistory: userPurchaseHistory,
+        //   )) continue;
+        // }
+        
+        flyers.add(flyer);
+      }
+
+      return flyers;
+    } catch (e) {
+      throw Exception('포그레벨 1단계 전단지 조회 실패: $e');
+    }
+  }
+
+  // 포그레벨 1단계 타일들 계산
+  Future<List<String>> _getFogLevel1Tiles(GeoPoint location, double radiusInKm) async {
+    try {
+      // 1. 현재 위치 주변 타일들 가져오기
+      final surroundingTiles = TileUtils.getSurroundingTiles(location.latitude, location.longitude);
+      final fogLevel1Tiles = <String>[];
+      
+      // 2. 각 타일의 포그레벨 확인
+      for (final tileId in surroundingTiles) {
+        final fogLevel = await VisitTileService.getFogLevelForTile(
+          tileId, 
+          currentPosition: LatLng(location.latitude, location.longitude)
+        );
+        
+        if (fogLevel == 1) {
+          fogLevel1Tiles.add(tileId);
+        }
+      }
+      
+      return fogLevel1Tiles;
+    } catch (e) {
+      print('포그레벨 1단계 타일 계산 실패: $e');
+      return [];
+    }
+  }
+
+  // 🚀 슈퍼포스트 조회 (모든 영역에서 표시)
+  Future<List<PostModel>> getSuperPostsInRadius({
+    required GeoPoint location,
+    required double radiusInKm,
+  }) async {
+    try {
+      // 슈퍼포스트만 조회 (isSuperPost = true)
+      final querySnapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
+          .where('isSuperPost', isEqualTo: true)
+          .get();
+
+      List<PostModel> superPosts = [];
+      for (var doc in querySnapshot.docs) {
+        final post = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (post.isExpired()) continue;
+        
+        // 거리 확인 (반경을 km로 변환)
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          post.location.latitude, post.location.longitude,
+        );
+        if (distance > radiusInKm * 1000) continue;
+        
+        superPosts.add(post);
+      }
+
+      return superPosts;
+    } catch (e) {
+      throw Exception('슈퍼포스트 조회 실패: $e');
+    }
+  }
+
+  // 🚀 실시간 포스트 스트림 (포그레벨 1단계)
+  Stream<List<PostModel>> getFlyersInFogLevel1Stream({
+    required GeoPoint location,
+    required double radiusInKm,
+  }) {
+    return _firestore
+        .collection('posts')
+        .where('isActive', isEqualTo: true)
+        .where('isCollected', isEqualTo: false)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      // 포그레벨 1단계 타일들 계산
+      final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+      
+      if (fogLevel1Tiles.isEmpty) {
+        return <PostModel>[];
+      }
+
+      List<PostModel> posts = [];
+      for (var doc in snapshot.docs) {
+        final post = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (post.isExpired()) continue;
+        
+        // 타일 ID 확인 (포그레벨 1단계 타일에 있는지)
+        if (post.tileId != null && fogLevel1Tiles.contains(post.tileId)) {
+          // 거리 확인 (추가 안전장치)
+          final distance = _calculateDistance(
+            location.latitude, location.longitude,
+            post.location.latitude, post.location.longitude,
+          );
+          if (distance <= radiusInKm * 1000) {
+            posts.add(post);
+          }
+        }
+      }
+
+      return posts;
+    });
+  }
+
+  // 🚀 실시간 슈퍼포스트 스트림
+  Stream<List<PostModel>> getSuperPostsStream({
+    required GeoPoint location,
+    required double radiusInKm,
+  }) {
+    return _firestore
+        .collection('posts')
+        .where('isActive', isEqualTo: true)
+        .where('isCollected', isEqualTo: false)
+        .where('isSuperPost', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+      List<PostModel> superPosts = [];
+      for (var doc in snapshot.docs) {
+        final post = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (post.isExpired()) continue;
+        
+        // 거리 확인 (반경을 km로 변환)
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          post.location.latitude, post.location.longitude,
+        );
+        if (distance <= radiusInKm * 1000) {
+          superPosts.add(post);
+        }
+      }
+
+      return superPosts;
+    });
+  }
+
+  // 🚀 모든 활성 포스트 조회 (포그레벨 필터링용)
+  Future<List<PostModel>> getAllActivePosts({
+    required GeoPoint location,
+    required double radiusInKm,
+  }) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
+          .get();
+
+      List<PostModel> posts = [];
+      for (var doc in querySnapshot.docs) {
+        final post = PostModel.fromFirestore(doc);
+        
+        // 만료 확인
+        if (post.isExpired()) continue;
+        
+        // 거리 확인 (반경을 km로 변환)
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          post.location.latitude, post.location.longitude,
+        );
+        if (distance <= radiusInKm * 1000) {
+          posts.add(post);
+        }
+      }
+
+      return posts;
+    } catch (e) {
+      throw Exception('모든 활성 포스트 조회 실패: $e');
+    }
+  }
+
+
+  // 전단지 ID 생성 헬퍼 메서드
+  String _generateFlyerId() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = math.Random().nextInt(1000);
+    return 'flyer_${timestamp}_$random';
   }
 
   // 거리 계산 헬퍼 메서드
