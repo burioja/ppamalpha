@@ -85,10 +85,11 @@ class _MapScreenState extends State<MapScreen> {
   // 필터 관련
   bool _showFilter = false;
   String _selectedCategory = 'all';
-  double _maxDistance = 10000.0; // 10km로 확장
+  double _maxDistance = 1000.0; // 기본 1km, 유료회원 3km
   int _minReward = 0;
   bool _showCouponsOnly = false;
   bool _showMyPostsOnly = false;
+  bool _isPremiumUser = false; // 유료 사용자 여부
   
   // 실시간 업데이트 관련
   Timer? _mapMoveTimer;
@@ -114,12 +115,10 @@ class _MapScreenState extends State<MapScreen> {
     
     _initializeLocation();
     _loadCustomMarker();
-    _loadPosts();
-    _loadMarkers();
     _loadUserLocations();
     _setupUserDataListener();
     _setupMarkerListener();
-    _setupPostStreamListener(); // 🚀 실시간 포스트 스트림 리스너 설정
+    // _checkPremiumStatus()와 _setupPostStreamListener()는 _getCurrentLocation()에서 호출됨
   }
 
   void _setupUserDataListener() {
@@ -157,32 +156,44 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition == null) return;
 
     print('마커 리스너 설정 시작');
-
-    // 실시간 마커 리스너
-    MarkerService.getMarkersStream(
-      center: _currentPosition!,
-      radiusInKm: _maxDistance / 1000.0,
-    ).listen((markers) {
-      print('마커 업데이트 감지됨: ${markers.length}개');
-      
-      setState(() {
-        _markers = markers.where((marker) => !marker.isCollected).toList();
-        _userMarkers = markers.where((marker) => 
-          marker.userId == FirebaseAuth.instance.currentUser?.uid
-        ).toList();
-      });
-      
-      _updateMarkers();
-    }, onError: (error) {
-      print('마커 리스너 오류: $error');
-    });
   }
+
+  // 유료 사용자 상태 확인
+  Future<void> _checkPremiumStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final isPremium = userData?['isPremium'] ?? false;
+        
+        setState(() {
+          _isPremiumUser = isPremium;
+          _maxDistance = isPremium ? 3000.0 : 1000.0; // 유료: 3km, 무료: 1km
+        });
+        
+        print('💰 유료 사용자 상태: $_isPremiumUser, 검색 반경: ${_maxDistance}m');
+      }
+    } catch (e) {
+      print('유료 사용자 상태 확인 실패: $e');
+    }
+  }
+
 
   // 🚀 실시간 포스트 스트림 리스너 설정
   void _setupPostStreamListener() {
     if (_currentPosition == null) return;
 
-    print('포스트 스트림 리스너 설정 시작');
+    print('🚀 포스트 스트림 리스너 설정 시작');
+    print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    print('💰 유료 사용자: $_isPremiumUser');
+    print('📏 검색 반경: ${_maxDistance}m (${_maxDistance / 1000.0}km)');
 
     // 포그레벨 1단계 포스트 실시간 스트림
     PostService().getFlyersInFogLevel1Stream(
@@ -190,13 +201,20 @@ class _MapScreenState extends State<MapScreen> {
       radiusInKm: _maxDistance / 1000.0,
     ).listen((posts) {
       print('📡 포그레벨 1단계 포스트 업데이트: ${posts.length}개');
+      print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      print('📏 검색 반경: ${_maxDistance / 1000.0}km');
       
       // 포스트를 마커 데이터로 변환
       final markers = <MarkerData>[];
+      final positionCount = <String, int>{}; // 위치별 포스트 개수 추적
       
       for (final post in posts) {
+        // 위치별 포스트 개수 추적
+        final positionKey = '${post.location.latitude.toStringAsFixed(6)},${post.location.longitude.toStringAsFixed(6)}';
+        positionCount[positionKey] = (positionCount[positionKey] ?? 0) + 1;
+        
         markers.add(MarkerData(
-          id: post.flyerId,
+          id: post.postId,
           title: post.title,
           description: post.description,
           userId: post.creatorId,
@@ -209,7 +227,21 @@ class _MapScreenState extends State<MapScreen> {
           collectedAt: post.collectedAt,
           type: MarkerType.post,
         ));
+        
+        print('📌 포스트: ${post.title} (${post.reward}원) - 위치: $positionKey');
       }
+      
+      // 중복 위치 확인
+      print('🔍 위치별 포스트 개수:');
+      positionCount.forEach((position, count) {
+        if (count > 1) {
+          print('  - $position: $count개 포스트 (중복!)');
+        } else {
+          print('  - $position: $count개 포스트');
+        }
+      });
+      
+      print('🎯 총 마커 개수: ${markers.length}개');
       
       setState(() {
         _markers = markers;
@@ -300,10 +332,11 @@ class _MapScreenState extends State<MapScreen> {
         newPosition.longitude
       );
       
+      // 유료 상태 확인 후 포스트 스트림 설정
+      await _checkPremiumStatus();
       
-      // 포스트 및 마커 로드
-      _loadPosts();
-      _loadMarkers();
+      // 🚀 실시간 포스트 스트림 리스너 설정 (위치 확보 후)
+      _setupPostStreamListener();
       
       // 현재 위치 마커 생성
       _createCurrentLocationMarker(newPosition);
@@ -532,104 +565,131 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _loadPosts() async {
+  // 🚀 Firestore 기반 실시간 마커 로드 (제거됨 - _setupPostStreamListener로 대체)
+
+  Future<void> _loadPosts({bool forceRefresh = false}) async {
     if (_currentPosition == null) return;
     
-    setState(() {
-      _isLoading = true;
-    });
+    // 로딩 상태는 짧게만 표시
+    if (forceRefresh) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
-      final posts = await PostService().getFlyersNearLocation(
-        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        radiusInKm: _maxDistance / 1000.0,
+      if (forceRefresh) {
+        // 🚀 수동 새로고침: 일회성 조회 (포스트 배포 후 즉시 반영)
+        final posts = await PostService().getFlyersInFogLevel1(
+          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+          radiusInKm: _maxDistance / 1000.0,
         );
-    
-    setState(() {
-        _posts = posts;
-        _isLoading = false;
-      });
-      
-      _updateMarkers();
+        
+        // 일반 포스트만 조회 (슈퍼포스트는 스트림에서 자동 처리)
+        final allPosts = posts;
+        
+        // 마커 데이터 생성
+        final markers = <MarkerData>[];
+        for (final post in allPosts) {
+          // 🚀 슈퍼포스트 판별: 1000원 이상이면 슈퍼포스트
+          final isSuperPost = post.reward >= 1000;
+          
+          markers.add(MarkerData(
+            id: post.postId,
+            title: post.title,
+            description: post.description,
+            userId: post.creatorId,
+            position: LatLng(post.location.latitude, post.location.longitude),
+            createdAt: post.createdAt,
+            expiryDate: post.expiresAt,
+            data: post.toFirestore(),
+            isCollected: post.isCollected,
+            collectedBy: post.collectedBy,
+            collectedAt: post.collectedAt,
+            type: isSuperPost ? MarkerType.superPost : MarkerType.post,
+          ));
+        }
+        
+        if (mounted) {
+          setState(() {
+            _posts = allPosts;
+            _markers = markers;
+            _isLoading = false;
+          });
+          _updateMarkers();
+          
+          // 🚀 마커 캐시 저장
+        }
+      } else {
+        // 🚀 실시간 포스트 스트림 사용 (포그레벨 1단계)
+        PostService().getFlyersInFogLevel1Stream(
+          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+          radiusInKm: _maxDistance / 1000.0,
+        ).listen((posts) {
+          if (mounted) {
+            // 🚀 슈퍼포스트 판별: 1000원 이상이면 슈퍼포스트
+            final markers = <MarkerData>[];
+            for (final post in posts) {
+              final isSuperPost = post.reward >= 1000;
+              
+              markers.add(MarkerData(
+                id: post.postId,
+                title: post.title,
+                description: post.description,
+                userId: post.creatorId,
+                position: LatLng(post.location.latitude, post.location.longitude),
+                createdAt: post.createdAt,
+                expiryDate: post.expiresAt,
+                data: post.toFirestore(),
+                isCollected: post.isCollected,
+                collectedBy: post.collectedBy,
+                collectedAt: post.collectedAt,
+                type: isSuperPost ? MarkerType.superPost : MarkerType.post,
+              ));
+            }
+            
+            setState(() {
+              _posts = posts;
+              _markers = markers;
+              _isLoading = false; // 첫 번째 데이터 수신 시 로딩 해제
+            });
+            _updateMarkers();
+            
+            // 🚀 마커 캐시 저장
+          }
+        }, onError: (e) {
+          if (mounted) {
+            setState(() {
+              _errorMessage = '포스트를 불러오는 중 오류가 발생했습니다: $e';
+              _isLoading = false;
+            });
+          }
+        });
+        
+        // 스트림 시작 후 즉시 로딩 해제 (스트림이 비어있을 수 있으므로)
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        });
+      }
     } catch (e) {
-    setState(() {
+      setState(() {
         _errorMessage = '포스트를 불러오는 중 오류가 발생했습니다: $e';
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _loadMarkers() async {
-    if (_currentPosition == null) return;
-
-    try {
-      // 🚀 성능 최적화: 포그레벨 1단계 포스트만 조회
-      final posts = await PostService().getFlyersInFogLevel1(
-        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        radiusInKm: _maxDistance / 1000.0,
-      );
-    
-      // 슈퍼포스트도 추가로 조회 (검은 영역에서도 표시)
-      final superPosts = await PostService().getSuperPostsInRadius(
-        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        radiusInKm: _maxDistance / 1000.0,
-      );
-      
-      // 포스트를 마커 데이터로 변환
-      final markers = <MarkerData>[];
-      
-      // 일반 포스트 (포그레벨 1단계)
-      for (final post in posts) {
-        markers.add(MarkerData(
-          id: post.flyerId,
-          title: post.title,
-          description: post.description,
-          userId: post.creatorId,
-          position: LatLng(post.location.latitude, post.location.longitude),
-          createdAt: post.createdAt,
-          expiryDate: post.expiresAt,
-          data: post.toFirestore(),
-          isCollected: post.isCollected,
-          collectedBy: post.collectedBy,
-          collectedAt: post.collectedAt,
-          type: MarkerType.post,
-        ));
-      }
-      
-      // 슈퍼포스트 (모든 영역)
-      for (final post in superPosts) {
-        markers.add(MarkerData(
-          id: post.flyerId,
-          title: post.title,
-          description: post.description,
-          userId: post.creatorId,
-          position: LatLng(post.location.latitude, post.location.longitude),
-          createdAt: post.createdAt,
-          expiryDate: post.expiresAt,
-          data: post.toFirestore(),
-          isCollected: post.isCollected,
-          collectedBy: post.collectedBy,
-          collectedAt: post.collectedAt,
-          type: MarkerType.superPost,
-        ));
-      }
-    
-      setState(() {
-        _markers = markers;
-      });
-      
-      _updateMarkers();
-    } catch (e) {
-      print('마커 로드 중 오류: $e');
-    }
-  }
 
   // 🚀 실시간 업데이트: 지도 이동 감지 및 포스트 새로고침
   void _onMapMoved(MapEvent event) {
     if (event is MapEventMove || event is MapEventMoveStart) {
       // 지도 이동 중이면 타이머 리셋
       _mapMoveTimer?.cancel();
-      _mapMoveTimer = Timer(const Duration(milliseconds: 500), () {
+      _mapMoveTimer = Timer(const Duration(milliseconds: 200), () {
         _handleMapMoveComplete();
       });
     }
@@ -642,10 +702,10 @@ class _MapScreenState extends State<MapScreen> {
     final currentCenter = _mapController?.camera.center;
     if (currentCenter == null) return;
     
-    // 이전 위치와 거리 계산 (100m 이상 이동했을 때만 업데이트)
+    // 이전 위치와 거리 계산 (200m 이상 이동했을 때만 업데이트)
     if (_lastMapCenter != null) {
       final distance = _calculateDistance(_lastMapCenter!, currentCenter);
-      if (distance < 100) return; // 100m 미만 이동은 무시
+      if (distance < 200) return; // 200m 미만 이동은 무시
     }
     
     _isUpdatingPosts = true;
@@ -664,7 +724,7 @@ class _MapScreenState extends State<MapScreen> {
         });
         
         // 포스트 새로고침
-        await _loadMarkers();
+        await _loadPosts(forceRefresh: true);
         
         // 포그레벨 업데이트
         await _updateFogOfWar();
@@ -789,7 +849,7 @@ class _MapScreenState extends State<MapScreen> {
       for (final post in allPosts) {
         if (post.tileId != null && fogLevel1Tiles.contains(post.tileId)) {
           filteredMarkers.add(MarkerData(
-            id: post.flyerId,
+            id: post.postId,
             title: post.title,
             description: post.description,
             userId: post.creatorId,
@@ -802,14 +862,14 @@ class _MapScreenState extends State<MapScreen> {
             collectedAt: post.collectedAt,
             type: MarkerType.post,
           ));
-          newVisiblePostIds.add(post.flyerId);
+          newVisiblePostIds.add(post.postId);
         }
       }
       
       // 슈퍼포스트는 항상 표시
       for (final post in superPosts) {
         filteredMarkers.add(MarkerData(
-          id: post.flyerId,
+          id: post.postId,
           title: post.title,
           description: post.description,
           userId: post.creatorId,
@@ -822,7 +882,7 @@ class _MapScreenState extends State<MapScreen> {
           collectedAt: post.collectedAt,
           type: MarkerType.superPost,
         ));
-        newVisiblePostIds.add(post.flyerId);
+        newVisiblePostIds.add(post.postId);
       }
       
       // 표시 상태 변경 감지
@@ -1006,31 +1066,17 @@ class _MapScreenState extends State<MapScreen> {
   void _updateMarkers() {
     final markers = <Marker>[];
     
-    // 포스트 마커들 - 포스트 타입에 따라 다른 색상
+    // 포스트 마커들 - ppam_work 이미지 사용
     for (final marker in _markers) {
-      Color markerColor;
-      IconData markerIcon;
-      
-      if (marker.type == MarkerType.superPost) {
-        // 🚀 슈퍼포스트: 금색
-        markerColor = Colors.amber;
-        markerIcon = Icons.star;
-      } else {
-        // 일반 포스트: 파란색
-        markerColor = Colors.blue;
-        markerIcon = Icons.location_on;
-      }
-      
       markers.add(
         Marker(
           point: marker.position,
-          width: 40,
-          height: 40,
+          width: 35,
+          height: 35,
           child: GestureDetector(
             onTap: () => _showMarkerDetails(marker),
             child: Container(
               decoration: BoxDecoration(
-                color: markerColor,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
@@ -1041,10 +1087,13 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               ),
-              child: Icon(
-                markerIcon,
-                color: Colors.white,
-                size: 20,
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/ppam_work.png',
+                  width: 31,
+                  height: 31,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
@@ -1052,48 +1101,7 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-    // 일반 마커들 (파란색) - 모든 사용자에게 보임
-    for (final marker in _markers) {
-      final position = marker.position;
-      
-      // 거리 확인
-      if (_currentPosition != null) {
-        final distance = _calculateDistance(_currentPosition!, position);
-        if (distance > _maxDistance) continue;
-      }
-      
-      final markerWidget = Marker(
-      point: position,
-        width: 35,
-        height: 35,
-      child: GestureDetector(
-          onTap: () => _showMarkerDetail(marker),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/ppam_work.png',
-                width: 31,
-                height: 31,
-                fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      ),
-    );
-      
-      markers.add(markerWidget);
-    }
+    // 중복 마커 표시 로직은 위에서 이미 처리됨
 
 
     // 사용자 마커 위젯들을 별도로 저장
@@ -1287,13 +1295,16 @@ class _MapScreenState extends State<MapScreen> {
 
       if (isOwner) {
         // 배포자: 마커 삭제
-        await MarkerService.deleteMarker(marker.id);
+        await PostService().deletePost(marker.id);
           ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('마커가 회수되었습니다')),
         );
       } else {
         // 타겟 사용자: 마커 수집
-        await MarkerService.collectMarker(marker.id);
+        await PostService().collectPost(
+          postId: marker.id,
+          userId: currentUserId!,
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('마커를 수집했습니다')),
         );
@@ -1348,8 +1359,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _deleteMarker(MarkerData marker) async {
     try {
-      await MarkerService.deleteMarker(marker.id);
-      _loadMarkers(); // 마커 목록 새로고침
+      await PostService().deletePost(marker.id);
+      await _loadPosts(forceRefresh: true); // 마커 목록 새로고침
           ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('마커가 삭제되었습니다.')),
           );
@@ -1430,10 +1441,11 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _collectPost(PostModel post) async {
     try {
       await PostService().collectPost(
-        postId: post.flyerId, 
+        postId: post.postId, 
         userId: FirebaseAuth.instance.currentUser!.uid
       );
-      _loadPosts(); // 포스트 목록 새로고침
+      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // _loadPosts(forceRefresh: true); // 포스트 목록 새로고침
           ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 수집했습니다!')),
           );
@@ -1446,8 +1458,9 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _removePost(PostModel post) async {
     try {
-      await PostService().deletePost(post.flyerId);
-      _loadPosts(); // 포스트 목록 새로고침
+      await PostService().deletePost(post.postId);
+      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // _loadPosts(forceRefresh: true); // 포스트 목록 새로고침
           ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다!')),
           );
@@ -1557,27 +1570,47 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     const SizedBox(height: 30),
-                    // 거리 슬라이더
+                    // 거리 표시 (유료/무료에 따라)
                     Row(
                       children: [
-                        const Text('거리:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        const Text('검색 반경:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                         const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isPremiumUser ? Colors.amber[50] : Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _isPremiumUser ? Colors.amber[200]! : Colors.blue[200]!),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('${_maxDistance.toInt()}m', 
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              Slider(
-                                value: _maxDistance,
-                                min: 100,
-                                max: 5000,
-                                divisions: 49,
-                                onChanged: (value) {
-                setState(() {
-                                    _maxDistance = value;
-                });
-              },
+                              Text(
+                                '${_maxDistance.toInt()}m',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isPremiumUser ? Colors.amber[800] : Colors.blue,
+                                ),
                               ),
+                              if (_isPremiumUser) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber[600],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    'PRO',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1720,7 +1753,7 @@ class _MapScreenState extends State<MapScreen> {
   void _resetFilters() {
     setState(() {
       _selectedCategory = 'all';
-      _maxDistance = 10000.0; // 10km로 확장
+      _maxDistance = _isPremiumUser ? 3000.0 : 1000.0; // 유료: 3km, 무료: 1km
       _minReward = 0;
       _showCouponsOnly = false;
       _showMyPostsOnly = false;
@@ -1738,8 +1771,10 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 마커 새로고침
     if (result != null) {
       print('포스트 배포 완료: $result');
-      await _loadMarkers(); // 마커 목록 새로고침
-    setState(() {
+      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 로딩 상태만 해제하고 롱프레스 위치 초기화
+      setState(() {
+        _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }
@@ -1752,10 +1787,13 @@ class _MapScreenState extends State<MapScreen> {
         'type': 'address',
     });
     
-    // 포스트 배포 완료 후 롱프레스 위치 유지
+    // 포스트 배포 완료 후 마커 새로고침
     if (result != null) {
       print('포스트 배포 완료: $result');
-    setState(() {
+      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 로딩 상태만 해제하고 롱프레스 위치 초기화
+      setState(() {
+        _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }
@@ -1768,10 +1806,13 @@ class _MapScreenState extends State<MapScreen> {
         'type': 'category',
     });
     
-    // 포스트 배포 완료 후 롱프레스 위치 유지
+    // 포스트 배포 완료 후 마커 새로고침
     if (result != null) {
       print('포스트 배포 완료: $result');
-    setState(() {
+      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 로딩 상태만 해제하고 롱프레스 위치 초기화
+      setState(() {
+        _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     }

@@ -65,3 +65,4 @@ String getTileId(double latitude, double longitude) {
 LatLng getTileCenter(String tileId) {
   return TileUtils.getTileCenter(tileId);
 }
+

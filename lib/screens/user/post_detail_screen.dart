@@ -496,7 +496,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _refreshPost() async {
     try {
       final postService = PostService();
-      final updatedPost = await postService.getPostById(currentPost.flyerId);
+      final updatedPost = await postService.getPostById(currentPost.postId);
       if (updatedPost != null && mounted) {
         setState(() {
           currentPost = updatedPost;

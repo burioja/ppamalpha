@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
+import 'visit_tile_service.dart';
+import '../models/post_model.dart';
 
 /// 마커 타입 열거형
 enum MarkerType {
@@ -84,172 +86,154 @@ class MarkerData {
 /// 마커 서비스
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const String _collection = 'markers';
-
-  /// 마커 생성
-  static Future<String> createMarker({
-    required String title,
-    required String description,
-    required LatLng position,
-    Map<String, dynamic>? additionalData,
-    DateTime? expiryDate,
-  }) async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('사용자가 로그인되지 않았습니다.');
-      }
-
-      final markerId = _firestore.collection(_collection).doc().id;
-      final marker = MarkerData(
-        id: markerId,
-        title: title,
-        description: description,
-        userId: userId,
-        position: position,
-        createdAt: DateTime.now(),
-        expiryDate: expiryDate,
-        data: additionalData ?? {},
-      );
-
-      await _firestore
-          .collection(_collection)
-          .doc(markerId)
-          .set(marker.toFirestore());
-
-      return markerId;
-    } catch (e) {
-      throw Exception('마커 생성 중 오류가 발생했습니다: $e');
-    }
-  }
-
-  /// 반경 내 마커 조회
-  static Future<List<MarkerData>> getMarkersInRadius({
-    required LatLng center,
-    required double radiusInKm,
-  }) async {
-    try {
-      // 간단한 반경 쿼리 (Firestore의 제한으로 인해 대략적인 범위)
-      const double latRange = 0.01; // 약 1km
-      const double lngRange = 0.01; // 약 1km
-
-      final query = await _firestore
-          .collection(_collection)
-          .where('position', isGreaterThan: GeoPoint(
-            center.latitude - latRange,
-            center.longitude - lngRange,
-          ))
-          .where('position', isLessThan: GeoPoint(
-            center.latitude + latRange,
-            center.longitude + lngRange,
-          ))
-          .get();
-
-      final markers = query.docs
-          .map((doc) => MarkerData.fromFirestore(doc))
-          .toList();
-
-      // 정확한 거리 계산으로 필터링
-      final filteredMarkers = markers.where((marker) {
-        final distance = _calculateDistance(center, marker.position);
-        return distance <= radiusInKm;
-      }).toList();
-
-      return filteredMarkers;
-    } catch (e) {
-      throw Exception('마커 조회 중 오류가 발생했습니다: $e');
-    }
-  }
-
-  /// 마커 삭제 (생성자만 가능)
-  static Future<void> deleteMarker(String markerId) async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('사용자가 로그인되지 않았습니다.');
-      }
-
-      // 마커 소유자 확인
-      final doc = await _firestore.collection(_collection).doc(markerId).get();
-      if (!doc.exists) {
-        throw Exception('마커를 찾을 수 없습니다.');
-      }
-
-      final marker = MarkerData.fromFirestore(doc);
-      if (marker.userId != userId) {
-        throw Exception('마커를 삭제할 권한이 없습니다.');
-      }
-
-      await _firestore.collection(_collection).doc(markerId).delete();
-    } catch (e) {
-      throw Exception('마커 삭제 중 오류가 발생했습니다: $e');
-    }
-  }
-
-  /// 마커 수집 (타겟 사용자만 가능)
-  static Future<void> collectMarker(String markerId) async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('사용자가 로그인되지 않았습니다.');
-      }
-
-      await _firestore.collection(_collection).doc(markerId).update({
-        'isCollected': true,
-        'collectedBy': userId,
-        'collectedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      throw Exception('마커 수집 중 오류가 발생했습니다: $e');
-    }
-  }
-
-  /// 실시간 마커 리스너
+  
+  // 포그레벨 타일 캐시
+  static final Map<String, List<String>> _fogLevelCache = {};
+  static final Map<String, DateTime> _fogLevelCacheTimestamps = {};
+  static const Duration _fogLevelCacheExpiry = Duration(minutes: 10);
+  
+  // 🚀 실시간 마커 스트림 (posts 컬렉션 기반) - 최적화됨
   static Stream<List<MarkerData>> getMarkersStream({
-    required LatLng center,
+    required LatLng location,
     required double radiusInKm,
   }) {
-    const double latRange = 0.01; // 약 1km
-    const double lngRange = 0.01; // 약 1km
-
     return _firestore
-        .collection(_collection)
-        .where('position', isGreaterThan: GeoPoint(
-          center.latitude - latRange,
-          center.longitude - lngRange,
-        ))
-        .where('position', isLessThan: GeoPoint(
-          center.latitude + latRange,
-          center.longitude + lngRange,
-        ))
+        .collection('posts')
+        .where('isActive', isEqualTo: true)
+        .where('isCollected', isEqualTo: false)
+        .limit(100) // 🚀 쿼리 제한 추가 (최대 100개)
+        .orderBy('createdAt', descending: true) // 🚀 최신 포스트 우선
         .snapshots()
-        .map((snapshot) {
-      final markers = snapshot.docs
-          .map((doc) => MarkerData.fromFirestore(doc))
-          .toList();
-
-      // 정확한 거리 계산으로 필터링
-      return markers.where((marker) {
-        final distance = _calculateDistance(center, marker.position);
-        return distance <= radiusInKm;
-      }).toList();
+        .asyncMap((snapshot) async {
+      print('📊 Firestore에서 ${snapshot.docs.length}개 포스트 조회됨');
+      
+      // 포그레벨 1단계 타일들 계산 (캐싱 적용)
+      final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+      
+      List<MarkerData> markers = [];
+      int processedCount = 0;
+      int filteredByDistance = 0;
+      int filteredByFogLevel = 0;
+      int superPostCount = 0;
+      
+      for (var doc in snapshot.docs) {
+        processedCount++;
+        final post = PostModel.fromFirestore(doc);
+        
+        // 슈퍼포스트는 거리와 포그레벨 무시
+        final isSuperPost = post.reward >= 1000;
+        if (isSuperPost) {
+          superPostCount++;
+          markers.add(_createMarkerData(post, MarkerType.superPost));
+          continue;
+        }
+        
+        // 일반 포스트: 거리 확인
+        final distance = _calculateDistance(
+          location.latitude, location.longitude,
+          post.location.latitude, post.location.longitude,
+        );
+        if (distance > radiusInKm * 1000) {
+          filteredByDistance++;
+          continue;
+        }
+        
+        // 포그레벨 확인
+        final tileId = post.tileId;
+        if (tileId != null && fogLevel1Tiles.contains(tileId)) {
+          markers.add(_createMarkerData(post, MarkerType.post));
+        } else {
+          filteredByFogLevel++;
+        }
+      }
+      
+      print('📈 마커 처리 통계:');
+      print('  - 총 처리: $processedCount개');
+      print('  - 슈퍼포스트: $superPostCount개');
+      print('  - 거리로 필터링: $filteredByDistance개');
+      print('  - 포그레벨로 필터링: $filteredByFogLevel개');
+      print('  - 최종 마커: ${markers.length}개');
+      
+      return markers;
     });
   }
-
-  /// 거리 계산 (km)
-  static double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371; // 지구 반지름 (km)
+  
+  // 마커 데이터 생성 헬퍼 메서드
+  static MarkerData _createMarkerData(PostModel post, MarkerType type) {
+    return MarkerData(
+      id: post.postId,
+      title: post.title,
+      description: post.description,
+      userId: post.creatorId,
+      position: LatLng(post.location.latitude, post.location.longitude),
+      createdAt: post.createdAt,
+      expiryDate: post.expiresAt,
+      data: post.toFirestore(),
+      isCollected: post.isCollected,
+      collectedBy: post.collectedBy,
+      collectedAt: post.collectedAt,
+      type: type,
+    );
+  }
+  
+  // 포그레벨 1단계 타일들 계산 (캐싱 적용)
+  static Future<List<String>> _getFogLevel1Tiles(LatLng location, double radiusInKm) async {
+    final cacheKey = '${location.latitude.toStringAsFixed(4)}_${location.longitude.toStringAsFixed(4)}';
     
-    final lat1Rad = point1.latitude * (pi / 180);
-    final lat2Rad = point2.latitude * (pi / 180);
-    final deltaLat = (point2.latitude - point1.latitude) * (pi / 180);
-    final deltaLng = (point2.longitude - point1.longitude) * (pi / 180);
-
-    final a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-        cos(lat1Rad) * cos(lat2Rad) *
-        sin(deltaLng / 2) * sin(deltaLng / 2);
-    final c = 2 * asin(sqrt(a));
-
+    // 캐시 확인
+    if (_fogLevelCache.containsKey(cacheKey) && 
+        _fogLevelCacheTimestamps[cacheKey]!.isAfter(DateTime.now().subtract(_fogLevelCacheExpiry))) {
+      print('🚀 포그레벨 타일 캐시 사용: $cacheKey');
+      return _fogLevelCache[cacheKey]!;
+    }
+    
+    try {
+      print('🔄 포그레벨 타일 계산 중: $cacheKey');
+      // VisitTileService를 사용하여 포그레벨 1단계 타일 계산
+      final fogLevelMap = await VisitTileService.getSurroundingTilesFogLevel(
+        location.latitude, 
+        location.longitude
+      );
+      
+      // 포그레벨 1인 타일들만 필터링
+      final fogLevel1Tiles = fogLevelMap.entries
+          .where((entry) => entry.value == 1)
+          .map((entry) => entry.key)
+          .toList();
+      
+      // 캐시 저장
+      _fogLevelCache[cacheKey] = fogLevel1Tiles;
+      _fogLevelCacheTimestamps[cacheKey] = DateTime.now();
+      
+      print('✅ 포그레벨 타일 계산 완료: ${fogLevel1Tiles.length}개');
+      return fogLevel1Tiles;
+    } catch (e) {
+      print('❌ 포그레벨 1단계 타일 계산 실패: $e');
+      return [];
+    }
+  }
+  
+  // 거리 계산
+  static double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371000; // 지구 반지름 (미터)
+    
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+    
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        sin(_degreesToRadians(lat1)) * sin(_degreesToRadians(lat2)) * 
+        sin(dLon / 2) * sin(dLon / 2);
+    final double c = 2 * asin(sqrt(a));
+    
     return earthRadius * c;
   }
+  
+  static double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180);
+  }
+  // markers 컬렉션은 더 이상 사용하지 않음 - posts 컬렉션에서 직접 관리
+
+  // markers 컬렉션 관련 메서드들은 더 이상 사용하지 않음
+  // posts 컬렉션에서 직접 관리하므로 PostService를 사용하세요
+
 }

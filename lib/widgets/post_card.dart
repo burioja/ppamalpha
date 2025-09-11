@@ -5,15 +5,19 @@ import 'package:intl/intl.dart';
 class PostCard extends StatelessWidget {
   final PostModel post;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
   final bool showStatus;
   final bool showExpiry;
+  final bool showDeleteButton;
 
   const PostCard({
     super.key, 
     required this.post, 
     this.onTap,
+    this.onDelete,
     this.showStatus = true,
     this.showExpiry = true,
+    this.showDeleteButton = false,
   });
 
   @override
@@ -51,6 +55,20 @@ class PostCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   _buildStatusChip(isExpired, isCollected),
+                  // 삭제 버튼 (내 포스트인 경우에만 표시)
+                  if (showDeleteButton && onDelete != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      iconSize: 20,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               
