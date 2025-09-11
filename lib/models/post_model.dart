@@ -42,6 +42,10 @@ class PostModel {
   final DateTime? collectedAt;
   final bool isDistributed; // 배포 여부 (true: 배포됨, false: 발행 전)
   final DateTime? distributedAt; // 배포 일시
+  
+  // 타일 관련 (성능 최적화용)
+  final String? tileId; // 포스트가 위치한 타일 ID
+  final bool isSuperPost; // 슈퍼포스트 여부 (검은 영역에서도 표시)
 
   PostModel({
     required this.flyerId,
@@ -73,6 +77,8 @@ class PostModel {
     this.updatedAt,
     this.isDistributed = false,
     this.distributedAt,
+    this.tileId,
+    this.isSuperPost = false,
   }) : markerId = markerId ?? '${creatorId}_$flyerId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -118,6 +124,8 @@ class PostModel {
       distributedAt: data['distributedAt'] != null 
           ? (data['distributedAt'] as Timestamp).toDate()
           : null,
+      tileId: data['tileId'],
+      isSuperPost: data['isSuperPost'] ?? false,
     );
   }
 
@@ -151,6 +159,8 @@ class PostModel {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isDistributed': isDistributed,
       'distributedAt': distributedAt != null ? Timestamp.fromDate(distributedAt!) : null,
+      'tileId': tileId,
+      'isSuperPost': isSuperPost,
     };
   }
 
@@ -276,6 +286,8 @@ class PostModel {
     DateTime? updatedAt,
     bool? isDistributed,
     DateTime? distributedAt,
+    String? tileId,
+    bool? isSuperPost,
   }) {
     return PostModel(
       flyerId: flyerId ?? this.flyerId,
@@ -307,6 +319,8 @@ class PostModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isDistributed: isDistributed ?? this.isDistributed,
       distributedAt: distributedAt ?? this.distributedAt,
+      tileId: tileId ?? this.tileId,
+      isSuperPost: isSuperPost ?? this.isSuperPost,
     );
   }
 } 

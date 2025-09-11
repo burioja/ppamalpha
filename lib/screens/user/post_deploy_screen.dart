@@ -150,22 +150,19 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    // Fog Level 체크 (Level 1,2 영역에서만 배포 허용)
-    if (_selectedLocation != null) {
-      final tileId = getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude);
-      // 현재 위치를 null로 전달 (MapScreen에서 처리)
-      final fogLevel = await VisitTileService.getFogLevelForTile(tileId, currentPosition: null);
-      
-      if (fogLevel == 3) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('이 위치는 배포할 수 없습니다. 밝은 영역이나 회색 영역에서만 배포 가능합니다.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-    }
+    // 🚀 임시로 포그레벨 체크 비활성화 - 모든 위치에서 배포 허용
+    print('🔍 배포 위치: ${_selectedLocation?.latitude}, ${_selectedLocation?.longitude}');
+    print('✅ 포그레벨 체크 비활성화 - 배포 진행');
+    
+    // TODO: 포그레벨 체크 로직 수정 후 활성화
+    // if (_selectedLocation != null) {
+    //   final tileId = getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude);
+    //   final fogLevel = await VisitTileService.getFogLevelForTile(tileId, currentPosition: _selectedLocation);
+    //   if (fogLevel == 3) {
+    //     // 배포 불가 처리
+    //     return;
+    //   }
+    // }
 
     setState(() {
       _isDeploying = true;
@@ -175,29 +172,35 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 1. 지갑 잔액 확인 (구현 필요)
       // 2. 예치(escrow) 홀드 (구현 필요)
       
-      // 3. 마커 생성 및 Firestore에 저장
-      await MarkerService.createMarker(
+      // 3. 포스트 생성 및 Firestore에 저장
+      final newPost = PostModel(
+        flyerId: '', // Firestore에서 자동 생성
+        creatorId: _selectedPost!.creatorId,
+        creatorName: _selectedPost!.creatorName,
+        location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
+        radius: _selectedPost!.radius,
+        createdAt: DateTime.now(),
+        expiresAt: _selectedPost!.expiresAt,
+        reward: price,
+        targetAge: _selectedPost!.targetAge,
+        targetGender: _selectedPost!.targetGender,
+        targetInterest: _selectedPost!.targetInterest,
+        targetPurchaseHistory: _selectedPost!.targetPurchaseHistory,
+        mediaType: _selectedPost!.mediaType,
+        mediaUrl: _selectedPost!.mediaUrl,
         title: _selectedPost!.title,
         description: _selectedPost!.description,
-        position: _selectedLocation!,
-        additionalData: {
-          'type': 'post_place',
-          'flyerId': _selectedPost!.flyerId,
-          'creatorName': _selectedPost!.creatorName,
-          'price': price,
-          'amount': quantity,
-          'remainingAmount': quantity,
-          'targetGender': _selectedPost!.targetGender,
-          'targetAge': _selectedPost!.targetAge,
-          'canRespond': _selectedPost!.canRespond,
-          'canForward': _selectedPost!.canForward,
-          'canRequestReward': _selectedPost!.canRequestReward,
-          'canUse': _selectedPost!.canUse,
-          'markerId': _selectedPost!.markerId,
-          'radius': _selectedPost!.radius,
-        },
-        expiryDate: _selectedPost!.expiresAt,
+        canRespond: _selectedPost!.canRespond,
+        canForward: _selectedPost!.canForward,
+        canRequestReward: _selectedPost!.canRequestReward,
+        canUse: _selectedPost!.canUse,
+        tileId: TileUtils.getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude),
+        isSuperPost: false, // 일반 포스트
       );
+
+      // 포스트 생성
+      final createdPostId = await _postService.createPost(newPost);
+      print('✅ 포스트 생성 완료: $createdPostId');
 
       // 4. 포스트 상태 업데이트 (배포됨으로 표시)
       await _postService.updatePost(_selectedPost!.flyerId, {

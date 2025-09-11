@@ -90,6 +90,17 @@ class _MapScreenState extends State<MapScreen> {
   bool _showCouponsOnly = false;
   bool _showMyPostsOnly = false;
   
+  // 실시간 업데이트 관련
+  Timer? _mapMoveTimer;
+  LatLng? _lastMapCenter;
+  Set<String> _lastFogLevel1Tiles = {};
+  bool _isUpdatingPosts = false;
+  
+  // 포그레벨 변경 감지 관련
+  Map<String, int> _tileFogLevels = {}; // 타일별 포그레벨 캐시
+  Set<String> _visiblePostIds = {}; // 현재 표시 중인 포스트 ID들
+  
+  
   // 클러스터링 관련
   List<Marker> _clusteredMarkers = [];
   bool _isClustered = false;
@@ -108,6 +119,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadUserLocations();
     _setupUserDataListener();
     _setupMarkerListener();
+    _setupPostStreamListener(); // 🚀 실시간 포스트 스트림 리스너 설정
   }
 
   void _setupUserDataListener() {
@@ -163,6 +175,49 @@ class _MapScreenState extends State<MapScreen> {
       _updateMarkers();
     }, onError: (error) {
       print('마커 리스너 오류: $error');
+    });
+  }
+
+  // 🚀 실시간 포스트 스트림 리스너 설정
+  void _setupPostStreamListener() {
+    if (_currentPosition == null) return;
+
+    print('포스트 스트림 리스너 설정 시작');
+
+    // 포그레벨 1단계 포스트 실시간 스트림
+    PostService().getFlyersInFogLevel1Stream(
+      location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+      radiusInKm: _maxDistance / 1000.0,
+    ).listen((posts) {
+      print('📡 포그레벨 1단계 포스트 업데이트: ${posts.length}개');
+      
+      // 포스트를 마커 데이터로 변환
+      final markers = <MarkerData>[];
+      
+      for (final post in posts) {
+        markers.add(MarkerData(
+          id: post.flyerId,
+          title: post.title,
+          description: post.description,
+          userId: post.creatorId,
+          position: LatLng(post.location.latitude, post.location.longitude),
+          createdAt: post.createdAt,
+          expiryDate: post.expiresAt,
+          data: post.toFirestore(),
+          isCollected: post.isCollected,
+          collectedBy: post.collectedBy,
+          collectedAt: post.collectedAt,
+          type: MarkerType.post,
+        ));
+      }
+      
+      setState(() {
+        _markers = markers;
+      });
+      
+      _updateMarkers();
+    }, onError: (error) {
+      print('포스트 스트림 리스너 오류: $error');
     });
   }
 
@@ -508,26 +563,59 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition == null) return;
 
     try {
-      // Fog Level 기반 마커 로딩 (Level 1,2 영역에서만)
-      final markers = await MarkerService.getMarkersInRadius(
-        center: _currentPosition!,
+      // 🚀 성능 최적화: 포그레벨 1단계 포스트만 조회
+      final posts = await PostService().getFlyersInFogLevel1(
+        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
         radiusInKm: _maxDistance / 1000.0,
       );
     
-      // Fog Level 필터링 적용
-      final filteredMarkers = <MarkerData>[];
-      for (final marker in markers) {
-        final tileId = getTileId(marker.position.latitude, marker.position.longitude);
-        final fogLevel = await VisitTileService.getFogLevelForTile(tileId, currentPosition: _currentPosition);
-        
-        // Level 1 (밝은 영역) 또는 Level 2 (회색 영역)에서만 마커 표시
-        if (fogLevel == 1 || fogLevel == 2) {
-          filteredMarkers.add(marker);
-        }
-    }
+      // 슈퍼포스트도 추가로 조회 (검은 영역에서도 표시)
+      final superPosts = await PostService().getSuperPostsInRadius(
+        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        radiusInKm: _maxDistance / 1000.0,
+      );
+      
+      // 포스트를 마커 데이터로 변환
+      final markers = <MarkerData>[];
+      
+      // 일반 포스트 (포그레벨 1단계)
+      for (final post in posts) {
+        markers.add(MarkerData(
+          id: post.flyerId,
+          title: post.title,
+          description: post.description,
+          userId: post.creatorId,
+          position: LatLng(post.location.latitude, post.location.longitude),
+          createdAt: post.createdAt,
+          expiryDate: post.expiresAt,
+          data: post.toFirestore(),
+          isCollected: post.isCollected,
+          collectedBy: post.collectedBy,
+          collectedAt: post.collectedAt,
+          type: MarkerType.post,
+        ));
+      }
+      
+      // 슈퍼포스트 (모든 영역)
+      for (final post in superPosts) {
+        markers.add(MarkerData(
+          id: post.flyerId,
+          title: post.title,
+          description: post.description,
+          userId: post.creatorId,
+          position: LatLng(post.location.latitude, post.location.longitude),
+          createdAt: post.createdAt,
+          expiryDate: post.expiresAt,
+          data: post.toFirestore(),
+          isCollected: post.isCollected,
+          collectedBy: post.collectedBy,
+          collectedAt: post.collectedAt,
+          type: MarkerType.superPost,
+        ));
+      }
     
-    setState(() {
-        _markers = filteredMarkers;
+      setState(() {
+        _markers = markers;
       });
       
       _updateMarkers();
@@ -536,33 +624,415 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // 🚀 실시간 업데이트: 지도 이동 감지 및 포스트 새로고침
+  void _onMapMoved(MapEvent event) {
+    if (event is MapEventMove || event is MapEventMoveStart) {
+      // 지도 이동 중이면 타이머 리셋
+      _mapMoveTimer?.cancel();
+      _mapMoveTimer = Timer(const Duration(milliseconds: 500), () {
+        _handleMapMoveComplete();
+      });
+    }
+  }
+
+  // 지도 이동 완료 후 처리
+  Future<void> _handleMapMoveComplete() async {
+    if (_isUpdatingPosts) return; // 이미 업데이트 중이면 스킵
+    
+    final currentCenter = _mapController?.camera.center;
+    if (currentCenter == null) return;
+    
+    // 이전 위치와 거리 계산 (100m 이상 이동했을 때만 업데이트)
+    if (_lastMapCenter != null) {
+      final distance = _calculateDistance(_lastMapCenter!, currentCenter);
+      if (distance < 100) return; // 100m 미만 이동은 무시
+    }
+    
+    _isUpdatingPosts = true;
+    
+    try {
+      // 현재 포그레벨 1단계 타일들 계산
+      final currentFogLevel1Tiles = await _getCurrentFogLevel1Tiles(currentCenter);
+      
+      // 포그레벨 1단계 타일이 변경되었을 때만 포스트 업데이트
+      if (!_areTileSetsEqual(_lastFogLevel1Tiles, currentFogLevel1Tiles)) {
+        print('🔄 포그레벨 1단계 타일 변경 감지 - 포스트 업데이트');
+        
+        // 현재 위치 업데이트
+        setState(() {
+          _currentPosition = currentCenter;
+        });
+        
+        // 포스트 새로고침
+        await _loadMarkers();
+        
+        // 포그레벨 업데이트
+        await _updateFogOfWar();
+        
+        // 🚀 포그레벨 변경 감지 및 포스트 필터링
+        await _updatePostsBasedOnFogLevel();
+        
+        // 마지막 상태 저장
+        _lastMapCenter = currentCenter;
+        _lastFogLevel1Tiles = currentFogLevel1Tiles;
+      }
+    } catch (e) {
+      print('지도 이동 후 포스트 업데이트 실패: $e');
+    } finally {
+      _isUpdatingPosts = false;
+    }
+  }
+
+  // 현재 위치의 포그레벨 1단계 타일들 계산
+  Future<Set<String>> _getCurrentFogLevel1Tiles(LatLng center) async {
+    try {
+      final surroundingTiles = TileUtils.getSurroundingTiles(center.latitude, center.longitude);
+      final fogLevel1Tiles = <String>{};
+      
+      for (final tileId in surroundingTiles) {
+        final fogLevel = await VisitTileService.getFogLevelForTile(
+          tileId, 
+          currentPosition: center
+        );
+        
+        if (fogLevel == 1) {
+          fogLevel1Tiles.add(tileId);
+        }
+      }
+      
+      return fogLevel1Tiles;
+    } catch (e) {
+      print('포그레벨 1단계 타일 계산 실패: $e');
+      return {};
+    }
+  }
+
+  // 두 타일 세트가 같은지 비교
+  bool _areTileSetsEqual(Set<String> set1, Set<String> set2) {
+    if (set1.length != set2.length) return false;
+    return set1.every((tile) => set2.contains(tile));
+  }
+
+  // 🚀 포그레벨 변경 감지 및 포스트 필터링
+  Future<void> _updatePostsBasedOnFogLevel() async {
+    if (_currentPosition == null) return;
+
+    try {
+      // 주변 타일들의 포그레벨 계산
+      final surroundingTiles = TileUtils.getSurroundingTiles(
+        _currentPosition!.latitude, 
+        _currentPosition!.longitude
+      );
+      
+      final newTileFogLevels = <String, int>{};
+      final fogLevel1Tiles = <String>{};
+      
+      for (final tileId in surroundingTiles) {
+        final fogLevel = await VisitTileService.getFogLevelForTile(
+          tileId, 
+          currentPosition: _currentPosition!
+        );
+        
+        newTileFogLevels[tileId] = fogLevel;
+        if (fogLevel == 1) {
+          fogLevel1Tiles.add(tileId);
+        }
+      }
+      
+      // 포그레벨 변경 감지
+      bool fogLevelChanged = false;
+      for (final tileId in surroundingTiles) {
+        final oldLevel = _tileFogLevels[tileId] ?? 0;
+        final newLevel = newTileFogLevels[tileId] ?? 0;
+        
+        if (oldLevel != newLevel) {
+          fogLevelChanged = true;
+          print('🔄 타일 $tileId 포그레벨 변경: $oldLevel → $newLevel');
+        }
+      }
+      
+      if (fogLevelChanged) {
+        print('🔄 포그레벨 변경 감지 - 포스트 필터링 업데이트');
+        
+        // 포그레벨 캐시 업데이트
+        _tileFogLevels = newTileFogLevels;
+        
+        // 포스트 필터링 업데이트
+        await _filterPostsByFogLevel(fogLevel1Tiles);
+      }
+      
+    } catch (e) {
+      print('포그레벨 변경 감지 실패: $e');
+    }
+  }
+
+  // 포그레벨에 따른 포스트 필터링
+  Future<void> _filterPostsByFogLevel(Set<String> fogLevel1Tiles) async {
+    try {
+      // 모든 활성 포스트 조회 (캐시된 데이터 사용)
+      final allPosts = await PostService().getAllActivePosts(
+        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        radiusInKm: _maxDistance / 1000.0,
+      );
+      
+      // 슈퍼포스트도 조회
+      final superPosts = await PostService().getSuperPostsInRadius(
+        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        radiusInKm: _maxDistance / 1000.0,
+      );
+      
+      // 포스트 필터링
+      final filteredMarkers = <MarkerData>[];
+      final newVisiblePostIds = <String>{};
+      
+      // 일반 포스트 필터링 (포그레벨 1단계만)
+      for (final post in allPosts) {
+        if (post.tileId != null && fogLevel1Tiles.contains(post.tileId)) {
+          filteredMarkers.add(MarkerData(
+            id: post.flyerId,
+            title: post.title,
+            description: post.description,
+            userId: post.creatorId,
+            position: LatLng(post.location.latitude, post.location.longitude),
+            createdAt: post.createdAt,
+            expiryDate: post.expiresAt,
+            data: post.toFirestore(),
+            isCollected: post.isCollected,
+            collectedBy: post.collectedBy,
+            collectedAt: post.collectedAt,
+            type: MarkerType.post,
+          ));
+          newVisiblePostIds.add(post.flyerId);
+        }
+      }
+      
+      // 슈퍼포스트는 항상 표시
+      for (final post in superPosts) {
+        filteredMarkers.add(MarkerData(
+          id: post.flyerId,
+          title: post.title,
+          description: post.description,
+          userId: post.creatorId,
+          position: LatLng(post.location.latitude, post.location.longitude),
+          createdAt: post.createdAt,
+          expiryDate: post.expiresAt,
+          data: post.toFirestore(),
+          isCollected: post.isCollected,
+          collectedBy: post.collectedBy,
+          collectedAt: post.collectedAt,
+          type: MarkerType.superPost,
+        ));
+        newVisiblePostIds.add(post.flyerId);
+      }
+      
+      // 표시 상태 변경 감지
+      final addedPosts = newVisiblePostIds.difference(_visiblePostIds);
+      final removedPosts = _visiblePostIds.difference(newVisiblePostIds);
+      
+      if (addedPosts.isNotEmpty) {
+        print('📌 새로 표시된 포스트: ${addedPosts.length}개');
+      }
+      if (removedPosts.isNotEmpty) {
+        print('🙈 숨겨진 포스트: ${removedPosts.length}개');
+      }
+      
+      setState(() {
+        _markers = filteredMarkers;
+        _visiblePostIds = newVisiblePostIds;
+      });
+      
+      _updateMarkers();
+      
+    } catch (e) {
+      print('포스트 필터링 실패: $e');
+    }
+  }
+
+  // 🚀 포그레벨 확인 후 롱프레스 메뉴 표시
+  Future<void> _checkFogLevelAndShowMenu(LatLng point) async {
+    try {
+      // 해당 위치의 포그레벨 확인
+      final tileId = TileUtils.getTileId(point.latitude, point.longitude);
+      
+      print('🔍 포그레벨 확인 시작:');
+      print('  - 롱프레스 위치: ${point.latitude}, ${point.longitude}');
+      print('  - 현재 위치: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}');
+      print('  - 타일 ID: $tileId');
+      
+      final fogLevel = await VisitTileService.getFogLevelForTile(
+        tileId, 
+        currentPosition: _currentPosition ?? point
+      );
+      
+      print('🔍 롱프레스 위치 포그레벨: $fogLevel (타일: $tileId)');
+      
+      if (fogLevel == 1) {
+        // 포그레벨 1단계: 배포 가능
+        print('✅ 포그레벨 1단계 - 정상 배포 메뉴 표시');
+        _showLongPressMenu();
+      } else if (fogLevel == 2) {
+        // 포그레벨 2단계: 회색 영역 - 제한된 배포
+        print('⚠️ 포그레벨 2단계 - 제한된 배포 메뉴 표시');
+        _showRestrictedLongPressMenu();
+      } else {
+        // 포그레벨 3단계: 검은 영역 - 배포 불가
+        print('🚫 포그레벨 3단계 - 배포 불가 메뉴 표시');
+        _showBlockedLongPressMessage();
+      }
+      
+    } catch (e) {
+      print('❌ 포그레벨 확인 실패: $e');
+      // 오류 시 기본 메뉴 표시
+      print('🔄 오류로 인해 기본 배포 메뉴 표시');
+      _showLongPressMenu();
+    }
+  }
+
+  // 제한된 배포 메뉴 표시
+  void _showRestrictedLongPressMenu() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('⚠️ 제한된 영역'),
+          content: const Text(
+            '이 영역은 회색 영역입니다.\n'
+            '포스트 배포가 제한됩니다.\n\n'
+            '집, 가게, 현재 위치 주변의 밝은 영역에서만 배포가 가능합니다.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 배포 불가 메시지 표시
+  void _showBlockedLongPressMessage() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('🚫 배포 불가'),
+          content: const Text(
+            '이 영역은 검은 영역입니다.\n'
+            '포스트 배포가 불가능합니다.\n\n'
+            '집, 가게, 현재 위치 주변의 밝은 영역에서만 배포가 가능합니다.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 포그레벨 업데이트 메서드
+  Future<void> _updateFogOfWar() async {
+    if (_currentPosition == null) return;
+    
+    try {
+      // OSM 기반 포그레벨 업데이트
+      await _updateOSMFogOfWar();
+    } catch (e) {
+      print('포그레벨 업데이트 실패: $e');
+    }
+  }
+
+  // OSM 기반 포그레벨 업데이트
+  Future<void> _updateOSMFogOfWar() async {
+    if (_currentPosition == null) return;
+
+    try {
+      // OSM 포그 서비스 사용
+      final osmFogService = OSMFogService();
+      await osmFogService.updateFogOfWar(
+        currentPosition: _currentPosition!,
+        homeLocation: _homeLocation,
+        workLocations: _workLocations,
+      );
+
+      // 포그레벨 업데이트 후 UI 갱신
+      setState(() {
+        // 포그레벨 상태 업데이트 (실제 구현에 따라 조정)
+      });
+    } catch (e) {
+      print('OSM 포그레벨 업데이트 실패: $e');
+    }
+  }
+
+  // 마커 상세 정보 표시
+  void _showMarkerDetails(MarkerData marker) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(marker.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('설명: ${marker.description}'),
+              const SizedBox(height: 8),
+              Text('생성자: ${marker.userId}'),
+              const SizedBox(height: 8),
+              Text('생성일: ${marker.createdAt}'),
+              if (marker.expiryDate != null) ...[
+                const SizedBox(height: 8),
+                Text('만료일: ${marker.expiryDate}'),
+              ],
+              const SizedBox(height: 8),
+              Text('타입: ${marker.type == MarkerType.superPost ? "슈퍼포스트" : "일반포스트"}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _updateMarkers() {
     final markers = <Marker>[];
     
-    // 포스트 마커들 (파란색) - 모든 사용자에게 보임
-    for (final post in _posts) {
-      if (post.isActive && !post.isCollected && !post.isExpired()) {
-        final position = LatLng(post.location.latitude, post.location.longitude);
-        
-        // 거리 확인
-        if (_currentPosition != null) {
-          final distance = _calculateDistance(_currentPosition!, position);
-          if (distance > _maxDistance) continue;
-        }
-        
-        // 필터 조건 확인
-        if (!_matchesFilter(post)) continue;
-        
-        final marker = Marker(
-      point: position,
+    // 포스트 마커들 - 포스트 타입에 따라 다른 색상
+    for (final marker in _markers) {
+      Color markerColor;
+      IconData markerIcon;
+      
+      if (marker.type == MarkerType.superPost) {
+        // 🚀 슈퍼포스트: 금색
+        markerColor = Colors.amber;
+        markerIcon = Icons.star;
+      } else {
+        // 일반 포스트: 파란색
+        markerColor = Colors.blue;
+        markerIcon = Icons.location_on;
+      }
+      
+      markers.add(
+        Marker(
+          point: marker.position,
           width: 40,
           height: 40,
-      child: GestureDetector(
-            onTap: () => _showPostDetail(post),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+          child: GestureDetector(
+            onTap: () => _showMarkerDetails(marker),
+            child: Container(
+              decoration: BoxDecoration(
+                color: markerColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.3),
@@ -571,20 +1041,15 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               ),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/ppam_work.png',
-                  width: 36,
-                  height: 36,
-                  fit: BoxFit.cover,
+              child: Icon(
+                markerIcon,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
         ),
-      ),
-    );
-        
-        markers.add(marker);
-      }
+      );
     }
 
     // 일반 마커들 (파란색) - 모든 사용자에게 보임
@@ -915,6 +1380,7 @@ class _MapScreenState extends State<MapScreen> {
     
     return true;
   }
+
 
   void _showPostDetail(PostModel post) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -1505,6 +1971,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _mapMoveTimer?.cancel(); // 타이머 정리
     super.dispose();
   }
 
@@ -1533,17 +2000,23 @@ class _MapScreenState extends State<MapScreen> {
                 initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
                 initialZoom: _currentZoom,
           onMapReady: _onMapReady,
+                onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
                 onTap: (tapPosition, point) {
                   setState(() {
                     _longPressedLatLng = null;
                   });
                 },
-                onLongPress: (tapPosition, point) {
+                onLongPress: (tapPosition, point) async {
                   setState(() {
                     _longPressedLatLng = point;
                   });
-                  // 롱프레스 시 메뉴 표시
+                  
+                  // 🚀 임시로 포그레벨 확인 비활성화 - 기본 배포 메뉴 표시
+                  print('🔍 롱프레스 위치: ${point.latitude}, ${point.longitude}');
                   _showLongPressMenu();
+                  
+                  // TODO: 포그레벨 확인 로직 수정 후 활성화
+                  // await _checkFogLevelAndShowMenu(point);
                 },
               ),
         children: [
