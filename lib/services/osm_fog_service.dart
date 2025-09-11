@@ -58,6 +58,35 @@ class OSMFogService {
     );
   }
 
+  /// 포그레벨 업데이트 메서드
+  Future<void> updateFogOfWar({
+    required LatLng currentPosition,
+    LatLng? homeLocation,
+    List<LatLng>? workLocations,
+  }) async {
+    try {
+      // 현재 위치 기반으로 포그레벨 업데이트
+      // 실제 구현에서는 VisitTileService와 연동하여 포그레벨 계산
+      print('🔄 포그레벨 업데이트: ${currentPosition.latitude}, ${currentPosition.longitude}');
+      
+      // 집 위치가 있으면 해당 영역도 밝게 처리
+      if (homeLocation != null) {
+        print('🏠 집 위치 포그레벨 업데이트: ${homeLocation.latitude}, ${homeLocation.longitude}');
+      }
+      
+      // 일터 위치들이 있으면 해당 영역들도 밝게 처리
+      if (workLocations != null && workLocations.isNotEmpty) {
+        for (int i = 0; i < workLocations.length; i++) {
+          print('🏢 일터 ${i + 1} 포그레벨 업데이트: ${workLocations[i].latitude}, ${workLocations[i].longitude}');
+        }
+      }
+      
+    } catch (e) {
+      print('포그레벨 업데이트 실패: $e');
+      rethrow;
+    }
+  }
+
   /// 1km 경계선 원 생성
   static CircleMarker createRingCircle(LatLng currentPosition) {
     return CircleMarker(
@@ -68,6 +97,26 @@ class OSMFogService {
       borderStrokeWidth: 2,
       borderColor: Colors.white.withOpacity(0.9),
     );
+  }
+
+  /// 회색 영역 폴리곤 생성 (과거 방문 위치들)
+  static List<Polygon> createGrayAreas(List<LatLng> visitedPositions) {
+    final grayPolygons = <Polygon>[];
+    
+    for (final position in visitedPositions) {
+      final circleHole = makeCircleHole(position, 1000); // 1km
+      
+      grayPolygons.add(Polygon(
+        points: _worldCoverRect,
+        holePointsList: [circleHole], // 원형 홀
+        isFilled: true,
+        color: Colors.grey.withOpacity(0.7), // 회색 반투명
+        borderColor: Colors.transparent,
+        borderStrokeWidth: 0,
+      ));
+    }
+    
+    return grayPolygons;
   }
 
   /// 줌 레벨에 따른 그리드 간격 계산 (미터)
