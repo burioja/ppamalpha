@@ -57,7 +57,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Polygon> _fogPolygons = [];
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
-  List<Marker> _userMarkers = [];
+  List<Marker> _userMarkersUI = []; // Flutter Map용 마커
   
   // 사용자 위치 정보
   LatLng? _homeLocation;
@@ -560,6 +560,17 @@ class _MapScreenState extends State<MapScreen> {
       markers.add(markerWidget);
     }
 
+    // 사용자 마커들을 별도 리스트로 업데이트
+    _updateUserMarkers();
+
+    setState(() {
+      _clusteredMarkers = markers;
+    });
+  }
+
+  void _updateUserMarkers() {
+    final userMarkers = <Marker>[];
+    
     // 사용자 마커들 (초록색) - 배포자만 회수 가능
     for (final marker in _userMarkers) {
       final position = marker.position;
@@ -598,12 +609,10 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       
-      markers.add(markerWidget);
+      userMarkers.add(markerWidget);
     }
 
-    setState(() {
-      _clusteredMarkers = markers;
-    });
+    _userMarkersUI = userMarkers;
   }
 
   void _showUserMarkerDetail(MarkerData marker) {
@@ -1582,7 +1591,7 @@ class _MapScreenState extends State<MapScreen> {
                 // 현재 위치 마커
                 MarkerLayer(markers: _currentMarkers),
                 // 사용자 마커
-                MarkerLayer(markers: _userMarkers),
+                MarkerLayer(markers: _userMarkersUI),
                 // 롱프레스 마커
               if (_longPressedLatLng != null)
             MarkerLayer(
