@@ -267,11 +267,82 @@ class _StoreScreenState extends State<StoreScreen> {
 
   int get _usablePostsCount {
     return _collectedPosts
-        .where((post) => post.canUse && !post.isExpired())
+        .where((post) => post.canBeUsed)
         .length;
   }
 
+  Future<void> _performPostUsage(PostModel post) async {
+    if (_currentUserId == null) return;
+
+    try {
+      // 로딩 다이얼로그 표시
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // 포스트 사용 처리
+      await _postService.usePost(post.flyerId, _currentUserId!);
+
+      // 로딩 다이얼로그 닫기
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      // 성공 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${post.title} 포스트를 사용했습니다! (+${post.reward}포인트)'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // 목록 새로고침
+      await _loadCollectedPosts();
+    } catch (e) {
+      // 로딩 다이얼로그 닫기
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      // 에러 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('포스트 사용 중 오류가 발생했습니다: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   void _usePost(PostModel post) {
+    // 사용 가능 여부 확인
+    if (!post.canBeUsed) {
+      String message = '';
+      if (post.isUsed || post.isUsedByCurrentUser) {
+        message = '이미 사용된 포스트입니다.';
+      } else if (post.isExpired()) {
+        message = '만료된 포스트입니다.';
+      } else if (!post.canUse) {
+        message = '사용할 수 없는 포스트입니다.';
+      } else if (!post.isActive) {
+        message = '비활성화된 포스트입니다.';
+      } else {
+        message = '포스트를 사용할 수 없습니다.';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -296,17 +367,9 @@ class _StoreScreenState extends State<StoreScreen> {
               child: const Text('취소'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // TODO: 실제 포스트 사용 처리
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${post.title} 포스트를 사용했습니다! (+${post.reward}포인트)'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-                // 목록 새로고침
-                _loadCollectedPosts();
+                await _performPostUsage(post);
               },
               child: const Text('사용'),
             ),
@@ -891,7 +954,7 @@ class _StoreScreenState extends State<StoreScreen> {
                           }
                         },
                       ),
-                      if (post.canUse && !post.isExpired())
+                      if (post.canBeUsed)
                         Positioned(
                           bottom: 8,
                           right: 8,

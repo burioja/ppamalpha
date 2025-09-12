@@ -56,6 +56,22 @@ class PostCard extends StatelessWidget {
               
               const SizedBox(height: 8),
               
+              // 이미지 표시 (mediaUrl에서 이미지가 있는 경우)
+              if (post.mediaUrl.isNotEmpty && _hasImageMedia(post)) ...[
+                const SizedBox(height: 8),
+                Container(
+                  height: 160,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey.shade100,
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: _buildImageWidget(post),
+                ),
+                const SizedBox(height: 12),
+              ],
+              
               // 설명
               if (post.description.isNotEmpty) ...[
                 Text(
@@ -199,6 +215,93 @@ class PostCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // 이미지 미디어가 있는지 확인
+  bool _hasImageMedia(PostModel post) {
+    return post.mediaType.contains('image') && (post.thumbnailUrl.isNotEmpty || post.mediaUrl.isNotEmpty);
+  }
+
+  // 이미지 위젯 빌드 (썸네일 우선 사용)
+  Widget _buildImageWidget(PostModel post) {
+    // 썸네일이 있으면 썸네일 사용, 없으면 원본 사용
+    final imageUrl = _getThumbnailUrl(post) ?? _getOriginalImageUrl(post);
+    
+    if (imageUrl == null) {
+      return Container(
+        color: Colors.grey.shade200,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+            const SizedBox(height: 8),
+            Text(
+              '이미지 없음',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey.shade200,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image, size: 40, color: Colors.grey.shade500),
+              const SizedBox(height: 8),
+              Text(
+                '이미지를 불러올 수 없습니다',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          color: Colors.grey.shade100,
+          child: Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // 썸네일 URL 가져오기
+  String? _getThumbnailUrl(PostModel post) {
+    final imageIndex = post.mediaType.indexOf('image');
+    if (imageIndex >= 0 && imageIndex < post.thumbnailUrl.length) {
+      return post.thumbnailUrl[imageIndex];
+    }
+    return null;
+  }
+
+  // 원본 이미지 URL 가져오기
+  String? _getOriginalImageUrl(PostModel post) {
+    final imageIndex = post.mediaType.indexOf('image');
+    if (imageIndex >= 0 && imageIndex < post.mediaUrl.length) {
+      return post.mediaUrl[imageIndex];
+    }
+    return null;
   }
 
   Widget _buildStatusChip(bool isExpired, bool isCollected) {

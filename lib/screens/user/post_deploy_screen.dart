@@ -406,16 +406,20 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   Widget _buildPostsGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: _userPosts.length,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+        
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: _userPosts.length,
       itemBuilder: (context, index) {
         final post = _userPosts[index];
         final isSelected = _selectedPost?.flyerId == post.flyerId;
@@ -493,6 +497,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
               ],
             ),
           ),
+        );
+      },
         );
       },
     );
@@ -633,6 +639,72 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     return '${date.month}/${date.day}';
   }
 
+  int _getCrossAxisCount(double width) {
+    // 반응형 그리드 컬럼 수 계산
+    if (width < 600) {
+      return 2; // 모바일: 2열
+    } else if (width < 900) {
+      return 3; // 태블릿: 3열  
+    } else {
+      return 4; // 데스크톱: 4열
+    }
+  }
+
+  // 마커를 Firestore에 생성하는 메서드
+  Future<void> _createMarkerInFirestore({
+    required PostModel post,
+    required LatLng location,
+    required int quantity,
+    required int price,
+  }) async {
+    try {
+      // 기존 마커가 있는지 확인 (중복 방지)
+      final existingMarkers = await FirebaseFirestore.instance
+          .collection('markers')
+          .where('flyerId', isEqualTo: post.flyerId)
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      if (existingMarkers.docs.isNotEmpty) {
+        debugPrint('이미 배포된 포스트의 마커가 존재합니다: ${post.flyerId}');
+        return; // 이미 마커가 있으면 생성하지 않음
+      }
+
+      final markerData = {
+        'title': post.title,
+        'price': price,
+        'amount': quantity,
+        'userId': post.creatorId,
+        'position': GeoPoint(location.latitude, location.longitude),
+        'remainingAmount': quantity,
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiryDate': post.expiresAt,
+        'isActive': true,
+        'isCollected': false,
+        'type': 'post_place', // MapScreen과 일치하는 타입
+        'flyerId': post.flyerId,
+        'creatorName': post.creatorName,
+        'description': post.description,
+        'targetGender': post.targetGender,
+        'targetAge': post.targetAge,
+        'canRespond': post.canRespond,
+        'canForward': post.canForward,
+        'canRequestReward': post.canRequestReward,
+        'canUse': post.canUse,
+        'markerId': post.markerId,
+        'radius': post.radius, // 포스트 반경 정보 추가
+      };
+
+      // markers 컬렉션에 저장
+      final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
+      
+      debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
+      debugPrint('마커 ID: ${docRef.id}, 포스트 ID: ${post.flyerId}');
+    } catch (e) {
+      debugPrint('마커 생성 실패: $e');
+      throw Exception('마커 생성에 실패했습니다: $e');
+    }
+  }
 
   @override
   void dispose() {

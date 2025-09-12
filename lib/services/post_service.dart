@@ -23,6 +23,7 @@ class PostService {
     required List<String> targetPurchaseHistory,
     required List<String> mediaType,
     required List<String> mediaUrl,
+    List<String>? thumbnailUrl,
     required String title,
     required String description,
     required bool canRespond,
@@ -51,6 +52,7 @@ class PostService {
         targetPurchaseHistory: targetPurchaseHistory,
         mediaType: mediaType,
         mediaUrl: mediaUrl,
+        thumbnailUrl: thumbnailUrl ?? [],
         title: title,
         description: description,
         canRespond: canRespond,
@@ -164,8 +166,19 @@ class PostService {
         return null;
       }
       
+      // 원본 Firestore 데이터 로깅
+      final data = doc.data() as Map<String, dynamic>;
+      debugPrint('=== Firestore에서 불러온 원본 데이터 ===');
+      debugPrint('mediaType: ${data['mediaType']}');
+      debugPrint('mediaUrl: ${data['mediaUrl']}');
+      debugPrint('thumbnailUrl: ${data['thumbnailUrl']}');
+      
       final post = PostModel.fromFirestore(doc);
-      debugPrint('✅ 포스트 조회 완료: targetAge=${post.targetAge}');
+      debugPrint('✅ PostModel 변환 완룼: targetAge=${post.targetAge}');
+      debugPrint('파스링된 데이터:');
+      debugPrint('  mediaType: ${post.mediaType}');
+      debugPrint('  mediaUrl: ${post.mediaUrl}');
+      debugPrint('  thumbnailUrl: ${post.thumbnailUrl}');
       
       return post;
     } catch (e) {
@@ -869,6 +882,191 @@ class PostService {
       await batch.commit();
     } catch (e) {
       throw Exception('만료 전단지 정리 실패: $e');
+    }
+  }
+
+  // ==================== 포스트 사용 관련 기능 ====================
+
+  /// 포스트 사용 처리
+  Future<bool> usePost(String postId, String userId) async {
+    try {
+      if (kDebugMode) {
+        print('포스트 사용 시작: postId=$postId, userId=$userId');
+      }
+
+      // 포스트 정보 조회
+      final postDoc = await _firestore.collection('flyers').doc(postId).get();
+      if (!postDoc.exists) {
+        throw Exception('포스트를 찾을 수 없습니다.');
+      }
+
+      final post = PostModel.fromFirestore(postDoc);
+
+      // 사용 가능 여부 확인
+      if (!post.canUse) {
+        throw Exception('사용할 수 없는 포스트입니다.');
+      }
+
+      if (post.isExpired()) {
+        throw Exception('만료된 포스트입니다.');
+      }
+
+      // 이미 사용했는지 확인
+      final usageQuery = await _firestore
+          .collection('post_usage')
+          .where('postId', isEqualTo: postId)
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      if (usageQuery.docs.isNotEmpty) {
+        throw Exception('이미 사용한 포스트입니다.');
+      }
+
+      final now = DateTime.now();
+      final batch = _firestore.batch();
+
+      // 포스트 사용 기록 저장
+      final usageRef = _firestore.collection('post_usage').doc();
+      batch.set(usageRef, {
+        'id': usageRef.id,
+        'postId': postId,
+        'userId': userId,
+        'creatorId': post.creatorId,
+        'title': post.title,
+        'reward': post.reward,
+        'usedAt': Timestamp.fromDate(now),
+        'createdAt': Timestamp.fromDate(now),
+      });
+
+      // 사용자 포인트 증가
+      await _addUserPoints(userId, post.reward, batch);
+
+      // 배치 실행
+      await batch.commit();
+
+      if (kDebugMode) {
+        print('포스트 사용 완료: +${post.reward}포인트');
+      }
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('포스트 사용 실패: $e');
+      }
+      throw Exception('포스트 사용 실패: $e');
+    }
+  }
+
+  /// 사용자 포인트 증가 (내부 메서드)
+  Future<void> _addUserPoints(String userId, int points, WriteBatch batch) async {
+    final userPointsRef = _firestore.collection('user_points').doc(userId);
+    final userPointsDoc = await userPointsRef.get();
+
+    if (userPointsDoc.exists) {
+      final currentPoints = userPointsDoc.data()?['totalPoints'] ?? 0;
+      batch.update(userPointsRef, {
+        'totalPoints': currentPoints + points,
+        'lastUpdated': Timestamp.fromDate(DateTime.now()),
+      });
+    } else {
+      batch.set(userPointsRef, {
+        'userId': userId,
+        'totalPoints': points,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+        'lastUpdated': Timestamp.fromDate(DateTime.now()),
+      });
+    }
+  }
+
+  /// 사용자 포인트 조회
+  Future<int> getUserPoints(String userId) async {
+    try {
+      final doc = await _firestore.collection('user_points').doc(userId).get();
+      if (doc.exists) {
+        return doc.data()?['totalPoints'] ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      if (kDebugMode) {
+        print('포인트 조회 실패: $e');
+      }
+      return 0;
+    }
+  }
+
+  /// 포스트 사용 이력 조회
+  Future<List<Map<String, dynamic>>> getPostUsageHistory(String userId, {int limit = 50}) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('post_usage')
+          .where('userId', isEqualTo: userId)
+          .orderBy('usedAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+              })
+          .toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('사용 이력 조회 실패: $e');
+      }
+      return [];
+    }
+  }
+
+  /// 특정 포스트의 사용 여부 확인
+  Future<bool> isPostUsedByUser(String postId, String userId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('post_usage')
+          .where('postId', isEqualTo: postId)
+          .where('userId', isEqualTo: userId)
+          .limit(1)
+          .get();
+
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      if (kDebugMode) {
+        print('포스트 사용 여부 확인 실패: $e');
+      }
+      return false;
+    }
+  }
+
+  /// 사용자별 포인트 통계
+  Future<Map<String, int>> getUserPointsStats(String userId) async {
+    try {
+      final usageSnapshot = await _firestore
+          .collection('post_usage')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      final totalEarned = usageSnapshot.docs.fold<int>(
+        0,
+        (sum, doc) => sum + (doc.data()['reward'] as int? ?? 0),
+      );
+
+      final totalUsed = usageSnapshot.docs.length;
+      final currentPoints = await getUserPoints(userId);
+
+      return {
+        'totalEarned': totalEarned,
+        'totalUsed': totalUsed,
+        'currentPoints': currentPoints,
+      };
+    } catch (e) {
+      if (kDebugMode) {
+        print('포인트 통계 조회 실패: $e');
+      }
+      return {
+        'totalEarned': 0,
+        'totalUsed': 0,
+        'currentPoints': 0,
+      };
     }
   }
 } 

@@ -61,6 +61,7 @@ class _MapScreenState extends State<MapScreen> {
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
   List<Marker> _userMarkerWidgets = [];
+  List<Marker> _userMarkersUI = []; // Flutter Map용 마커
   
   // 사용자 위치 정보
   LatLng? _homeLocation;
@@ -1095,11 +1096,20 @@ class _MapScreenState extends State<MapScreen> {
       markers.add(markerWidget);
     }
 
+    // 사용자 마커들을 별도 리스트로 업데이트
+    _updateUserMarkers();
 
-    // 사용자 마커 위젯들을 별도로 저장
-    final userMarkerWidgets = <Marker>[];
-    for (final marker in _userMarkers) {
-      final position = marker.position;
+    setState(() {
+      _clusteredMarkers = markers;
+    });
+  }
+
+  void _updateUserMarkers() {
+    final userMarkers = <Marker>[];
+    
+    // 사용자 마커들 (초록색) - 배포자만 회수 가능
+    for (final markerData in _userMarkers) {
+      final position = markerData.position;
       
       // 거리 확인
       if (_currentPosition != null) {
@@ -1112,7 +1122,7 @@ class _MapScreenState extends State<MapScreen> {
         width: 35,
         height: 35,
         child: GestureDetector(
-          onTap: () => _showUserMarkerDetail(marker),
+          onTap: () => _showUserMarkerDetail(markerData),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.green,
@@ -1135,12 +1145,12 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       
-      userMarkerWidgets.add(markerWidget);
+      userMarkers.add(markerWidget);
     }
 
     setState(() {
-      _clusteredMarkers = markers;
-      _userMarkerWidgets = userMarkerWidgets;
+      _userMarkerWidgets = userMarkers;
+      _userMarkersUI = userMarkers;
     });
   }
 
@@ -2075,7 +2085,27 @@ class _MapScreenState extends State<MapScreen> {
                 // Firebase 마커들 (포스트 + 사용자 생성 마커)
                 MarkerLayer(markers: _clusteredMarkers),
                 // 사용자 마커
-                MarkerLayer(markers: _userMarkerWidgets),
+                MarkerLayer(markers: _userMarkersUI),
+                // 롱프레스 마커
+              if (_longPressedLatLng != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _longPressedLatLng!,
+                  width: 40,
+                  height: 40,
+                        child: _customMarkerIcon ??
+                            const Icon(
+                              Icons.add_location,
+                      color: Colors.blue,
+                              size: 40,
+                  ),
+                        ),
+                      ],
+                    ),
+                      ],
+                    ),
+          ),
           // 에러 메시지
           if (_errorMessage != null)
            Positioned(
