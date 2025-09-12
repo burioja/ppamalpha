@@ -637,12 +637,12 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 기존 마커가 있는지 확인 (중복 방지)
       final existingMarkers = await FirebaseFirestore.instance
           .collection('markers')
-          .where('flyerId', isEqualTo: post.flyerId)
+          .where('flyerId', isEqualTo: post.postId)
           .where('isActive', isEqualTo: true)
           .get();
       
       if (existingMarkers.docs.isNotEmpty) {
-        debugPrint('이미 배포된 포스트의 마커가 존재합니다: ${post.flyerId}');
+        debugPrint('이미 배포된 포스트의 마커가 존재합니다: ${post.postId}');
         return; // 이미 마커가 있으면 생성하지 않음
       }
 
@@ -658,7 +658,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         'isActive': true,
         'isCollected': false,
         'type': 'post_place', // MapScreen과 일치하는 타입
-        'flyerId': post.flyerId,
+        'flyerId': post.postId,
         'creatorName': post.creatorName,
         'description': post.description,
         'targetGender': post.targetGender,
@@ -675,7 +675,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
       
       debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
-      debugPrint('마커 ID: ${docRef.id}, 포스트 ID: ${post.flyerId}');
+      debugPrint('마커 ID: ${docRef.id}, 포스트 ID: ${post.postId}');
     } catch (e) {
       debugPrint('마커 생성 실패: $e');
       throw Exception('마커 생성에 실패했습니다: $e');

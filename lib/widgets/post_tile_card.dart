@@ -7,12 +7,16 @@ class PostTileCard extends StatelessWidget {
   final PostModel post;
   final VoidCallback? onTap;
   final bool isSelected;
+  final bool showDeleteButton;
+  final VoidCallback? onDelete;
 
   const PostTileCard({
     super.key,
     required this.post,
     this.onTap,
     this.isSelected = false,
+    this.showDeleteButton = false,
+    this.onDelete,
   });
 
   @override
@@ -76,6 +80,27 @@ class PostTileCard extends StatelessWidget {
                       right: 8,
                       child: _buildStatusBadge(isExpired, isCollected, isUsed),
                     ),
+                    // 삭제 버튼 (좌상단)
+                    if (showDeleteButton && onDelete != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: GestureDetector(
+                          onTap: onDelete,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.delete,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
                     // 사용된 포스트 오버레이
                     if (isUsed)
                       Positioned.fill(

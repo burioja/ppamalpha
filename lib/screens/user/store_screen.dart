@@ -286,7 +286,7 @@ class _StoreScreenState extends State<StoreScreen> {
       );
 
       // 포스트 사용 처리
-      await _postService.usePost(post.flyerId, _currentUserId!);
+      await _postService.usePost(post.postId, _currentUserId!);
 
       // 로딩 다이얼로그 닫기
       if (!mounted) return;
