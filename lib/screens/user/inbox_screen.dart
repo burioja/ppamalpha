@@ -646,6 +646,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             final post = filteredPosts[index];
                             return PostTileCard(
                               post: post,
+                              showDeleteButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 삭제 버튼 표시
+                              onDelete: () => _showDeleteConfirmation(post),
                               onTap: () async {
                                 // 포스트 상세 화면으로 이동
                                 final result = await Navigator.pushNamed(
@@ -808,6 +810,95 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         }
       },
     );
+  }
+
+  // 포스트 삭제 확인 다이얼로그
+  void _showDeleteConfirmation(PostModel post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('포스트 삭제'),
+          content: Text(
+            '정말 이 포스트를 삭제하겠습니까?\n\n"${post.title}"\n\n삭제된 포스트는 복구할 수 없습니다.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                '취소',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _deletePost(post);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 포스트 삭제 실행
+  Future<void> _deletePost(PostModel post) async {
+    try {
+      // 로딩 다이얼로그 표시
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("포스트를 삭제하는 중..."),
+              ],
+            ),
+          );
+        },
+      );
+
+      // 포스트 삭제
+      await _postService.deletePost(post.postId);
+
+      // 로딩 다이얼로그 닫기
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        // 성공 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('포스트가 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // 인박스 새로고침
+        setState(() {});
+      }
+    } catch (e) {
+      // 로딩 다이얼로그 닫기
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        // 에러 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('포스트 삭제에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // 배포 포스트 통계 표시 (PRD 요구사항)

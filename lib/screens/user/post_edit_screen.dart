@@ -190,13 +190,13 @@ class _PostEditScreenState extends State<PostEditScreen> {
       };
 
       debugPrint('🔄 포스트 수정 데이터:');
-      debugPrint('  - flyerId: ${widget.post.flyerId}');
+      debugPrint('  - postId: ${widget.post.postId}');
       debugPrint('  - targetAge: ${updates['targetAge']}');
       debugPrint('  - targetGender: ${updates['targetGender']}');
       debugPrint('  - _selectedAgeRange: ${_selectedAgeRange.start.toInt()}-${_selectedAgeRange.end.toInt()}');
       debugPrint('  - _selectedGenders: $_selectedGenders');
 
-      await _postService.updatePost(widget.post.flyerId, updates);
+      await _postService.updatePost(widget.post.postId, updates);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

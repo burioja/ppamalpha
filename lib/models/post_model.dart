@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 class PostModel {
   // 필수 메타데이터
-  final String flyerId;
+  final String postId;
   final String creatorId;
   final String creatorName;
   final GeoPoint location;
@@ -53,7 +53,7 @@ class PostModel {
   final bool isUsedByCurrentUser; // 현재 사용자가 사용했는지 여부
 
   PostModel({
-    required this.flyerId,
+    required this.postId,
     required this.creatorId,
     required this.creatorName,
     required this.location,
@@ -87,13 +87,13 @@ class PostModel {
     this.isSuperPost = false,
     this.usedAt,
     this.isUsedByCurrentUser = false,
-  }) : markerId = markerId ?? '${creatorId}_$flyerId';
+  }) : markerId = markerId ?? '${creatorId}_$postId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     
     return PostModel(
-      flyerId: doc.id,
+      postId: data['postId'] ?? doc.id, // Firebase 필드 우선, 없으면 문서 ID 사용
       creatorId: data['creatorId'] ?? '',
       creatorName: data['creatorName'] ?? '',
       location: data['location'] ?? const GeoPoint(0, 0),
@@ -144,6 +144,7 @@ class PostModel {
 
   Map<String, dynamic> toFirestore() {
     return {
+      'postId': postId, // postId 필드 추가
       'creatorId': creatorId,
       'creatorName': creatorName,
       'location': location,
@@ -183,7 +184,7 @@ class PostModel {
   // Meilisearch용 데이터 구조
   Map<String, dynamic> toMeilisearch() {
     return {
-      'id': flyerId,
+      'id': postId,
       'location': {
         'lat': location.latitude,
         'lng': location.longitude,
@@ -292,7 +293,7 @@ class PostModel {
   }
 
   PostModel copyWith({
-    String? flyerId,
+    String? postId,
     String? creatorId,
     String? creatorName,
     GeoPoint? location,
@@ -328,7 +329,7 @@ class PostModel {
     bool? isUsedByCurrentUser,
   }) {
     return PostModel(
-      flyerId: flyerId ?? this.flyerId,
+      postId: postId ?? this.postId,
       creatorId: creatorId ?? this.creatorId,
       creatorName: creatorName ?? this.creatorName,
       location: location ?? this.location,

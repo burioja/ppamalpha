@@ -43,6 +43,55 @@ class VisitTileService {
     }
   }
 
+  // FogLevel 1 타일 캐시
+  static final Map<String, List<String>> _fogLevel1Cache = {};
+  static final Map<String, DateTime> _fogLevel1CacheTimestamps = {};
+  static const Duration _fogLevel1CacheExpiry = Duration(minutes: 10);
+  
+  /// FogLevel 1 타일 목록을 캐시와 함께 조회
+  static Future<List<String>> getFogLevel1TileIdsCached(String userId) async {
+    final cacheKey = userId;
+    
+    // 캐시 확인
+    if (_fogLevel1Cache.containsKey(cacheKey) && 
+        _fogLevel1CacheTimestamps[cacheKey]!.isAfter(DateTime.now().subtract(_fogLevel1CacheExpiry))) {
+      print('🚀 FogLevel 1 타일 캐시 사용: $cacheKey');
+      return _fogLevel1Cache[cacheKey]!;
+    }
+    
+    try {
+      print('🔄 FogLevel 1 타일 계산 중: $cacheKey');
+      
+      // Firestore에서 사용자의 방문 기록 조회
+      final visitedTiles = await _firestore
+          .collection(_collection)
+          .doc(userId)
+          .collection('visited')
+          .get();
+      
+      final fogLevel1Tiles = <String>[];
+      
+      for (final doc in visitedTiles.docs) {
+        final data = doc.data();
+        final fogLevel = data['fogLevel'] as int?;
+        
+        if (fogLevel == 1) {
+          fogLevel1Tiles.add(doc.id);
+        }
+      }
+      
+      // 캐시 저장
+      _fogLevel1Cache[cacheKey] = fogLevel1Tiles;
+      _fogLevel1CacheTimestamps[cacheKey] = DateTime.now();
+      
+      print('✅ FogLevel 1 타일 계산 완료: ${fogLevel1Tiles.length}개');
+      return fogLevel1Tiles;
+    } catch (e) {
+      print('❌ FogLevel 1 타일 계산 실패: $e');
+      return [];
+    }
+  }
+
   /// 주변 타일들의 Fog Level 조회
   static Future<Map<String, int>> getSurroundingTilesFogLevel(
     double latitude, 

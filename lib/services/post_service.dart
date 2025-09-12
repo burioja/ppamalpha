@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rxdart/rxdart.dart';
 import '../models/post_model.dart';
 import 'visit_tile_service.dart';
 import '../utils/tile_utils.dart';
@@ -38,7 +39,7 @@ class PostService {
       final tileId = TileUtils.getTileId(location.latitude, location.longitude);
       
       final flyer = PostModel(
-        flyerId: '',
+        postId: '',
         creatorId: creatorId,
         creatorName: creatorName,
         location: location,
@@ -65,11 +66,12 @@ class PostService {
 
       // Firestore에 저장
       final docRef = await _firestore.collection('posts').add(flyer.toFirestore());
+      final postId = docRef.id;
       
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
-      await _indexToMeilisearch(flyer.copyWith(flyerId: docRef.id));
+      await _indexToMeilisearch(flyer.copyWith(postId: postId));
       
-      return docRef.id;
+      return postId;
     } catch (e) {
       throw Exception('전단지 생성 실패: $e');
     }
@@ -82,7 +84,7 @@ class PostService {
       final docRef = await _firestore.collection('posts').add(post.toFirestore());
       
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
-      await _indexToMeilisearch(post.copyWith(flyerId: docRef.id));
+      await _indexToMeilisearch(post.copyWith(postId: docRef.id));
       
       return docRef.id;
     } catch (e) {
@@ -205,12 +207,30 @@ class PostService {
     }
   }
 
+  // 포스트 삭제
+  Future<void> deletePost(String postId) async {
+    try {
+      debugPrint('🗑️ PostService.deletePost 호출: $postId');
+      
+      await _firestore.collection('posts').doc(postId).delete();
+      
+      debugPrint('✅ 포스트 삭제 완료: $postId');
+      
+      // Meilisearch에서도 삭제 (실제 구현 시)
+      // await _deleteFromMeilisearch(postId);
+    } catch (e) {
+      debugPrint('❌ 포스트 삭제 실패: $e');
+      throw Exception('포스트 삭제 실패: $e');
+    }
+  }
+
+
   // Meilisearch 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
   Future<void> _indexToMeilisearch(PostModel flyer) async {
     try {
       // TODO: Meilisearch 클라이언트 구현
-      // await meilisearchClient.index('flyers').addDocuments([flyer.toMeilisearch()]);
-      debugPrint('Meilisearch 인덱싱: ${flyer.flyerId}');
+      // await meilisearchClient.index('posts').addDocuments([flyer.toMeilisearch()]);
+      debugPrint('Meilisearch 인덱싱: ${flyer.postId}');
     } catch (e) {
       debugPrint('Meilisearch 인덱싱 실패: $e');
     }
@@ -266,7 +286,7 @@ class PostService {
     }
   }
 
-  // 🚀 성능 최적화: 포그레벨 1단계 포스트만 조회
+  // 🚀 성능 최적화: 1km 타일 기반 포스트 조회
   Future<List<PostModel>> getFlyersInFogLevel1({
     required GeoPoint location,
     required double radiusInKm,
@@ -279,43 +299,46 @@ class PostService {
       // 1. 현재 위치 기준으로 포그레벨 1단계 타일들 계산
       final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
       
-      if (fogLevel1Tiles.isEmpty) {
-        return []; // 포그레벨 1단계 타일이 없으면 빈 리스트 반환
-      }
+      List<PostModel> flyers = [];
+      
+      if (fogLevel1Tiles.isNotEmpty) {
+        // 2. 포그레벨 1단계 타일에 있는 일반 포스트만 조회 (서버 사이드 필터링)
+        final normalPostsQuery = await _firestore
+            .collection('posts')
+            .where('isActive', isEqualTo: true)
+            .where('isCollected', isEqualTo: false)
+            .where('tileId', whereIn: fogLevel1Tiles) // 타일 ID로 필터링
+            .where('reward', isLessThan: 1000) // 일반 포스트만 (1000원 미만)
+            .get();
 
-      // 2. 해당 타일들에 있는 포스트만 조회 (서버 사이드 필터링)
-      final querySnapshot = await _firestore
+        for (var doc in normalPostsQuery.docs) {
+          final flyer = PostModel.fromFirestore(doc);
+          if (!flyer.isExpired()) {
+            flyers.add(flyer);
+          }
+        }
+      }
+      
+      // 3. 슈퍼포스트 (1000원 이상)는 반경 내에서만 조회
+      final superPostsQuery = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
           .where('isCollected', isEqualTo: false)
-          .where('tileId', whereIn: fogLevel1Tiles) // 타일 ID로 필터링
+          .where('reward', isGreaterThanOrEqualTo: 1000) // 슈퍼포스트만
           .get();
 
-      List<PostModel> flyers = [];
-      for (var doc in querySnapshot.docs) {
+      for (var doc in superPostsQuery.docs) {
         final flyer = PostModel.fromFirestore(doc);
-        
-        // 만료 확인
-        if (flyer.isExpired()) continue;
-        
-        // 거리 확인 (반경을 km로 변환) - 추가 안전장치
-        final distance = _calculateDistance(
-          location.latitude, location.longitude,
-          flyer.location.latitude, flyer.location.longitude,
-        );
-        if (distance > radiusInKm * 1000) continue;
-        
-        // 3. 타겟 조건 필터링 (임시로 비활성화하여 모든 flyer 표시)
-        // if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
-        //   if (!flyer.matchesTargetConditions(
-        //     userAge: userAge,
-        //     userGender: userGender,
-        //     userInterests: userInterests,
-        //     userPurchaseHistory: userPurchaseHistory,
-        //   )) continue;
-        // }
-        
-        flyers.add(flyer);
+        if (!flyer.isExpired()) {
+          // 거리 확인 (슈퍼포스트는 반경 내에서만)
+          final distance = _calculateDistance(
+            location.latitude, location.longitude,
+            flyer.location.latitude, flyer.location.longitude,
+          );
+          if (distance <= radiusInKm * 1000) {
+            flyers.add(flyer);
+          }
+        }
       }
 
       return flyers;
@@ -324,26 +347,14 @@ class PostService {
     }
   }
 
-  // 포그레벨 1단계 타일들 계산
+  // 포그레벨 1단계 타일들 계산 (캐시 활용)
   Future<List<String>> _getFogLevel1Tiles(GeoPoint location, double radiusInKm) async {
     try {
-      // 1. 현재 위치 주변 타일들 가져오기
-      final surroundingTiles = TileUtils.getSurroundingTiles(location.latitude, location.longitude);
-      final fogLevel1Tiles = <String>[];
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
       
-      // 2. 각 타일의 포그레벨 확인
-      for (final tileId in surroundingTiles) {
-        final fogLevel = await VisitTileService.getFogLevelForTile(
-          tileId, 
-          currentPosition: LatLng(location.latitude, location.longitude)
-        );
-        
-        if (fogLevel == 1) {
-          fogLevel1Tiles.add(tileId);
-        }
-      }
-      
-      return fogLevel1Tiles;
+      // 🚀 캐시된 FogLevel 1 타일 목록 사용
+      return await VisitTileService.getFogLevel1TileIdsCached(user.uid);
     } catch (e) {
       print('포그레벨 1단계 타일 계산 실패: $e');
       return [];
@@ -387,44 +398,113 @@ class PostService {
     }
   }
 
-  // 🚀 실시간 포스트 스트림 (포그레벨 1단계)
+  // 🚀 최적화된 실시간 포스트 스트림 (서버 사이드 필터링)
   Stream<List<PostModel>> getFlyersInFogLevel1Stream({
     required GeoPoint location,
     required double radiusInKm,
   }) {
+    return Rx.combineLatest2(
+      // 1. 일반 포스트: FogLevel 1 타일에서만 조회
+      _getNormalPostsStream(location, radiusInKm),
+      // 2. 슈퍼포스트: 별도 쿼리로 조회
+      _getSuperPostsStream(location, radiusInKm),
+      (List<PostModel> normalPosts, List<PostModel> superPosts) {
+        // 두 리스트 합치기
+        final allPosts = [...normalPosts, ...superPosts];
+        
+        print('📊 최적화된 포스트 로드:');
+        print('  - 일반 포스트: ${normalPosts.length}개');
+        print('  - 슈퍼포스트: ${superPosts.length}개');
+        print('  - 총 포스트: ${allPosts.length}개');
+        
+        return allPosts;
+      },
+    );
+  }
+  
+  // 일반 포스트 스트림 (FogLevel 1 타일만)
+  Stream<List<PostModel>> _getNormalPostsStream(GeoPoint location, double radiusInKm) {
+    return _getFogLevel1Tiles(location, radiusInKm).asStream().asyncExpand((fogTiles) {
+      print('🔍 일반 포스트 쿼리:');
+      print('  - FogLevel 1 타일 개수: ${fogTiles.length}개');
+      print('  - 타일 목록: $fogTiles');
+      
+      if (fogTiles.isEmpty) {
+        print('  - 타일이 비어있음, 빈 리스트 반환');
+        return Stream.value(<PostModel>[]);
+      }
+      
+      return _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
+          .where('tileId', whereIn: fogTiles) // 🚀 서버에서 필터링
+          .where('reward', isLessThan: 1000) // 일반 포스트만
+          .snapshots()
+          .map((snapshot) {
+        print('  - Firebase 쿼리 결과: ${snapshot.docs.length}개 문서');
+        
+        final allPosts = snapshot.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+        print('  - 파싱된 포스트: ${allPosts.length}개');
+        
+        // 만료 상태 상세 확인
+        for (final post in allPosts) {
+          final now = DateTime.now();
+          final isExpired = now.isAfter(post.expiresAt);
+          final timeDiff = post.expiresAt.difference(now).inMinutes;
+          print('  - 포스트: ${post.title} - 만료: $isExpired (${timeDiff}분 남음)');
+        }
+        
+        final posts = allPosts.where((post) => !post.isExpired()).toList();
+        print('  - 만료 제외 후: ${posts.length}개 포스트');
+        return posts;
+      });
+    });
+  }
+  
+  // 슈퍼포스트 스트림 (거리 계산만)
+  Stream<List<PostModel>> _getSuperPostsStream(GeoPoint location, double radiusInKm) {
+    print('🔍 슈퍼포스트 쿼리:');
+    print('  - 검색 위치: ${location.latitude}, ${location.longitude}');
+    print('  - 검색 반경: ${radiusInKm}km');
+    
     return _firestore
         .collection('posts')
         .where('isActive', isEqualTo: true)
         .where('isCollected', isEqualTo: false)
+        .where('reward', isGreaterThanOrEqualTo: 1000) // 슈퍼포스트만
         .snapshots()
-        .asyncMap((snapshot) async {
-      // 포그레벨 1단계 타일들 계산
-      final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+        .map((snapshot) {
+      print('  - Firebase 쿼리 결과: ${snapshot.docs.length}개 문서');
       
-      if (fogLevel1Tiles.isEmpty) {
-        return <PostModel>[];
+      final allPosts = snapshot.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+      print('  - 파싱된 슈퍼포스트: ${allPosts.length}개');
+      
+      // 만료 상태 상세 확인
+      for (final post in allPosts) {
+        final now = DateTime.now();
+        final isExpired = now.isAfter(post.expiresAt);
+        final timeDiff = post.expiresAt.difference(now).inMinutes;
+        print('  - 슈퍼포스트: ${post.title} - 만료: $isExpired (${timeDiff}분 남음)');
       }
-
-      List<PostModel> posts = [];
-      for (var doc in snapshot.docs) {
-        final post = PostModel.fromFirestore(doc);
-        
-        // 만료 확인
-        if (post.isExpired()) continue;
-        
-        // 타일 ID 확인 (포그레벨 1단계 타일에 있는지)
-        if (post.tileId != null && fogLevel1Tiles.contains(post.tileId)) {
-          // 거리 확인 (추가 안전장치)
-          final distance = _calculateDistance(
-            location.latitude, location.longitude,
-            post.location.latitude, post.location.longitude,
-          );
-          if (distance <= radiusInKm * 1000) {
-            posts.add(post);
-          }
-        }
-      }
-
+      
+      final posts = allPosts
+          .where((post) => !post.isExpired()) // 만료 확인
+          .where((post) {
+            // 거리 계산 (지정된 반경 이내)
+            final distance = _calculateDistance(
+              location.latitude, location.longitude,
+              post.location.latitude, post.location.longitude,
+            );
+            final isInRange = distance <= radiusInKm * 1000;
+            if (isInRange) {
+              print('  - 슈퍼포스트: ${post.title} (거리: ${(distance/1000).toStringAsFixed(2)}km)');
+            }
+            return isInRange;
+          })
+          .toList();
+          
+      print('  - 거리 필터링 후: ${posts.length}개 슈퍼포스트');
       return posts;
     });
   }
@@ -553,30 +633,6 @@ class PostService {
     }
   }
 
-  // 포스트 삭제 (발행자만 가능)
-  Future<void> deletePost(String postId) async {
-    try {
-      debugPrint('🔄 deletePost 호출: postId=$postId');
-      
-      // 포스트 존재 확인
-      final postDoc = await _firestore.collection('posts').doc(postId).get();
-      if (!postDoc.exists) {
-        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
-        throw Exception('포스트를 찾을 수 없습니다.');
-      }
-      
-      // Firestore에서 삭제
-      await _firestore.collection('posts').doc(postId).delete();
-      
-      // Meilisearch에서 제거
-      await _removeFromMeilisearch(postId);
-      
-      debugPrint('✅ 포스트 삭제 완료: $postId');
-    } catch (e) {
-      debugPrint('❌ deletePost 실패: $e');
-      throw Exception('포스트 삭제 실패: $e');
-    }
-  }
 
   // 전단지 회수 (발행자만 가능)
   // 발행자가 자신의 포스트를 회수하는 메서드
@@ -690,7 +746,7 @@ class PostService {
           .toList();
           
       for (final post in posts) {
-        debugPrint('📝 수령된 포스트: ${post.title} (${post.flyerId}) - 수령일: ${post.collectedAt}');
+        debugPrint('📝 수령된 포스트: ${post.title} (${post.postId}) - 수령일: ${post.collectedAt}');
       }
 
       return posts;
@@ -731,7 +787,7 @@ class PostService {
       for (final post in collectedPosts) {
         // TODO: 향후 PostClaim 모델 구현 시 실제 사용 상태 확인
         // 현재는 collectedAt이 있으면 수집된 것으로 간주
-        usageStatus[post.flyerId] = post.collectedAt != null;
+        usageStatus[post.postId] = post.collectedAt != null;
       }
       
       return usageStatus;
@@ -767,7 +823,7 @@ class PostService {
 
       // 디버깅을 위한 로그
       for (final post in posts) {
-        debugPrint('📝 Post: ${post.title} (${post.flyerId}) - 생성일: ${post.createdAt}');
+        debugPrint('📝 Post: ${post.title} (${post.postId}) - 생성일: ${post.createdAt}');
       }
 
       return posts;
@@ -806,11 +862,11 @@ class PostService {
     }
   }
 
-  // 사용자가 배포한 활성 전단지 조회 (배포한 포스트 탭용)
+  // 사용자가 배포한 활성 포스트 조회 (배포한 포스트 탭용)
   Future<List<PostModel>> getDistributedFlyers(String userId) async {
     try {
       final querySnapshot = await _firestore
-          .collection('flyers')
+          .collection('posts')
           .where('creatorId', isEqualTo: userId)
           .where('isActive', isEqualTo: true)
           .orderBy('createdAt', descending: true)
@@ -823,26 +879,26 @@ class PostService {
       if (e.code == 'failed-precondition') {
         // 인덱스가 없을 경우 클라이언트에서 필터링
         final fallbackSnapshot = await _firestore
-            .collection('flyers')
+            .collection('posts')
             .where('creatorId', isEqualTo: userId)
             .get();
         final items = fallbackSnapshot.docs
             .map((doc) => PostModel.fromFirestore(doc))
-            .where((flyer) => flyer.isActive) // 클라이언트에서 활성 상태 필터링
+            .where((post) => post.isActive) // 클라이언트에서 활성 상태 필터링
             .toList();
         items.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // DESC
         return items;
       }
       rethrow;
     } catch (e) {
-      throw Exception('배포한 전단지 조회 실패: $e');
+      throw Exception('배포한 포스트 조회 실패: $e');
     }
   }
 
   // 전단지 상세 정보 조회 (Lazy Load)
-  Future<PostModel?> getFlyerDetail(String flyerId) async {
+  Future<PostModel?> getPostDetail(String postId) async {
     try {
-      final doc = await _firestore.collection('flyers').doc(flyerId).get();
+      final doc = await _firestore.collection('posts').doc(postId).get();
       if (doc.exists) {
         return PostModel.fromFirestore(doc);
       }
@@ -852,25 +908,14 @@ class PostService {
     }
   }
 
-  // 전단지 ID로 조회 (MarkerItem 변환용)
-  Future<PostModel?> getFlyerById(String flyerId) async {
-    try {
-      final doc = await _firestore.collection('flyers').doc(flyerId).get();
-      if (doc.exists) {
-        return PostModel.fromFirestore(doc);
-      }
-      return null;
-    } catch (e) {
-      throw Exception('전단지 조회 실패: $e');
-    }
-  }
 
-  // 만료된 전단지 정리 (배치 작업용)
+
+  // 만료된 포스트 정리 (배치 작업용)
   Future<void> cleanupExpiredFlyers() async {
     try {
       final now = DateTime.now();
       final querySnapshot = await _firestore
-          .collection('flyers')
+          .collection('posts')
           .where('expiresAt', isLessThan: Timestamp.fromDate(now))
           .where('isActive', isEqualTo: true)
           .get();
@@ -881,7 +926,7 @@ class PostService {
       }
       await batch.commit();
     } catch (e) {
-      throw Exception('만료 전단지 정리 실패: $e');
+      throw Exception('만료된 포스트 정리 실패: $e');
     }
   }
 

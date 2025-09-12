@@ -172,47 +172,23 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 1. 지갑 잔액 확인 (구현 필요)
       // 2. 예치(escrow) 홀드 (구현 필요)
       
-      // 3. 포스트 생성 및 Firestore에 저장
-      final newPost = PostModel(
-        flyerId: '', // Firestore에서 자동 생성
-        creatorId: _selectedPost!.creatorId,
-        creatorName: _selectedPost!.creatorName,
-        location: GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
-        radius: _selectedPost!.radius,
-        createdAt: DateTime.now(),
-        expiresAt: _selectedPost!.expiresAt,
-        reward: price,
-        targetAge: _selectedPost!.targetAge,
-        targetGender: _selectedPost!.targetGender,
-        targetInterest: _selectedPost!.targetInterest,
-        targetPurchaseHistory: _selectedPost!.targetPurchaseHistory,
-        mediaType: _selectedPost!.mediaType,
-        mediaUrl: _selectedPost!.mediaUrl,
-        title: _selectedPost!.title,
-        description: _selectedPost!.description,
-        canRespond: _selectedPost!.canRespond,
-        canForward: _selectedPost!.canForward,
-        canRequestReward: _selectedPost!.canRequestReward,
-        canUse: _selectedPost!.canUse,
-        tileId: TileUtils.getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude),
-        isSuperPost: false, // 일반 포스트
-      );
-
-      // 포스트 생성
-      final createdPostId = await _postService.createPost(newPost);
-      print('✅ 포스트 생성 완료: $createdPostId');
-
-      // 4. 포스트 상태 업데이트 (배포됨으로 표시)
-      await _postService.updatePost(_selectedPost!.flyerId, {
+      // 3. 기존 포스트를 배포 위치로 업데이트 (새 포스트 생성하지 않음)
+      await _postService.updatePost(_selectedPost!.postId, {
+        'location': GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
+        'tileId': TileUtils.getTileId(_selectedLocation!.latitude, _selectedLocation!.longitude),
+        'reward': price,
         'isDistributed': true,
         'distributedAt': DateTime.now(),
         'updatedAt': DateTime.now(),
+        'isActive': true, // 배포 시 활성화
       });
+
+      print('✅ 포스트 배포 완료: ${_selectedPost!.postId}');
 
       if (mounted) {
         Navigator.pop(context, {
           'location': _selectedLocation,
-          'postId': _selectedPost!.flyerId,
+          'postId': _selectedPost!.postId,
           'address': null,
           'quantity': quantity,
           'price': price,
@@ -422,7 +398,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
           itemCount: _userPosts.length,
       itemBuilder: (context, index) {
         final post = _userPosts[index];
-        final isSelected = _selectedPost?.flyerId == post.flyerId;
+        final isSelected = _selectedPost?.postId == post.postId;
         
         return GestureDetector(
           onTap: () {

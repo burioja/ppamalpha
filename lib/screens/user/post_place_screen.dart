@@ -466,7 +466,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
       // 포스트 모델 생성
       final post = PostModel(
-        flyerId: '', // Firestore에서 자동 생성
+        postId: '', // Firestore에서 자동 생성
         creatorId: _firebaseService.currentUser?.uid ?? '',
         creatorName: _firebaseService.currentUser?.displayName ?? '익명',
         location: _currentLocation!,
