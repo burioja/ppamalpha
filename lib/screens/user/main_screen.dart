@@ -159,20 +159,12 @@ class _MainScreenState extends State<MainScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(_icons.length, (index) {
           final isSelected = index == _selectedIndex;
-          final isMapLocationButton = _selectedIndex == 0 && index == 0;
 
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 0),
               child: GestureDetector(
-                onTap: () {
-                  if (isMapLocationButton) {
-                    // TODO: 지도 현재 위치로 이동 기능
-                    debugPrint('지도 현재 위치로 이동');
-                  } else {
-                    _onItemTapped(index);
-                  }
-                },
+                onTap: () => _onItemTapped(index),
                 child: SizedBox(
                   height: 60,
                   child: Center(
@@ -180,16 +172,12 @@ class _MainScreenState extends State<MainScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isMapLocationButton
-                              ? Icons.my_location
-                              : _icons[index],
+                          _icons[index],
                           color: isSelected ? accentColor : Colors.grey,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isMapLocationButton
-                              ? "현재위치"
-                              : _labels[index],
+                          _labels[index],
                           style: TextStyle(
                             fontSize: 12,
                             color: isSelected ? accentColor : Colors.grey,

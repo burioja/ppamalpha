@@ -107,6 +107,9 @@ class _MapScreenState extends State<MapScreen> {
   List<Marker> _clusteredMarkers = [];
   bool _isClustered = false;
   static const double _clusterRadius = 50.0; // 픽셀 단위
+  
+  // 위치 이동 관련
+  int _currentWorkplaceIndex = 0; // 현재 일터 인덱스
 
   @override
   void initState() {
@@ -1772,6 +1775,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _navigateToPostPlace() async {
+    // 배포하기 버튼을 눌렀을 때 마커 표시
+    setState(() {
+      // 롱프레스 마커 표시를 위한 상태 업데이트는 하지 않음
+      // 배포 화면에서만 위치 정보 전달
+    });
+    
     // 위치 기반 포스트 배포 화면으로 이동
     final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
         'location': _longPressedLatLng,
@@ -1786,6 +1795,11 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+    } else {
+      // 배포를 취소한 경우 롱프레스 위치 초기화
+      setState(() {
+        _longPressedLatLng = null;
       });
     }
   }
@@ -1806,6 +1820,11 @@ class _MapScreenState extends State<MapScreen> {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
+    } else {
+      // 배포를 취소한 경우 롱프레스 위치 초기화
+      setState(() {
+        _longPressedLatLng = null;
+      });
     }
   }
 
@@ -1824,6 +1843,11 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+    } else {
+      // 배포를 취소한 경우 롱프레스 위치 초기화
+      setState(() {
+        _longPressedLatLng = null;
       });
     }
   }
@@ -2002,6 +2026,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // 집으로 이동
+  void _moveToHome() {
+    if (_homeLocation != null) {
+      _mapController?.move(_homeLocation!, _currentZoom);
+    }
+  }
+
+  // 일터로 이동 (순차적으로)
+  void _moveToWorkplace() {
+    if (_workLocations.isNotEmpty) {
+      final targetLocation = _workLocations[_currentWorkplaceIndex];
+      _mapController?.move(targetLocation, _currentZoom);
+      
+      // 다음 일터로 인덱스 이동 (순환)
+      setState(() {
+        _currentWorkplaceIndex = (_currentWorkplaceIndex + 1) % _workLocations.length;
+      });
+    }
+  }
+
   double _calculateDistance(LatLng point1, LatLng point2) {
     const double earthRadius = 6371000; // 지구 반지름 (미터)
     
@@ -2058,9 +2102,8 @@ class _MapScreenState extends State<MapScreen> {
                   });
                 },
                 onLongPress: (tapPosition, point) async {
-                  setState(() {
-                    _longPressedLatLng = point;
-                  });
+                  // 롱프레스 위치만 저장하고 마커는 표시하지 않음
+                  _longPressedLatLng = point;
                   
                   // 🚀 임시로 포그레벨 확인 비활성화 - 기본 배포 메뉴 표시
                   print('🔍 롱프레스 위치: ${point.latitude}, ${point.longitude}');
@@ -2127,23 +2170,6 @@ class _MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: _clusteredMarkers),
                 // 사용자 마커
                 MarkerLayer(markers: _userMarkersUI),
-                // 롱프레스 마커
-              if (_longPressedLatLng != null)
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: _longPressedLatLng!,
-                  width: 40,
-                  height: 40,
-                        child: _customMarkerIcon ??
-                            const Icon(
-                              Icons.add_location,
-                      color: Colors.blue,
-                              size: 40,
-                  ),
-                        ),
-                      ],
-                    ),
                       ],
                     ),
           ),
@@ -2241,31 +2267,82 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
-          // 현위치 버튼 (우하단)
-           Positioned(
+          // 위치 이동 버튼들 (우하단)
+          Positioned(
             bottom: 80,
             right: 16,
-             child: Container(
-               decoration: BoxDecoration(
-                 color: Colors.white,
-                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                     ),
-                 ],
-               ),
-              child: IconButton(
-              onPressed: () {
-                  if (_currentPosition != null) {
-                    _mapController?.move(_currentPosition!, _currentZoom);
-                  }
-                },
-                icon: const Icon(Icons.my_location, color: Colors.blue),
-                iconSize: 24,
-              ),
+            child: Column(
+              children: [
+                // 집 버튼
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _homeLocation != null ? _moveToHome : null,
+                    icon: Icon(
+                      Icons.home, 
+                      color: _homeLocation != null ? Colors.green : Colors.grey,
+                    ),
+                    iconSize: 24,
+                  ),
+                ),
+                // 일터 버튼
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _workLocations.isNotEmpty ? _moveToWorkplace : null,
+                    icon: Icon(
+                      Icons.work, 
+                      color: _workLocations.isNotEmpty ? Colors.orange : Colors.grey,
+                    ),
+                    iconSize: 24,
+                  ),
+                ),
+                // 현재 위치 버튼
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      if (_currentPosition != null) {
+                        _mapController?.move(_currentPosition!, _currentZoom);
+                      }
+                    },
+                    icon: const Icon(Icons.my_location, color: Colors.blue),
+                    iconSize: 24,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
