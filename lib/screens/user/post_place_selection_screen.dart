@@ -251,7 +251,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     }
   }
 
-  void _continueToPostCreation() {
+  void _continueToPostCreation() async {
     if (_selectedPlaceId != null) {
       final selectedPlace = _userPlaces.firstWhere(
         (place) => place.id == _selectedPlaceId,
@@ -263,7 +263,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       
       if (fromPostDeploy) {
         // PostDeployScreen에서 온 경우: pushNamed 사용하여 결과 대기
-        Navigator.pushNamed(
+        final result = await Navigator.pushNamed(
           context,
           '/post-place',
           arguments: {
@@ -272,6 +272,11 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
             'fromPostDeploy': true,
           },
         );
+        
+        // 포스트 생성 결과를 PostDeployScreen에 전달
+        if (result == true && mounted) {
+          Navigator.pop(context, true);
+        }
       } else {
         // 일반적인 경우: pushReplacementNamed 사용
         Navigator.pushReplacementNamed(

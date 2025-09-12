@@ -367,16 +367,20 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   Widget _buildPostsGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: _userPosts.length,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+        
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: _userPosts.length,
       itemBuilder: (context, index) {
         final post = _userPosts[index];
         final isSelected = _selectedPost?.flyerId == post.flyerId;
@@ -454,6 +458,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
               ],
             ),
           ),
+        );
+      },
         );
       },
     );
@@ -592,6 +598,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return '미정';
     return '${date.month}/${date.day}';
+  }
+
+  int _getCrossAxisCount(double width) {
+    // 반응형 그리드 컬럼 수 계산
+    if (width < 600) {
+      return 2; // 모바일: 2열
+    } else if (width < 900) {
+      return 3; // 태블릿: 3열  
+    } else {
+      return 4; // 데스크톱: 4열
+    }
   }
 
   // 마커를 Firestore에 생성하는 메서드

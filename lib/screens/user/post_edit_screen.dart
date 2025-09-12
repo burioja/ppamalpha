@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-
+import 'dart:typed_data';
 import 'dart:convert';
 
 import '../../models/post_model.dart';
@@ -114,36 +114,48 @@ class _PostEditScreenState extends State<PostEditScreen> {
         mediaUrls.add(_existingAudioUrl);
       }
 
-      // Upload new images
+      // Upload new images with thumbnails
       for (final dynamic imagePath in _selectedImages) {
-        String url;
+        Map<String, String> uploadResult;
         if (imagePath is File) {
-          url = await _firebaseService.uploadImage(imagePath, 'posts');
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(imagePath, 'posts');
         } else if (imagePath is String && imagePath.startsWith('data:image/')) {
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(imagePath, 'posts', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(imagePath, 'posts', safeName);
         } else if (imagePath is Uint8List) {
-          continue;
+          // Web에서 선택된 이미지 (bytes)를 업로드
+          final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
+          uploadResult = await _firebaseService.uploadImageBytesWithThumbnail(imagePath, 'posts', safeName);
         } else {
           continue;
         }
         mediaTypes.add('image');
-        mediaUrls.add(url);
+        mediaUrls.add(uploadResult['original']!);
+        // Note: thumbnailUrl handling would need additional logic for post editing
       }
 
       // Upload new audio if selected
       if (_selectedSound != null) {
         String audioUrl;
-        if (kIsWeb) {
+        if (kIsWeb && _selectedSound is Uint8List) {
+          // Web에서 선택된 오디오 (bytes)를 업로드
+          final safeName = _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3';
+          audioUrl = await _firebaseService.uploadAudioBytes(
+            _selectedSound as Uint8List,
+            'audios',
+            safeName,
+          );
+        } else if (_selectedSound is File) {
+          audioUrl = await _firebaseService.uploadImage(
+            _selectedSound as File,
+            'audios',
+          );
+        } else {
+          // Legacy blob handling
           audioUrl = await _firebaseService.uploadImageFromBlob(
             _selectedSound,
             'audios',
             _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
-          );
-        } else {
-          audioUrl = await _firebaseService.uploadImage(
-            _selectedSound as File,
-            'audios',
           );
         }
         mediaTypes.add('audio');
@@ -359,6 +371,41 @@ class _PostEditScreenState extends State<PostEditScreen> {
               _buildReadonlyInfo('생성일', widget.post.createdAt),
               _buildReadonlyInfo('만료일', widget.post.expiresAt),
               _buildReadonlyInfo('위치', widget.post.location),
+              
+              const SizedBox(height: 32),
+              // 하단 완료 버튼
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving || widget.post.isDistributed ? null : _save,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.check_circle, color: Colors.white),
+                  label: Text(
+                    _isSaving ? '수정 중...' : '포스트 수정 완료',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4D4DFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -696,6 +743,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
         type: FileType.image,
         allowMultiple: true,
         allowCompression: true,
+        withData: true, // Enable bytes data for web
       );
       
       if (result != null && result.files.isNotEmpty) {
@@ -707,9 +755,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
             continue;
           }
           
-          if (mounted) {
+          // Web에서는 bytes 사용, path는 null
+          if (file.bytes != null && mounted) {
             setState(() {
-              _selectedImages.add(file.path ?? '');
+              _selectedImages.add(file.bytes!); // Uint8List 사용
               _imageNames.add(file.name);
             });
           }
@@ -723,11 +772,18 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _pickImageMobile() async {
+    if (kIsWeb) {
+      // 웹에서는 FilePicker를 사용
+      await _pickImageWeb();
+      return;
+    }
+    
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {
+          // 모바일에서만 File 사용
           _selectedImages.add(File(image.path));
           _imageNames.add(image.name);
         });
@@ -761,6 +817,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: false,
+        withData: true, // Enable bytes data for web
       );
       
       if (result != null && result.files.isNotEmpty) {
@@ -771,9 +828,11 @@ class _PostEditScreenState extends State<PostEditScreen> {
           }
           return;
         }
-        if (mounted) {
+        
+        // Web에서는 bytes 사용, path는 null
+        if (file.bytes != null && mounted) {
           setState(() {
-            _selectedSound = file.path ?? '';
+            _selectedSound = file.bytes!; // Uint8List 사용
             _soundFileName = file.name;
             _existingAudioUrl = '';
           });
@@ -787,6 +846,12 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _pickSoundMobile() async {
+    if (kIsWeb) {
+      // 웹에서는 _pickSoundWeb을 호출
+      await _pickSoundWeb();
+      return;
+    }
+    
     final result = await FilePicker.platform.pickFiles(type: FileType.audio);
     if (result != null && result.files.isNotEmpty) {
       final PlatformFile file = result.files.first;

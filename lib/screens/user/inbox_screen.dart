@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/post_service.dart';
 import '../../models/post_model.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/post_tile_card.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -47,6 +48,18 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 다시 포커스를 받을 때 포스트 목록 새로고침
+    // 포스트 생성/수정 후 돌아왔을 때 최신 데이터 표시
+    if (_currentUserId != null && _allPosts.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadInitialData();
+      });
+    }
   }
 
   @override
@@ -245,18 +258,40 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
            date1.day == date2.day;
   }
 
+  int _getCrossAxisCount(double width) {
+    // 반응형 그리드 컬럼 수 계산
+    if (width < 600) {
+      return 2; // 모바일: 2열
+    } else if (width < 900) {
+      return 3; // 태블릿: 3열  
+    } else {
+      return 4; // 데스크톱: 4열
+    }
+  }
+
   // 로딩 인디케이터 위젯
   Widget _buildLoadingIndicator() {
     if (!_hasMoreData) return const SizedBox.shrink();
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       child: const Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(strokeWidth: 2),
             SizedBox(height: 8),
-            Text('더 많은 포스트를 불러오는 중...', style: TextStyle(color: Colors.grey)),
+            Text(
+              '로딩중...',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
           ],
         ),
       ),
@@ -589,7 +624,18 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           }
                           return true;
                         },
-                        child: ListView.builder(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+                            
+                            return GridView.builder(
+                              padding: const EdgeInsets.all(16),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 0.8,
+                              ),
                           itemCount: filteredPosts.length + (_hasMoreData ? 1 : 0),
                           itemBuilder: (context, index) {
                             // 로딩 인디케이터 표시
@@ -598,7 +644,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             }
                             
                             final post = filteredPosts[index];
-                            return PostCard(
+                            return PostTileCard(
                               post: post,
                               onTap: () async {
                                 // 포스트 상세 화면으로 이동
@@ -618,6 +664,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   });
                                 }
                               },
+                            );
+                          },
                             );
                           },
                         ),
@@ -714,11 +762,22 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           ],
                         ),
                       )
-                    : ListView.builder(
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+                          
+                          return GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.8,
+                            ),
                         itemCount: filteredPosts.length,
                         itemBuilder: (context, index) {
                           final post = filteredPosts[index];
-                          return PostCard(
+                          return PostTileCard(
                             post: post,
                             onTap: () async {
                               // 포스트 상세 화면으로 이동
@@ -738,6 +797,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                 });
                               }
                             },
+                          );
+                        },
                           );
                         },
                       ),
@@ -797,9 +858,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
   // 내 스토어로 이동 (PRD 요구사항)
   void _navigateToMyStore(BuildContext context) {
-    // TODO: 내 스토어 화면으로 이동
-    // 현재는 플레이스 검색 화면으로 이동
-    Navigator.pushNamed(context, '/place-search');
+    Navigator.pushNamed(context, '/store');
   }
 
 

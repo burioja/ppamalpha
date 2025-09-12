@@ -22,6 +22,7 @@ class PostModel {
   // 광고 콘텐츠
   final List<String> mediaType; // text / image / audio
   final List<String> mediaUrl; // 파일 링크 (1~2개 조합 가능)
+  final List<String> thumbnailUrl; // 썸네일 이미지 링크
   final String title;
   final String description;
   
@@ -42,6 +43,8 @@ class PostModel {
   final DateTime? collectedAt;
   final bool isDistributed; // 배포 여부 (true: 배포됨, false: 발행 전)
   final DateTime? distributedAt; // 배포 일시
+  final DateTime? usedAt; // 사용 일시
+  final bool isUsedByCurrentUser; // 현재 사용자가 사용했는지 여부
 
   PostModel({
     required this.flyerId,
@@ -58,6 +61,7 @@ class PostModel {
     required this.targetPurchaseHistory,
     required this.mediaType,
     required this.mediaUrl,
+    this.thumbnailUrl = const [],
     required this.title,
     required this.description,
     required this.canRespond,
@@ -73,6 +77,8 @@ class PostModel {
     this.updatedAt,
     this.isDistributed = false,
     this.distributedAt,
+    this.usedAt,
+    this.isUsedByCurrentUser = false,
   }) : markerId = markerId ?? '${creatorId}_$flyerId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -97,6 +103,7 @@ class PostModel {
       targetPurchaseHistory: List<String>.from(data['targetPurchaseHistory'] ?? []),
       mediaType: List<String>.from(data['mediaType'] ?? ['text']),
       mediaUrl: List<String>.from(data['mediaUrl'] ?? []),
+      thumbnailUrl: List<String>.from(data['thumbnailUrl'] ?? []),
       title: data['title'] ?? '',
       description: data['description'] ?? '',
       canRespond: data['canRespond'] ?? false,
@@ -118,6 +125,10 @@ class PostModel {
       distributedAt: data['distributedAt'] != null 
           ? (data['distributedAt'] as Timestamp).toDate()
           : null,
+      usedAt: data['usedAt'] != null 
+          ? (data['usedAt'] as Timestamp).toDate()
+          : null,
+      isUsedByCurrentUser: data['isUsedByCurrentUser'] ?? false,
     );
   }
 
@@ -136,6 +147,7 @@ class PostModel {
       'targetPurchaseHistory': targetPurchaseHistory,
       'mediaType': mediaType,
       'mediaUrl': mediaUrl,
+      'thumbnailUrl': thumbnailUrl,
       'title': title,
       'description': description,
       'canRespond': canRespond,
@@ -151,6 +163,8 @@ class PostModel {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isDistributed': isDistributed,
       'distributedAt': distributedAt != null ? Timestamp.fromDate(distributedAt!) : null,
+      'usedAt': usedAt != null ? Timestamp.fromDate(usedAt!) : null,
+      'isUsedByCurrentUser': isUsedByCurrentUser,
     };
   }
 
@@ -246,6 +260,25 @@ class PostModel {
     return degrees * (math.pi / 180);
   }
 
+  // 포스트 사용 관련 메서드
+  bool get isUsed => usedAt != null;
+
+  bool get canBeUsed => canUse && !isUsed && !isUsedByCurrentUser && !isExpired() && isActive;
+
+  PostModel markAsUsed() {
+    return copyWith(
+      usedAt: DateTime.now(),
+      isUsedByCurrentUser: true,
+    );
+  }
+
+  PostModel updateUsageStatus({required bool isUsedByCurrentUser, DateTime? usedAt}) {
+    return copyWith(
+      isUsedByCurrentUser: isUsedByCurrentUser,
+      usedAt: usedAt,
+    );
+  }
+
   PostModel copyWith({
     String? flyerId,
     String? creatorId,
@@ -261,6 +294,7 @@ class PostModel {
     List<String>? targetPurchaseHistory,
     List<String>? mediaType,
     List<String>? mediaUrl,
+    List<String>? thumbnailUrl,
     String? title,
     String? description,
     bool? canRespond,
@@ -276,6 +310,8 @@ class PostModel {
     DateTime? updatedAt,
     bool? isDistributed,
     DateTime? distributedAt,
+    DateTime? usedAt,
+    bool? isUsedByCurrentUser,
   }) {
     return PostModel(
       flyerId: flyerId ?? this.flyerId,
@@ -292,6 +328,7 @@ class PostModel {
       targetPurchaseHistory: targetPurchaseHistory ?? this.targetPurchaseHistory,
       mediaType: mediaType ?? this.mediaType,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       title: title ?? this.title,
       description: description ?? this.description,
       canRespond: canRespond ?? this.canRespond,
@@ -307,6 +344,8 @@ class PostModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isDistributed: isDistributed ?? this.isDistributed,
       distributedAt: distributedAt ?? this.distributedAt,
+      usedAt: usedAt ?? this.usedAt,
+      isUsedByCurrentUser: isUsedByCurrentUser ?? this.isUsedByCurrentUser,
     );
   }
 } 

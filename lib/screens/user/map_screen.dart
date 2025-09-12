@@ -572,8 +572,8 @@ class _MapScreenState extends State<MapScreen> {
     final userMarkers = <Marker>[];
     
     // 사용자 마커들 (초록색) - 배포자만 회수 가능
-    for (final marker in _userMarkers) {
-      final position = marker.position;
+    for (final markerData in _userMarkers) {
+      final position = markerData.position;
       
       // 거리 확인
       if (_currentPosition != null) {
@@ -586,7 +586,7 @@ class _MapScreenState extends State<MapScreen> {
         width: 35,
         height: 35,
         child: GestureDetector(
-          onTap: () => _showUserMarkerDetail(marker),
+          onTap: () => _showUserMarkerDetail(markerData),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.green,
@@ -1592,6 +1592,8 @@ class _MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: _currentMarkers),
                 // 사용자 마커
                 MarkerLayer(markers: _userMarkersUI),
+                // 클러스터된 마커들 (포스트, 일반 마커, 사용자 마커 포함)
+                MarkerLayer(markers: _clusteredMarkers),
                 // 롱프레스 마커
               if (_longPressedLatLng != null)
             MarkerLayer(

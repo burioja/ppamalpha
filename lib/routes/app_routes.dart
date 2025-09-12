@@ -24,6 +24,7 @@ import '../screens/place/create_place_screen.dart';
 import '../screens/place/place_detail_screen.dart';
 import '../screens/place/place_image_viewer_screen.dart';
 import '../screens/place/place_search_screen.dart';
+import '../screens/user/store_screen.dart';
 
 
 class AppRoutes {
@@ -50,6 +51,7 @@ class AppRoutes {
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
   static const String debug = '/debug';
+  static const String store = '/store';
 
   static Map<String, WidgetBuilder> get routes => {
     login: (context) => const LoginScreen(),
@@ -126,5 +128,6 @@ class AppRoutes {
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
     debug: (context) => const DebugScreen(),
+    store: (context) => const StoreScreen(),
   };
 } 

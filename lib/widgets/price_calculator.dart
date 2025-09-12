@@ -8,6 +8,7 @@ class PriceCalculator extends StatefulWidget {
   final dynamic sound;
   final TextEditingController priceController;
   final String? Function(String?)? validator;
+  final VoidCallback? onPriceCalculated; // 콜백 추가
 
   const PriceCalculator({
     Key? key,
@@ -15,6 +16,7 @@ class PriceCalculator extends StatefulWidget {
     required this.sound,
     required this.priceController,
     this.validator,
+    this.onPriceCalculated,
   }) : super(key: key);
 
   @override
@@ -35,8 +37,47 @@ class _PriceCalculatorState extends State<PriceCalculator> {
   @override
   void didUpdateWidget(PriceCalculator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.images != widget.images || oldWidget.sound != widget.sound) {
+    // 더 적극적으로 변화 감지 - 배열 내용 변화도 감지
+    if (_hasMediaChanged(oldWidget)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _calculateMinimumPrice();
+        _updatePriceControllerIfNeeded();
+      });
+    }
+  }
+
+  bool _hasMediaChanged(PriceCalculator oldWidget) {
+    // 배열 길이가 다르면 변경됨
+    if (oldWidget.images.length != widget.images.length || 
+        oldWidget.sound != widget.sound) {
+      return true;
+    }
+    
+    // 배열 내용이 다르면 변경됨 (참조 비교)
+    for (int i = 0; i < widget.images.length; i++) {
+      if (oldWidget.images[i] != widget.images[i]) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // 외부에서 강제로 계산을 트리거할 수 있는 공개 메서드
+  void forceRecalculate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateMinimumPrice();
+      _updatePriceControllerIfNeeded();
+    });
+  }
+
+  void _updatePriceControllerIfNeeded() {
+    // 현재 입력된 가격이 최소 가격보다 낮으면 최소 가격으로 업데이트
+    final currentPrice = double.tryParse(widget.priceController.text) ?? 0;
+    if (_minimumPrice > 0 && currentPrice < _minimumPrice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.priceController.text = _minimumPrice.toInt().toString();
+      });
     }
   }
 
@@ -75,6 +116,13 @@ class _PriceCalculatorState extends State<PriceCalculator> {
     _minimumPrice = (_totalSizeKB / 100.0) * _basePricePer100KB;
     
     setState(() {});
+    
+    // 계산 완료 콜백 호출
+    if (widget.onPriceCalculated != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onPriceCalculated!();
+      });
+    }
   }
 
   String? _validatePrice(String? value) {

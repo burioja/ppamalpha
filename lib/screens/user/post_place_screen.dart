@@ -379,33 +379,47 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     });
 
     try {
-      // 이미지 업로드
-      List<String> imageUrls = [];
-      List<String> mediaTypes = [];
+      // 매체 데이터 초기화
+      List<String> mediaUrls = []; // 전체 미디어 URL (이미지 원본 + 텍스트 + 오디오)
+      List<String> thumbnailUrls = []; // 이미지 썸네일만
+      List<String> mediaTypes = []; // 매체 타입
       
       for (dynamic imagePath in _selectedImages) {
-        String url;
+        Map<String, String> uploadResult;
         if (imagePath is File) {
-          url = await _firebaseService.uploadImage(imagePath, 'posts');
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(imagePath, 'posts');
         } else if (imagePath is String && imagePath.startsWith('data:image/')) {
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(imagePath, 'posts', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(imagePath, 'posts', safeName);
         } else if (imagePath is Uint8List) {
-          // 웹에서 선택된 바이트 데이터 처리
+          // 웹에서 선택된 바이트 데이터 - 원본과 썸네일 분리 업로드
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageFromBlob(imagePath, 'posts', safeName);
+          debugPrint('Uint8List 이미지 업로드 시작: $safeName');
+          uploadResult = await _firebaseService.uploadImageBytesWithThumbnail(imagePath, 'posts', safeName);
         } else {
           // 지원하지 않는 타입은 건너뜀
           continue;
         }
-        imageUrls.add(url);
+        final originalUrl = uploadResult['original']!;
+        final thumbnailUrl = uploadResult['thumbnail']!;
+        
+        // 디버그 로깅
+        debugPrint('=== 이미지 업로드 결과 ===');
+        debugPrint('원본 URL: $originalUrl');
+        debugPrint('썸네일 URL: $thumbnailUrl');
+        debugPrint('원본에 /original/ 포함: ${originalUrl.contains('/original/')}');
+        debugPrint('썸네일에 /thumbnails/ 포함: ${thumbnailUrl.contains('/thumbnails/')}');
+        
+        mediaUrls.add(originalUrl); // 원본 이미지 URL
+        thumbnailUrls.add(thumbnailUrl); // 썸네일 URL
         mediaTypes.add('image');
       }
 
       // 텍스트 콘텐츠가 있는 경우 추가
       if (_contentController.text.trim().isNotEmpty) {
         mediaTypes.add('text');
-        imageUrls.add(_contentController.text.trim());
+        mediaUrls.add(_contentController.text.trim()); // 텍스트는 mediaUrls에만 추가
+        // thumbnailUrls에는 추가하지 않음 (인덱스 맞춤을 위해)
       }
 
       // 사운드 업로드
@@ -430,7 +444,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           // audioUrl이 성공적으로 생성된 경우에만 추가
           if (audioUrl != null) {
             mediaTypes.add('audio');
-            imageUrls.add(audioUrl);
+            mediaUrls.add(audioUrl); // 오디오 URL
           }
         } catch (e) {
           // 사운드 업로드 실패는 치명적이지 않으므로 경고만 표시
@@ -465,7 +479,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         targetInterest: [], // TODO: 사용자 관심사 연동
         targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
         mediaType: mediaTypes,
-        mediaUrl: imageUrls,
+        mediaUrl: mediaUrls, // 원본 이미지 + 텍스트 + 오디오
+        thumbnailUrl: thumbnailUrls,
         title: _titleController.text.trim(),
         description: '', // 설명 필드 제거
         canRespond: _canRespond,
@@ -475,6 +490,22 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         placeId: widget.place.id, // 플레이스 ID 연결
       );
 
+      // 저장 전 데이터 검증 로깅
+      debugPrint('=== 포스트 저장 데이터 ===');
+      debugPrint('mediaTypes: $mediaTypes');
+      debugPrint('mediaUrls (원본): $mediaUrls');
+      debugPrint('thumbnailUrls: $thumbnailUrls');
+      debugPrint('mediaTypes.length: ${mediaTypes.length}');
+      debugPrint('mediaUrls.length: ${mediaUrls.length}');
+      debugPrint('thumbnailUrls.length: ${thumbnailUrls.length}');
+      
+      for (int i = 0; i < mediaTypes.length && i < mediaUrls.length; i++) {
+        debugPrint('[$i] type=${mediaTypes[i]}, url=${mediaUrls[i]}');
+        if (mediaTypes[i] == 'image' && i < thumbnailUrls.length) {
+          debugPrint('[$i] thumbnail=${thumbnailUrls[i]}');
+        }
+      }
+      
       // 포스트 저장
       await _postService.createPost(post);
 
@@ -694,6 +725,40 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               _buildSectionTitle('위치 정보'),
               _buildLocationInfo(),
               const SizedBox(height: 32),
+              
+              // 하단 완료 버튼
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _createPost,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.check_circle, color: Colors.white),
+                  label: Text(
+                    _isLoading ? '포스트 작성 중...' : '포스트 작성 완료',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4D4DFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),

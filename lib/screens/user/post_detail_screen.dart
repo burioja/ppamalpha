@@ -4,8 +4,7 @@ import '../../utils/web_dom_stub.dart'
     if (dart.library.html) '../../utils/web_dom.dart';
 import 'dart:convert';
 import '../../services/firebase_service.dart';
-import '../../widgets/network_image_fallback_stub.dart'
-    if (dart.library.html) '../../widgets/network_image_fallback_web.dart';
+import '../../widgets/network_image_fallback_with_data.dart';
 import '../../routes/app_routes.dart';
 import '../../services/place_service.dart';
 import '../../services/post_service.dart';
@@ -55,6 +54,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (currentPost.placeId != null) _buildPlacePreview(context),
+            // 메인 플라이어 이미지 (첫 번째 이미지를 대형으로 표시)
+            _buildMainFlyerImage(),
+            const SizedBox(height: 16),
             // 포스트 헤더
             Container(
               width: double.infinity,
@@ -215,6 +217,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // 무조건 로그에 남겨서 콘솔에서 확인 가능
       // ignore: avoid_print
       print('[PostDetail] media[$i] type=$type rawUrl=$url');
+      print('[PostDetail] 하단 미디어 섹션: 썸네일 사용 예정');
       if (type == 'image') {
         items.add(
           Padding(
@@ -230,7 +233,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     final effective = snapshot.data ?? url;
                     // ignore: avoid_print
                     print('[PostDetail] media[$i] resolvedUrl=$effective');
-                    return _buildImageFromUrl(effective);
+                    return buildNetworkImage(effective);
                   },
                 ),
               ),
@@ -267,104 +270,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       }
     }
-    // 디버그 섹션 추가: 원본/해석 URL을 확인할 수 있도록 출력
-    items.add(const SizedBox(height: 8));
-    items.add(_buildMediaDebugList());
-    return _buildInfoSection('미디어', items);
-  }
-
-  bool _isDataImage(String url) {
-    return url.startsWith('data:image/');
-  }
-
-  Widget _buildImageFromUrl(String url) {
-    if (_isDataImage(url)) {
-      try {
-        final base64Data = url.split(',').last;
-        return Image.memory(
-          base64Decode(base64Data),
-          fit: BoxFit.cover,
-        );
-      } catch (_) {
-        return const Icon(Icons.broken_image);
-      }
+    
+    // 사용자 친화적인 미디어 접근 버튼들
+    if (items.isNotEmpty) {
+      items.add(const SizedBox(height: 16));
+      items.add(_buildMediaAccessButtons());
     }
-    if (_isHttpUrl(url)) {
-      return buildNetworkImage(url);
-    }
-    // 지원되지 않는 경로이면 플레이스홀더
-    return Container(
-      color: Colors.grey.shade100,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.image_not_supported, color: Colors.grey),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              '이미지 URL이 유효하지 않습니다',
-              style: TextStyle(color: Colors.grey.shade600),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
+    
+    return items.isEmpty ? const SizedBox.shrink() : _buildInfoSection('미디어', items);
   }
 
-  bool _isHttpUrl(String url) => url.startsWith('http://') || url.startsWith('https://');
 
-  Widget _buildMediaDebugList() {
-    final firebaseService = FirebaseService();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('디버그: 미디어 URL 목록', style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        for (int i = 0; i < currentPost.mediaType.length && i < currentPost.mediaUrl.length; i++)
-          FutureBuilder<String?>(
-            future: firebaseService.resolveImageUrl(currentPost.mediaUrl[i].toString()),
-            builder: (context, snapshot) {
-              final type = currentPost.mediaType[i];
-              final raw = currentPost.mediaUrl[i].toString();
-              final resolved = snapshot.data ?? '(해석 실패)';
-              return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('[$i] type=$type'),
-                    const SizedBox(height: 4),
-                    const Text('원본 URL:'),
-                    SelectableText(raw, style: const TextStyle(fontSize: 12)),
-                    const SizedBox(height: 4),
-                    const Text('해석 URL:'),
-                    SelectableText(resolved, style: const TextStyle(fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => openExternalUrl(resolved),
-                        icon: const Icon(Icons.open_in_new, size: 16),
-                        label: const Text('브라우저로 열기'),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
+
+
 
   String _buildCapabilitiesText() {
     final caps = <String>[];
@@ -577,5 +495,449 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       },
     );
+  }
+
+  // 메인 플라이어 이미지 위젯
+  Widget _buildMainFlyerImage() {
+    print('\n========== [_buildMainFlyerImage] 시작 ==========');
+    
+    // 첫 번째 이미지 찾기 (원본 이미지 사용)
+    final firstImageIndex = currentPost.mediaType.indexOf('image');
+    if (firstImageIndex == -1 || firstImageIndex >= currentPost.mediaUrl.length) {
+      print('이미지 없음: firstImageIndex=$firstImageIndex, mediaUrl.length=${currentPost.mediaUrl.length}');
+      return const SizedBox.shrink(); // 이미지가 없으면 표시하지 않음
+    }
+
+    // 원본 이미지 URL 찾기: mediaUrl에서 원본 이미지를 찾거나 원본 URL 생성
+    String imageUrl = currentPost.mediaUrl[firstImageIndex].toString();
+    
+    // 상세 디버그 로그 추가
+    print('=== [MainFlyerImage] 데이터 구조 분석 ===');
+    print('[MainFlyerImage] firstImageIndex: $firstImageIndex');
+    print('[MainFlyerImage] 기본 이미지 URL: $imageUrl');
+    print('[MainFlyerImage] mediaType: ${currentPost.mediaType}');
+    print('[MainFlyerImage] mediaUrl 길이: ${currentPost.mediaUrl.length}');
+    for (int i = 0; i < currentPost.mediaUrl.length; i++) {
+      print('[MainFlyerImage] mediaUrl[$i]: ${currentPost.mediaUrl[i]}');
+    }
+    print('[MainFlyerImage] thumbnailUrl 길이: ${currentPost.thumbnailUrl.length}');
+    for (int i = 0; i < currentPost.thumbnailUrl.length; i++) {
+      print('[MainFlyerImage] thumbnailUrl[$i]: ${currentPost.thumbnailUrl[i]}');
+    }
+    print('[MainFlyerImage] URL 패턴 분석:');
+    print('  - HTTP/HTTPS: ${imageUrl.startsWith('http')}');
+    print('  - Data URL: ${imageUrl.startsWith('data:image/')}');
+    print('  - Contains /thumbnails/: ${imageUrl.contains('/thumbnails/')}');
+    print('  - Contains %2Fthumbnails%2F: ${imageUrl.contains('%2Fthumbnails%2F')}');
+    print('  - Contains /original/: ${imageUrl.contains('/original/')}');
+    print('  - Contains %2Foriginal%2F: ${imageUrl.contains('%2Foriginal%2F')}');
+    
+    // 원본 이미지 URL 찾기 로직
+    String originalImageUrl = _findOriginalImageUrl(imageUrl, firstImageIndex);
+    print('[MainFlyerImage] 최종 원본 URL: $originalImageUrl');
+    
+    final firebaseService = FirebaseService();
+
+    return Container(
+      width: double.infinity,
+      height: 300, // 대형 이미지 크기
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: FutureBuilder<String?>(
+          future: _resolveImageUrlConditionally(originalImageUrl, firebaseService),
+          builder: (context, snapshot) {
+            final effectiveUrl = snapshot.data ?? originalImageUrl;
+            print('[MainFlyerImage] resolveImageUrl 결과: $effectiveUrl');
+            
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Container(
+                color: Colors.grey.shade200,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
+            return buildHighQualityImageWithData(
+              effectiveUrl,
+              currentPost.thumbnailUrl,
+              0, // 첫 번째 이미지
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+
+
+  // 사용자 친화적인 미디어 접근 버튼들
+  Widget _buildMediaAccessButtons() {
+    final firebaseService = FirebaseService();
+    final List<Widget> buttons = [];
+    
+    // 이미지 보기 버튼들
+    final imageIndices = <int>[];
+    for (int i = 0; i < currentPost.mediaType.length; i++) {
+      if (currentPost.mediaType[i] == 'image') {
+        imageIndices.add(i);
+      }
+    }
+    
+    if (imageIndices.length > 1) {
+      // 첫 번째 이미지는 이미 위에 대형으로 표시되므로, 추가 이미지들만 버튼으로 제공
+      buttons.add(
+        ElevatedButton.icon(
+          onPressed: () => _showImageGallery(imageIndices),
+          icon: const Icon(Icons.photo_library, color: Colors.white),
+          label: Text(
+            '모든 이미지 보기 (${imageIndices.length}장)',
+            style: const TextStyle(color: Colors.white),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue.shade600,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      );
+    }
+    
+    // 오디오 재생 버튼들
+    for (int i = 0; i < currentPost.mediaType.length; i++) {
+      if (currentPost.mediaType[i] == 'audio') {
+        final audioUrl = currentPost.mediaUrl[i].toString();
+        buttons.add(
+          OutlinedButton.icon(
+            onPressed: () async {
+              final resolvedUrl = await firebaseService.resolveImageUrl(audioUrl);
+              if (resolvedUrl != null) {
+                await openExternalUrl(resolvedUrl);
+              }
+            },
+            icon: const Icon(Icons.play_arrow, color: Colors.green),
+            label: const Text(
+              '오디오 재생',
+              style: TextStyle(color: Colors.green),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.green),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        );
+      }
+    }
+    
+    return buttons.isEmpty 
+      ? const SizedBox.shrink()
+      : Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: buttons,
+        );
+  }
+
+  // 이미지 갤러리 다이얼로그 표시
+  void _showImageGallery(List<int> imageIndices) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('이미지 갤러리'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: ListView.builder(
+            itemCount: imageIndices.length,
+            itemBuilder: (context, index) {
+              final mediaIndex = imageIndices[index];
+              final imageUrl = currentPost.mediaUrl[mediaIndex].toString();
+              final firebaseService = FirebaseService();
+              
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '이미지 ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 200,
+                        child: FutureBuilder<String?>(
+                          future: firebaseService.resolveImageUrl(imageUrl),
+                          builder: (context, snapshot) {
+                            final effectiveUrl = snapshot.data ?? imageUrl;
+                            return buildHighQualityImageWithData(
+              effectiveUrl,
+              currentPost.thumbnailUrl,
+              0, // 첫 번째 이미지
+            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 고화질 원본 이미지 위젯 (상단 메인 플라이어용)
+  Widget _buildHighQualityOriginalImage(String url) {
+    print('=== [_buildHighQualityOriginalImage] 시작 ===');
+    print('로딩할 URL: $url');
+    
+    // Data URL 처리
+    if (url.startsWith('data:image/')) {
+      print('타입: Data URL - base64 이미지 사용');
+      try {
+        final base64Data = url.split(',').last;
+        return Image.memory(
+          base64Decode(base64Data),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        );
+      } catch (e) {
+        print('에러: Data URL 처리 실패 - $e');
+        return _buildImageErrorPlaceholder('이미지를 불러올 수 없습니다');
+      }
+    }
+    
+    // HTTP URL 처리 - 고화질 원본 이미지 직접 로드
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      print('타입: HTTP URL - 네트워크 이미지 로딩');
+      print('  - 원본 경로 포함: ${url.contains('/original/')}');
+      print('  - 썸네일 경로 포함: ${url.contains('/thumbnails/')}');
+      
+      return Image.network(
+        url, // 원본 URL 직접 사용 (썸네일 변환 없이)
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            print('이미지 로딩 완료: $url');
+            return child;
+          }
+          final progress = loadingProgress.expectedTotalBytes != null
+              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+              : null;
+          print('이미지 로딩 중: ${(progress ?? 0 * 100).toStringAsFixed(1)}%');
+          return Container(
+            color: Colors.grey.shade200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(value: progress),
+                  const SizedBox(height: 8),
+                  Text('고화질 원본 로딩 중...', 
+                    style: TextStyle(color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('에러: 고화질 이미지 로드 실패');
+          print('  URL: $url');
+          print('  에러: $error');
+          print('  스택트레이스: $stackTrace');
+          return _buildImageErrorPlaceholderWithFallback(url);
+        },
+      );
+    }
+    
+    // 지원되지 않는 URL 형식
+    print('에러: 지원되지 않는 URL 형식 - $url');
+    return _buildImageErrorPlaceholder('지원되지 않는 이미지 형식');
+  }
+
+  // 이미지 에러 플레이스홀더 (Fallback 로직 포함)
+  Widget _buildImageErrorPlaceholderWithFallback(String failedUrl) {
+    print('=== [_buildImageErrorPlaceholderWithFallback] Fallback 시도 ===');
+    print('실패한 URL: $failedUrl');
+    
+    // 원본 이미지 실패 시 썸네일로 대체 시도
+    if (failedUrl.contains('/original/') || failedUrl.contains('%2Foriginal%2F')) {
+      final thumbnailUrl = failedUrl
+        .replaceAll('/original/', '/thumbnails/')
+        .replaceAll('%2Foriginal%2F', '%2Fthumbnails%2F');
+      print('Fallback: 썸네일 URL로 시도 - $thumbnailUrl');
+      
+      return Image.network(
+        thumbnailUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            print('Fallback 성공: 썸네일 로딩 완료');
+            return Stack(
+              children: [
+                child,
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      '썸네일',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          return Container(
+            color: Colors.grey.shade200,
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 8),
+                  Text('썸네일 로딩 중...',
+                    style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('Fallback 실패: 썸네일도 로드 실패');
+          return _buildImageErrorPlaceholder('이미지를 불러올 수 없습니다');
+        },
+      );
+    }
+    
+    // Fallback도 실패한 경우 기본 에러 플레이스홀더
+    return _buildImageErrorPlaceholder('이미지를 불러올 수 없습니다');
+  }
+
+  // 기본 이미지 에러 플레이스홀더
+  Widget _buildImageErrorPlaceholder(String message) {
+    return Container(
+      color: Colors.grey.shade200,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported,
+            size: 60,
+            color: Colors.grey.shade500,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 원본 이미지 URL 찾기 로직
+  String _findOriginalImageUrl(String baseUrl, int imageIndex) {
+    print('=== [_findOriginalImageUrl] 분석 시작 ===');
+    print('baseUrl: $baseUrl');
+    print('imageIndex: $imageIndex');
+    
+    // 1. 우선: baseUrl(mediaUrl)이 이미 원본 URL인지 확인
+    if (baseUrl.contains('/original/') || baseUrl.contains('%2Foriginal%2F')) {
+      print('기본 mediaUrl이 이미 원본 URL임: $baseUrl');
+      return baseUrl; // 이미 원본 URL이므로 그대로 사용
+    }
+    
+    // 2. mediaUrl이 썸네일이면 원본 URL로 변경
+    if (baseUrl.contains('/thumbnails/') || baseUrl.contains('%2Fthumbnails%2F')) {
+      final originalUrl = baseUrl
+        .replaceAll('/thumbnails/', '/original/')
+        .replaceAll('%2Fthumbnails%2F', '%2Foriginal%2F');
+      print('mediaUrl이 썸네일이므로 원본 URL로 변경: $originalUrl');
+      return originalUrl;
+    }
+    
+    // 3. thumbnailUrl 배열에서 원본 URL 생성 시도 (마지막 수단)
+    if (currentPost.thumbnailUrl.isNotEmpty && imageIndex < currentPost.thumbnailUrl.length) {
+      final thumbnailUrl = currentPost.thumbnailUrl[imageIndex];
+      if (thumbnailUrl.contains('/thumbnails/') || thumbnailUrl.contains('%2Fthumbnails%2F')) {
+        final originalUrl = thumbnailUrl
+          .replaceAll('/thumbnails/', '/original/')
+          .replaceAll('%2Fthumbnails%2F', '%2Foriginal%2F');
+        print('마지막 수단: thumbnailUrl에서 원본 URL 생성: $originalUrl');
+        return originalUrl;
+      }
+    }
+    
+    // 4. 모두 실패한 경우 기본 URL 사용
+    print('기본 URL 그대로 사용: $baseUrl');
+    return baseUrl;
+  }
+
+  // 조건부 URL 해석
+  Future<String?> _resolveImageUrlConditionally(String url, FirebaseService service) async {
+    print('=== [_resolveImageUrlConditionally] 분석 ===');
+    print('입력 URL: $url');
+    
+    // HTTP/HTTPS URL이면 그대로 사용 (이중 처리 방지)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      print('HTTP URL이므로 resolveImageUrl 생략');
+      return url;
+    }
+    
+    // Data URL이면 그대로 사용
+    if (url.startsWith('data:image/')) {
+      print('Data URL이므로 resolveImageUrl 생략');
+      return url;
+    }
+    
+    // 그 외의 경우만 Firebase 해석 사용
+    print('Firebase resolveImageUrl 사용');
+    final resolved = await service.resolveImageUrl(url);
+    print('해석 결과: $resolved');
+    return resolved;
   }
 }
