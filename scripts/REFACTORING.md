@@ -38,16 +38,19 @@
   - [x] Widget 기반으로 컴포넌트 분리
   - [x] map_display_widget.dart, fog_overlay_widget.dart, marker_layer_widget.dart, map_filter_widget.dart 생성
 - [x] **Tile System 최적화**
-  - [x] 4개 타일 서비스를 1개로 통합 (custom_tile_provider.dart + tile_cache_manager.dart + tile_prefetcher.dart → tile_provider.dart)
+  - [x] 4개 타일 서비스를 2개로 통합 (custom_tile_provider.dart + tile_prefetcher.dart → tile_provider.dart, tile_cache_manager.dart 유지)
   - [x] 캐싱 및 성능 최적화 구현
 - [x] **Directory 구조 생성**
   - [x] features/map_system/ 디렉토리 생성
   - [x] screens/, services/fog_of_war/, services/tiles/, services/markers/, providers/, widgets/, utils/ 폴더 생성
 - [x] **파일 이동 및 Import 경로 업데이트**
   - [x] Map 관련 파일들을 새로운 구조로 이동
-  - [x] 전체 프로젝트의 import 경로 업데이트
-- [x] 테스트 및 검증 (진행 중)
-- [ ] Git 커밋
+  - [x] 전체 프로젝트의 import 경로 업데이트 (30+ 파일)
+- [x] **테스트 및 검증**
+  - [x] Flutter analyze 실행 완료
+  - [x] 앱 실행 테스트 완료
+- [x] **Git 커밋**
+  - [x] Phase 2 완료 커밋 (7a1285b): 38 files changed, 2410 insertions(+), 1289 deletions(-)
 
 ### Phase 3: Feature 모듈 분리 ⏳ PENDING
 - [ ] **Post System 모듈화**
