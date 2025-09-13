@@ -2,8 +2,10 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
-import 'visit_tile_service.dart';
-import '../core/models/post/post_model.dart';
+import '../../../../services/visit_tile_service.dart';
+import '../../../../core/models/post/post_model.dart';
+import '../../../../utils/tile_utils.dart';
+import '../../../../core/models/map/fog_level.dart';
 
 /// 마커 타입 열거형
 enum MarkerType {
@@ -190,14 +192,12 @@ class MarkerService {
     try {
       print('🔄 포그레벨 타일 계산 중: $cacheKey');
       // VisitTileService를 사용하여 포그레벨 1단계 타일 계산
-      final fogLevelMap = await VisitTileService.getSurroundingTilesFogLevel(
-        location.latitude, 
-        location.longitude
-      );
+      final surroundingTiles = TileUtils.getSurroundingTiles(location.latitude, location.longitude);
+      final fogLevelMap = await VisitTileService.getSurroundingTilesFogLevel(surroundingTiles);
       
-      // 포그레벨 1인 타일들만 필터링
+      // 포그레벨 1(clear)인 타일들만 필터링
       final fogLevel1Tiles = fogLevelMap.entries
-          .where((entry) => entry.value == 1)
+          .where((entry) => entry.value == FogLevel.clear)
           .map((entry) => entry.key)
           .toList();
       

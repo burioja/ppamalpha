@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:latlong2/latlong.dart';
-import '../models/fog_level.dart';
+import '../core/models/map/fog_level.dart';
 import 'firebase_functions_service.dart';
 
 /// 성능 모니터링 시스템

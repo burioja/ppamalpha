@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'map_screen.dart';
+import '../../features/map_system/screens/map_screen.dart';
 import 'inbox_screen.dart';
 
 import '../../core/services/location/location_service.dart';

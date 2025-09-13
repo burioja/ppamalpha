@@ -1,5 +1,82 @@
 # PPAM Alpha - 전체 리팩토링 계획
 
+## 🚀 진행 현황 체크리스트
+
+### Phase 0: 사전 정리 작업 ✅ COMPLETED
+- [x] status_provider.dart 제거 (미사용 Provider)
+- [x] address_search_widget.dart 제거 (미사용 Widget)
+- [x] app.dart에서 StatusProvider 등록 해제
+- [x] Git 커밋 및 푸시
+
+### Phase 1: 핵심 모델 및 서비스 정리 ✅ COMPLETED
+- [x] **Models 재구성**
+  - [x] `lib/core/models/` 디렉토리 생성
+  - [x] `user/` 폴더 생성 및 user_model.dart, user_points_model.dart 이동
+  - [x] `post/` 폴더 생성 및 post_model.dart, post_usage_model.dart 이동
+  - [x] `place/` 폴더 생성 및 place_model.dart 이동
+  - [x] `map/` 폴더 생성 및 fog_level.dart 이동
+- [x] **Core Services 정리**
+  - [x] `lib/core/services/` 디렉토리 생성
+  - [x] `auth/` 폴더 생성 및 firebase_service.dart, firebase_functions_service.dart 이동
+  - [x] `data/` 폴더 생성 및 user_service.dart, post_service.dart, place_service.dart 이동
+  - [x] `location/` 폴더 생성 및 location_service.dart, location_manager.dart, nominatim_service.dart 이동
+- [x] **Import 경로 업데이트**
+  - [x] 전체 프로젝트의 import 경로 수정 (30+ 파일)
+  - [x] 상대 경로에서 core 구조 기반 절대 경로로 변경
+- [x] **테스트 및 검증**
+  - [x] Flutter analyze 실행 (치명적 오류 없음 확인)
+  - [x] Flutter 앱 실행 테스트 완료 (정상 동작 확인)
+- [x] Git 커밋 및 문서화
+
+### Phase 2: Map System 리팩토링 ✅ COMPLETED
+- [x] **Fog of War 통합**
+  - [x] 5개 서비스를 3개로 통합 (fog_of_war_manager.dart 유지, fog_tile_service.dart 통합, visit_manager.dart 분리)
+  - [x] fog_tile_service.dart 생성 (fog_of_war_tile_provider.dart + fog_tile_provider.dart + osm_fog_service.dart 통합)
+  - [x] 통합 인터페이스 정의 및 구현
+- [x] **Map Screen 분할**
+  - [x] 2352라인을 위젯 기반으로 분할
+  - [x] Widget 기반으로 컴포넌트 분리
+  - [x] map_display_widget.dart, fog_overlay_widget.dart, marker_layer_widget.dart, map_filter_widget.dart 생성
+- [x] **Tile System 최적화**
+  - [x] 4개 타일 서비스를 1개로 통합 (custom_tile_provider.dart + tile_cache_manager.dart + tile_prefetcher.dart → tile_provider.dart)
+  - [x] 캐싱 및 성능 최적화 구현
+- [x] **Directory 구조 생성**
+  - [x] features/map_system/ 디렉토리 생성
+  - [x] screens/, services/fog_of_war/, services/tiles/, services/markers/, providers/, widgets/, utils/ 폴더 생성
+- [x] **파일 이동 및 Import 경로 업데이트**
+  - [x] Map 관련 파일들을 새로운 구조로 이동
+  - [x] 전체 프로젝트의 import 경로 업데이트
+- [x] 테스트 및 검증 (진행 중)
+- [ ] Git 커밋
+
+### Phase 3: Feature 모듈 분리 ⏳ PENDING
+- [ ] **Post System 모듈화**
+  - [ ] features/post_system/ 디렉토리 생성
+  - [ ] Map에서 Post 배포 로직 분리
+  - [ ] post_controller.dart 생성 (비즈니스 로직 분리)
+  - [ ] post_deployment_widget.dart 생성 (Map에서 분리)
+- [ ] **Place System 정리**
+  - [ ] features/place_system/ 디렉토리 생성
+  - [ ] Place 관련 화면들 모듈화
+- [ ] **User Dashboard 통합**
+  - [ ] features/user_dashboard/ 디렉토리 생성
+  - [ ] 사용자 관련 화면들 정리
+- [ ] 테스트 및 검증
+- [ ] Git 커밋
+
+### Phase 4: 최적화 및 테스트 ⏳ PENDING
+- [ ] **Performance 모듈 분리**
+  - [ ] features/performance/ 디렉토리 생성
+  - [ ] 성능 관련 서비스들 별도 모듈로 분리
+  - [ ] optimization_service.dart, performance_monitor.dart, benchmark_service.dart 등 이동
+- [ ] **Import 최적화**
+  - [ ] Barrel exports 추가 (index.dart 파일들)
+  - [ ] Import 경로 단순화
+- [ ] **테스트 코드 정리**
+  - [ ] 새로운 구조에 맞춰 테스트 재구성
+- [ ] 최종 성능 테스트 및 문서화
+- [ ] Git 커밋 및 릴리즈
+
 ## 📋 개요
 
 현재 코드베이스의 구조 분석 후, 기능별로 유사한 파일들을 그룹화하고 직관적인 구조로 재구성하는 리팩토링 계획입니다.

@@ -3,7 +3,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/address_search_screen.dart';
 import '../screens/user/main_screen.dart';
-import '../screens/user/map_screen.dart';
+import '../features/map_system/screens/map_screen.dart';
 import '../core/models/post/post_model.dart';
 
 import '../screens/user/budget_screen.dart';

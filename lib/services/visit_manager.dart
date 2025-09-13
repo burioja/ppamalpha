@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
-import '../utils/tile_utils.dart';
+import '../features/map_system/utils/tile_utils.dart';
 
 /// 방문 기록 관리자
 class VisitManager {

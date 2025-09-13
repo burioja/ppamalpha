@@ -7,15 +7,16 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../core/models/post/post_model.dart';
-import '../../core/services/data/post_service.dart';
-import '../../services/marker_service.dart';
+import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/post_service.dart';
+import '../services/markers/marker_service.dart';
 // OSM 기반 Fog of War 시스템
-import '../../services/osm_fog_service.dart';
-import '../../services/visit_tile_service.dart';
-import '../../services/nominatim_service.dart';
-import '../../core/services/location/location_service.dart';
-import '../../utils/tile_utils.dart';
+import '../../../services/osm_fog_service.dart';
+import '../../../services/visit_tile_service.dart';
+import '../../../core/services/location/nominatim_service.dart';
+import '../../../core/services/location/location_service.dart';
+import '../../../utils/tile_utils.dart';
+import '../../../core/models/map/fog_level.dart';
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -331,10 +332,8 @@ class _MapScreenState extends State<MapScreen> {
       _updateCurrentAddress();
       
       // 타일 방문 기록 업데이트 (새로운 기능)
-      await VisitTileService.updateCurrentTileVisit(
-        newPosition.latitude, 
-        newPosition.longitude
-      );
+      final tileId = TileUtils.getTileId(newPosition.latitude, newPosition.longitude);
+      await VisitTileService.updateCurrentTileVisit(tileId);
       
       // 유료 상태 확인 후 포스트 스트림 설정
       await _checkPremiumStatus();
@@ -754,10 +753,7 @@ class _MapScreenState extends State<MapScreen> {
       final fogLevel1Tiles = <String>{};
       
       for (final tileId in surroundingTiles) {
-        final fogLevel = await VisitTileService.getFogLevelForTile(
-          tileId, 
-          currentPosition: center
-        );
+        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
         
         if (fogLevel == 1) {
           fogLevel1Tiles.add(tileId);
@@ -792,13 +788,10 @@ class _MapScreenState extends State<MapScreen> {
       final fogLevel1Tiles = <String>{};
       
       for (final tileId in surroundingTiles) {
-        final fogLevel = await VisitTileService.getFogLevelForTile(
-          tileId, 
-          currentPosition: _currentPosition!
-        );
+        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
         
-        newTileFogLevels[tileId] = fogLevel;
-        if (fogLevel == 1) {
+        newTileFogLevels[tileId] = fogLevel.level;
+        if (fogLevel == FogLevel.clear) {
           fogLevel1Tiles.add(tileId);
         }
       }
@@ -923,10 +916,7 @@ class _MapScreenState extends State<MapScreen> {
       print('  - 현재 위치: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}');
       print('  - 타일 ID: $tileId');
       
-      final fogLevel = await VisitTileService.getFogLevelForTile(
-        tileId, 
-        currentPosition: _currentPosition ?? point
-      );
+      final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
       
       print('🔍 롱프레스 위치 포그레벨: $fogLevel (타일: $tileId)');
       
@@ -1017,11 +1007,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       // OSM 포그 서비스 사용
       final osmFogService = OSMFogService();
-      await osmFogService.updateFogOfWar(
-        currentPosition: _currentPosition!,
-        homeLocation: _homeLocation,
-        workLocations: _workLocations,
-      );
+      await osmFogService.updateFogOfWar(_currentPosition!);
 
       // 포그레벨 업데이트 후 UI 갱신
       setState(() {

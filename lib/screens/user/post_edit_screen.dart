@@ -9,7 +9,7 @@ import 'dart:convert';
 
 import '../../core/models/post/post_model.dart';
 import '../../core/services/data/post_service.dart';
-import '../../services/firebase_service.dart';
+import '../../core/services/auth/firebase_service.dart';
 import '../../widgets/range_slider_with_input.dart';
 import '../../widgets/gender_checkbox_group.dart';
 import '../../widgets/period_slider_with_input.dart';

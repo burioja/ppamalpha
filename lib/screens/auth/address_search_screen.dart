@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/nominatim_service.dart';
+import '../../core/services/location/nominatim_service.dart';
 
 class AddressSearchScreen extends StatefulWidget {
   const AddressSearchScreen({super.key});

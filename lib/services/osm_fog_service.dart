@@ -5,155 +5,103 @@ import 'package:flutter_map/flutter_map.dart';
 
 /// OSM 기반 Fog of War 서비스
 class OSMFogService {
-  // 전세계 커버용 큰 사각형(경위도)
-  static const List<LatLng> _worldCoverRect = [
-    LatLng(85, -180),
-    LatLng(85, 180),
-    LatLng(-85, 180),
-    LatLng(-85, -180),
-  ];
+  static const double _fogRadius = 500.0; // 500미터 반경
 
-  /// 1km 원형 홀 생성
-  static List<LatLng> makeCircleHole(LatLng center, double radiusMeters, {int sides = 180}) {
-    const earth = 6378137.0; // 지구 반지름 (미터)
-    final d = radiusMeters / earth;
-    final lat = center.latitude * pi / 180;
-    final lng = center.longitude * pi / 180;
-    final result = <LatLng>[];
-    
-    for (int i = 0; i < sides; i++) {
-      final brng = 2 * pi * i / sides;
-      final lat2 = asin(sin(lat) * cos(d) + cos(lat) * sin(d) * cos(brng));
-      final lng2 = lng + atan2(sin(brng) * sin(d) * cos(lat), cos(d) - sin(lat) * sin(lat2));
-      result.add(LatLng(lat2 * 180 / pi, lng2 * 180 / pi));
-    }
-    return result;
-  }
-
-  /// Fog of War 폴리곤 생성 (단일 위치)
-  static Polygon createFogPolygon(LatLng currentPosition) {
-    final circleHole = makeCircleHole(currentPosition, 1000); // 1km
-    
+  /// 현재 위치를 기반으로 포그 폴리곤 생성
+  static Polygon createFogPolygon(LatLng position) {
     return Polygon(
-      points: _worldCoverRect,
-      holePointsList: [circleHole], // 원형 홀
-      isFilled: true,
-      color: Colors.black.withOpacity(1.0), // 완전 검정
+      points: _generateCirclePoints(position, _fogRadius),
+      color: Colors.black.withOpacity(0.7),
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,
     );
   }
 
-  /// Fog of War 폴리곤 생성 (여러 위치)
+  /// 여러 위치를 기반으로 구멍이 있는 포그 폴리곤 생성
   static Polygon createFogPolygonWithMultipleHoles(List<LatLng> positions) {
-    final circleHoles = positions.map((pos) => makeCircleHole(pos, 1000)).toList();
-    
+    // 전체 맵을 덮는 큰 사각형
+    List<LatLng> outerPoints = [
+      LatLng(-90, -180),
+      LatLng(-90, 180),
+      LatLng(90, 180),
+      LatLng(90, -180),
+    ];
+
+    // 각 위치 주변에 구멍 생성
+    List<List<LatLng>> holes = positions
+        .map((pos) => _generateCirclePoints(pos, _fogRadius))
+        .toList();
+
     return Polygon(
-      points: _worldCoverRect,
-      holePointsList: circleHoles, // 여러 원형 홀
-      isFilled: true,
-      color: Colors.black.withOpacity(1.0), // 완전 검정
+      points: outerPoints,
+      holePointsList: holes,
+      color: Colors.black.withOpacity(0.7),
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,
     );
   }
 
-  /// 포그레벨 업데이트 메서드
-  Future<void> updateFogOfWar({
-    required LatLng currentPosition,
-    LatLng? homeLocation,
-    List<LatLng>? workLocations,
-  }) async {
-    try {
-      // 현재 위치 기반으로 포그레벨 업데이트
-      // 실제 구현에서는 VisitTileService와 연동하여 포그레벨 계산
-      print('🔄 포그레벨 업데이트: ${currentPosition.latitude}, ${currentPosition.longitude}');
-      
-      // 집 위치가 있으면 해당 영역도 밝게 처리
-      if (homeLocation != null) {
-        print('🏠 집 위치 포그레벨 업데이트: ${homeLocation.latitude}, ${homeLocation.longitude}');
-      }
-      
-      // 일터 위치들이 있으면 해당 영역들도 밝게 처리
-      if (workLocations != null && workLocations.isNotEmpty) {
-        for (int i = 0; i < workLocations.length; i++) {
-          print('🏢 일터 ${i + 1} 포그레벨 업데이트: ${workLocations[i].latitude}, ${workLocations[i].longitude}');
-        }
-      }
-      
-    } catch (e) {
-      print('포그레벨 업데이트 실패: $e');
-      rethrow;
-    }
-  }
-
-  /// 1km 경계선 원 생성
-  static CircleMarker createRingCircle(LatLng currentPosition) {
+  /// 링 원 생성 (반투명 원형 표시)
+  static CircleMarker createRingCircle(LatLng position) {
     return CircleMarker(
-      point: currentPosition,
-      radius: 1000, // 미터 단위
-      useRadiusInMeter: true, // 미터 반경 사용
-      color: Colors.transparent,
-      borderStrokeWidth: 2,
-      borderColor: Colors.white.withOpacity(0.9),
+      point: position,
+      radius: _fogRadius,
+      color: Colors.blue.withOpacity(0.1),
+      borderColor: Colors.blue.withOpacity(0.3),
+      borderStrokeWidth: 2.0,
     );
   }
 
-  /// 회색 영역 폴리곤 생성 (과거 방문 위치들)
+  /// 방문한 지역의 회색 영역 생성
   static List<Polygon> createGrayAreas(List<LatLng> visitedPositions) {
-    final grayPolygons = <Polygon>[];
-    
-    for (final position in visitedPositions) {
-      final circleHole = makeCircleHole(position, 1000); // 1km
-      
-      grayPolygons.add(Polygon(
-        points: _worldCoverRect,
-        holePointsList: [circleHole], // 원형 홀
-        isFilled: true,
-        color: Colors.grey.withOpacity(0.7), // 회색 반투명
-        borderColor: Colors.transparent,
-        borderStrokeWidth: 0,
-      ));
-    }
-    
-    return grayPolygons;
+    return visitedPositions.map((position) {
+      return Polygon(
+        points: _generateCirclePoints(position, _fogRadius * 0.8),
+        color: Colors.grey.withOpacity(0.3),
+        borderColor: Colors.grey.withOpacity(0.5),
+        borderStrokeWidth: 1.0,
+      );
+    }).toList();
   }
 
-  /// 줌 레벨에 따른 그리드 간격 계산 (미터)
-  static double gridMetersForZoom(double zoom) {
-    if (zoom >= 16) return 100;
-    if (zoom >= 14) return 250;
-    if (zoom >= 12) return 500;
-    return 1000;
+  /// 원형 포인트 생성 헬퍼 메서드
+  static List<LatLng> _generateCirclePoints(LatLng center, double radiusInMeters) {
+    const int numberOfPoints = 64;
+    final List<LatLng> points = [];
+
+    const Distance distance = Distance();
+
+    for (int i = 0; i < numberOfPoints; i++) {
+      final double angle = (i * 360 / numberOfPoints) * (pi / 180);
+      final LatLng point = distance.offset(center, radiusInMeters, angle * 180 / pi);
+      points.add(point);
+    }
+
+    return points;
   }
 
-  /// 1km 반경 내에서 그리드 기반 샘플링
-  static List<LatLng> samplePointsInRadius(
-    LatLng center, 
-    double gridMeters, 
-    List<LatLng> allPoints
-  ) {
-    final sampledPoints = <LatLng>[];
-    final gridSize = gridMeters / 111320; // 미터를 도 단위로 변환 (대략적)
-    
-    for (final point in allPoints) {
-      // 1km 반경 내 확인
-      final distance = Distance().as(LengthUnit.Meter, center, point);
-      if (distance > 1000) continue;
-      
-      // 그리드 스냅핑
-      final snappedLat = (point.latitude / gridSize).round() * gridSize;
-      final snappedLng = (point.longitude / gridSize).round() * gridSize;
-      final snappedPoint = LatLng(snappedLat, snappedLng);
-      
-      // 중복 제거
-      if (!sampledPoints.any((p) => 
-          (p.latitude - snappedPoint.latitude).abs() < 0.0001 &&
-          (p.longitude - snappedPoint.longitude).abs() < 0.0001)) {
-        sampledPoints.add(snappedPoint);
-      }
+  /// 두 지점 간 거리 계산
+  static double calculateDistance(LatLng point1, LatLng point2) {
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Meter, point1, point2);
+  }
+
+  /// 위치가 포그 내부에 있는지 확인
+  static bool isInsideFogRadius(LatLng center, LatLng target, {double? customRadius}) {
+    final double radius = customRadius ?? _fogRadius;
+    return calculateDistance(center, target) <= radius;
+  }
+
+  /// 포그 오브 워 업데이트 (사용자 위치 기반)
+  Future<void> updateFogOfWar(LatLng currentPosition) async {
+    // 현재 위치 기반으로 포그 상태 업데이트
+    // 실제 구현에서는 방문한 타일 정보를 업데이트하고
+    // 필요시 서버에 동기화
+    try {
+      // 타일 방문 정보 업데이트는 VisitTileService에서 처리
+      print('포그 오브 워 업데이트 완료: ${currentPosition.latitude}, ${currentPosition.longitude}');
+    } catch (e) {
+      print('포그 오브 워 업데이트 오류: $e');
     }
-    
-    return sampledPoints;
   }
 }

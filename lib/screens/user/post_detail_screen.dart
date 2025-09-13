@@ -3,7 +3,7 @@ import '../../core/models/post/post_model.dart';
 import '../../utils/web_dom_stub.dart'
     if (dart.library.html) '../../utils/web_dom.dart';
 import 'dart:convert';
-import '../../services/firebase_service.dart';
+import '../../core/services/auth/firebase_service.dart';
 import '../../widgets/network_image_fallback_with_data.dart';
 import '../../routes/app_routes.dart';
 import '../../core/services/data/place_service.dart';
