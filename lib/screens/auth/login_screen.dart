@@ -57,14 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
         password: pass,
       );
 
-      if (userCredential.user != null) {
+      if (userCredential.user != null && mounted) {
         // UserProvider 업데이트
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.setEmail(_emailController.text.trim());
-        
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/main');
-        }
+
+        Navigator.pushReplacementNamed(context, '/main');
       }
     } on FirebaseAuthException catch (e) {
       String errorMessage = '로그인에 실패했습니다.';

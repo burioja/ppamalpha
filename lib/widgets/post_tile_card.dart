@@ -45,7 +45,7 @@ class PostTileCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isUsed ? 0.02 : 0.05),
+              color: Colors.black.withValues(alpha: isUsed ? 0.02 : 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -163,7 +163,7 @@ class PostTileCard extends StatelessWidget {
                         Text(
                           isExpired 
                             ? '만료됨'
-                            : '${DateFormat('MM/dd').format(post.expiresAt)}',
+                            : DateFormat('MM/dd').format(post.expiresAt),
                           style: TextStyle(
                             fontSize: 10,
                             color: isExpired ? Colors.red.shade500 : Colors.grey.shade600,
@@ -183,22 +183,17 @@ class PostTileCard extends StatelessWidget {
   }
 
   Widget _buildImageWidget() {
-    // 디버깅: 이미지 정보 출력
-    print('PostTileCard - mediaUrl: ${post.mediaUrl}');
-    print('PostTileCard - mediaType: ${post.mediaType}');
-    
     if (post.mediaUrl.isNotEmpty) {
       // 이미지 타입 체크를 더 관대하게 변경
-      bool hasImageMedia = post.mediaType.isNotEmpty && 
+      bool hasImageMedia = post.mediaType.isNotEmpty &&
           (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
            post.mediaUrl.first.toLowerCase().contains('.jpg') ||
            post.mediaUrl.first.toLowerCase().contains('.jpeg') ||
            post.mediaUrl.first.toLowerCase().contains('.png') ||
            post.mediaUrl.first.toLowerCase().contains('.gif') ||
            post.mediaUrl.first.toLowerCase().contains('firebasestorage'));
-      
+
       if (hasImageMedia) {
-        print('PostTileCard - 이미지 표시 중: ${post.mediaUrl.first}');
         return ClipRRect(
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(12),
@@ -209,11 +204,7 @@ class PostTileCard extends StatelessWidget {
             child: buildNetworkImage(post.mediaUrl.first),
           ),
         );
-      } else {
-        print('PostTileCard - 이미지 타입 아님: ${post.mediaType}');
       }
-    } else {
-      print('PostTileCard - mediaUrl이 비어있음');
     }
     
     // 이미지가 없거나 이미지 타입이 아닌 경우 기본 아이콘 표시

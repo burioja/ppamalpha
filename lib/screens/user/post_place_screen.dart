@@ -1044,7 +1044,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: value,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

@@ -8,8 +8,6 @@ import '../models/post_model.dart';
 
 import '../screens/user/budget_screen.dart';
 import '../screens/user/search_screen.dart';
-import '../screens/user/map_search_screen.dart';
-import '../screens/user/track_connection_screen.dart';
 import '../screens/user/settings_screen.dart';
 import '../screens/user/post_place_screen.dart';
 import '../screens/user/post_place_selection_screen.dart';
@@ -18,7 +16,6 @@ import '../screens/user/location_picker_screen.dart';
 import '../screens/user/post_detail_screen.dart';
 import '../screens/user/post_edit_screen.dart';
 import '../screens/user/post_deploy_screen.dart';
-import '../screens/shared/debug_screen.dart';
 import '../models/place_model.dart';
 import '../screens/place/create_place_screen.dart';
 import '../screens/place/place_detail_screen.dart';
@@ -36,8 +33,6 @@ class AppRoutes {
 
   static const String budget = '/budget';
   static const String search = '/search';
-  static const String mapSearch = '/map-search';
-  static const String trackConnection = '/track-connection';
   static const String settings = '/settings';
   static const String postPlace = '/post-place';
   static const String postPlaceSelection = '/post-place-selection';
@@ -50,7 +45,6 @@ class AppRoutes {
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
-  static const String debug = '/debug';
   static const String store = '/store';
 
   static Map<String, WidgetBuilder> get routes => {
@@ -62,8 +56,6 @@ class AppRoutes {
 
     budget: (context) => const BudgetScreen(),
     search: (context) => const SearchScreen(),
-    mapSearch: (context) => const MapSearchScreen(),
-    trackConnection: (context) => const TrackConnectionScreen(type: 'track'),
     settings: (context) => const SettingsScreen(),
     postPlace: (context) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -127,7 +119,6 @@ class AppRoutes {
       final index = args?['index'] as int? ?? 0;
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
-    debug: (context) => const DebugScreen(),
     store: (context) => const StoreScreen(),
   };
 } 

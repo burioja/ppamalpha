@@ -11,7 +11,7 @@ class RangeSliderWithInput extends StatefulWidget {
   final String Function(double) labelBuilder;
 
   const RangeSliderWithInput({
-    Key? key,
+    super.key,
     required this.label,
     required this.initialValues,
     required this.min,
@@ -20,7 +20,7 @@ class RangeSliderWithInput extends StatefulWidget {
     this.validator,
     this.onChanged,
     required this.labelBuilder,
-  }) : super(key: key);
+  });
 
   @override
   State<RangeSliderWithInput> createState() => _RangeSliderWithInputState();

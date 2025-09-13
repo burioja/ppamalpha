@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
 import '../../services/nominatim_service.dart';
 
 class AddressSearchScreen extends StatefulWidget {
@@ -23,17 +22,23 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
 
     try {
       final results = await NominatimService.searchAddress(_searchController.text.trim());
-      setState(() {
-        _searchResults = results;
-      });
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+        });
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('주소 검색 중 오류가 발생했습니다: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('주소 검색 중 오류가 발생했습니다: $e')),
+        );
+      }
     } finally {
-      setState(() {
-        _isSearching = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
     }
   }
 

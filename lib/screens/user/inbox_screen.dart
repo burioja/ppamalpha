@@ -374,7 +374,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 상태 필터
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         initialValue: _statusFilter,
+                         value: _statusFilter,
                          decoration: const InputDecoration(
                            labelText: '상태',
                            border: OutlineInputBorder(),
@@ -395,7 +395,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 기간 필터
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         initialValue: _periodFilter,
+                         value: _periodFilter,
                          decoration: const InputDecoration(
                            labelText: '기간',
                            border: OutlineInputBorder(),
@@ -419,7 +419,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 정렬 기준
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         initialValue: _sortBy,
+                         value: _sortBy,
                          decoration: const InputDecoration(
                            labelText: '정렬 기준',
                            border: OutlineInputBorder(),
@@ -440,7 +440,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                      // 정렬 순서
                      Expanded(
                        child: DropdownButtonFormField<String>(
-                         initialValue: _sortOrder,
+                         value: _sortOrder,
                          decoration: const InputDecoration(
                            labelText: '정렬 순서',
                            border: OutlineInputBorder(),

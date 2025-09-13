@@ -198,7 +198,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
               
               // 메인 카테고리
               DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
+                value: _selectedCategory,
                 decoration: const InputDecoration(
                   labelText: '메인 카테고리',
                   border: OutlineInputBorder(),
@@ -223,7 +223,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
               // 서브 카테고리
               if (_selectedCategory != null)
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedSubCategory,
+                  value: _selectedSubCategory,
                   decoration: const InputDecoration(
                     labelText: '서브 카테고리',
                     border: OutlineInputBorder(),

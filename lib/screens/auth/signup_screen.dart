@@ -1,11 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../providers/user_provider.dart';
-import '../../services/nominatim_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -95,22 +92,8 @@ class _SignupScreenState extends State<SignupScreen> {
     });
     
     // 이메일 중복 확인
-    try {
-      final methods = await FirebaseAuth.instance.fetchSignInMethodsForEmail(_emailController.text.trim());
-      if (methods.isNotEmpty) {
-        _showToast('이미 사용 중인 이메일입니다');
-        setState(() {
-          _isEmailVerifying = false;
-        });
-        return;
-      }
-    } catch (e) {
-      _showToast('이메일 중복 확인 중 오류가 발생했습니다');
-      setState(() {
-        _isEmailVerifying = false;
-      });
-      return;
-    }
+    // Note: fetchSignInMethodsForEmail is deprecated
+    // Email uniqueness will be checked during actual account creation
     
     // 인증번호 생성 및 발송 (실제로는 이메일 서비스 사용)
     _emailVerificationCode = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
@@ -313,7 +296,9 @@ class _SignupScreenState extends State<SignupScreen> {
       });
       
       _showToast('회원가입이 완료되었습니다');
-      Navigator.pushReplacementNamed(context, '/main');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/main');
+      }
     } catch (e) {
       _showToast('회원가입 중 오류가 발생했습니다: $e');
     }
@@ -764,7 +749,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
               ),
             );
-          }).toList(),
+          }),
           
           const SizedBox(height: 24),
           

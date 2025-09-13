@@ -6,11 +6,11 @@ class PeriodSliderWithInput extends StatefulWidget {
   final String? Function(int)? validator;
 
   const PeriodSliderWithInput({
-    Key? key,
+    super.key,
     required this.initialValue,
     this.onChanged,
     this.validator,
-  }) : super(key: key);
+  });
 
   @override
   State<PeriodSliderWithInput> createState() => _PeriodSliderWithInputState();
@@ -56,9 +56,9 @@ class _PeriodSliderWithInputState extends State<PeriodSliderWithInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '기간',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),

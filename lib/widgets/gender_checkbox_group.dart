@@ -6,11 +6,11 @@ class GenderCheckboxGroup extends StatefulWidget {
   final String? Function(List<String>)? validator;
 
   const GenderCheckboxGroup({
-    Key? key,
+    super.key,
     required this.selectedGenders,
     required this.onChanged,
     this.validator,
-  }) : super(key: key);
+  });
 
   @override
   State<GenderCheckboxGroup> createState() => _GenderCheckboxGroupState();
@@ -41,9 +41,9 @@ class _GenderCheckboxGroupState extends State<GenderCheckboxGroup> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '성별 타겟팅',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),

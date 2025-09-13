@@ -3,7 +3,6 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'routes/app_routes.dart';
-import 'providers/status_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/search_provider.dart';
 import 'providers/screen_provider.dart';
@@ -19,9 +18,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<StatusProvider>(
-          create: (_) => StatusProvider(),
-        ),
         ChangeNotifierProvider<UserProvider>(
           create: (_) => UserProvider(),
         ),

@@ -11,13 +11,13 @@ class PriceCalculator extends StatefulWidget {
   final VoidCallback? onPriceCalculated; // 콜백 추가
 
   const PriceCalculator({
-    Key? key,
+    super.key,
     required this.images,
     required this.sound,
     required this.priceController,
     this.validator,
     this.onPriceCalculated,
-  }) : super(key: key);
+  });
 
   @override
  State<PriceCalculator> createState() => _PriceCalculatorState();
@@ -157,9 +157,9 @@ class _PriceCalculatorState extends State<PriceCalculator> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '단가',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
