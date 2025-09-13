@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/place_model.dart';
-import '../../services/place_service.dart';
+import '../../core/models/place/place_model.dart';
+import '../../core/services/data/place_service.dart';
 
 class PlaceDetailScreen extends StatelessWidget {
   final String placeId;

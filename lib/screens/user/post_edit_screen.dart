@@ -7,8 +7,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 
-import '../../models/post_model.dart';
-import '../../services/post_service.dart';
+import '../../core/models/post/post_model.dart';
+import '../../core/services/data/post_service.dart';
 import '../../services/firebase_service.dart';
 import '../../widgets/range_slider_with_input.dart';
 import '../../widgets/gender_checkbox_group.dart';

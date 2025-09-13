@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 import '../utils/tile_utils.dart';
-import 'nominatim_service.dart';
+import '../core/services/location/nominatim_service.dart';
 
 /// 타일 기반 방문 기록 관리 서비스
 class VisitTileService {

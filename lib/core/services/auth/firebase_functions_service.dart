@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
-import '../utils/tile_utils.dart';
-import '../models/fog_level.dart';
+import '../../../utils/tile_utils.dart';
+import '../../models/map/fog_level.dart';
 
 /// Firebase Functions 서비스
 class FirebaseFunctionsService {

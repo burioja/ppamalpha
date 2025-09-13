@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/post_service.dart';
-import '../../models/post_model.dart';
+import '../../core/services/data/post_service.dart';
+import '../../core/models/post/post_model.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/post_tile_card.dart';
 

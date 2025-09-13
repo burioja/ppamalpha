@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/post_model.dart';
+import '../core/models/post/post_model.dart';
 import '../widgets/network_image_fallback_web.dart' if (dart.library.io) '../widgets/network_image_fallback_stub.dart';
 import 'package:intl/intl.dart';
 

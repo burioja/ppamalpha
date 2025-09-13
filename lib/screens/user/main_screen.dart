@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'map_screen.dart';
 import 'inbox_screen.dart';
 
-import '../../services/location_service.dart';
+import '../../core/services/location/location_service.dart';
 import 'budget_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';

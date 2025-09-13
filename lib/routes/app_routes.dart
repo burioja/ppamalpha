@@ -4,7 +4,7 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/address_search_screen.dart';
 import '../screens/user/main_screen.dart';
 import '../screens/user/map_screen.dart';
-import '../models/post_model.dart';
+import '../core/models/post/post_model.dart';
 
 import '../screens/user/budget_screen.dart';
 import '../screens/user/search_screen.dart';
@@ -16,7 +16,7 @@ import '../screens/user/location_picker_screen.dart';
 import '../screens/user/post_detail_screen.dart';
 import '../screens/user/post_edit_screen.dart';
 import '../screens/user/post_deploy_screen.dart';
-import '../models/place_model.dart';
+import '../core/models/place/place_model.dart';
 import '../screens/place/create_place_screen.dart';
 import '../screens/place/place_detail_screen.dart';
 import '../screens/place/place_image_viewer_screen.dart';

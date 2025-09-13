@@ -6,8 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 
-import '../../models/place_model.dart';
-import '../../services/place_service.dart';
+import '../../core/models/place/place_model.dart';
+import '../../core/services/data/place_service.dart';
 import '../../services/firebase_service.dart';
 
 class CreatePlaceScreen extends StatefulWidget {

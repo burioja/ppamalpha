@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/place_model.dart';
+import '../../models/place/place_model.dart';
 
 class PlaceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

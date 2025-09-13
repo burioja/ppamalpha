@@ -7,14 +7,14 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../models/post_model.dart';
-import '../../services/post_service.dart';
+import '../../core/models/post/post_model.dart';
+import '../../core/services/data/post_service.dart';
 import '../../services/marker_service.dart';
 // OSM 기반 Fog of War 시스템
 import '../../services/osm_fog_service.dart';
 import '../../services/visit_tile_service.dart';
 import '../../services/nominatim_service.dart';
-import '../../services/location_service.dart';
+import '../../core/services/location/location_service.dart';
 import '../../utils/tile_utils.dart';
 
 /// 마커 아이템 클래스

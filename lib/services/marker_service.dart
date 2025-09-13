@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 import 'visit_tile_service.dart';
-import '../models/post_model.dart';
+import '../core/models/post/post_model.dart';
 
 /// 마커 타입 열거형
 enum MarkerType {
