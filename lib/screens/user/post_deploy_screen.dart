@@ -127,6 +127,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
+    // postId 검증 추가
+    if (_selectedPost!.postId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('포스트 정보가 올바르지 않습니다. 포스트를 다시 선택해주세요.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final quantity = int.tryParse(_quantityController.text);
     final price = int.tryParse(_priceController.text);
 
@@ -183,9 +194,29 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         'isActive': true, // 배포 시 활성화
       });
 
-      print('✅ 포스트 배포 완료: ${_selectedPost!.postId}');
+      // 4. 마커 생성 (수량만큼)
+      for (int i = 0; i < quantity; i++) {
+        await _createMarkerInFirestore(
+          post: _selectedPost!,
+          location: _selectedLocation!,
+          quantity: 1, // 각 마커는 1개씩
+          price: price,
+        );
+        print('✅ 마커 ${i + 1}/${quantity} 생성 완료');
+      }
+
+      print('✅ 포스트 배포 완료: ${_selectedPost!.postId} (${quantity}개 마커 생성)');
 
       if (mounted) {
+        // 성공 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('포스트가 성공적으로 배포되었습니다! (${quantity}개 마커 생성)'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
         Navigator.pop(context, {
           'location': _selectedLocation,
           'postId': _selectedPost!.postId,
@@ -196,18 +227,31 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         });
       }
     } catch (e) {
+      debugPrint('❌ 포스트 배포 실패: $e');
       if (mounted) {
+        String errorMessage = '배포 실패: ';
+        if (e.toString().contains('포스트 ID가 비어있습니다')) {
+          errorMessage += '포스트 정보가 올바르지 않습니다. 포스트를 다시 선택해주세요.';
+        } else if (e.toString().contains('포스트를 찾을 수 없습니다')) {
+          errorMessage += '선택한 포스트를 찾을 수 없습니다. 포스트를 다시 선택해주세요.';
+        } else {
+          errorMessage += e.toString();
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('배포에 실패했습니다: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     } finally {
-      setState(() {
-        _isDeploying = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isDeploying = false;
+        });
+      }
     }
   }
 
@@ -634,19 +678,13 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     required int price,
   }) async {
     try {
-      // 기존 마커가 있는지 확인 (중복 방지)
-      final existingMarkers = await FirebaseFirestore.instance
-          .collection('markers')
-          .where('flyerId', isEqualTo: post.postId)
-          .where('isActive', isEqualTo: true)
-          .get();
-      
-      if (existingMarkers.docs.isNotEmpty) {
-        debugPrint('이미 배포된 포스트의 마커가 존재합니다: ${post.postId}');
-        return; // 이미 마커가 있으면 생성하지 않음
-      }
+      // 고유한 마커 ID 생성 (타임스탬프 + 랜덤)
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final random = DateTime.now().microsecond;
+      final markerId = '${post.postId}_${timestamp}_$random';
 
       final markerData = {
+        'markerId': markerId, // 고유한 마커 ID
         'title': post.title,
         'price': price,
         'amount': quantity,
@@ -658,7 +696,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         'isActive': true,
         'isCollected': false,
         'type': 'post_place', // MapScreen과 일치하는 타입
-        'flyerId': post.postId,
+        'postId': post.postId,
         'creatorName': post.creatorName,
         'description': post.description,
         'targetGender': post.targetGender,
@@ -671,11 +709,14 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         'radius': post.radius, // 포스트 반경 정보 추가
       };
 
-      // markers 컬렉션에 저장
-      final docRef = await FirebaseFirestore.instance.collection('markers').add(markerData);
+      // markers 컬렉션에 고유한 ID로 저장
+      await FirebaseFirestore.instance
+          .collection('markers')
+          .doc(markerId)
+          .set(markerData);
       
       debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
-      debugPrint('마커 ID: ${docRef.id}, 포스트 ID: ${post.postId}');
+      debugPrint('마커 ID: $markerId, 포스트 ID: ${post.postId}');
     } catch (e) {
       debugPrint('마커 생성 실패: $e');
       throw Exception('마커 생성에 실패했습니다: $e');

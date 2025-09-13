@@ -55,7 +55,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           children: [
             if (currentPost.placeId != null) _buildPlacePreview(context),
             // 메인 플라이어 이미지 (첫 번째 이미지를 대형으로 표시)
-            _buildMainFlyerImage(),
+            _buildMainPostImage(),
             const SizedBox(height: 16),
             // 포스트 헤더
             Container(
@@ -497,9 +497,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  // 메인 플라이어 이미지 위젯
-  Widget _buildMainFlyerImage() {
-    print('\n========== [_buildMainFlyerImage] 시작 ==========');
+  // 메인 포스트 이미지 위젯
+  Widget _buildMainPostImage() {
+    print('\n========== [_buildMainPostImage] 시작 ==========');
     
     // 첫 번째 이미지 찾기 (원본 이미지 사용)
     final firstImageIndex = currentPost.mediaType.indexOf('image');
@@ -512,19 +512,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     String imageUrl = currentPost.mediaUrl[firstImageIndex].toString();
     
     // 상세 디버그 로그 추가
-    print('=== [MainFlyerImage] 데이터 구조 분석 ===');
-    print('[MainFlyerImage] firstImageIndex: $firstImageIndex');
-    print('[MainFlyerImage] 기본 이미지 URL: $imageUrl');
-    print('[MainFlyerImage] mediaType: ${currentPost.mediaType}');
-    print('[MainFlyerImage] mediaUrl 길이: ${currentPost.mediaUrl.length}');
+    print('=== [MainPostImage] 데이터 구조 분석 ===');
+    print('[MainPostImage] firstImageIndex: $firstImageIndex');
+    print('[MainPostImage] 기본 이미지 URL: $imageUrl');
+    print('[MainPostImage] mediaType: ${currentPost.mediaType}');
+    print('[MainPostImage] mediaUrl 길이: ${currentPost.mediaUrl.length}');
     for (int i = 0; i < currentPost.mediaUrl.length; i++) {
-      print('[MainFlyerImage] mediaUrl[$i]: ${currentPost.mediaUrl[i]}');
+      print('[MainPostImage] mediaUrl[$i]: ${currentPost.mediaUrl[i]}');
     }
-    print('[MainFlyerImage] thumbnailUrl 길이: ${currentPost.thumbnailUrl.length}');
+    print('[MainPostImage] thumbnailUrl 길이: ${currentPost.thumbnailUrl.length}');
     for (int i = 0; i < currentPost.thumbnailUrl.length; i++) {
-      print('[MainFlyerImage] thumbnailUrl[$i]: ${currentPost.thumbnailUrl[i]}');
+      print('[MainPostImage] thumbnailUrl[$i]: ${currentPost.thumbnailUrl[i]}');
     }
-    print('[MainFlyerImage] URL 패턴 분석:');
+    print('[MainPostImage] URL 패턴 분석:');
     print('  - HTTP/HTTPS: ${imageUrl.startsWith('http')}');
     print('  - Data URL: ${imageUrl.startsWith('data:image/')}');
     print('  - Contains /thumbnails/: ${imageUrl.contains('/thumbnails/')}');
@@ -534,7 +534,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     
     // 원본 이미지 URL 찾기 로직
     String originalImageUrl = _findOriginalImageUrl(imageUrl, firstImageIndex);
-    print('[MainFlyerImage] 최종 원본 URL: $originalImageUrl');
+    print('[MainPostImage] 최종 원본 URL: $originalImageUrl');
     
     final firebaseService = FirebaseService();
 
@@ -557,7 +557,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           future: _resolveImageUrlConditionally(originalImageUrl, firebaseService),
           builder: (context, snapshot) {
             final effectiveUrl = snapshot.data ?? originalImageUrl;
-            print('[MainFlyerImage] resolveImageUrl 결과: $effectiveUrl');
+            print('[MainPostImage] resolveImageUrl 결과: $effectiveUrl');
             
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Container(

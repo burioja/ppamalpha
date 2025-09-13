@@ -11,8 +11,8 @@ import '../utils/tile_utils.dart';
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 전단지 생성 (Firestore + Meilisearch)
-  Future<String> createFlyer({
+  // 포스트 생성 (Firestore + Meilisearch)
+  Future<String> createPost({
     required String creatorId,
     required String creatorName,
     required GeoPoint location,
@@ -40,6 +40,7 @@ class PostService {
       
       // Firestore에 먼저 저장하여 문서 ID 생성
       final docRef = await _firestore.collection('posts').add({
+        'postId': '', // 임시로 빈 문자열, 문서 ID 생성 후 업데이트
         'creatorId': creatorId,
         'creatorName': creatorName,
         'location': location,
@@ -70,7 +71,10 @@ class PostService {
       
       final postId = docRef.id;
       
-      final flyer = PostModel(
+      // 생성된 문서 ID를 postId 필드에 업데이트
+      await docRef.update({'postId': postId});
+      
+      final post = PostModel(
         postId: postId,
         creatorId: creatorId,
         creatorName: creatorName,
@@ -97,16 +101,16 @@ class PostService {
       );
 
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
-      await _indexToMeilisearch(flyer);
+      await _indexToMeilisearch(post);
       
       return postId;
     } catch (e) {
-      throw Exception('전단지 생성 실패: $e');
+      throw Exception('포스트 생성 실패: $e');
     }
   }
 
   // 포스트 생성 (PostModel 사용)
-  Future<String> createPost(PostModel post) async {
+  Future<String> createPostFromModel(PostModel post) async {
     try {
       // Firestore에 저장
       final docRef = await _firestore.collection('posts').add(post.toFirestore());
@@ -141,7 +145,7 @@ class PostService {
     required bool canUse,
     required DateTime expiresAt,
   }) async {
-    return await createFlyer(
+    return await createPost(
       creatorId: creatorId,
       creatorName: creatorName,
       location: location,
@@ -167,19 +171,26 @@ class PostService {
   // 포스트 업데이트
   Future<void> updatePost(String postId, Map<String, dynamic> updates) async {
     try {
-      // postId 검증
-      if (postId.isEmpty) {
-        throw Exception('포스트 ID가 비어있습니다.');
+      // postId 검증 강화
+      if (postId.isEmpty || postId.trim().isEmpty) {
+        throw Exception('포스트 ID가 비어있습니다. postId: "$postId"');
       }
       
       debugPrint('🔄 PostService.updatePost 호출:');
       debugPrint('  - postId: $postId');
-      debugPrint('  - targetAge: ${updates['targetAge']}');
-      debugPrint('  - targetGender: ${updates['targetGender']}');
+      debugPrint('  - updates: $updates');
       
-      await _firestore.collection('posts').doc(postId).update(updates);
+      // 문서 존재 여부 확인
+      final docRef = _firestore.collection('posts').doc(postId);
+      final docSnapshot = await docRef.get();
       
-      debugPrint('✅ 포스트 업데이트 완료');
+      if (!docSnapshot.exists) {
+        throw Exception('포스트를 찾을 수 없습니다. postId: $postId');
+      }
+      
+      await docRef.update(updates);
+      
+      debugPrint('✅ 포스트 업데이트 완료: $postId');
       
       // Meilisearch 업데이트 (실제 구현 시)
       // await _updateMeilisearch(postId, updates);
@@ -259,18 +270,18 @@ class PostService {
 
 
   // Meilisearch 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
-  Future<void> _indexToMeilisearch(PostModel flyer) async {
+  Future<void> _indexToMeilisearch(PostModel post) async {
     try {
       // TODO: Meilisearch 클라이언트 구현
-      // await meilisearchClient.index('posts').addDocuments([flyer.toMeilisearch()]);
-      debugPrint('Meilisearch 인덱싱: ${flyer.postId}');
+      // await meilisearchClient.index('posts').addDocuments([post.toMeilisearch()]);
+      debugPrint('Meilisearch 인덱싱: ${post.postId}');
     } catch (e) {
       debugPrint('Meilisearch 인덱싱 실패: $e');
     }
   }
 
-  // 위치 기반 전단지 조회 (GeoFlutterFire 사용) - 기존 방식
-  Future<List<PostModel>> getFlyersNearLocation({
+  // 위치 기반 포스트 조회 (GeoFlutterFire 사용) - 기존 방식
+  Future<List<PostModel>> getPostsNearLocation({
     required GeoPoint location,
     required double radiusInKm,
     String? userGender,
@@ -286,23 +297,23 @@ class PostService {
           .where('isCollected', isEqualTo: false)
           .get();
 
-      List<PostModel> flyers = [];
+      List<PostModel> posts = [];
       for (var doc in querySnapshot.docs) {
-        final flyer = PostModel.fromFirestore(doc);
+        final post = PostModel.fromFirestore(doc);
         
         // 만료 확인
-        if (flyer.isExpired()) continue;
+        if (post.isExpired()) continue;
         
         // 거리 확인 (반경을 km로 변환)
         final distance = _calculateDistance(
           location.latitude, location.longitude,
-          flyer.location.latitude, flyer.location.longitude,
+          post.location.latitude, post.location.longitude,
         );
         if (distance > radiusInKm * 1000) continue;
         
-        // 2단계: 타겟 조건 필터링 (임시로 비활성화하여 모든 flyer 표시)
+        // 2단계: 타겟 조건 필터링 (임시로 비활성화하여 모든 post 표시)
         // if (userAge != null && userGender != null && userInterests != null && userPurchaseHistory != null) {
-        //   if (!flyer.matchesTargetConditions(
+        //   if (!post.matchesTargetConditions(
         //     userAge: userAge,
         //     userGender: userGender,
         //     userInterests: userInterests,
@@ -310,17 +321,17 @@ class PostService {
         //   )) continue;
         // }
         
-        flyers.add(flyer);
+        posts.add(post);
       }
 
-      return flyers;
+      return posts;
     } catch (e) {
-      throw Exception('전단지 조회 실패: $e');
+      throw Exception('포스트 조회 실패: $e');
     }
   }
 
   // 🚀 성능 최적화: 1km 타일 기반 포스트 조회
-  Future<List<PostModel>> getFlyersInFogLevel1({
+  Future<List<PostModel>> getPostsInFogLevel1({
     required GeoPoint location,
     required double radiusInKm,
     String? userGender,
@@ -332,7 +343,7 @@ class PostService {
       // 1. 현재 위치 기준으로 포그레벨 1단계 타일들 계산
       final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
       
-      List<PostModel> flyers = [];
+      List<PostModel> posts = [];
       
       if (fogLevel1Tiles.isNotEmpty) {
         // 2. 포그레벨 1단계 타일에 있는 일반 포스트만 조회 (서버 사이드 필터링)
@@ -345,9 +356,9 @@ class PostService {
             .get();
 
         for (var doc in normalPostsQuery.docs) {
-          final flyer = PostModel.fromFirestore(doc);
-          if (!flyer.isExpired()) {
-            flyers.add(flyer);
+          final post = PostModel.fromFirestore(doc);
+          if (!post.isExpired()) {
+            posts.add(post);
           }
         }
       }
@@ -361,22 +372,22 @@ class PostService {
           .get();
 
       for (var doc in superPostsQuery.docs) {
-        final flyer = PostModel.fromFirestore(doc);
-        if (!flyer.isExpired()) {
+        final post = PostModel.fromFirestore(doc);
+        if (!post.isExpired()) {
           // 거리 확인 (슈퍼포스트는 반경 내에서만)
           final distance = _calculateDistance(
             location.latitude, location.longitude,
-            flyer.location.latitude, flyer.location.longitude,
+            post.location.latitude, post.location.longitude,
           );
           if (distance <= radiusInKm * 1000) {
-            flyers.add(flyer);
+            posts.add(post);
           }
         }
       }
 
-      return flyers;
+      return posts;
     } catch (e) {
-      throw Exception('포그레벨 1단계 전단지 조회 실패: $e');
+      throw Exception('포그레벨 1단계 포스트 조회 실패: $e');
     }
   }
 
@@ -432,7 +443,7 @@ class PostService {
   }
 
   // 🚀 최적화된 실시간 포스트 스트림 (서버 사이드 필터링)
-  Stream<List<PostModel>> getFlyersInFogLevel1Stream({
+  Stream<List<PostModel>> getPostsInFogLevel1Stream({
     required GeoPoint location,
     required double radiusInKm,
   }) {
@@ -611,11 +622,11 @@ class PostService {
   }
 
 
-  // 전단지 ID 생성 헬퍼 메서드
-  String _generateFlyerId() {
+  // 포스트 ID 생성 헬퍼 메서드
+  String _generatePostId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = math.Random().nextInt(1000);
-    return 'flyer_${timestamp}_$random';
+    return 'post_${timestamp}_$random';
   }
 
   // 거리 계산 헬퍼 메서드
@@ -638,7 +649,7 @@ class PostService {
   }
 
   // Meilisearch를 통한 고급 필터링 (실제 구현 시)
-  Future<List<PostModel>> searchFlyersWithMeilisearch({
+  Future<List<PostModel>> searchPostsWithMeilisearch({
     required GeoPoint location,
     required double radiusInKm,
     String? targetGender,
@@ -657,7 +668,7 @@ class PostService {
       // );
       
       // 임시로 Firestore에서 조회
-      return await getFlyersNearLocation(
+      return await getPostsNearLocation(
         location: location,
         radiusInKm: radiusInKm,
       );
@@ -896,7 +907,7 @@ class PostService {
   }
 
   // 사용자가 배포한 활성 포스트 조회 (배포한 포스트 탭용)
-  Future<List<PostModel>> getDistributedFlyers(String userId) async {
+  Future<List<PostModel>> getDistributedPosts(String userId) async {
     try {
       final querySnapshot = await _firestore
           .collection('posts')
@@ -944,7 +955,7 @@ class PostService {
 
 
   // 만료된 포스트 정리 (배치 작업용)
-  Future<void> cleanupExpiredFlyers() async {
+  Future<void> cleanupExpiredPosts() async {
     try {
       final now = DateTime.now();
       final querySnapshot = await _firestore

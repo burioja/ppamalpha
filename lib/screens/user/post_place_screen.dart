@@ -480,8 +480,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         }
       }
       
-      // 포스트 저장 (createFlyer 메서드 사용)
-      final postId = await _postService.createFlyer(
+      // 포스트 저장 (createPost 메서드 사용)
+      final postId = await _postService.createPost(
         creatorId: _firebaseService.currentUser?.uid ?? '',
         creatorName: _firebaseService.currentUser?.displayName ?? '익명',
         location: _currentLocation!,

@@ -92,8 +92,14 @@ class PostModel {
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     
+    // postId 우선순위: Firebase 필드 > 문서 ID > 빈 문자열 방지
+    String postId = data['postId'] ?? doc.id;
+    if (postId.isEmpty) {
+      postId = doc.id; // 문서 ID를 fallback으로 사용
+    }
+    
     return PostModel(
-      postId: data['postId'] ?? doc.id, // Firebase 필드 우선, 없으면 문서 ID 사용
+      postId: postId, // 이제 항상 유효한 ID 보장
       creatorId: data['creatorId'] ?? '',
       creatorName: data['creatorName'] ?? '',
       location: data['location'] ?? const GeoPoint(0, 0),

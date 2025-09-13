@@ -200,7 +200,7 @@ class _MapScreenState extends State<MapScreen> {
     print('📏 검색 반경: ${_maxDistance}m (${_maxDistance / 1000.0}km)');
 
     // 포그레벨 1단계 포스트 실시간 스트림
-    PostService().getFlyersInFogLevel1Stream(
+    PostService().getPostsInFogLevel1Stream(
       location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
       radiusInKm: _maxDistance / 1000.0,
     ).listen((posts) {
@@ -584,7 +584,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       if (forceRefresh) {
         // 🚀 수동 새로고침: 일회성 조회 (포스트 배포 후 즉시 반영)
-        final posts = await PostService().getFlyersInFogLevel1(
+        final posts = await PostService().getPostsInFogLevel1(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
           radiusInKm: _maxDistance / 1000.0,
         );
@@ -626,7 +626,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       } else {
         // 🚀 실시간 포스트 스트림 사용 (포그레벨 1단계)
-        PostService().getFlyersInFogLevel1Stream(
+        PostService().getPostsInFogLevel1Stream(
           location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
           radiusInKm: _maxDistance / 1000.0,
         ).listen((posts) {

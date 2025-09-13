@@ -909,7 +909,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         return AlertDialog(
           title: const Text('배포 포스트 통계'),
           content: FutureBuilder<List<PostModel>>(
-            future: _postService.getDistributedFlyers(_currentUserId!),
+            future: _postService.getDistributedPosts(_currentUserId!),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
