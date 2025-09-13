@@ -464,32 +464,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         calculatedExpiresAt = DateTime.now().add(const Duration(days: 7));
       }
 
-      // 포스트 모델 생성
-      final post = PostModel(
-        postId: '', // Firestore에서 자동 생성
-        creatorId: _firebaseService.currentUser?.uid ?? '',
-        creatorName: _firebaseService.currentUser?.displayName ?? '익명',
-        location: _currentLocation!,
-        radius: 1000, // 기본 반경 1km
-        createdAt: DateTime.now(),
-        expiresAt: calculatedExpiresAt,
-        reward: int.tryParse(_priceController.text) ?? 0,
-        targetAge: [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
-        targetGender: _getGenderFromTarget(_selectedGenders),
-        targetInterest: [], // TODO: 사용자 관심사 연동
-        targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
-        mediaType: mediaTypes,
-        mediaUrl: mediaUrls, // 원본 이미지 + 텍스트 + 오디오
-        thumbnailUrl: thumbnailUrls,
-        title: _titleController.text.trim(),
-        description: '', // 설명 필드 제거
-        canRespond: _canRespond,
-        canForward: _canForward,
-        canRequestReward: _canTransfer,
-        canUse: _selectedFunction == 'Using',
-        placeId: widget.place.id, // 플레이스 ID 연결
-      );
-
       // 저장 전 데이터 검증 로깅
       debugPrint('=== 포스트 저장 데이터 ===');
       debugPrint('mediaTypes: $mediaTypes');
@@ -506,8 +480,29 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         }
       }
       
-      // 포스트 저장
-      await _postService.createPost(post);
+      // 포스트 저장 (createFlyer 메서드 사용)
+      final postId = await _postService.createFlyer(
+        creatorId: _firebaseService.currentUser?.uid ?? '',
+        creatorName: _firebaseService.currentUser?.displayName ?? '익명',
+        location: _currentLocation!,
+        radius: 1000, // 기본 반경 1km
+        reward: int.tryParse(_priceController.text) ?? 0,
+        targetAge: [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
+        targetGender: _getGenderFromTarget(_selectedGenders),
+        targetInterest: [], // TODO: 사용자 관심사 연동
+        targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
+        mediaType: mediaTypes,
+        mediaUrl: mediaUrls, // 원본 이미지 + 텍스트 + 오디오
+        thumbnailUrl: thumbnailUrls,
+        title: _titleController.text.trim(),
+        description: '', // 설명 필드 제거
+        canRespond: _canRespond,
+        canForward: _canForward,
+        canRequestReward: _canTransfer,
+        canUse: _selectedFunction == 'Using',
+        expiresAt: calculatedExpiresAt,
+        isSuperPost: false, // 일반 포스트
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

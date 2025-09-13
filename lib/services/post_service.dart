@@ -38,8 +38,40 @@ class PostService {
       // 타일 ID 자동 계산
       final tileId = TileUtils.getTileId(location.latitude, location.longitude);
       
+      // Firestore에 먼저 저장하여 문서 ID 생성
+      final docRef = await _firestore.collection('posts').add({
+        'creatorId': creatorId,
+        'creatorName': creatorName,
+        'location': location,
+        'radius': radius,
+        'createdAt': DateTime.now(),
+        'expiresAt': expiresAt,
+        'reward': reward,
+        'targetAge': targetAge,
+        'targetGender': targetGender,
+        'targetInterest': targetInterest,
+        'targetPurchaseHistory': targetPurchaseHistory,
+        'mediaType': mediaType,
+        'mediaUrl': mediaUrl,
+        'thumbnailUrl': thumbnailUrl ?? [],
+        'title': title,
+        'description': description,
+        'canRespond': canRespond,
+        'canForward': canForward,
+        'canRequestReward': canRequestReward,
+        'canUse': canUse,
+        'tileId': tileId, // 타일 ID 자동 설정
+        'isSuperPost': isSuperPost, // 슈퍼포스트 여부
+        'isActive': true,
+        'isCollected': false,
+        'collectedBy': null,
+        'collectedAt': null,
+      });
+      
+      final postId = docRef.id;
+      
       final flyer = PostModel(
-        postId: '',
+        postId: postId,
         creatorId: creatorId,
         creatorName: creatorName,
         location: location,
@@ -64,12 +96,8 @@ class PostService {
         isSuperPost: isSuperPost, // 슈퍼포스트 여부
       );
 
-      // Firestore에 저장
-      final docRef = await _firestore.collection('posts').add(flyer.toFirestore());
-      final postId = docRef.id;
-      
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
-      await _indexToMeilisearch(flyer.copyWith(postId: postId));
+      await _indexToMeilisearch(flyer);
       
       return postId;
     } catch (e) {
@@ -139,6 +167,11 @@ class PostService {
   // 포스트 업데이트
   Future<void> updatePost(String postId, Map<String, dynamic> updates) async {
     try {
+      // postId 검증
+      if (postId.isEmpty) {
+        throw Exception('포스트 ID가 비어있습니다.');
+      }
+      
       debugPrint('🔄 PostService.updatePost 호출:');
       debugPrint('  - postId: $postId');
       debugPrint('  - targetAge: ${updates['targetAge']}');
