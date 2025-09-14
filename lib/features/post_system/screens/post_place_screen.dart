@@ -7,15 +7,15 @@ import 'dart:io';
 
 import 'dart:convert';
 
-import '../../core/models/place/place_model.dart';
-import '../../core/models/post/post_model.dart';
-import '../../core/services/data/post_service.dart';
-import '../../core/services/auth/firebase_service.dart';
-import '../../core/services/location/location_service.dart';
-import '../../widgets/range_slider_with_input.dart';
-import '../../widgets/gender_checkbox_group.dart';
-import '../../widgets/period_slider_with_input.dart';
-import '../../widgets/price_calculator.dart';
+import '../../../core/models/place/place_model.dart';
+import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/post_service.dart';
+import '../../../core/services/auth/firebase_service.dart';
+import '../../../core/services/location/location_service.dart';
+import '../widgets/range_slider_with_input.dart';
+import '../widgets/gender_checkbox_group.dart';
+import '../widgets/period_slider_with_input.dart';
+import '../widgets/price_calculator.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   final PlaceModel place;

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'visit_manager.dart';
+import '../../../features/map_system/services/fog_of_war/visit_manager.dart';
 
 /// 위치 관리자
 class LocationManager {

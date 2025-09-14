@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/models/place/place_model.dart';
-import '../../core/services/data/place_service.dart';
+import '../../../core/models/place/place_model.dart';
+import '../../../core/services/data/place_service.dart';
 
 class PlaceSearchScreen extends StatefulWidget {
   const PlaceSearchScreen({super.key});

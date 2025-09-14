@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
-import '../features/map_system/utils/tile_utils.dart';
-import '../core/models/map/fog_level.dart';
+import '../../utils/tile_utils.dart';
+import '../../../../core/models/map/fog_level.dart';
 
 /// 고성능 타일 캐시 관리자
 class TileCacheManager {

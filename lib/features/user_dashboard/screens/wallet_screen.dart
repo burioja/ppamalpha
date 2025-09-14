@@ -6,8 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image/image.dart' as img;
-import '../../core/services/data/post_service.dart';
-import '../../core/models/post/post_model.dart';
+import '../../../core/services/data/post_service.dart';
+import '../../../core/models/post/post_model.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});

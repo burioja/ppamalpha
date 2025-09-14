@@ -6,9 +6,9 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 
-import '../../core/models/place/place_model.dart';
-import '../../core/services/data/place_service.dart';
-import '../../core/services/auth/firebase_service.dart';
+import '../../../core/models/place/place_model.dart';
+import '../../../core/services/data/place_service.dart';
+import '../../../core/services/auth/firebase_service.dart';
 
 class CreatePlaceScreen extends StatefulWidget {
   const CreatePlaceScreen({super.key});

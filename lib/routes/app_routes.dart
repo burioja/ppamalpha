@@ -1,27 +1,37 @@
 import 'package:flutter/material.dart';
+
+// Authentication screens
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/address_search_screen.dart';
-import '../screens/user/main_screen.dart';
-import '../features/map_system/screens/map_screen.dart';
+
+// Core models
 import '../core/models/post/post_model.dart';
-
-import '../screens/user/budget_screen.dart';
-import '../screens/user/search_screen.dart';
-import '../screens/user/settings_screen.dart';
-import '../screens/user/post_place_screen.dart';
-import '../screens/user/post_place_selection_screen.dart';
-
-import '../screens/user/location_picker_screen.dart';
-import '../screens/user/post_detail_screen.dart';
-import '../screens/user/post_edit_screen.dart';
-import '../screens/user/post_deploy_screen.dart';
 import '../core/models/place/place_model.dart';
-import '../screens/place/create_place_screen.dart';
-import '../screens/place/place_detail_screen.dart';
-import '../screens/place/place_image_viewer_screen.dart';
-import '../screens/place/place_search_screen.dart';
-import '../screens/user/store_screen.dart';
+
+// Map System (already moved to features)
+import '../features/map_system/screens/map_screen.dart';
+
+// User Dashboard System
+import '../features/user_dashboard/screens/main_screen.dart';
+import '../features/user_dashboard/screens/budget_screen.dart';
+import '../features/user_dashboard/screens/search_screen.dart';
+import '../features/user_dashboard/screens/settings_screen.dart';
+import '../features/user_dashboard/screens/location_picker_screen.dart';
+import '../features/user_dashboard/screens/store_screen.dart';
+
+// Post System
+import '../features/post_system/screens/post_place_screen.dart';
+import '../features/post_system/screens/post_place_selection_screen.dart';
+import '../features/post_system/screens/post_detail_screen.dart';
+import '../features/post_system/screens/post_edit_screen.dart';
+import '../features/post_system/screens/post_deploy_screen.dart';
+
+// Place System
+import '../features/place_system/screens/create_place_screen.dart';
+import '../features/place_system/screens/place_detail_screen.dart';
+import '../features/place_system/screens/place_image_viewer_screen.dart';
+import '../features/place_system/screens/place_search_screen.dart';
 
 
 class AppRoutes {

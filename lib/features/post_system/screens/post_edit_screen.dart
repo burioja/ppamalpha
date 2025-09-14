@@ -7,13 +7,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 
-import '../../core/models/post/post_model.dart';
-import '../../core/services/data/post_service.dart';
-import '../../core/services/auth/firebase_service.dart';
-import '../../widgets/range_slider_with_input.dart';
-import '../../widgets/gender_checkbox_group.dart';
-import '../../widgets/period_slider_with_input.dart';
-import '../../widgets/price_calculator.dart';
+import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/post_service.dart';
+import '../../../core/services/auth/firebase_service.dart';
+import '../widgets/range_slider_with_input.dart';
+import '../widgets/gender_checkbox_group.dart';
+import '../widgets/period_slider_with_input.dart';
+import '../widgets/price_calculator.dart';
 
 class PostEditScreen extends StatefulWidget {
   final PostModel post;

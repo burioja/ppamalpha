@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../services/markers/marker_service.dart';
+import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../../../services/osm_fog_service.dart';
 import '../../../services/visit_tile_service.dart';
@@ -1761,23 +1762,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _navigateToPostPlace() async {
-    // 배포하기 버튼을 눌렀을 때 마커 표시
-    setState(() {
-      // 롱프레스 마커 표시를 위한 상태 업데이트는 하지 않음
-      // 배포 화면에서만 위치 정보 전달
-    });
-    
-    // 위치 기반 포스트 배포 화면으로 이동
-    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
-        'location': _longPressedLatLng,
-        'type': 'location',
-    });
-    
-    // 포스트 배포 완료 후 마커 새로고침
-    if (result != null) {
-      print('포스트 배포 완료: $result');
+    if (_longPressedLatLng == null) return;
+
+    // PostDeploymentController를 사용한 위치 기반 포스트 배포
+    final success = await PostDeploymentController.deployFromLocation(context, _longPressedLatLng!);
+
+    // 포스트 배포 완료 후 처리
+    if (success) {
+      print('포스트 배포 완료');
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
-      // 로딩 상태만 해제하고 롱프레스 위치 초기화
       setState(() {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
@@ -1791,17 +1784,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _navigateToPostAddress() async {
-    // 주소 기반 포스트 배포 화면으로 이동
-    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
-        'location': _longPressedLatLng,
-        'type': 'address',
-    });
-    
-    // 포스트 배포 완료 후 마커 새로고침
-    if (result != null) {
-      print('포스트 배포 완료: $result');
+    if (_longPressedLatLng == null) return;
+
+    // PostDeploymentController를 사용한 주소 기반 포스트 배포
+    final success = await PostDeploymentController.deployFromAddress(context, _longPressedLatLng!);
+
+    // 포스트 배포 완료 후 처리
+    if (success) {
+      print('포스트 배포 완료');
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
-      // 로딩 상태만 해제하고 롱프레스 위치 초기화
       setState(() {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화
@@ -1815,17 +1806,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _navigateToPostBusiness() async {
-    // 업종 기반 포스트 배포 화면으로 이동
-    final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
-        'location': _longPressedLatLng,
-        'type': 'category',
-    });
-    
-    // 포스트 배포 완료 후 마커 새로고침
-    if (result != null) {
-      print('포스트 배포 완료: $result');
+    if (_longPressedLatLng == null) return;
+
+    // PostDeploymentController를 사용한 카테고리 기반 포스트 배포
+    final success = await PostDeploymentController.deployFromCategory(context, _longPressedLatLng!);
+
+    // 포스트 배포 완료 후 처리
+    if (success) {
+      print('포스트 배포 완료');
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
-      // 로딩 상태만 해제하고 롱프레스 위치 초기화
       setState(() {
         _isLoading = false;
         _longPressedLatLng = null; // 팝업용 변수만 초기화

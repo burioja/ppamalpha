@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../core/models/post/post_model.dart';
-import '../widgets/network_image_fallback_web.dart' if (dart.library.io) '../widgets/network_image_fallback_stub.dart';
+import '../../../core/models/post/post_model.dart';
+import '../../../../widgets/network_image_fallback_web.dart' if (dart.library.io) '../../../../widgets/network_image_fallback_stub.dart';
 import 'package:intl/intl.dart';
 
 class PostTileCard extends StatelessWidget {

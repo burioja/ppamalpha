@@ -9,7 +9,7 @@ import 'providers/screen_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'features/map_system/providers/map_filter_provider.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/user/main_screen.dart';
+import 'features/user_dashboard/screens/main_screen.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
