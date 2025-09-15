@@ -12,8 +12,8 @@ import '../../../core/services/data/post_service.dart';
 import '../services/markers/marker_service.dart';
 import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
-import '../../../services/osm_fog_service.dart';
-import '../../../services/visit_tile_service.dart';
+import '../services/external/osm_fog_service.dart';
+import '../services/fog_of_war/visit_tile_service.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';

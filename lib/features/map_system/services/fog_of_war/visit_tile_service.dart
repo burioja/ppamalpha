@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../core/models/map/fog_level.dart';
+import '../../../../core/models/map/fog_level.dart';
 
 /// 방문 타일 관리 서비스
 class VisitTileService {

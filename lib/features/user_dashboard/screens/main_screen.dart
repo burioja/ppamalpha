@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../features/map_system/screens/map_screen.dart';
+import '../../map_system/screens/map_screen.dart';
 import 'inbox_screen.dart';
 
-import '../../core/services/location/location_service.dart';
+import '../../../core/services/location/location_service.dart';
 import 'budget_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
-import '../../providers/search_provider.dart';
+import '../../../providers/search_provider.dart';
 
 
 class MainScreen extends StatefulWidget {

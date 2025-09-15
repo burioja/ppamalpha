@@ -5,7 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../models/post/post_model.dart';
-import '../../../services/visit_tile_service.dart';
+import '../../../features/map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
 
 class PostService {

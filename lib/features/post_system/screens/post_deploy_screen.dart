@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../map_system/services/markers/marker_service.dart';
-import '../../../services/visit_tile_service.dart';
+import '../../map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
 
 

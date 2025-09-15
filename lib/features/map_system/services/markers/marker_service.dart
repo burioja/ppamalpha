@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
-import '../../../../services/visit_tile_service.dart';
+import '../fog_of_war/visit_tile_service.dart';
 import '../../../../core/models/post/post_model.dart';
 import '../../../../utils/tile_utils.dart';
 import '../../../../core/models/map/fog_level.dart';

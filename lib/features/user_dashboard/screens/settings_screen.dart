@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../../providers/user_provider.dart';
-import '../../core/services/location/nominatim_service.dart';
+import '../../../providers/user_provider.dart';
+import '../../../core/services/location/nominatim_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
