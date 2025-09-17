@@ -474,8 +474,31 @@ class PostService {
       print('  - 타일 목록: $fogTiles');
       
       if (fogTiles.isEmpty) {
-        print('  - 타일이 비어있음, 빈 리스트 반환');
-        return Stream.value(<PostModel>[]);
+        print('  - 타일이 비어있음, 현재 위치 주변에서 직접 조회');
+        // 포그레벨 1 타일이 없으면 현재 위치 주변에서 직접 조회
+        return _firestore
+            .collection('posts')
+            .where('isActive', isEqualTo: true)
+            .where('isCollected', isEqualTo: false)
+            .where('reward', isLessThan: 1000) // 일반 포스트만
+            .snapshots()
+            .map((snapshot) {
+          print('  - 직접 쿼리 결과: ${snapshot.docs.length}개 문서');
+          
+          final allPosts = snapshot.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+          
+          // 거리 기반 필터링 (클라이언트 사이드)
+          final filteredPosts = allPosts.where((post) {
+            final distance = _calculateDistance(
+              location.latitude, location.longitude,
+              post.location.latitude, post.location.longitude,
+            );
+            return distance <= radiusInKm;
+          }).toList();
+          
+          print('  - 거리 필터링 후: ${filteredPosts.length}개');
+          return filteredPosts;
+        });
       }
       
       return _firestore

@@ -216,6 +216,11 @@ class _MapScreenState extends State<MapScreen> {
         print('📌 포스트 $i: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
       }
       
+      // 디버깅: 포그레벨 1 타일 조회 결과
+      final fogLevel1Tiles = await VisitTileService.getFogLevel1TileIdsCached(_userProvider.user!.uid);
+      print('🔍 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}개');
+      print('🔍 포그레벨 1 타일 목록: $fogLevel1Tiles');
+      
       // 포스트를 마커 데이터로 변환
       final markers = <MarkerData>[];
       final positionCount = <String, int>{}; // 위치별 포스트 개수 추적
@@ -1112,6 +1117,12 @@ class _MapScreenState extends State<MapScreen> {
       _clusteredMarkers = markers;
     });
     print('✅ _clusteredMarkers 업데이트 완료: ${_clusteredMarkers.length}개');
+    
+    // 디버깅: 마커 상세 정보 출력
+    for (int i = 0; i < _clusteredMarkers.length && i < 3; i++) {
+      final marker = _clusteredMarkers[i];
+      print('🎯 마커 $i: ${marker.key} at (${marker.point.latitude}, ${marker.point.longitude})');
+    }
   }
 
   void _updateUserMarkers() {
