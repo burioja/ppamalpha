@@ -7,6 +7,7 @@ import 'package:rxdart/rxdart.dart';
 import '../../models/post/post_model.dart';
 import '../../../features/map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
+import 'post_search_service.dart';
 
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -73,6 +74,9 @@ class PostService {
       
       // 생성된 문서 ID를 postId 필드에 업데이트
       await docRef.update({'postId': postId});
+      
+      // S2 타일 ID 자동 설정
+      await PostSearchService.updatePostS2Tiles(postId);
       
       final post = PostModel(
         postId: postId,
@@ -447,23 +451,28 @@ class PostService {
     required GeoPoint location,
     required double radiusInKm,
   }) {
-    return Rx.combineLatest2(
-      // 1. 일반 포스트: FogLevel 1 타일에서만 조회
-      _getNormalPostsStream(location, radiusInKm),
-      // 2. 슈퍼포스트: 별도 쿼리로 조회
-      _getSuperPostsStream(location, radiusInKm),
-      (List<PostModel> normalPosts, List<PostModel> superPosts) {
-        // 두 리스트 합치기
-        final allPosts = [...normalPosts, ...superPosts];
+    // 새로운 서버 사이드 필터링 사용
+    return Stream.periodic(const Duration(seconds: 5)).asyncMap((_) async {
+      try {
+        final result = await PostSearchService.searchPosts(
+          centerLat: location.latitude,
+          centerLng: location.longitude,
+          radiusKm: radiusInKm,
+          fogLevel: 1, // 포그레벨 1만
+          rewardType: 'all',
+          limit: 100,
+        );
         
-        print('📊 최적화된 포스트 로드:');
-        print('  - 일반 포스트: ${normalPosts.length}개');
-        print('  - 슈퍼포스트: ${superPosts.length}개');
-        print('  - 총 포스트: ${allPosts.length}개');
+        print('📊 서버 사이드 포스트 로드:');
+        print('  - 총 포스트: ${result.posts.length}개');
+        print('  - 총 카운트: ${result.totalCount}개');
         
-        return allPosts;
-      },
-    );
+        return result.posts;
+      } catch (e) {
+        print('❌ 서버 사이드 포스트 로드 실패: $e');
+        return <PostModel>[];
+      }
+    });
   }
   
   // 일반 포스트 스트림 (FogLevel 1 타일만)

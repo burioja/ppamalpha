@@ -48,6 +48,15 @@ class PostModel {
   final String? tileId; // 포스트가 위치한 타일 ID
   final bool isSuperPost; // 슈퍼포스트 여부 (검은 영역에서도 표시)
   
+  // S2 타일 ID (서버 사이드 필터링용)
+  final String? s2_10; // S2 level 10 cell id (쿼리용)
+  final String? s2_12; // S2 level 12 cell id (더 촘촘한 커버링용)
+  
+  // 필터링 필드 (서버 사이드 최적화)
+  final String rewardType; // 'normal' | 'super'
+  final int? fogLevel; // 포그레벨 (1: Clear, 2: Partial, 3: Dark)
+  final String? tileId_fog1; // 포그레벨 1 타일 ID
+  
   // 사용 관련
   final DateTime? usedAt; // 사용 일시
   final bool isUsedByCurrentUser; // 현재 사용자가 사용했는지 여부
@@ -85,6 +94,11 @@ class PostModel {
     this.distributedAt,
     this.tileId,
     this.isSuperPost = false,
+    this.s2_10,
+    this.s2_12,
+    this.rewardType = 'normal',
+    this.fogLevel,
+    this.tileId_fog1,
     this.usedAt,
     this.isUsedByCurrentUser = false,
   }) : markerId = markerId ?? '${creatorId}_$postId';
@@ -141,6 +155,11 @@ class PostModel {
           : null,
       tileId: data['tileId'],
       isSuperPost: data['isSuperPost'] ?? false,
+      s2_10: data['s2_10'],
+      s2_12: data['s2_12'],
+      rewardType: data['rewardType'] ?? 'normal',
+      fogLevel: data['fogLevel'],
+      tileId_fog1: data['tileId_fog1'],
       usedAt: data['usedAt'] != null 
           ? (data['usedAt'] as Timestamp).toDate()
           : null,
