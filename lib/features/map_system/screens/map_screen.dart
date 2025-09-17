@@ -9,7 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../services/markers/marker_service.dart';
+import '../../../core/services/data/marker_service.dart';
+import '../../../core/models/marker/marker_model.dart';
+import 'package:latlong2/latlong.dart';
+import '../widgets/marker_layer_widget.dart';
 import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../services/external/osm_fog_service.dart';
@@ -80,8 +83,8 @@ class _MapScreenState extends State<MapScreen> {
   
   // 포스트 관련
   List<PostModel> _posts = [];
-  List<MarkerData> _markers = [];
-  List<MarkerData> _userMarkers = []; // 사용자가 배치한 마커들
+  List<MarkerModel> _markers = []; // 새로운 마커 모델 사용
+  List<MarkerModel> _userMarkers = []; // 사용자가 배치한 마커들
   bool _isLoading = false;
   String? _errorMessage;
   
@@ -192,127 +195,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
 
-  // 🚀 실시간 포스트 스트림 리스너 설정
+  // 🚀 마커 서비스 리스너 설정 (포스트 조회 제거)
   void _setupPostStreamListener() {
     if (_currentPosition == null) return;
 
-    print('🚀 포스트 스트림 리스너 설정 시작');
+    print('🚀 마커 서비스 리스너 설정 시작');
     print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
     print('💰 유료 사용자: $_isPremiumUser');
     print('📏 검색 반경: ${_maxDistance}m (${_maxDistance / 1000.0}km)');
 
-    // 포그레벨 1단계 포스트 실시간 스트림
-    PostService().getPostsInFogLevel1Stream(
-      location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-      radiusInKm: _maxDistance / 1000.0,
-    ).listen((posts) {
-      print('📡 포그레벨 1단계 포스트 업데이트: ${posts.length}개');
-      print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
-      print('📏 검색 반경: ${_maxDistance / 1000.0}km');
-      
-      // 디버깅: 포스트 상세 정보 출력
-      for (int i = 0; i < posts.length && i < 3; i++) {
-        final post = posts[i];
-        print('📌 포스트 $i: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
-      }
-      
-      // 디버깅: 포그레벨 1 타일 조회 결과 (비동기로 처리)
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        VisitTileService.getFogLevel1TileIdsCached(user.uid).then((fogLevel1Tiles) {
-          print('🔍 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}개');
-          print('🔍 포그레벨 1 타일 목록: $fogLevel1Tiles');
-        });
-      }
-      
-      // 포스트를 포스트 ID별로 그룹화하여 마커 데이터로 변환
-      final markers = <MarkerData>[];
-      final postGroups = <String, List<PostModel>>{}; // 포스트 ID별 포스트 그룹
-      
-      // 1. 포스트 ID별로 그룹화 (같은 포스트 ID = 같은 마커)
-      for (final post in posts) {
-        final postKey = post.postId; // 포스트 ID를 키로 사용
-        if (postGroups[postKey] == null) {
-          postGroups[postKey] = [];
-        }
-        postGroups[postKey]!.add(post);
-      }
-      
-      // 2. 각 포스트 ID별로 하나의 마커 생성
-      postGroups.forEach((postId, postList) {
-        // 가장 최근 포스트를 대표로 사용
-        final representativePost = postList.reduce((a, b) => 
-          a.createdAt.isAfter(b.createdAt) ? a : b
-        );
-        
-        // 수량 계산 (수집되지 않은 포스트만)
-        final availablePosts = postList.where((post) => !post.isCollected).toList();
-        final totalQuantity = availablePosts.length;
-        
-        // 수량이 0이면 마커 생성하지 않음 (자동 소멸)
-        if (totalQuantity <= 0) {
-          print('📌 마커 소멸: $postId (수량 소진)');
-          return;
-        }
-        
-        // 수량 정보를 title에 포함
-        final title = totalQuantity > 1 
-          ? '${representativePost.title} (${totalQuantity}개)'
-          : representativePost.title;
-        
-        // 위치 기반 고유 ID 생성 (같은 포스트 ID는 같은 위치에 있어야 함)
-        final positionKey = '${representativePost.location.latitude.toStringAsFixed(6)},${representativePost.location.longitude.toStringAsFixed(6)}';
-        final markerId = '${postId}_${positionKey}';
-        
-        markers.add(MarkerData(
-          id: markerId, // 포스트 ID + 위치 기반 고유 ID
-          title: title,
-          description: representativePost.description,
-          userId: representativePost.creatorId,
-          position: LatLng(representativePost.location.latitude, representativePost.location.longitude),
-          createdAt: representativePost.createdAt,
-          expiryDate: representativePost.expiresAt,
-          data: {
-            'posts': availablePosts.map((p) => p.toFirestore()).toList(), // 사용 가능한 포스트만 포함
-            'postCount': totalQuantity, // 사용 가능한 수량
-            'postId': postId, // 포스트 ID
-            'representativePost': representativePost.toFirestore(),
-            'remainingQuantity': totalQuantity, // 남은 수량
-          },
-          isCollected: false, // 마커 자체는 수집되지 않음
-          collectedBy: null,
-          collectedAt: null,
-          type: MarkerType.post,
-        ));
-        
-        print('📌 마커 생성: $title at $positionKey (${totalQuantity}개 수량)');
-      });
-      
-      // 3. 포스트 ID별 포스트 개수 확인
-      print('🔍 포스트 ID별 포스트 개수:');
-      postGroups.forEach((postId, postList) {
-        final availablePosts = postList.where((post) => !post.isCollected).toList();
-        final totalQuantity = availablePosts.length;
-        
-        if (postList.length > 1) {
-          print('  - $postId: ${postList.length}개 포스트 (사용 가능: ${totalQuantity}개)');
-        } else {
-          print('  - $postId: ${postList.length}개 포스트 (사용 가능: ${totalQuantity}개)');
-        }
-      });
-      
-      print('🎯 총 마커 개수: ${markers.length}개');
-      
-      setState(() {
-        _markers = markers;
-      });
-      
-      print('🔄 마커 업데이트 시작 - _markers: ${_markers.length}개');
-      _updateMarkers();
-      print('🔄 마커 업데이트 완료 - _clusteredMarkers: ${_clusteredMarkers.length}개');
-    }, onError: (error) {
-      print('포스트 스트림 리스너 오류: $error');
-    });
+    // 새로운 구조: MarkerService에서 직접 마커 조회
+    _updatePostsBasedOnFogLevel();
   }
 
   void _loadCustomMarker() {
@@ -638,106 +531,17 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     try {
-      if (forceRefresh) {
-        // 🚀 수동 새로고침: 일회성 조회 (포스트 배포 후 즉시 반영)
-        final posts = await PostService().getPostsInFogLevel1(
-          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-          radiusInKm: _maxDistance / 1000.0,
-        );
-        
-        // 일반 포스트만 조회 (슈퍼포스트는 스트림에서 자동 처리)
-        final allPosts = posts;
-        
-        // 마커 데이터 생성
-        final markers = <MarkerData>[];
-        for (final post in allPosts) {
-          // 🚀 슈퍼포스트 판별: 1000원 이상이면 슈퍼포스트
-          final isSuperPost = post.reward >= 1000;
-          
-          markers.add(MarkerData(
-            id: post.postId,
-            title: post.title,
-            description: post.description,
-            userId: post.creatorId,
-            position: LatLng(post.location.latitude, post.location.longitude),
-            createdAt: post.createdAt,
-            expiryDate: post.expiresAt,
-            data: post.toFirestore(),
-            isCollected: post.isCollected,
-            collectedBy: post.collectedBy,
-            collectedAt: post.collectedAt,
-            type: isSuperPost ? MarkerType.superPost : MarkerType.post,
-          ));
-        }
-        
-        if (mounted) {
-          setState(() {
-            _posts = allPosts;
-            _markers = markers;
-            _isLoading = false;
-          });
-          _updateMarkers();
-          
-          // 🚀 마커 캐시 저장
-        }
-      } else {
-        // 🚀 실시간 포스트 스트림 사용 (포그레벨 1단계)
-        PostService().getPostsInFogLevel1Stream(
-          location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-          radiusInKm: _maxDistance / 1000.0,
-        ).listen((posts) {
-          if (mounted) {
-            // 🚀 슈퍼포스트 판별: 1000원 이상이면 슈퍼포스트
-            final markers = <MarkerData>[];
-            for (final post in posts) {
-              final isSuperPost = post.reward >= 1000;
-              
-              markers.add(MarkerData(
-                id: post.postId,
-                title: post.title,
-                description: post.description,
-                userId: post.creatorId,
-                position: LatLng(post.location.latitude, post.location.longitude),
-                createdAt: post.createdAt,
-                expiryDate: post.expiresAt,
-                data: post.toFirestore(),
-                isCollected: post.isCollected,
-                collectedBy: post.collectedBy,
-                collectedAt: post.collectedAt,
-                type: isSuperPost ? MarkerType.superPost : MarkerType.post,
-              ));
-            }
-            
-            setState(() {
-              _posts = posts;
-              _markers = markers;
-              _isLoading = false; // 첫 번째 데이터 수신 시 로딩 해제
-            });
-            _updateMarkers();
-            
-            // 🚀 마커 캐시 저장
-          }
-        }, onError: (e) {
-          if (mounted) {
-            setState(() {
-              _errorMessage = '포스트를 불러오는 중 오류가 발생했습니다: $e';
-              _isLoading = false;
-            });
-          }
-        });
-        
-        // 스트림 시작 후 즉시 로딩 해제 (스트림이 비어있을 수 있으므로)
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-          }
+      // 새로운 구조: MarkerService에서 직접 마커 조회
+      await _updatePostsBasedOnFogLevel();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = '포스트를 불러오는 중 오류가 발생했습니다: $e';
+        _errorMessage = '마커를 불러오는 중 오류가 발생했습니다: $e';
         _isLoading = false;
       });
     }
@@ -830,135 +634,46 @@ class _MapScreenState extends State<MapScreen> {
     return set1.every((tile) => set2.contains(tile));
   }
 
-  // 🚀 포그레벨 변경 감지 및 포스트 필터링
+  // 🚀 새로운 마커 서비스 사용
   Future<void> _updatePostsBasedOnFogLevel() async {
     if (_currentPosition == null) return;
 
     try {
-      // 주변 타일들의 포그레벨 계산
-      final surroundingTiles = TileUtils.getSurroundingTiles(
-        _currentPosition!.latitude, 
-        _currentPosition!.longitude
+      print('🔍 _updatePostsBasedOnFogLevel 호출됨');
+      final currentLat = _currentPosition!.latitude;
+      final currentLng = _currentPosition!.longitude;
+
+      // 1. 현재 위치 주변의 마커들을 MarkerService를 통해 조회
+      final markerStream = MarkerService.getMarkersInRadius(
+        center: LatLng(currentLat, currentLng),
+        radiusKm: 1.0, // 1km 반경
+        limit: 100,
       );
       
-      final newTileFogLevels = <String, int>{};
-      final fogLevel1Tiles = <String>{};
-      
-      for (final tileId in surroundingTiles) {
-        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
-        
-        newTileFogLevels[tileId] = fogLevel.level;
-        if (fogLevel == FogLevel.clear) {
-          fogLevel1Tiles.add(tileId);
-        }
-      }
-      
-      // 포그레벨 변경 감지
-      bool fogLevelChanged = false;
-      for (final tileId in surroundingTiles) {
-        final oldLevel = _tileFogLevels[tileId] ?? 0;
-        final newLevel = newTileFogLevels[tileId] ?? 0;
-        
-        if (oldLevel != newLevel) {
-          fogLevelChanged = true;
-          print('🔄 타일 $tileId 포그레벨 변경: $oldLevel → $newLevel');
-        }
-      }
-      
-      if (fogLevelChanged) {
-        print('🔄 포그레벨 변경 감지 - 포스트 필터링 업데이트');
-        
-        // 포그레벨 캐시 업데이트
-        _tileFogLevels = newTileFogLevels;
-        
-        // 포스트 필터링 업데이트
-        await _filterPostsByFogLevel(fogLevel1Tiles);
-      }
-      
+      // 스트림에서 첫 번째 데이터를 가져옴
+      final fetchedMarkers = await markerStream.first;
+
+      setState(() {
+        _markers = fetchedMarkers;
+        print('✅ _updatePostsBasedOnFogLevel: ${_markers.length}개의 마커 업데이트됨');
+      });
+
+      // TODO: 포그레벨 로직은 나중에 마커와 별개로 처리하거나, 마커 필터링에 통합
+      // 현재는 마커 표시를 우선으로 함
+
     } catch (e) {
-      print('포그레벨 변경 감지 실패: $e');
+      print('❌ _updatePostsBasedOnFogLevel 오류: $e');
     }
   }
 
-  // 포그레벨에 따른 포스트 필터링
+  // 포그레벨에 따른 마커 필터링
   Future<void> _filterPostsByFogLevel(Set<String> fogLevel1Tiles) async {
     try {
-      // 모든 활성 포스트 조회 (캐시된 데이터 사용)
-      final allPosts = await PostService().getAllActivePosts(
-        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        radiusInKm: _maxDistance / 1000.0,
-      );
-      
-      // 슈퍼포스트도 조회
-      final superPosts = await PostService().getSuperPostsInRadius(
-        location: GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
-        radiusInKm: _maxDistance / 1000.0,
-      );
-      
-      // 포스트 필터링
-      final filteredMarkers = <MarkerData>[];
-      final newVisiblePostIds = <String>{};
-      
-      // 일반 포스트 필터링 (포그레벨 1단계만)
-      for (final post in allPosts) {
-        if (post.tileId != null && fogLevel1Tiles.contains(post.tileId)) {
-          filteredMarkers.add(MarkerData(
-            id: post.postId,
-            title: post.title,
-            description: post.description,
-            userId: post.creatorId,
-            position: LatLng(post.location.latitude, post.location.longitude),
-            createdAt: post.createdAt,
-            expiryDate: post.expiresAt,
-            data: post.toFirestore(),
-            isCollected: post.isCollected,
-            collectedBy: post.collectedBy,
-            collectedAt: post.collectedAt,
-            type: MarkerType.post,
-          ));
-          newVisiblePostIds.add(post.postId);
-        }
-      }
-      
-      // 슈퍼포스트는 항상 표시
-      for (final post in superPosts) {
-        filteredMarkers.add(MarkerData(
-          id: post.postId,
-          title: post.title,
-          description: post.description,
-          userId: post.creatorId,
-          position: LatLng(post.location.latitude, post.location.longitude),
-          createdAt: post.createdAt,
-          expiryDate: post.expiresAt,
-          data: post.toFirestore(),
-          isCollected: post.isCollected,
-          collectedBy: post.collectedBy,
-          collectedAt: post.collectedAt,
-          type: MarkerType.superPost,
-        ));
-        newVisiblePostIds.add(post.postId);
-      }
-      
-      // 표시 상태 변경 감지
-      final addedPosts = newVisiblePostIds.difference(_visiblePostIds);
-      final removedPosts = _visiblePostIds.difference(newVisiblePostIds);
-      
-      if (addedPosts.isNotEmpty) {
-        print('📌 새로 표시된 포스트: ${addedPosts.length}개');
-      }
-      if (removedPosts.isNotEmpty) {
-        print('🙈 숨겨진 포스트: ${removedPosts.length}개');
-      }
-      
-      setState(() {
-        _markers = filteredMarkers;
-        _visiblePostIds = newVisiblePostIds;
-      });
-      
-      _updateMarkers();
+      // 새로운 구조: MarkerService에서 직접 마커 조회
+      await _updatePostsBasedOnFogLevel();
       
     } catch (e) {
-      print('포스트 필터링 실패: $e');
+      print('마커 필터링 실패: $e');
     }
   }
 
@@ -1076,7 +791,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 마커 상세 정보 표시
-  void _showMarkerDetails(MarkerData marker) {
+  void _showMarkerDetails(MarkerModel marker) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1086,17 +801,17 @@ class _MapScreenState extends State<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('설명: ${marker.description}'),
+              Text('포스트 ID: ${marker.postId}'),
               const SizedBox(height: 8),
-              Text('생성자: ${marker.userId}'),
+              Text('수량: ${marker.quantity}개'),
+              const SizedBox(height: 8),
+              Text('생성자: ${marker.creatorId}'),
               const SizedBox(height: 8),
               Text('생성일: ${marker.createdAt}'),
-              if (marker.expiryDate != null) ...[
+              if (marker.expiresAt != null) ...[
                 const SizedBox(height: 8),
-                Text('만료일: ${marker.expiryDate}'),
+                Text('만료일: ${marker.expiresAt}'),
               ],
-              const SizedBox(height: 8),
-              Text('타입: ${marker.type == MarkerType.superPost ? "슈퍼포스트" : "일반포스트"}'),
             ],
           ),
           actions: [
@@ -1114,11 +829,12 @@ class _MapScreenState extends State<MapScreen> {
     print('🔧 _updateMarkers 호출됨 - _markers 개수: ${_markers.length}');
     final markers = <Marker>[];
     
-    // 포스트 마커들 - ppam_work 이미지 사용
+    // 새로운 마커 모델 사용
     for (final marker in _markers) {
-      print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude})');
+      print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
       markers.add(
         Marker(
+          key: ValueKey(marker.markerId),
           point: marker.position,
           width: 35,
           height: 35,
@@ -1164,7 +880,7 @@ class _MapScreenState extends State<MapScreen> {
     // 디버깅: 마커 상세 정보 출력
     for (int i = 0; i < _clusteredMarkers.length && i < 3; i++) {
       final marker = _clusteredMarkers[i];
-      print('🎯 마커 $i: ${marker.key} at (${marker.point.latitude}, ${marker.point.longitude})');
+      print('🎯 마커 $i: ${marker.key?.toString() ?? "key없음"} at (${marker.point.latitude}, ${marker.point.longitude})');
     }
   }
 
@@ -1218,223 +934,24 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  void _showUserMarkerDetail(MarkerData marker) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final isOwner = marker.userId == currentUserId;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.4,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 핸들 바
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // 마커 정보
-                    Text(
-                marker.title,
-                style: const TextStyle(
-                  fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              
-              if (marker.description.isNotEmpty) ...[
-                Text(
-                  marker.description,
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-              ],
-              
-              // 배치자 정보
-              Text(
-                '배치자: ${marker.userId}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              
-              Text(
-                '배치일: ${marker.createdAt.toString().split(' ')[0]}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // 액션 버튼들
-              if (isOwner) ...[
-                // 배포자만 회수 가능
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _collectMarker(marker),
-                    icon: const Icon(Icons.delete),
-                    label: const Text('마커 회수'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-            ] else ...[
-                // 타겟 사용자는 수집 가능
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _collectMarker(marker),
-                    icon: const Icon(Icons.check),
-                    label: const Text('마커 수집'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              
-              const SizedBox(height: 12),
-              
-              // 닫기 버튼
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-              child: const Text('닫기'),
-                ),
-            ),
-          ],
-          ),
-        ),
-      ),
-    );
+  void _showUserMarkerDetail(MarkerModel marker) {
+    // TODO: 새로운 구조에 맞게 구현 예정
+    print('사용자 마커 상세: ${marker.title}');
   }
 
-  Future<void> _collectMarker(MarkerData marker) async {
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId == null) return;
-
-      final isOwner = marker.userId == currentUserId;
-
-      if (isOwner) {
-        // 배포자: 마커 삭제
-        await PostService().deletePost(marker.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마커가 회수되었습니다')),
-        );
-      } else {
-        // 타겟 사용자: 마커 수집
-        await PostService().collectPost(
-          postId: marker.id,
-          userId: currentUserId!,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마커를 수집했습니다')),
-        );
-      }
-
-      Navigator.pop(context); // 상세 화면 닫기
-    } catch (e) {
-      print('마커 처리 실패: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('마커 처리 실패: $e')),
-        );
-    }
+  Future<void> _collectMarker(MarkerModel marker) async {
+    // TODO: 새로운 구조에 맞게 구현 예정
+    print('마커 수집: ${marker.title}');
   }
 
-  void _showMarkerDetail(MarkerData marker) {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final isOwner = marker.userId == currentUserId;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(marker.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Text('설명: ${marker.description}'),
-            Text('생성일: ${marker.createdAt.toString().split(' ')[0]}'),
-            if (marker.expiryDate != null)
-              Text('만료일: ${marker.expiryDate!.toString().split(' ')[0]}'),
-            if (isOwner) 
-              Text('배포자: 본인', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          actions: [
-            TextButton(
-            onPressed: () => Navigator.pop(context),
-              child: const Text('닫기'),
-            ),
-              if (isOwner)
-                TextButton(
-                  onPressed: () {
-                Navigator.pop(context);
-                _deleteMarker(marker);
-              },
-              child: const Text('삭제', style: TextStyle(color: Colors.red)),
-            ),
-        ],
-      ),
-    );
+  void _showMarkerDetail(MarkerModel marker) {
+    // TODO: 새로운 구조에 맞게 구현 예정
+    print('마커 상세: ${marker.title}');
   }
 
-  Future<void> _deleteMarker(MarkerData marker) async {
-    try {
-      await PostService().deletePost(marker.id);
-      await _loadPosts(forceRefresh: true); // 마커 목록 새로고침
-          ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('마커가 삭제되었습니다.')),
-          );
-    } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('마커 삭제 중 오류가 발생했습니다: $e')),
-      );
-    }
+  Future<void> _deleteMarker(MarkerModel marker) async {
+    // TODO: 새로운 구조에 맞게 구현 예정
+    print('마커 삭제: ${marker.title}');
   }
 
   bool _matchesFilter(PostModel post) {

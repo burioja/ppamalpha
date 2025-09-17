@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../map_system/services/markers/marker_service.dart';
+import '../../../core/services/data/marker_service.dart';
 import '../../map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
 
@@ -186,16 +186,16 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 3. 포스트는 업데이트하지 않고 마커만 생성 (중복 배포 허용)
       // 포스트 자체는 원본 그대로 유지하고, 마커만 새로 생성
 
-      // 4. 마커 생성 (수량만큼)
-      for (int i = 0; i < quantity; i++) {
-        await _createMarkerInFirestore(
-          post: _selectedPost!,
-          location: _selectedLocation!,
-          quantity: 1, // 각 마커는 1개씩
-          price: price,
-        );
-        print('✅ 마커 ${i + 1}/${quantity} 생성 완료');
-      }
+      // 4. 마커 생성 (새로운 구조)
+      await MarkerService.createMarker(
+        postId: _selectedPost!.postId,
+        title: _selectedPost!.title,
+        position: _selectedLocation!,
+        quantity: quantity, // 전체 수량을 하나의 마커에
+        creatorId: _selectedPost!.creatorId,
+        expiresAt: _selectedPost!.expiresAt,
+      );
+      print('✅ 마커 생성 완료: ${_selectedPost!.title} (${quantity}개 수량)');
 
       print('✅ 포스트 배포 완료: ${_selectedPost!.postId} (${quantity}개 마커 생성)');
 
@@ -662,58 +662,6 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     }
   }
 
-  // 마커를 Firestore에 생성하는 메서드
-  Future<void> _createMarkerInFirestore({
-    required PostModel post,
-    required LatLng location,
-    required int quantity,
-    required int price,
-  }) async {
-    try {
-      // 고유한 마커 ID 생성 (타임스탬프 + 랜덤)
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final random = DateTime.now().microsecond;
-      final postMarkerId = '${post.postId}_${timestamp}_$random';
-
-      final markerData = {
-        'markerId': postMarkerId, // 고유한 마커 ID
-        'title': post.title,
-        'price': price,
-        'amount': quantity,
-        'userId': post.creatorId,
-        'position': GeoPoint(location.latitude, location.longitude),
-        'remainingAmount': quantity,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiryDate': post.expiresAt,
-        'isActive': true,
-        'isCollected': false,
-        'type': 'post_place', // MapScreen과 일치하는 타입
-        'postId': post.postId,
-        'creatorName': post.creatorName,
-        'description': post.description,
-        'targetGender': post.targetGender,
-        'targetAge': post.targetAge,
-        'canRespond': post.canRespond,
-        'canForward': post.canForward,
-        'canRequestReward': post.canRequestReward,
-        'canUse': post.canUse,
-        'markerId': post.markerId,
-        'radius': post.radius, // 포스트 반경 정보 추가
-      };
-
-      // markers 컬렉션에 고유한 ID로 저장
-      await FirebaseFirestore.instance
-          .collection('markers')
-          .doc(postMarkerId)
-          .set(markerData);
-      
-      debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
-      debugPrint('마커 ID: $postMarkerId, 포스트 ID: ${post.postId}');
-    } catch (e) {
-      debugPrint('마커 생성 실패: $e');
-      throw Exception('마커 생성에 실패했습니다: $e');
-    }
-  }
 
   @override
   void dispose() {
