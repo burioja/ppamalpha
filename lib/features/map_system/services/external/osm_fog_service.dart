@@ -5,13 +5,13 @@ import 'package:flutter_map/flutter_map.dart';
 
 /// OSM 기반 Fog of War 서비스
 class OSMFogService {
-  static const double _fogRadius = 500.0; // 500미터 반경
+  static const double _fogRadius = 1000.0; // 1km 반경
 
   /// 현재 위치를 기반으로 포그 폴리곤 생성
   static Polygon createFogPolygon(LatLng position) {
     return Polygon(
       points: _generateCirclePoints(position, _fogRadius),
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withOpacity(1.0), // 완전히 검게 (opacity 1.0)
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,
     );
@@ -35,7 +35,7 @@ class OSMFogService {
     return Polygon(
       points: outerPoints,
       holePointsList: holes,
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withOpacity(1.0), // 완전히 검게 (opacity 1.0)
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,
     );
@@ -56,7 +56,7 @@ class OSMFogService {
   static List<Polygon> createGrayAreas(List<LatLng> visitedPositions) {
     return visitedPositions.map((position) {
       return Polygon(
-        points: _generateCirclePoints(position, _fogRadius * 0.8),
+        points: _generateCirclePoints(position, _fogRadius), // 1km 반경으로 통일
         color: Colors.grey.withOpacity(0.3),
         borderColor: Colors.grey.withOpacity(0.5),
         borderStrokeWidth: 1.0,

@@ -1765,7 +1765,7 @@ class _MapScreenState extends State<MapScreen> {
     if (_longPressedLatLng == null) return;
 
     // PostDeploymentController를 사용한 위치 기반 포스트 배포
-    final success = await PostDeploymentController.deployFromLocation(context, _longPressedLatLng!);
+    final success = await PostDeploymentController.deployPostFromLocation(context, _longPressedLatLng!);
 
     // 포스트 배포 완료 후 처리
     if (success) {
@@ -1787,7 +1787,7 @@ class _MapScreenState extends State<MapScreen> {
     if (_longPressedLatLng == null) return;
 
     // PostDeploymentController를 사용한 주소 기반 포스트 배포
-    final success = await PostDeploymentController.deployFromAddress(context, _longPressedLatLng!);
+    final success = await PostDeploymentController.deployPostFromAddress(context, _longPressedLatLng!);
 
     // 포스트 배포 완료 후 처리
     if (success) {
@@ -1809,7 +1809,7 @@ class _MapScreenState extends State<MapScreen> {
     if (_longPressedLatLng == null) return;
 
     // PostDeploymentController를 사용한 카테고리 기반 포스트 배포
-    final success = await PostDeploymentController.deployFromCategory(context, _longPressedLatLng!);
+    final success = await PostDeploymentController.deployPostFromCategory(context, _longPressedLatLng!);
 
     // 포스트 배포 완료 후 처리
     if (success) {
@@ -2099,8 +2099,8 @@ class _MapScreenState extends State<MapScreen> {
                 PolygonLayer(polygons: _grayPolygons),
                 // Fog of War 마스크 (전세계 검정 + 1km 원형 홀)
                 PolygonLayer(polygons: _fogPolygons),
-                // 1km 경계선
-                CircleLayer(circles: _ringCircles),
+                // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
+                // CircleLayer(circles: _ringCircles),
                 // 사용자 위치 마커들
                 MarkerLayer(
                   markers: [

@@ -116,7 +116,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     return quantity * price.toDouble();
   }
 
-  Future<void> _deployPost() async {
+  Future<void> _deployPostToLocation() async {
     if (_selectedPost == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -625,7 +625,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       width: double.infinity,
       height: 56,
       child: ElevatedButton.icon(
-        onPressed: _selectedPost != null && !_isDeploying ? _deployPost : null,
+        onPressed: _selectedPost != null && !_isDeploying ? _deployPostToLocation : null,
         icon: _isDeploying
             ? const SizedBox(
                 width: 20,
@@ -681,10 +681,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 고유한 마커 ID 생성 (타임스탬프 + 랜덤)
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = DateTime.now().microsecond;
-      final markerId = '${post.postId}_${timestamp}_$random';
+      final postMarkerId = '${post.postId}_${timestamp}_$random';
 
       final markerData = {
-        'markerId': markerId, // 고유한 마커 ID
+        'markerId': postMarkerId, // 고유한 마커 ID
         'title': post.title,
         'price': price,
         'amount': quantity,
@@ -712,11 +712,11 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // markers 컬렉션에 고유한 ID로 저장
       await FirebaseFirestore.instance
           .collection('markers')
-          .doc(markerId)
+          .doc(postMarkerId)
           .set(markerData);
       
       debugPrint('마커 생성 완료: ${post.title} at ${location.latitude}, ${location.longitude}');
-      debugPrint('마커 ID: $markerId, 포스트 ID: ${post.postId}');
+      debugPrint('마커 ID: $postMarkerId, 포스트 ID: ${post.postId}');
     } catch (e) {
       debugPrint('마커 생성 실패: $e');
       throw Exception('마커 생성에 실패했습니다: $e');

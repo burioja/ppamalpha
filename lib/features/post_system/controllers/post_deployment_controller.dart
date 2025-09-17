@@ -13,7 +13,7 @@ class PostDeploymentController {
   /// [location] - 배포할 위치 (LatLng)
   ///
   /// Returns: 배포 성공 여부 (true: 성공, false: 취소)
-  static Future<bool> deployFromLocation(BuildContext context, LatLng location) async {
+  static Future<bool> deployPostFromLocation(BuildContext context, LatLng location) async {
     final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
       'location': location,
       'type': 'location',
@@ -28,7 +28,7 @@ class PostDeploymentController {
   /// [location] - 배포할 위치 (LatLng)
   ///
   /// Returns: 배포 성공 여부 (true: 성공, false: 취소)
-  static Future<bool> deployFromAddress(BuildContext context, LatLng location) async {
+  static Future<bool> deployPostFromAddress(BuildContext context, LatLng location) async {
     final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
       'location': location,
       'type': 'address',
@@ -43,7 +43,7 @@ class PostDeploymentController {
   /// [location] - 배포할 위치 (LatLng)
   ///
   /// Returns: 배포 성공 여부 (true: 성공, false: 취소)
-  static Future<bool> deployFromCategory(BuildContext context, LatLng location) async {
+  static Future<bool> deployPostFromCategory(BuildContext context, LatLng location) async {
     final result = await Navigator.pushNamed(context, '/post-deploy', arguments: {
       'location': location,
       'type': 'category',
@@ -62,13 +62,13 @@ class PostDeploymentController {
   static Future<bool> deployPost(BuildContext context, LatLng location, String deployType) async {
     switch (deployType) {
       case 'location':
-        return await deployFromLocation(context, location);
+        return await deployPostFromLocation(context, location);
       case 'address':
-        return await deployFromAddress(context, location);
+        return await deployPostFromAddress(context, location);
       case 'category':
-        return await deployFromCategory(context, location);
+        return await deployPostFromCategory(context, location);
       default:
-        return await deployFromLocation(context, location);
+        return await deployPostFromLocation(context, location);
     }
   }
 
