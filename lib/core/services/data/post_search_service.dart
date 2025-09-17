@@ -50,30 +50,43 @@ class PostSearchService {
         );
       }
       
-      // 2. Firestore IN 쿼리 제한 (30개) 고려한 배치 처리
-      final batches = S2TileUtils.batchS2Cells(s2Cells);
-      print('  - 배치 개수: ${batches.length}개');
-      
+      // 2. 인덱스가 없을 때를 대비한 폴백 처리
       final allPosts = <PostModel>[];
       
-      // 3. 각 배치별로 쿼리 실행
-      for (int i = 0; i < batches.length; i++) {
-        final batch = batches[i];
-        print('  - 배치 ${i + 1}/${batches.length} 처리 중...');
+      try {
+        // S2 타일 기반 쿼리 시도
+        final batches = S2TileUtils.batchS2Cells(s2Cells);
+        print('  - 배치 개수: ${batches.length}개');
         
-        final posts = await _queryPostsBatch(
-          s2Cells: batch,
+        // 3. 각 배치별로 쿼리 실행
+        for (int i = 0; i < batches.length; i++) {
+          final batch = batches[i];
+          print('  - 배치 ${i + 1}/${batches.length} 처리 중...');
+          
+          final posts = await _queryPostsBatch(
+            s2Cells: batch,
+            fogLevel: fogLevel,
+            rewardType: rewardType,
+            limit: limit,
+          );
+          
+          allPosts.addAll(posts);
+          
+          // 제한 수에 도달하면 중단
+          if (allPosts.length >= limit) {
+            break;
+          }
+        }
+      } catch (e) {
+        print('  - S2 타일 쿼리 실패, 폴백 처리: $e');
+        
+        // 폴백: 기본 필터만 사용
+        final posts = await _queryPostsFallback(
           fogLevel: fogLevel,
           rewardType: rewardType,
           limit: limit,
         );
-        
         allPosts.addAll(posts);
-        
-        // 제한 수에 도달하면 중단
-        if (allPosts.length >= limit) {
-          break;
-        }
       }
       
       // 4. 거리 기반 정밀 필터링
@@ -197,6 +210,42 @@ class PostSearchService {
       
     } catch (e) {
       print('❌ 포스트 S2 타일 업데이트 실패: $e');
+    }
+  }
+  
+  /// 폴백 쿼리 (인덱스 없이 작동)
+  static Future<List<PostModel>> _queryPostsFallback({
+    required int? fogLevel,
+    required String rewardType,
+    required int limit,
+  }) async {
+    try {
+      print('  - 폴백 쿼리 실행 중...');
+      
+      // 기본 필터만 사용
+      Query query = _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .where('isCollected', isEqualTo: false)
+          .where('expiresAt', isGreaterThan: Timestamp.now());
+      
+      // 리워드 타입 필터
+      if (rewardType != 'all') {
+        query = query.where('rewardType', isEqualTo: rewardType);
+      }
+      
+      // 쿼리 실행
+      final snapshot = await query.limit(limit).get();
+      
+      print('  - 폴백 쿼리 결과: ${snapshot.docs.length}개 문서');
+      
+      return snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+          
+    } catch (e) {
+      print('❌ 폴백 쿼리 실패: $e');
+      return [];
     }
   }
   
