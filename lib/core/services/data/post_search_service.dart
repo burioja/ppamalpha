@@ -80,13 +80,20 @@ class PostSearchService {
       } catch (e) {
         print('  - S2 타일 쿼리 실패, 폴백 처리: $e');
         
-        // 폴백: 기본 필터만 사용
-        final posts = await _queryPostsFallback(
-          fogLevel: fogLevel,
-          rewardType: rewardType,
-          limit: limit,
-        );
-        allPosts.addAll(posts);
+      // 폴백: 기본 필터만 사용
+      final posts = await _queryPostsFallback(
+        fogLevel: fogLevel,
+        rewardType: rewardType,
+        limit: limit,
+      );
+      allPosts.addAll(posts);
+      
+      // 디버깅: 폴백 결과 확인
+      print('  - 폴백 결과: ${posts.length}개 포스트');
+      for (int i = 0; i < posts.length && i < 3; i++) {
+        final post = posts[i];
+        print('  - 폴백 포스트 $i: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
+      }
       }
       
       // 4. 거리 기반 정밀 필터링
@@ -222,7 +229,16 @@ class PostSearchService {
     try {
       print('  - 폴백 쿼리 실행 중...');
       
-      // 기본 필터만 사용
+      // 1. 먼저 모든 포스트 조회 (디버깅용)
+      final allPostsSnapshot = await _firestore.collection('posts').limit(10).get();
+      print('  - 전체 포스트 개수: ${allPostsSnapshot.docs.length}개');
+      
+      if (allPostsSnapshot.docs.isNotEmpty) {
+        final samplePost = allPostsSnapshot.docs.first;
+        print('  - 샘플 포스트: ${samplePost.data()}');
+      }
+      
+      // 2. 기본 필터만 사용
       Query query = _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
