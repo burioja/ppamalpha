@@ -533,10 +533,10 @@ class _MapScreenState extends State<MapScreen> {
     try {
       // 새로운 구조: MarkerService에서 직접 마커 조회
       await _updatePostsBasedOnFogLevel();
-      
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
+        
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
         });
       }
     } catch (e) {
@@ -660,7 +660,7 @@ class _MapScreenState extends State<MapScreen> {
 
       // TODO: 포그레벨 로직은 나중에 마커와 별개로 처리하거나, 마커 필터링에 통합
       // 현재는 마커 표시를 우선으로 함
-
+      
     } catch (e) {
       print('❌ _updatePostsBasedOnFogLevel 오류: $e');
     }
