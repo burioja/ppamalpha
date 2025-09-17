@@ -50,50 +50,52 @@ class PostSearchService {
         );
       }
       
-      // 2. 인덱스가 없을 때를 대비한 폴백 처리
+      // 2. 먼저 포스트 존재 여부 확인
+      print('  - 포스트 존재 여부 확인 중...');
+      final allPostsSnapshot = await _firestore.collection('posts').limit(5).get();
+      print('  - 전체 포스트 개수: ${allPostsSnapshot.docs.length}개');
+      
+      if (allPostsSnapshot.docs.isEmpty) {
+        print('  - 포스트가 없습니다. 포스트를 먼저 생성해야 합니다.');
+        return PostSearchResult(
+          posts: [],
+          nextCursor: null,
+          totalCount: 0,
+        );
+      }
+      
+      // 3. 간단한 쿼리로 포스트 조회
       final allPosts = <PostModel>[];
       
       try {
-        // S2 타일 기반 쿼리 시도
-        final batches = S2TileUtils.batchS2Cells(s2Cells);
-        print('  - 배치 개수: ${batches.length}개');
+        print('  - 간단한 쿼리로 포스트 조회 중...');
         
-        // 3. 각 배치별로 쿼리 실행
-        for (int i = 0; i < batches.length; i++) {
-          final batch = batches[i];
-          print('  - 배치 ${i + 1}/${batches.length} 처리 중...');
-          
-          final posts = await _queryPostsBatch(
-            s2Cells: batch,
-            fogLevel: fogLevel,
-            rewardType: rewardType,
-            limit: limit,
-          );
-          
-          allPosts.addAll(posts);
-          
-          // 제한 수에 도달하면 중단
-          if (allPosts.length >= limit) {
-            break;
+        // 가장 간단한 쿼리부터 시도
+        Query simpleQuery = _firestore
+            .collection('posts')
+            .where('isActive', isEqualTo: true);
+        
+        final simpleSnapshot = await simpleQuery.limit(limit).get();
+        print('  - 간단한 쿼리 결과: ${simpleSnapshot.docs.length}개');
+        
+        if (simpleSnapshot.docs.isNotEmpty) {
+          final sampleDoc = simpleSnapshot.docs.first;
+          print('  - 샘플 포스트: ${sampleDoc.data()}');
+        }
+        
+        // 포스트 변환
+        for (final doc in simpleSnapshot.docs) {
+          try {
+            final post = PostModel.fromFirestore(doc);
+            allPosts.add(post);
+            print('  - 포스트 추가: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
+          } catch (e) {
+            print('  - 포스트 변환 실패: $e');
           }
         }
-      } catch (e) {
-        print('  - S2 타일 쿼리 실패, 폴백 처리: $e');
         
-      // 폴백: 기본 필터만 사용
-      final posts = await _queryPostsFallback(
-        fogLevel: fogLevel,
-        rewardType: rewardType,
-        limit: limit,
-      );
-      allPosts.addAll(posts);
-      
-      // 디버깅: 폴백 결과 확인
-      print('  - 폴백 결과: ${posts.length}개 포스트');
-      for (int i = 0; i < posts.length && i < 3; i++) {
-        final post = posts[i];
-        print('  - 폴백 포스트 $i: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
-      }
+      } catch (e) {
+        print('  - 간단한 쿼리 실패: $e');
       }
       
       // 4. 거리 기반 정밀 필터링
