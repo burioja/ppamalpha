@@ -55,6 +55,11 @@ class PostSearchService {
       final allPostsSnapshot = await _firestore.collection('posts').limit(5).get();
       print('  - 전체 포스트 개수: ${allPostsSnapshot.docs.length}개');
       
+      if (allPostsSnapshot.docs.isNotEmpty) {
+        final sampleDoc = allPostsSnapshot.docs.first;
+        print('  - 샘플 포스트 데이터: ${sampleDoc.data()}');
+      }
+      
       if (allPostsSnapshot.docs.isEmpty) {
         print('  - 포스트가 없습니다. 포스트를 먼저 생성해야 합니다.');
         return PostSearchResult(
