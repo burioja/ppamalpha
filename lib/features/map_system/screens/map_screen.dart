@@ -225,33 +225,47 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
       
-      // 포스트를 위치별로 그룹화하여 마커 데이터로 변환
+      // 포스트를 포스트 ID별로 그룹화하여 마커 데이터로 변환
       final markers = <MarkerData>[];
-      final positionGroups = <String, List<PostModel>>{}; // 위치별 포스트 그룹
+      final postGroups = <String, List<PostModel>>{}; // 포스트 ID별 포스트 그룹
       
-      // 1. 위치별로 포스트 그룹화
+      // 1. 포스트 ID별로 그룹화 (같은 포스트 ID = 같은 마커)
       for (final post in posts) {
-        final positionKey = '${post.location.latitude.toStringAsFixed(6)},${post.location.longitude.toStringAsFixed(6)}';
-        if (positionGroups[positionKey] == null) {
-          positionGroups[positionKey] = [];
+        final postKey = post.postId; // 포스트 ID를 키로 사용
+        if (postGroups[postKey] == null) {
+          postGroups[postKey] = [];
         }
-        positionGroups[positionKey]!.add(post);
+        postGroups[postKey]!.add(post);
       }
       
-      // 2. 각 위치별로 하나의 마커 생성
-      positionGroups.forEach((positionKey, postList) {
+      // 2. 각 포스트 ID별로 하나의 마커 생성
+      postGroups.forEach((postId, postList) {
         // 가장 최근 포스트를 대표로 사용
         final representativePost = postList.reduce((a, b) => 
           a.createdAt.isAfter(b.createdAt) ? a : b
         );
         
-        // 포스트 개수 정보를 title에 포함
-        final title = postList.length > 1 
-          ? '${representativePost.title} (${postList.length}개)'
+        // 수량 계산 (수집되지 않은 포스트만)
+        final availablePosts = postList.where((post) => !post.isCollected).toList();
+        final totalQuantity = availablePosts.length;
+        
+        // 수량이 0이면 마커 생성하지 않음 (자동 소멸)
+        if (totalQuantity <= 0) {
+          print('📌 마커 소멸: $postId (수량 소진)');
+          return;
+        }
+        
+        // 수량 정보를 title에 포함
+        final title = totalQuantity > 1 
+          ? '${representativePost.title} (${totalQuantity}개)'
           : representativePost.title;
         
+        // 위치 기반 고유 ID 생성 (같은 포스트 ID는 같은 위치에 있어야 함)
+        final positionKey = '${representativePost.location.latitude.toStringAsFixed(6)},${representativePost.location.longitude.toStringAsFixed(6)}';
+        final markerId = '${postId}_${positionKey}';
+        
         markers.add(MarkerData(
-          id: '${positionKey}_${postList.length}', // 위치 기반 고유 ID
+          id: markerId, // 포스트 ID + 위치 기반 고유 ID
           title: title,
           description: representativePost.description,
           userId: representativePost.creatorId,
@@ -259,9 +273,11 @@ class _MapScreenState extends State<MapScreen> {
           createdAt: representativePost.createdAt,
           expiryDate: representativePost.expiresAt,
           data: {
-            'posts': postList.map((p) => p.toFirestore()).toList(), // 모든 포스트 정보 포함
-            'postCount': postList.length,
+            'posts': availablePosts.map((p) => p.toFirestore()).toList(), // 사용 가능한 포스트만 포함
+            'postCount': totalQuantity, // 사용 가능한 수량
+            'postId': postId, // 포스트 ID
             'representativePost': representativePost.toFirestore(),
+            'remainingQuantity': totalQuantity, // 남은 수량
           },
           isCollected: false, // 마커 자체는 수집되지 않음
           collectedBy: null,
@@ -269,16 +285,19 @@ class _MapScreenState extends State<MapScreen> {
           type: MarkerType.post,
         ));
         
-        print('📌 마커 생성: $title at $positionKey (${postList.length}개 포스트)');
+        print('📌 마커 생성: $title at $positionKey (${totalQuantity}개 수량)');
       });
       
-      // 3. 위치별 포스트 개수 확인
-      print('🔍 위치별 포스트 개수:');
-      positionGroups.forEach((position, postList) {
+      // 3. 포스트 ID별 포스트 개수 확인
+      print('🔍 포스트 ID별 포스트 개수:');
+      postGroups.forEach((postId, postList) {
+        final availablePosts = postList.where((post) => !post.isCollected).toList();
+        final totalQuantity = availablePosts.length;
+        
         if (postList.length > 1) {
-          print('  - $position: ${postList.length}개 포스트 (그룹화됨)');
+          print('  - $postId: ${postList.length}개 포스트 (사용 가능: ${totalQuantity}개)');
         } else {
-          print('  - $position: ${postList.length}개 포스트');
+          print('  - $postId: ${postList.length}개 포스트 (사용 가능: ${totalQuantity}개)');
         }
       });
       
