@@ -225,40 +225,60 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
       
-      // 포스트를 마커 데이터로 변환
+      // 포스트를 위치별로 그룹화하여 마커 데이터로 변환
       final markers = <MarkerData>[];
-      final positionCount = <String, int>{}; // 위치별 포스트 개수 추적
+      final positionGroups = <String, List<PostModel>>{}; // 위치별 포스트 그룹
       
+      // 1. 위치별로 포스트 그룹화
       for (final post in posts) {
-        // 위치별 포스트 개수 추적
         final positionKey = '${post.location.latitude.toStringAsFixed(6)},${post.location.longitude.toStringAsFixed(6)}';
-        positionCount[positionKey] = (positionCount[positionKey] ?? 0) + 1;
+        if (positionGroups[positionKey] == null) {
+          positionGroups[positionKey] = [];
+        }
+        positionGroups[positionKey]!.add(post);
+      }
+      
+      // 2. 각 위치별로 하나의 마커 생성
+      positionGroups.forEach((positionKey, postList) {
+        // 가장 최근 포스트를 대표로 사용
+        final representativePost = postList.reduce((a, b) => 
+          a.createdAt.isAfter(b.createdAt) ? a : b
+        );
+        
+        // 포스트 개수 정보를 title에 포함
+        final title = postList.length > 1 
+          ? '${representativePost.title} (${postList.length}개)'
+          : representativePost.title;
         
         markers.add(MarkerData(
-          id: post.postId,
-          title: post.title,
-          description: post.description,
-          userId: post.creatorId,
-          position: LatLng(post.location.latitude, post.location.longitude),
-          createdAt: post.createdAt,
-          expiryDate: post.expiresAt,
-          data: post.toFirestore(),
-          isCollected: post.isCollected,
-          collectedBy: post.collectedBy,
-          collectedAt: post.collectedAt,
+          id: '${positionKey}_${postList.length}', // 위치 기반 고유 ID
+          title: title,
+          description: representativePost.description,
+          userId: representativePost.creatorId,
+          position: LatLng(representativePost.location.latitude, representativePost.location.longitude),
+          createdAt: representativePost.createdAt,
+          expiryDate: representativePost.expiresAt,
+          data: {
+            'posts': postList.map((p) => p.toFirestore()).toList(), // 모든 포스트 정보 포함
+            'postCount': postList.length,
+            'representativePost': representativePost.toFirestore(),
+          },
+          isCollected: false, // 마커 자체는 수집되지 않음
+          collectedBy: null,
+          collectedAt: null,
           type: MarkerType.post,
         ));
         
-        print('📌 포스트: ${post.title} (${post.reward}원) - 위치: $positionKey');
-      }
+        print('📌 마커 생성: $title at $positionKey (${postList.length}개 포스트)');
+      });
       
-      // 중복 위치 확인
+      // 3. 위치별 포스트 개수 확인
       print('🔍 위치별 포스트 개수:');
-      positionCount.forEach((position, count) {
-        if (count > 1) {
-          print('  - $position: $count개 포스트 (중복!)');
+      positionGroups.forEach((position, postList) {
+        if (postList.length > 1) {
+          print('  - $position: ${postList.length}개 포스트 (그룹화됨)');
         } else {
-          print('  - $position: $count개 포스트');
+          print('  - $position: ${postList.length}개 포스트');
         }
       });
       
