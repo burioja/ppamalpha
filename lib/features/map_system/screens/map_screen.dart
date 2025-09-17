@@ -210,6 +210,12 @@ class _MapScreenState extends State<MapScreen> {
       print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
       print('📏 검색 반경: ${_maxDistance / 1000.0}km');
       
+      // 디버깅: 포스트 상세 정보 출력
+      for (int i = 0; i < posts.length && i < 3; i++) {
+        final post = posts[i];
+        print('📌 포스트 $i: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
+      }
+      
       // 포스트를 마커 데이터로 변환
       final markers = <MarkerData>[];
       final positionCount = <String, int>{}; // 위치별 포스트 개수 추적
@@ -253,7 +259,9 @@ class _MapScreenState extends State<MapScreen> {
         _markers = markers;
       });
       
+      print('🔄 마커 업데이트 시작 - _markers: ${_markers.length}개');
       _updateMarkers();
+      print('🔄 마커 업데이트 완료 - _clusteredMarkers: ${_clusteredMarkers.length}개');
     }, onError: (error) {
       print('포스트 스트림 리스너 오류: $error');
     });
@@ -1055,10 +1063,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateMarkers() {
+    print('🔧 _updateMarkers 호출됨 - _markers 개수: ${_markers.length}');
     final markers = <Marker>[];
     
     // 포스트 마커들 - ppam_work 이미지 사용
     for (final marker in _markers) {
+      print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude})');
       markers.add(
         Marker(
           point: marker.position,
@@ -1097,9 +1107,11 @@ class _MapScreenState extends State<MapScreen> {
     // 사용자 마커들을 별도 리스트로 업데이트
     _updateUserMarkers();
 
+    print('🎯 최종 마커 개수: ${markers.length}개');
     setState(() {
       _clusteredMarkers = markers;
     });
+    print('✅ _clusteredMarkers 업데이트 완료: ${_clusteredMarkers.length}개');
   }
 
   void _updateUserMarkers() {

@@ -71,9 +71,10 @@ class VisitTileService {
           .collection('users')
           .doc(userId)
           .collection('visited_tiles')
-          .where('visitCount', isGreaterThanOrEqualTo: 10)
+          .where('visitCount', isGreaterThanOrEqualTo: 1) // 1회 이상 방문하면 포그레벨 1
           .get();
 
+      print('🔍 포그레벨 1 타일 조회: ${snapshot.docs.length}개');
       return snapshot.docs.map((doc) => doc.id).toList();
     } catch (e) {
       print('포그 레벨 1 타일 목록 조회 오류: $e');
