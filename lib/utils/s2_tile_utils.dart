@@ -59,7 +59,7 @@ class S2TileUtils {
         final lng = centerLng + j * lngStep / steps;
         
         // 거리 체크
-        final distance = _calculateDistance(centerLat, centerLng, lat, lng);
+        final distance = calculateDistance(centerLat, centerLng, lat, lng);
         if (distance <= radiusKm) {
           final cellId = latLngToS2CellId(lat, lng, level);
           cells.add(cellId);
@@ -71,7 +71,7 @@ class S2TileUtils {
   }
   
   /// 두 지점 간의 거리 계산 (Haversine 공식)
-  static double _calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+  static double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
     final dLat = (lat2 - lat1) * math.pi / 180.0;
     final dLng = (lng2 - lng1) * math.pi / 180.0;
     

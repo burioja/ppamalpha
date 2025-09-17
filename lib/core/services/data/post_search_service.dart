@@ -78,7 +78,7 @@ class PostSearchService {
       
       // 4. 거리 기반 정밀 필터링
       final filteredPosts = allPosts.where((post) {
-        final distance = S2TileUtils._calculateDistance(
+        final distance = S2TileUtils.calculateDistance(
           centerLat, centerLng,
           post.location.latitude, post.location.longitude,
         );
@@ -87,11 +87,11 @@ class PostSearchService {
       
       // 5. 정렬 (거리순, 생성일순)
       filteredPosts.sort((a, b) {
-        final distanceA = S2TileUtils._calculateDistance(
+        final distanceA = S2TileUtils.calculateDistance(
           centerLat, centerLng,
           a.location.latitude, a.location.longitude,
         );
-        final distanceB = S2TileUtils._calculateDistance(
+        final distanceB = S2TileUtils.calculateDistance(
           centerLat, centerLng,
           b.location.latitude, b.location.longitude,
         );
