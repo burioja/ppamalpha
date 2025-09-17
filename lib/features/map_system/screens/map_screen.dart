@@ -217,10 +217,13 @@ class _MapScreenState extends State<MapScreen> {
       }
       
       // 디버깅: 포그레벨 1 타일 조회 결과 (비동기로 처리)
-      VisitTileService.getFogLevel1TileIdsCached(_userProvider.user!.uid).then((fogLevel1Tiles) {
-        print('🔍 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}개');
-        print('🔍 포그레벨 1 타일 목록: $fogLevel1Tiles');
-      });
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        VisitTileService.getFogLevel1TileIdsCached(user.uid).then((fogLevel1Tiles) {
+          print('🔍 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}개');
+          print('🔍 포그레벨 1 타일 목록: $fogLevel1Tiles');
+        });
+      }
       
       // 포스트를 마커 데이터로 변환
       final markers = <MarkerData>[];
