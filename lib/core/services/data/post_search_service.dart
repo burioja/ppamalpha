@@ -75,21 +75,31 @@ class PostSearchService {
       try {
         print('  - 간단한 쿼리로 포스트 조회 중...');
         
-        // 가장 간단한 쿼리부터 시도
-        Query simpleQuery = _firestore
+        // 가장 간단한 쿼리부터 시도 (조건 없이)
+        Query noFilterQuery = _firestore.collection('posts');
+        final noFilterSnapshot = await noFilterQuery.limit(limit).get();
+        print('  - 필터 없는 쿼리 결과: ${noFilterSnapshot.docs.length}개');
+        
+        if (noFilterSnapshot.docs.isNotEmpty) {
+          final sampleDoc = noFilterSnapshot.docs.first;
+          print('  - 샘플 포스트 (필터 없음): ${sampleDoc.data()}');
+        }
+        
+        // isActive 조건만 있는 쿼리
+        Query activeQuery = _firestore
             .collection('posts')
             .where('isActive', isEqualTo: true);
         
-        final simpleSnapshot = await simpleQuery.limit(limit).get();
-        print('  - 간단한 쿼리 결과: ${simpleSnapshot.docs.length}개');
+        final activeSnapshot = await activeQuery.limit(limit).get();
+        print('  - isActive=true 쿼리 결과: ${activeSnapshot.docs.length}개');
         
-        if (simpleSnapshot.docs.isNotEmpty) {
-          final sampleDoc = simpleSnapshot.docs.first;
-          print('  - 샘플 포스트: ${sampleDoc.data()}');
+        if (activeSnapshot.docs.isNotEmpty) {
+          final sampleDoc = activeSnapshot.docs.first;
+          print('  - 샘플 포스트 (isActive=true): ${sampleDoc.data()}');
         }
         
-        // 포스트 변환
-        for (final doc in simpleSnapshot.docs) {
+        // 포스트 변환 (isActive=true인 것만)
+        for (final doc in activeSnapshot.docs) {
           try {
             final post = PostModel.fromFirestore(doc);
             allPosts.add(post);
