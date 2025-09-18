@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:714872165171:web:1b07188ea5236f196e2446',
     messagingSenderId: '714872165171',
     projectId: 'ppamproto-439623',
-    authDomain: 'ppamproto-439623.firebaseapp.com',
+    authDomain: 'localhost',
     storageBucket: 'ppamproto-439623.appspot.com',
   );
 
