@@ -12,6 +12,7 @@ class MarkerModel {
   final DateTime createdAt;
   final DateTime expiresAt;
   final bool isActive;
+  final List<String> collectedBy; // 수령한 사용자 ID 목록
 
   MarkerModel({
     required this.markerId,
@@ -23,6 +24,7 @@ class MarkerModel {
     required this.createdAt,
     required this.expiresAt,
     required this.isActive,
+    this.collectedBy = const [],
   });
 
   /// Firestore에서 마커 생성
@@ -40,6 +42,7 @@ class MarkerModel {
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
       isActive: data['isActive'] ?? true,
+      collectedBy: List<String>.from(data['collectedBy'] ?? []),
     );
   }
 
@@ -54,6 +57,7 @@ class MarkerModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'expiresAt': Timestamp.fromDate(expiresAt),
       'isActive': isActive,
+      'collectedBy': collectedBy,
     };
   }
 
@@ -68,6 +72,7 @@ class MarkerModel {
     DateTime? createdAt,
     DateTime? expiresAt,
     bool? isActive,
+    List<String>? collectedBy,
   }) {
     return MarkerModel(
       markerId: markerId ?? this.markerId,
@@ -79,6 +84,7 @@ class MarkerModel {
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
       isActive: isActive ?? this.isActive,
+      collectedBy: collectedBy ?? this.collectedBy,
     );
   }
 }

@@ -656,6 +656,7 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _markers = fetchedMarkers;
         print('✅ _updatePostsBasedOnFogLevel: ${_markers.length}개의 마커 업데이트됨');
+        _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
 
       // TODO: 포그레벨 로직은 나중에 마커와 별개로 처리하거나, 마커 필터링에 통합
@@ -792,6 +793,17 @@ class _MapScreenState extends State<MapScreen> {
 
   // 마커 상세 정보 표시
   void _showMarkerDetails(MarkerModel marker) {
+    // 거리 체크
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('위치 정보를 가져올 수 없습니다')),
+      );
+      return;
+    }
+
+    final distance = _calculateDistance(_currentPosition!, marker.position);
+    final isWithinRange = distance <= 100; // 100m 이내
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -805,12 +817,21 @@ class _MapScreenState extends State<MapScreen> {
               const SizedBox(height: 8),
               Text('수량: ${marker.quantity}개'),
               const SizedBox(height: 8),
+              Text('거리: ${distance.toStringAsFixed(0)}m'),
+              const SizedBox(height: 8),
               Text('생성자: ${marker.creatorId}'),
               const SizedBox(height: 8),
               Text('생성일: ${marker.createdAt}'),
               if (marker.expiresAt != null) ...[
                 const SizedBox(height: 8),
                 Text('만료일: ${marker.expiresAt}'),
+              ],
+              if (!isWithinRange) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '수령 불가: 100m 이내에서만 수령 가능합니다',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
               ],
             ],
           ),
@@ -819,10 +840,50 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('닫기'),
             ),
+            if (isWithinRange && marker.quantity > 0) ...[
+              TextButton(
+                onPressed: () => _collectPostFromMarker(marker),
+                child: const Text('수령하기'),
+              ),
+            ],
           ],
         );
       },
     );
+  }
+
+  // 마커에서 포스트 수령
+  Future<void> _collectPostFromMarker(MarkerModel marker) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인이 필요합니다')),
+        );
+        return;
+      }
+
+      final success = await MarkerService.collectPostFromMarker(
+        markerId: marker.markerId,
+        userId: user.uid,
+      );
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('포스트를 수령했습니다')),
+        );
+        Navigator.of(context).pop(); // 다이얼로그 닫기
+        _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('포스트 수령에 실패했습니다')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류: $e')),
+      );
+    }
   }
 
   void _updateMarkers() {

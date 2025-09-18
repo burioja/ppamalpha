@@ -25,6 +25,7 @@ class MarkerService {
         'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(expiresAt),
         'isActive': true,
+        'collectedBy': [], // 수령한 사용자 목록 초기화
       };
 
       final docRef = await _firestore.collection('markers').add(markerData);
@@ -86,6 +87,58 @@ class MarkerService {
       print('📍 반경 ${radiusKm}km 내 마커 ${markers.length}개 발견');
       return markers;
     });
+  }
+
+  /// 마커에서 포스트 수령
+  static Future<bool> collectPostFromMarker({
+    required String markerId,
+    required String userId,
+  }) async {
+    try {
+      final docRef = _firestore.collection('markers').doc(markerId);
+      
+      await _firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(docRef);
+        
+        if (!doc.exists) {
+          throw Exception('마커를 찾을 수 없습니다');
+        }
+        
+        final data = doc.data()!;
+        final currentQuantity = data['quantity'] ?? 0;
+        final collectedBy = List<String>.from(data['collectedBy'] ?? []);
+        
+        if (collectedBy.contains(userId)) {
+          throw Exception('이미 수령한 포스트입니다');
+        }
+        
+        if (currentQuantity <= 0) {
+          throw Exception('수량이 부족합니다');
+        }
+        
+        final newQuantity = currentQuantity - 1;
+        collectedBy.add(userId);
+        
+        if (newQuantity <= 0) {
+          transaction.update(docRef, {
+            'quantity': 0,
+            'isActive': false,
+            'collectedBy': collectedBy,
+          });
+        } else {
+          transaction.update(docRef, {
+            'quantity': newQuantity,
+            'collectedBy': collectedBy,
+          });
+        }
+      });
+      
+      print('✅ 마커에서 포스트 수령 완료: $markerId, 사용자: $userId');
+      return true;
+    } catch (e) {
+      print('❌ 마커에서 포스트 수령 실패: $e');
+      return false;
+    }
   }
 
   /// 마커 수량 감소 (수령 시)
