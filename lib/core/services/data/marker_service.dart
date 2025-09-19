@@ -41,13 +41,11 @@ class MarkerService {
   static Stream<List<MarkerModel>> getMarkersInRadius({
     required LatLng center,
     required double radiusKm,
-    required int limit,
   }) {
     return _firestore
         .collection('markers')
         .where('isActive', isEqualTo: true)
         .where('expiresAt', isGreaterThan: Timestamp.now())
-        .limit(limit)
         .snapshots()
         .map((snapshot) {
       final markers = <MarkerModel>[];

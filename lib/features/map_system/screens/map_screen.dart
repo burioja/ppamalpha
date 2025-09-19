@@ -128,6 +128,7 @@ class _MapScreenState extends State<MapScreen> {
     _setupUserDataListener();
     _setupMarkerListener();
     // _checkPremiumStatus()와 _setupPostStreamListener()는 _getCurrentLocation()에서 호출됨
+    
   }
 
   void _setupUserDataListener() {
@@ -197,7 +198,10 @@ class _MapScreenState extends State<MapScreen> {
 
   // 🚀 마커 서비스 리스너 설정 (포스트 조회 제거)
   void _setupPostStreamListener() {
-    if (_currentPosition == null) return;
+    if (_currentPosition == null) {
+      print('❌ _setupPostStreamListener: _currentPosition이 null입니다');
+      return;
+    }
 
     print('🚀 마커 서비스 리스너 설정 시작');
     print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
@@ -290,6 +294,10 @@ class _MapScreenState extends State<MapScreen> {
       
       // 🚀 실시간 포스트 스트림 리스너 설정 (위치 확보 후)
       _setupPostStreamListener();
+      
+      // 추가로 마커 조회 강제 실행
+      print('🚀 위치 설정 완료 후 마커 조회 강제 실행');
+      _updatePostsBasedOnFogLevel();
       
       // 현재 위치 마커 생성
       _createCurrentLocationMarker(newPosition);
@@ -640,22 +648,58 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       print('🔍 _updatePostsBasedOnFogLevel 호출됨');
-      final currentLat = _currentPosition!.latitude;
-      final currentLng = _currentPosition!.longitude;
-
-      // 1. 현재 위치 주변의 마커들을 MarkerService를 통해 조회
-      final markerStream = MarkerService.getMarkersInRadius(
-        center: LatLng(currentLat, currentLng),
-        radiusKm: 1.0, // 1km 반경
-        limit: 100,
-      );
       
-      // 스트림에서 첫 번째 데이터를 가져옴
-      final fetchedMarkers = await markerStream.first;
+      // 1. 검색 기준점들 수집 (현재 위치, 집주소, 일터들)
+      final List<LatLng> searchCenters = [];
+      
+      // 현재 위치 추가
+      searchCenters.add(_currentPosition!);
+      print('📍 기준점 1 - 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      
+      // 집주소 추가
+      if (_homeLocation != null) {
+        searchCenters.add(_homeLocation!);
+        print('🏠 기준점 2 - 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+      }
+      
+      // 등록한 일터들 추가
+      for (int i = 0; i < _workLocations.length; i++) {
+        searchCenters.add(_workLocations[i]);
+        print('🏢 기준점 ${3 + i} - 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
+      }
+      
+      print('🎯 총 ${searchCenters.length}개의 기준점에서 마커 검색');
+
+      // 2. 각 기준점마다 마커 조회
+      final allMarkers = <MarkerModel>[];
+      for (int i = 0; i < searchCenters.length; i++) {
+        final center = searchCenters[i];
+        print('🔍 기준점 ${i + 1}에서 마커 조회 중...');
+        
+        final markerStream = MarkerService.getMarkersInRadius(
+          center: center,
+          radiusKm: 1.0, // 1km 반경
+        );
+        
+        final markers = await markerStream.first;
+        print('📍 기준점 ${i + 1}에서 ${markers.length}개 마커 발견');
+        allMarkers.addAll(markers);
+      }
+
+      // 3. 중복 제거 (같은 마커가 여러 기준점에 포함될 수 있음)
+      final uniqueMarkers = <MarkerModel>[];
+      final seenMarkerIds = <String>{};
+      
+      for (final marker in allMarkers) {
+        if (!seenMarkerIds.contains(marker.markerId)) {
+          uniqueMarkers.add(marker);
+          seenMarkerIds.add(marker.markerId);
+        }
+      }
 
       setState(() {
-        _markers = fetchedMarkers;
-        print('✅ _updatePostsBasedOnFogLevel: ${_markers.length}개의 마커 업데이트됨');
+        _markers = uniqueMarkers;
+        print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커 업데이트됨');
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
 
@@ -852,6 +896,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   // 마커에서 포스트 수령
   Future<void> _collectPostFromMarker(MarkerModel marker) async {
     try {
@@ -927,8 +972,6 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-    // 중복 마커 표시 로직은 위에서 이미 처리됨
-
     // 사용자 마커들을 별도 리스트로 업데이트
     _updateUserMarkers();
 
@@ -936,6 +979,13 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _clusteredMarkers = markers;
     });
+    print('✅ _clusteredMarkers 업데이트 완료: ${_clusteredMarkers.length}개');
+    
+    if (_clusteredMarkers.isEmpty) {
+      print('⚠️ 경고: _clusteredMarkers가 비어있습니다!');
+    } else {
+      print('✅ 마커가 정상적으로 표시됩니다.');
+    }
     print('✅ _clusteredMarkers 업데이트 완료: ${_clusteredMarkers.length}개');
     
     // 디버깅: 마커 상세 정보 출력
