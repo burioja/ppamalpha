@@ -249,6 +249,13 @@ class MarkerService {
             if (!fogLevel1Tiles.contains(tileId)) continue;
           }
           
+          // 수량 확인 - 수량이 0이면 마커 제외
+          final quantity = (data['quantity'] as num?)?.toInt() ?? 0;
+          if (quantity <= 0) {
+            print('수량 소진으로 마커 제외: ${data['title']} (수량: $quantity)');
+            continue;
+          }
+          
           // 마커 데이터 생성
           final marker = MapMarkerData(
             id: doc.id,
@@ -258,7 +265,7 @@ class MarkerService {
             position: position,
             createdAt: (data['createdAt'] as Timestamp).toDate(),
             expiryDate: (data['expiresAt'] as Timestamp).toDate(),
-            data: Map<String, dynamic>.from(data['data'] ?? {}),
+            data: Map<String, dynamic>.from(data['data'] ?? {})..['quantity'] = quantity,
             isCollected: false, // markers는 수령되지 않음
             collectedBy: null,
             collectedAt: null,
@@ -343,6 +350,44 @@ class MarkerService {
       isActive: !markerData.isCollected,
       collectedBy: markerData.collectedBy != null ? [markerData.collectedBy!] : [],
     );
+  }
+
+  /// 마커 생성
+  static Future<String> createMarker({
+    required String postId,
+    required String title,
+    required String creatorId,
+    required LatLng position,
+    required int quantity,
+    DateTime? expiresAt,
+  }) async {
+    try {
+      final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
+      
+      final markerData = {
+        'title': title,
+        'creatorId': creatorId,
+        'location': GeoPoint(position.latitude, position.longitude),
+        'postId': postId,
+        'createdAt': Timestamp.now(),
+        'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt) : null,
+        'isActive': true,
+        'quantity': quantity, // 수량 정보를 최상위 레벨에 저장
+        'data': {
+          'postId': postId,
+          'title': title,
+          'quantity': quantity,
+        },
+        'tileId': tileId,
+      };
+
+      final docRef = await _firestore.collection('markers').add(markerData);
+      print('✅ 마커 생성 완료: ${docRef.id}');
+      return docRef.id;
+    } catch (e) {
+      print('❌ 마커 생성 실패: $e');
+      rethrow;
+    }
   }
 
   /// 마커 삭제 (회수)

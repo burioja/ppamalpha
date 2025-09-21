@@ -11,6 +11,7 @@ class PostModel {
   final DateTime createdAt;
   final DateTime expiresAt;
   final int reward; // 리워드 금액
+  final int quantity; // 배포 수량
   final DateTime? updatedAt; // 수정일
   
   // 타겟팅 조건
@@ -70,6 +71,7 @@ class PostModel {
     required this.createdAt,
     required this.expiresAt,
     required this.reward,
+    this.quantity = 1,
     required this.targetAge,
     required this.targetGender,
     required this.targetInterest,
@@ -125,6 +127,7 @@ class PostModel {
           ? (data['expiresAt'] as Timestamp).toDate()
           : DateTime.now().add(const Duration(days: 30)),
       reward: data['reward'] ?? 0,
+      quantity: data['quantity'] ?? 1,
       targetAge: List<int>.from(data['targetAge'] ?? [20, 30]),
       targetGender: data['targetGender'] ?? 'all',
       targetInterest: List<String>.from(data['targetInterest'] ?? []),

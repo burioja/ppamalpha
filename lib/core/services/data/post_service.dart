@@ -744,7 +744,7 @@ class PostService {
     }
   }
 
-  // 일반 사용자가 다른 사용자의 포스트를 수령하는 메서드
+  // 일반 사용자가 다른 사용자의 포스트를 수령하는 메서드 (수량 차감 방식)
   Future<void> collectPost({
     required String postId,
     required String userId,
@@ -760,12 +760,12 @@ class PostService {
       }
       
       final post = PostModel.fromFirestore(postDoc);
-      debugPrint('📝 포스트 정보: ${post.title}, creatorId: ${post.creatorId}');
+      debugPrint('📝 포스트 정보: ${post.title}, creatorId: ${post.creatorId}, quantity: ${post.quantity}');
       
-      // 이미 수령된 포스트인지 확인
-      if (post.isCollected) {
-        debugPrint('❌ 이미 수령된 포스트: $postId');
-        throw Exception('이미 수령된 포스트입니다.');
+      // 수량이 0인지 확인
+      if (post.quantity <= 0) {
+        debugPrint('❌ 수령 가능한 수량이 없음: quantity=${post.quantity}');
+        throw Exception('수령 가능한 수량이 없습니다.');
       }
       
       // 자신의 포스트는 수령할 수 없음
@@ -776,17 +776,28 @@ class PostService {
       
       debugPrint('✅ 수령 조건 확인 완료, 수령 처리 시작');
       
-      // 수령 처리
+      // 수량 차감 처리
       await _firestore.collection('posts').doc(postId).update({
-        'isCollected': true,
-        'collectedBy': userId,
-        'collectedAt': Timestamp.now(),
+        'quantity': post.quantity - 1,
+        'updatedAt': Timestamp.now(),
       });
       
-      debugPrint('✅ 포스트 수령 완료: $postId, 수령자: $userId');
+      // 수령 기록을 별도 컬렉션에 저장
+      await _firestore.collection('post_collections').add({
+        'postId': postId,
+        'userId': userId,
+        'collectedAt': Timestamp.now(),
+        'postTitle': post.title,
+        'postCreatorId': post.creatorId,
+      });
       
-      // Meilisearch에서 제거
-      await _removeFromMeilisearch(postId);
+      debugPrint('✅ 포스트 수령 완료: $postId, 수령자: $userId, 남은 수량: ${post.quantity - 1}');
+      
+      // 수량이 0이 되면 Meilisearch에서 제거
+      if (post.quantity - 1 <= 0) {
+        await _removeFromMeilisearch(postId);
+        debugPrint('📤 수량 소진으로 Meilisearch에서 제거: $postId');
+      }
     } catch (e) {
       debugPrint('❌ collectPost 실패: $e');
       throw Exception('포스트 수령 실패: $e');
@@ -804,50 +815,45 @@ class PostService {
     }
   }
 
-  // 사용자가 수령한 포스트 조회 (받은 포스트 탭용)
+  // 사용자가 수령한 포스트 조회 (받은 포스트 탭용) - 새로운 수령 기록 시스템
   Future<List<PostModel>> getCollectedPosts(String userId) async {
     try {
       debugPrint('🔍 getCollectedPosts 호출: userId=$userId');
       
-      final querySnapshot = await _firestore
-          .collection('posts')
-          .where('collectedBy', isEqualTo: userId)
+      // post_collections 컬렉션에서 수령 기록 조회
+      final collectionSnapshot = await _firestore
+          .collection('post_collections')
+          .where('userId', isEqualTo: userId)
           .orderBy('collectedAt', descending: true)
           .get();
 
-      debugPrint('📊 수령된 포스트 조회 결과: ${querySnapshot.docs.length}개');
+      debugPrint('📊 수령 기록 조회 결과: ${collectionSnapshot.docs.length}개');
       
-      final posts = querySnapshot.docs
-          .map((doc) => PostModel.fromFirestore(doc))
-          .toList();
+      final posts = <PostModel>[];
+      
+      // 각 수령 기록에 대해 원본 포스트 정보 조회
+      for (final collectionDoc in collectionSnapshot.docs) {
+        try {
+          final collectionData = collectionDoc.data();
+          final postId = collectionData['postId'] as String;
           
-      for (final post in posts) {
-        debugPrint('📝 수령된 포스트: ${post.title} (${post.postId}) - 수령일: ${post.collectedAt}');
+          // 원본 포스트 조회
+          final postDoc = await _firestore.collection('posts').doc(postId).get();
+          if (postDoc.exists) {
+            final post = PostModel.fromFirestore(postDoc);
+            posts.add(post);
+            debugPrint('📝 수령된 포스트: ${post.title} (${post.postId})');
+          } else {
+            debugPrint('⚠️ 수령한 포스트가 삭제됨: $postId');
+          }
+        } catch (e) {
+          debugPrint('❌ 포스트 조회 실패: $e');
+          continue;
+        }
       }
 
+      debugPrint('📊 최종 수령한 포스트: ${posts.length}개');
       return posts;
-    } on FirebaseException catch (e) {
-      debugPrint('⚠️ FirebaseException: ${e.code} - ${e.message}');
-      // 인덱스 빌드 전(failed-precondition) 임시 우회: 서버 정렬 없이 가져와 클라이언트에서 정렬
-      if (e.code == 'failed-precondition') {
-        debugPrint('🔄 폴백 처리: 인덱스 없이 조회 후 클라이언트 정렬');
-        final fallbackSnapshot = await _firestore
-            .collection('posts')
-            .where('collectedBy', isEqualTo: userId)
-            .get();
-        final items = fallbackSnapshot.docs
-            .map((doc) => PostModel.fromFirestore(doc))
-            .toList();
-        items.sort((a, b) {
-          final aTime = a.collectedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final bTime = b.collectedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return bTime.compareTo(aTime); // DESC
-        });
-        
-        debugPrint('📊 폴백 처리 결과: ${items.length}개');
-        return items;
-      }
-      rethrow;
     } catch (e) {
       debugPrint('❌ getCollectedPosts 에러: $e');
       throw Exception('수령한 포스트 조회 실패: $e');

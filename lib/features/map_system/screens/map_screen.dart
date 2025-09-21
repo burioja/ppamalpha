@@ -1029,11 +1029,17 @@ class _MapScreenState extends State<MapScreen> {
                 onPressed: () => _removeMarker(marker),
                 child: const Text('회수하기', style: TextStyle(color: Colors.red)),
               ),
-            ] else if (isWithinRange && marker.quantity > 0) ...[
+            ] else             if (isWithinRange && marker.quantity > 0) ...[
               // 다른 사용자는 수령 버튼
               TextButton(
                 onPressed: () => _collectPostFromMarker(marker),
-                child: const Text('수령하기'),
+                child: Text('수령하기 (${marker.quantity}개 남음)'),
+              ),
+            ] else if (marker.quantity <= 0) ...[
+              // 수량 소진
+              const Text(
+                '수령 완료',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
             ],
           ],
@@ -1054,13 +1060,21 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
+      // 수량 확인
+      if (marker.quantity <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('수령 가능한 수량이 없습니다')),
+        );
+        return;
+      }
+
       await PostService().collectPost(
         postId: marker.postId,
         userId: user.uid,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('포스트를 수령했습니다')),
+        SnackBar(content: Text('포스트를 수령했습니다! (${marker.quantity - 1}개 남음)')),
       );
       Navigator.of(context).pop(); // 다이얼로그 닫기
       _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
