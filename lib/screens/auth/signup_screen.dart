@@ -477,6 +477,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   DropdownMenuItem(value: '+81', child: Text('+81')),
                 ],
                 onChanged: (value) => setState(() => _selectedCountryCode = value),
+                hint: const Text('국가코드'),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -534,6 +535,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       .map((year) => DropdownMenuItem(value: year, child: Text('$year년')))
                       .toList(),
                   onChanged: (value) => setState(() => _selectedYear = value!),
+                  hint: const Text('년도'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -544,6 +546,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       .map((month) => DropdownMenuItem(value: month, child: Text('$month월')))
                       .toList(),
                   onChanged: (value) => setState(() => _selectedMonth = value!),
+                  hint: const Text('월'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -554,6 +557,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       .map((day) => DropdownMenuItem(value: day, child: Text('$day일')))
                       .toList(),
                   onChanged: (value) => setState(() => _selectedDay = value!),
+                  hint: const Text('일'),
                 ),
               ),
             ],

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/marker/marker_model.dart';
+import '../../../utils/tile_utils.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,6 +17,9 @@ class MarkerService {
     required DateTime expiresAt,
   }) async {
     try {
+      // 타일 ID 계산
+      final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
+      
       final markerData = {
         'postId': postId,
         'title': title,
@@ -26,6 +30,7 @@ class MarkerService {
         'expiresAt': Timestamp.fromDate(expiresAt),
         'isActive': true,
         'collectedBy': [], // 수령한 사용자 목록 초기화
+        'tileId': tileId, // 타일 ID 저장
       };
 
       final docRef = await _firestore.collection('markers').add(markerData);

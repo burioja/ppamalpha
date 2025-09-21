@@ -333,6 +333,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         DropdownMenuItem(value: "female", child: Text("여성")),
                       ],
                       onChanged: (value) => setState(() => _selectedGender = value),
+                      hint: const Text('성별을 선택하세요'),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return '성별을 선택해주세요';

@@ -387,6 +387,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                            DropdownMenuItem(value: 'expired', child: Text('만료됨')),
                          ],
                          onChanged: _onStatusFilterChanged,
+                         hint: const Text('상태를 선택하세요'),
                        ),
                      ),
                      
@@ -408,6 +409,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                            DropdownMenuItem(value: 'month', child: Text('1개월')),
                          ],
                          onChanged: _onPeriodFilterChanged,
+                         hint: const Text('기간을 선택하세요'),
                        ),
                      ),
                    ],
@@ -432,6 +434,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                            DropdownMenuItem(value: 'expiresAt', child: Text('만료일')),
                          ],
                          onChanged: _onSortByChanged,
+                         hint: const Text('정렬 기준을 선택하세요'),
                        ),
                      ),
                      
@@ -451,6 +454,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                            DropdownMenuItem(value: 'asc', child: Text('오름차순')),
                          ],
                          onChanged: _onSortOrderChanged,
+                         hint: const Text('정렬 순서를 선택하세요'),
                        ),
                      ),
                    ],

@@ -269,13 +269,20 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _getCurrentLocation() async {
     try {
+      print('📍 현재 위치 요청 중...');
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
+      
+      print('✅ 현재 위치 획득 성공: ${position.latitude}, ${position.longitude}');
+      print('   - 정확도: ${position.accuracy}m');
+      print('   - 고도: ${position.altitude}m');
+      print('   - 속도: ${position.speed}m/s');
       
       final newPosition = LatLng(position.latitude, position.longitude);
       
-        setState(() {
+      setState(() {
         _currentPosition = newPosition;
         _errorMessage = null;
       });
@@ -288,6 +295,7 @@ class _MapScreenState extends State<MapScreen> {
       
       // 타일 방문 기록 업데이트 (새로운 기능)
       final tileId = TileUtils.getKm1TileId(newPosition.latitude, newPosition.longitude);
+      print('   - 타일 ID: $tileId');
       await VisitTileService.updateCurrentTileVisit(tileId);
       
       // 즉시 반영 (렌더링용 메모리 캐시)
@@ -705,27 +713,33 @@ class _MapScreenState extends State<MapScreen> {
 
   // 🚀 서버 API를 통한 마커 조회
   Future<void> _updatePostsBasedOnFogLevel() async {
-    if (_currentPosition == null) return;
+    // 🔥 Fail-open: 위치가 없어도 기본 위치로 조회
+    final centers = <LatLng>[];
+    if (_currentPosition != null) {
+      centers.add(_currentPosition!);
+      print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    } else {
+      // 위치가 없으면 서울시청으로 기본 설정
+      centers.add(LatLng(37.5663, 126.9779));
+      print('⚠️ 위치 없음 - 기본 위치 사용: 37.5663, 126.9779');
+    }
+    
+    // 집주소 추가
+    if (_homeLocation != null) {
+      centers.add(_homeLocation!);
+      print('🏠 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+    }
+    
+    // 등록한 일터들 추가
+    centers.addAll(_workLocations);
+    for (int i = 0; i < _workLocations.length; i++) {
+      print('🏢 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
+    }
+    
+    print('🎯 총 ${centers.length}개의 기준점에서 마커 검색');
 
     try {
       print('🔍 _updatePostsBasedOnFogLevel 호출됨');
-      
-      // 1. 검색 기준점들 수집 (현재 위치, 집주소, 일터들)
-      final List<LatLng> additionalCenters = [];
-      
-      // 집주소 추가
-      if (_homeLocation != null) {
-        additionalCenters.add(_homeLocation!);
-        print('🏠 기준점 - 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
-      }
-      
-      // 등록한 일터들 추가
-      additionalCenters.addAll(_workLocations);
-      for (int i = 0; i < _workLocations.length; i++) {
-        print('🏢 기준점 - 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
-      }
-      
-      print('🎯 총 ${additionalCenters.length + 1}개의 기준점에서 마커 검색');
 
       // 2. 필터 설정
       final filters = <String, dynamic>{
@@ -735,10 +749,18 @@ class _MapScreenState extends State<MapScreen> {
       };
 
       // 3. 서버에서 일반 포스트와 슈퍼포스트를 병렬로 조회
+      final primaryCenter = centers.first; // 첫 번째 중심점 사용
+      final additionalCenters = centers.skip(1).toList(); // 나머지는 추가 중심점
+      
+      print('🔍 서버 호출 시작:');
+      print('  - 주 중심점: ${primaryCenter.latitude}, ${primaryCenter.longitude}');
+      print('  - 추가 중심점: ${additionalCenters.length}개');
+      print('  - 반경: ${_maxDistance / 1000.0}km');
+      
       final futures = await Future.wait([
         // 일반 포스트 조회
         MarkerService.getMarkers(
-          location: _currentPosition!,
+          location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0, // km로 변환
           additionalCenters: additionalCenters,
           filters: filters,
@@ -746,7 +768,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
         // 슈퍼포스트 조회
         MarkerService.getSuperPosts(
-          location: _currentPosition!,
+          location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0,
           additionalCenters: additionalCenters,
           pageSize: 200,
@@ -756,8 +778,18 @@ class _MapScreenState extends State<MapScreen> {
       final normalMarkers = futures[0] as List<MapMarkerData>;
       final superMarkers = futures[1] as List<MapMarkerData>;
       
-      print('📍 일반 포스트: ${normalMarkers.length}개');
-      print('⭐ 슈퍼포스트: ${superMarkers.length}개');
+      print('📍 서버 응답:');
+      print('  - 일반 포스트: ${normalMarkers.length}개');
+      print('  - 슈퍼포스트: ${superMarkers.length}개');
+      
+      // 🔥 Fail-open: 마커가 없으면 경고 메시지
+      if (normalMarkers.isEmpty && superMarkers.isEmpty) {
+        print('⚠️ 마커가 없습니다! 가능한 원인:');
+        print('  - 위치 권한 문제');
+        print('  - 서버 필터가 너무 강함');
+        print('  - 포그레벨 1 타일이 없음');
+        print('  - Firestore 데이터 없음');
+      }
 
       // 4. 모든 마커를 합치고 중복 제거
       final allMarkers = <MapMarkerData>[];
@@ -791,11 +823,20 @@ class _MapScreenState extends State<MapScreen> {
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
       
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ _updatePostsBasedOnFogLevel 오류: $e');
+      print('📚 스택 트레이스: $stackTrace');
+      
+      // 🔥 Fail-open: 에러 발생 시에도 기본 마커라도 표시
+      print('🔄 에러 발생 - 기본 마커 표시 시도');
+      
       setState(() {
         _isLoading = false;
         _errorMessage = '마커를 불러오는 중 오류가 발생했습니다: $e';
+        
+        // 에러 발생 시 빈 마커 리스트로 설정 (무한 로딩 방지)
+        _markers = [];
+        _updateMarkers();
       });
     }
   }
@@ -936,6 +977,8 @@ class _MapScreenState extends State<MapScreen> {
 
     final distance = _calculateDistance(_currentPosition!, marker.position);
     final isWithinRange = distance <= 100; // 100m 이내
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isOwner = currentUser != null && marker.creatorId == currentUser.uid;
 
     showDialog(
       context: context,
@@ -959,6 +1002,13 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(height: 8),
                 Text('만료일: ${marker.expiresAt}'),
               ],
+              if (isOwner) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  '내가 배포한 포스트',
+                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                ),
+              ],
               if (!isWithinRange) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -973,7 +1023,14 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('닫기'),
             ),
-            if (isWithinRange && marker.quantity > 0) ...[
+            if (isOwner) ...[
+              // 배포자는 회수 버튼
+              TextButton(
+                onPressed: () => _removeMarker(marker),
+                child: const Text('회수하기', style: TextStyle(color: Colors.red)),
+              ),
+            ] else if (isWithinRange && marker.quantity > 0) ...[
+              // 다른 사용자는 수령 버튼
               TextButton(
                 onPressed: () => _collectPostFromMarker(marker),
                 child: const Text('수령하기'),
@@ -1088,9 +1145,63 @@ class _MapScreenState extends State<MapScreen> {
     print('마커 상세: ${marker.title}');
   }
 
-  Future<void> _deleteMarker(MarkerModel marker) async {
-    // TODO: 새로운 구조에 맞게 구현 예정
-    print('마커 삭제: ${marker.title}');
+  // 마커 회수 (삭제)
+  Future<void> _removeMarker(MarkerModel marker) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인이 필요합니다')),
+        );
+        return;
+      }
+
+      // 배포자 확인
+      if (marker.creatorId != user.uid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('자신이 배포한 포스트만 회수할 수 있습니다')),
+        );
+        return;
+      }
+
+      // 확인 다이얼로그
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('포스트 회수'),
+          content: const Text('이 포스트를 회수하시겠습니까? 회수된 포스트는 복구할 수 없습니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('회수', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      // 마커와 포스트 모두 삭제
+      await PostService().deletePost(marker.postId);
+      
+      // 마커도 삭제 (markers 컬렉션에서)
+      await MarkerService.deleteMarker(marker.markerId);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('포스트를 회수했습니다')),
+      );
+      
+      Navigator.of(context).pop(); // 다이얼로그 닫기
+      _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('포스트 회수 중 오류가 발생했습니다: $e')),
+      );
+    }
   }
 
   bool _matchesFilter(PostModel post) {
@@ -2061,9 +2172,11 @@ class _MapScreenState extends State<MapScreen> {
                     ],
                   ),
                   child: IconButton(
-                    onPressed: () {
-                      if (_currentPosition != null) {
-                        _mapController?.move(_currentPosition!, _currentZoom);
+                    onPressed: () async {
+                      try {
+                        await _getCurrentLocation();
+                      } catch (e) {
+                        print('현위치 버튼 오류: $e');
                       }
                     },
                     icon: const Icon(Icons.my_location, color: Colors.blue),

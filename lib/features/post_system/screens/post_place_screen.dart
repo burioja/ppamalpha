@@ -860,7 +860,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   Widget _buildFunctionDropdown() {
     return DropdownButtonFormField<String>(
-      initialValue: _selectedFunction,
+      value: _selectedFunction,
       decoration: const InputDecoration(
         labelText: '기능',
         border: OutlineInputBorder(),
@@ -876,6 +876,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           _selectedFunction = newValue!;
         });
       },
+      hint: const Text('기능을 선택하세요'),
     );
   }
 
@@ -1053,6 +1054,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           .map((e) => DropdownMenuItem<String>(value: e, child: Text(e)))
           .toList(),
       onChanged: onChanged,
+      hint: Text('$label을 선택하세요'),
     );
   }
 
