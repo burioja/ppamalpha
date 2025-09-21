@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/models/map/fog_level.dart';
 
 /// 방문 타일 관리 서비스
@@ -30,49 +31,137 @@ class VisitTileService {
     }
   }
 
-  /// 특정 타일의 포그 레벨 가져오기
+  /// 특정 타일의 포그 레벨 가져오기 (과거 데이터 호환 폴백 포함)
   static Future<FogLevel> getFogLevelForTile(String tileId) async {
     final user = _auth.currentUser;
     if (user == null) return FogLevel.black;
 
-    try {
-      final visitDoc = await _firestore
+    Future<FogLevel> _fetch(String docId) async {
+      final snap = await _firestore
           .collection('users')
           .doc(user.uid)
           .collection('visited_tiles')
-          .doc(tileId)
-          .get();
+          .doc(docId)
+          .get(const GetOptions(source: Source.server));
 
-      if (!visitDoc.exists) {
-        return FogLevel.black; // 방문하지 않은 타일
+      if (!snap.exists) return FogLevel.black;
+      final data = snap.data()!;
+      final ts = data['lastVisitTime'] as Timestamp?;
+      final t = ts?.toDate();
+
+      if (t == null) {
+        final cnt = (data['visitCount'] as num?)?.toInt() ?? 0;
+        return cnt > 0 ? FogLevel.gray : FogLevel.black;
+      }
+      final d = DateTime.now().difference(t).inDays;
+      return d <= 30 ? FogLevel.gray : FogLevel.black;
+    }
+
+    try {
+      print('🔍 포그레벨 조회: $tileId');
+      
+      // 1차: 현재 스킴 ID (1km 근사 그리드)
+      final primary = await _fetch(tileId);
+      print('  - 1차 조회 결과: $primary');
+      if (primary != FogLevel.black) return primary;
+
+      // 2차: 과거 스킴 ID로 폴백 (Web Mercator XYZ)
+      final latLng = _centerFromAnyTileId(tileId);
+      final legacyId = _xyz18Id(latLng.latitude, latLng.longitude);
+      print('  - 변환된 좌표: ${latLng.latitude}, ${latLng.longitude}');
+      print('  - 과거 스킴 ID: $legacyId');
+      
+      if (legacyId != null && legacyId != tileId) {
+        final legacy = await _fetch(legacyId);
+        print('  - 2차 조회 결과: $legacy');
+        if (legacy != FogLevel.black) return legacy;
       }
 
-      final data = visitDoc.data()!;
-      final visitCount = data['visitCount'] as int? ?? 0;
-
-      // 방문 횟수에 따른 포그 레벨 결정
-      if (visitCount >= 10) {
-        return FogLevel.clear; // 완전 개방
-      } else if (visitCount >= 3) {
-        return FogLevel.gray; // 부분 개방
-      } else {
-        return FogLevel.black; // 제한적 개방
-      }
+      print('  - 최종 결과: $FogLevel.black');
+      return FogLevel.black;
     } catch (e) {
       print('포그 레벨 조회 오류: $e');
       return FogLevel.black;
     }
   }
 
+  /// tileId를 중심좌표로 환산 (현재 스킴이 km1deg라 가정)
+  static LatLng _centerFromAnyTileId(String tileId) {
+    if (tileId.startsWith('tile_')) {
+      // 1km 근사 그리드 형식: tile_lat_lng
+      final parts = tileId.split('_');
+      if (parts.length == 3) {
+        final tileLat = int.tryParse(parts[1]);
+        final tileLng = int.tryParse(parts[2]);
+        if (tileLat != null && tileLng != null) {
+          const double tileSize = 0.009;
+          return LatLng(
+            tileLat * tileSize + (tileSize / 2),
+            tileLng * tileSize + (tileSize / 2),
+          );
+        }
+      }
+    }
+    
+    // Web Mercator XYZ 형식: x_y_z
+    final parts = tileId.split('_');
+    if (parts.length == 3) {
+      final x = int.tryParse(parts[0]);
+      final y = int.tryParse(parts[1]);
+      final z = int.tryParse(parts[2]);
+      if (x != null && y != null && z != null) {
+        final lat = _tileYToLatitude(y, z);
+        final lng = _tileXToLongitude(x, z);
+        return LatLng(lat, lng);
+      }
+    }
+    
+    return LatLng(0, 0); // 안전장치
+  }
+
+  /// Web Mercator XYZ 18레벨 타일 ID 생성
+  static String? _xyz18Id(double lat, double lng) {
+    try {
+      final x = _longitudeToTileX(lng, 18);
+      final y = _latitudeToTileY(lat, 18);
+      return '${x}_${y}_18';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Web Mercator 변환 함수들
+  static int _longitudeToTileX(double longitude, int zoomLevel) {
+    return ((longitude + 180.0) / 360.0 * pow(2.0, zoomLevel)).floor();
+  }
+
+  static int _latitudeToTileY(double latitude, int zoomLevel) {
+    final clampedLat = latitude.clamp(-85.0511, 85.0511);
+    final latRad = clampedLat * pi / 180.0;
+    final y = (1.0 - log(tan(latRad) + 1.0 / cos(latRad)) / pi) / 2.0;
+    return (y * pow(2.0, zoomLevel)).floor();
+  }
+
+  static double _tileXToLongitude(int tileX, int zoomLevel) {
+    return tileX / pow(2.0, zoomLevel) * 360.0 - 180.0;
+  }
+
+  static double _tileYToLatitude(int tileY, int zoomLevel) {
+    final n = pi - 2.0 * pi * tileY / pow(2.0, zoomLevel);
+    final latitude = 180.0 / pi * atan(0.5 * (exp(n) - exp(-n)));
+    return latitude.clamp(-85.0511, 85.0511);
+  }
+
   /// 포그 레벨 1 타일 ID 목록 가져오기 (캐시됨)
   static Future<List<String>> getFogLevel1TileIdsCached(String userId) async {
     try {
+      final thirtyDaysAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 30)));
       final snapshot = await _firestore
           .collection('users')
           .doc(userId)
           .collection('visited_tiles')
-          .where('visitCount', isGreaterThanOrEqualTo: 1) // 1회 이상 방문하면 포그레벨 1
-          .get();
+          .where('lastVisitTime', isGreaterThanOrEqualTo: thirtyDaysAgo) // 30일 이내 방문
+          .get(const GetOptions(source: Source.server)); // 서버 강제
 
       print('🔍 포그레벨 1 타일 조회: ${snapshot.docs.length}개');
       return snapshot.docs.map((doc) => doc.id).toList();

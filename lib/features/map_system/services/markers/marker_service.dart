@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 import '../fog_of_war/visit_tile_service.dart';
 import '../../../../core/models/post/post_model.dart';
+import '../../../../core/models/marker/marker_model.dart';
 import '../../../../utils/tile_utils.dart';
 import '../../../../core/models/map/fog_level.dart';
 
@@ -104,7 +105,7 @@ class MarkerService {
         .where('isActive', isEqualTo: true)
         .where('isCollected', isEqualTo: false)
         .limit(100) // 🚀 쿼리 제한 추가 (최대 100개)
-        .orderBy('createdAt', descending: true) // 🚀 최신 포스트 우선
+        // .orderBy('createdAt', descending: true) // 🚀 임시로 주석 처리 (인덱스 없이 작동)
         .snapshots()
         .asyncMap((snapshot) async {
       print('📊 Firestore에서 ${snapshot.docs.length}개 포스트 조회됨');
@@ -192,12 +193,12 @@ class MarkerService {
     try {
       print('🔄 포그레벨 타일 계산 중: $cacheKey');
       // VisitTileService를 사용하여 포그레벨 1단계 타일 계산
-      final surroundingTiles = TileUtils.getSurroundingTiles(location.latitude, location.longitude);
+      final surroundingTiles = TileUtils.getKm1SurroundingTiles(location.latitude, location.longitude);
       final fogLevelMap = await VisitTileService.getSurroundingTilesFogLevel(surroundingTiles);
       
-      // 포그레벨 1(clear)인 타일들만 필터링
+      // 포그레벨 1(gray 이상)인 타일들만 필터링
       final fogLevel1Tiles = fogLevelMap.entries
-          .where((entry) => entry.value == FogLevel.clear)
+          .where((entry) => entry.value == FogLevel.gray) // clear 체크 제거
           .map((entry) => entry.key)
           .toList();
       
@@ -231,6 +232,23 @@ class MarkerService {
   static double _degreesToRadians(double degrees) {
     return degrees * (pi / 180);
   }
+  
+  // MarkerData를 MarkerModel로 변환
+  static MarkerModel convertToMarkerModel(MarkerData markerData) {
+    return MarkerModel(
+      markerId: markerData.id,
+      postId: markerData.id, // MarkerData의 id가 postId와 동일
+      title: markerData.title,
+      position: markerData.position,
+      quantity: 1, // 기본 수량 (실제로는 PostModel에서 가져와야 함)
+      creatorId: markerData.userId,
+      createdAt: markerData.createdAt,
+      expiresAt: markerData.expiryDate ?? DateTime.now().add(const Duration(days: 30)),
+      isActive: !markerData.isCollected,
+      collectedBy: markerData.collectedBy != null ? [markerData.collectedBy!] : [],
+    );
+  }
+  
   // markers 컬렉션은 더 이상 사용하지 않음 - posts 컬렉션에서 직접 관리
 
   // markers 컬렉션 관련 메서드들은 더 이상 사용하지 않음

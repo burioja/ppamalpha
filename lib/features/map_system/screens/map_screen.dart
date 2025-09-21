@@ -9,7 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/data/marker_service.dart';
+import '../services/markers/marker_service.dart';
 import '../../../core/models/marker/marker_model.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/marker_layer_widget.dart';
@@ -65,8 +65,6 @@ class _MapScreenState extends State<MapScreen> {
   List<Polygon> _grayPolygons = []; // 회색 영역들 (과거 방문 위치)
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
-  List<Marker> _userMarkerWidgets = [];
-  List<Marker> _userMarkersUI = []; // Flutter Map용 마커
   
   // 사용자 위치 정보
   LatLng? _homeLocation;
@@ -84,7 +82,6 @@ class _MapScreenState extends State<MapScreen> {
   // 포스트 관련
   List<PostModel> _posts = [];
   List<MarkerModel> _markers = []; // 새로운 마커 모델 사용
-  List<MarkerModel> _userMarkers = []; // 사용자가 배치한 마커들
   bool _isLoading = false;
   String? _errorMessage;
   
@@ -103,6 +100,9 @@ class _MapScreenState extends State<MapScreen> {
   Set<String> _lastFogLevel1Tiles = {};
   bool _isUpdatingPosts = false;
   
+  // 로컬 포그레벨 1 타일 캐시 (즉시 반영용)
+  Set<String> _currentFogLevel1TileIds = {};
+  
   // 포그레벨 변경 감지 관련
   Map<String, int> _tileFogLevels = {}; // 타일별 포그레벨 캐시
   Set<String> _visiblePostIds = {}; // 현재 표시 중인 포스트 ID들
@@ -120,7 +120,6 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    
     
     _initializeLocation();
     _loadCustomMarker();
@@ -167,6 +166,7 @@ class _MapScreenState extends State<MapScreen> {
 
     print('마커 리스너 설정 시작');
   }
+
 
   // 유료 사용자 상태 확인
   Future<void> _checkPremiumStatus() async {
@@ -286,8 +286,11 @@ class _MapScreenState extends State<MapScreen> {
       _updateCurrentAddress();
       
       // 타일 방문 기록 업데이트 (새로운 기능)
-      final tileId = TileUtils.getTileId(newPosition.latitude, newPosition.longitude);
+      final tileId = TileUtils.getKm1TileId(newPosition.latitude, newPosition.longitude);
       await VisitTileService.updateCurrentTileVisit(tileId);
+      
+      // 즉시 반영 (렌더링용 메모리 캐시)
+      _setLevel1TileLocally(tileId);
       
       // 유료 상태 확인 후 포스트 스트림 설정
       await _checkPremiumStatus();
@@ -295,8 +298,11 @@ class _MapScreenState extends State<MapScreen> {
       // 🚀 실시간 포스트 스트림 리스너 설정 (위치 확보 후)
       _setupPostStreamListener();
       
-      // 추가로 마커 조회 강제 실행
+      // 추가로 마커 조회 강제 실행 (위치 기반으로 더 정확하게)
       print('🚀 위치 설정 완료 후 마커 조회 강제 실행');
+      setState(() {
+        _isLoading = true;
+      });
       _updatePostsBasedOnFogLevel();
       
       // 현재 위치 마커 생성
@@ -376,11 +382,12 @@ class _MapScreenState extends State<MapScreen> {
 
     print('총 밝은 영역 개수: ${allPositions.length}');
 
-    // 모든 위치에 대해 하나의 통합된 폴리곤 생성
+    // 겹치는 구멍을 처리하기 위해 별도의 폴리곤들 생성
     final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
+    final holePolygons = OSMFogService.createOverlappingHolePolygons(allPositions);
 
     setState(() {
-      _fogPolygons = [fogPolygon];
+      _fogPolygons = [fogPolygon, ...holePolygons];
       _ringCircles = ringCircles;
     });
 
@@ -618,22 +625,72 @@ class _MapScreenState extends State<MapScreen> {
   // 현재 위치의 포그레벨 1단계 타일들 계산
   Future<Set<String>> _getCurrentFogLevel1Tiles(LatLng center) async {
     try {
-      final surroundingTiles = TileUtils.getSurroundingTiles(center.latitude, center.longitude);
+      final surroundingTiles = TileUtils.getKm1SurroundingTiles(center.latitude, center.longitude);
       final fogLevel1Tiles = <String>{};
       
+      print('🔍 포그레벨 1단계 타일 계산 시작:');
+      print('  - 중심 위치: ${center.latitude}, ${center.longitude}');
+      print('  - 주변 타일 개수: ${surroundingTiles.length}');
+      print('  - 주변 타일 목록: $surroundingTiles');
+      print('  - 로컬 캐시 타일 개수: ${_currentFogLevel1TileIds.length}');
+      
       for (final tileId in surroundingTiles) {
-        final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
-        
-        if (fogLevel == 1) {
+        // 로컬 캐시 우선 확인 (즉시 반영된 타일)
+        if (_currentFogLevel1TileIds.contains(tileId)) {
           fogLevel1Tiles.add(tileId);
+          print('    ✅ 로컬 캐시에서 발견 - 포그레벨 1 추가');
+          continue;
+        }
+        
+        final tileCenter = TileUtils.getKm1TileCenter(tileId);
+        final distToCenterKm = _calculateDistance(center, tileCenter);
+        
+        // 타일 반대각선 절반(대략적) + 1km 원 교차 근사
+        final tileBounds = TileUtils.getKm1TileBounds(tileId);
+        final halfDiagKm = _approxTileHalfDiagonalKm(tileBounds);
+        
+        print('  - 타일 $tileId: 중심거리 ${distToCenterKm.toStringAsFixed(2)}km, 반대각선 ${halfDiagKm.toStringAsFixed(2)}km');
+        
+        if (distToCenterKm <= (1.0 + halfDiagKm)) {
+          // 원과 타일이 겹친다고 간주
+          fogLevel1Tiles.add(tileId);
+          print('    ✅ 1km+버퍼 이내 - 포그레벨 1 추가');
+        } else {
+          // 1km 밖은 방문 기록 확인
+          final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
+          print('    🔍 1km+버퍼 밖 - 포그레벨: $fogLevel');
+          if (fogLevel == FogLevel.gray) { // clear 체크 제거
+            fogLevel1Tiles.add(tileId);
+            print('    ✅ 방문 기록 있음 - 포그레벨 1 추가');
+          }
         }
       }
       
+      print('✅ 최종 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}');
       return fogLevel1Tiles;
     } catch (e) {
       print('포그레벨 1단계 타일 계산 실패: $e');
       return {};
     }
+  }
+
+  /// 타일 반대각선 절반 길이 계산 (km)
+  double _approxTileHalfDiagonalKm(Map<String, double> bounds) {
+    final center = LatLng(
+      (bounds['minLat']! + bounds['maxLat']!) / 2, 
+      (bounds['minLng']! + bounds['maxLng']!) / 2
+    );
+    final corner = LatLng(bounds['maxLat']!, bounds['maxLng']!);
+    final diag = _calculateDistance(center, corner) * 2; // center→corner*2 ≈ 전체 대각선
+    return diag / 2.0;
+  }
+
+  /// 방금 방문한 타일을 로컬에 즉시 반영
+  void _setLevel1TileLocally(String tileId) {
+    setState(() {
+      _currentFogLevel1TileIds.add(tileId);
+    });
+    print('🚀 타일 $tileId 로컬에 즉시 반영됨');
   }
 
   // 두 타일 세트가 같은지 비교
@@ -676,13 +733,20 @@ class _MapScreenState extends State<MapScreen> {
         final center = searchCenters[i];
         print('🔍 기준점 ${i + 1}에서 마커 조회 중...');
         
-        final markerStream = MarkerService.getMarkersInRadius(
-          center: center,
-          radiusKm: 1.0, // 1km 반경
+        final markerStream = MarkerService.getMarkersStream(
+          location: center,
+          radiusInKm: 1.0, // 1km 반경
         );
         
-        final markers = await markerStream.first;
-        print('📍 기준점 ${i + 1}에서 ${markers.length}개 마커 발견');
+        final markerDataList = await markerStream.first;
+        print('📍 기준점 ${i + 1}에서 ${markerDataList.length}개 마커 데이터 발견');
+        
+        // MarkerData를 MarkerModel로 변환
+        final markers = markerDataList.map((markerData) => 
+          MarkerService.convertToMarkerModel(markerData)
+        ).toList();
+        
+        print('📍 기준점 ${i + 1}에서 ${markers.length}개 마커 모델 변환 완료');
         allMarkers.addAll(markers);
       }
 
@@ -699,6 +763,7 @@ class _MapScreenState extends State<MapScreen> {
 
       setState(() {
         _markers = uniqueMarkers;
+        _isLoading = false;
         print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커 업데이트됨');
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
@@ -708,6 +773,10 @@ class _MapScreenState extends State<MapScreen> {
       
     } catch (e) {
       print('❌ _updatePostsBasedOnFogLevel 오류: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = '마커를 불러오는 중 오류가 발생했습니다: $e';
+      });
     }
   }
 
@@ -908,22 +977,16 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      final success = await MarkerService.collectPostFromMarker(
-        markerId: marker.markerId,
+      await PostService().collectPost(
+        postId: marker.postId,
         userId: user.uid,
       );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('포스트를 수령했습니다')),
-        );
-        Navigator.of(context).pop(); // 다이얼로그 닫기
-        _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('포스트 수령에 실패했습니다')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('포스트를 수령했습니다')),
+      );
+      Navigator.of(context).pop(); // 다이얼로그 닫기
+      _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('오류: $e')),
@@ -972,8 +1035,6 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-    // 사용자 마커들을 별도 리스트로 업데이트
-    _updateUserMarkers();
 
     print('🎯 최종 마커 개수: ${markers.length}개');
     setState(() {
@@ -995,60 +1056,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _updateUserMarkers() {
-    final userMarkers = <Marker>[];
-    
-    // 사용자 마커들 (초록색) - 배포자만 회수 가능
-    for (final markerData in _userMarkers) {
-      final position = markerData.position;
-      
-      // 거리 확인
-      if (_currentPosition != null) {
-        final distance = _calculateDistance(_currentPosition!, position);
-        if (distance > _maxDistance) continue;
-      }
-      
-      final markerWidget = Marker(
-        point: position,
-        width: 35,
-        height: 35,
-        child: GestureDetector(
-          onTap: () => _showUserMarkerDetail(markerData),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.place,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-        ),
-      );
-      
-      userMarkers.add(markerWidget);
-    }
 
-    setState(() {
-      _userMarkerWidgets = userMarkers;
-      _userMarkersUI = userMarkers;
-    });
-  }
-
-  void _showUserMarkerDetail(MarkerModel marker) {
-    // TODO: 새로운 구조에 맞게 구현 예정
-    print('사용자 마커 상세: ${marker.title}');
-  }
 
   Future<void> _collectMarker(MarkerModel marker) async {
     // TODO: 새로운 구조에 맞게 구현 예정
@@ -1837,11 +1845,42 @@ class _MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: _currentMarkers),
                 // Firebase 마커들 (포스트 + 사용자 생성 마커)
                 MarkerLayer(markers: _clusteredMarkers),
-                // 사용자 마커
-                MarkerLayer(markers: _userMarkersUI),
                       ],
                     ),
           ),
+          // 로딩 인디케이터
+          if (_isLoading)
+            Positioned(
+              top: 50,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('마커를 불러오는 중...'),
+                  ],
+                ),
+              ),
+            ),
           // 에러 메시지
           if (_errorMessage != null)
            Positioned(
