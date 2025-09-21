@@ -99,6 +99,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _lastMapCenter;
   Set<String> _lastFogLevel1Tiles = {};
   bool _isUpdatingPosts = false;
+  String? _lastCacheKey; // 캐시 키 기반 스킵용
   
   // 로컬 포그레벨 1 타일 캐시 (즉시 반영용)
   Set<String> _currentFogLevel1TileIds = {};
@@ -566,9 +567,9 @@ class _MapScreenState extends State<MapScreen> {
   // 🚀 실시간 업데이트: 지도 이동 감지 및 포스트 새로고침
   void _onMapMoved(MapEvent event) {
     if (event is MapEventMove || event is MapEventMoveStart) {
-      // 지도 이동 중이면 타이머 리셋
+      // 지도 이동 중이면 타이머 리셋 (디바운스 시간 증가)
       _mapMoveTimer?.cancel();
-      _mapMoveTimer = Timer(const Duration(milliseconds: 200), () {
+      _mapMoveTimer = Timer(const Duration(milliseconds: 500), () {
         _handleMapMoveComplete();
       });
     }
@@ -581,6 +582,13 @@ class _MapScreenState extends State<MapScreen> {
     final currentCenter = _mapController?.camera.center;
     if (currentCenter == null) return;
     
+    // 캐시 키 기반 스킵 로직
+    final newCacheKey = _generateCacheKeyForLocation(currentCenter);
+    if (newCacheKey == _lastCacheKey) {
+      print('🔄 동일 타일 위치 - 마커 업데이트 스킵');
+      return;
+    }
+    
     // 이전 위치와 거리 계산 (200m 이상 이동했을 때만 업데이트)
     if (_lastMapCenter != null) {
       final distance = _calculateDistance(_lastMapCenter!, currentCenter);
@@ -590,36 +598,32 @@ class _MapScreenState extends State<MapScreen> {
     _isUpdatingPosts = true;
     
     try {
-      // 현재 포그레벨 1단계 타일들 계산
-      final currentFogLevel1Tiles = await _getCurrentFogLevel1Tiles(currentCenter);
-      
-      // 포그레벨 1단계 타일이 변경되었을 때만 포스트 업데이트
-      if (!_areTileSetsEqual(_lastFogLevel1Tiles, currentFogLevel1Tiles)) {
-        print('🔄 포그레벨 1단계 타일 변경 감지 - 포스트 업데이트');
+      print('🔄 지도 이동 감지 - 마커 업데이트 시작');
         
         // 현재 위치 업데이트
         setState(() {
           _currentPosition = currentCenter;
         });
         
-        // 포스트 새로고침
-        await _loadPosts(forceRefresh: true);
-        
-        // 포그레벨 업데이트
-        await _updateFogOfWar();
-        
-        // 🚀 포그레벨 변경 감지 및 포스트 필터링
+      // 🚀 서버 API를 통한 마커 조회
         await _updatePostsBasedOnFogLevel();
         
         // 마지막 상태 저장
         _lastMapCenter = currentCenter;
-        _lastFogLevel1Tiles = currentFogLevel1Tiles;
-      }
+      _lastCacheKey = newCacheKey;
+      
     } catch (e) {
       print('지도 이동 후 포스트 업데이트 실패: $e');
     } finally {
       _isUpdatingPosts = false;
     }
+  }
+  
+  // 위치 기반 캐시 키 생성 (1km 그리드 스냅)
+  String _generateCacheKeyForLocation(LatLng location) {
+    final lat = (location.latitude * 1000).round() / 1000; // 1km 그리드 스냅
+    final lng = (location.longitude * 1000).round() / 1000;
+    return '${lat.toStringAsFixed(3)}_${lng.toStringAsFixed(3)}';
   }
 
   // 현재 위치의 포그레벨 1단계 타일들 계산
@@ -699,7 +703,7 @@ class _MapScreenState extends State<MapScreen> {
     return set1.every((tile) => set2.contains(tile));
   }
 
-  // 🚀 새로운 마커 서비스 사용
+  // 🚀 서버 API를 통한 마커 조회
   Future<void> _updatePostsBasedOnFogLevel() async {
     if (_currentPosition == null) return;
 
@@ -707,59 +711,78 @@ class _MapScreenState extends State<MapScreen> {
       print('🔍 _updatePostsBasedOnFogLevel 호출됨');
       
       // 1. 검색 기준점들 수집 (현재 위치, 집주소, 일터들)
-      final List<LatLng> searchCenters = [];
-      
-      // 현재 위치 추가
-      searchCenters.add(_currentPosition!);
-      print('📍 기준점 1 - 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      final List<LatLng> additionalCenters = [];
       
       // 집주소 추가
       if (_homeLocation != null) {
-        searchCenters.add(_homeLocation!);
-        print('🏠 기준점 2 - 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+        additionalCenters.add(_homeLocation!);
+        print('🏠 기준점 - 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
       }
       
       // 등록한 일터들 추가
+      additionalCenters.addAll(_workLocations);
       for (int i = 0; i < _workLocations.length; i++) {
-        searchCenters.add(_workLocations[i]);
-        print('🏢 기준점 ${3 + i} - 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
+        print('🏢 기준점 - 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
       }
       
-      print('🎯 총 ${searchCenters.length}개의 기준점에서 마커 검색');
+      print('🎯 총 ${additionalCenters.length + 1}개의 기준점에서 마커 검색');
 
-      // 2. 각 기준점마다 마커 조회
-      final allMarkers = <MarkerModel>[];
-      for (int i = 0; i < searchCenters.length; i++) {
-        final center = searchCenters[i];
-        print('🔍 기준점 ${i + 1}에서 마커 조회 중...');
-        
-        final markerStream = MarkerService.getMarkersStream(
-          location: center,
-          radiusInKm: 1.0, // 1km 반경
-        );
-        
-        final markerDataList = await markerStream.first;
-        print('📍 기준점 ${i + 1}에서 ${markerDataList.length}개 마커 데이터 발견');
-        
-        // MarkerData를 MarkerModel로 변환
-        final markers = markerDataList.map((markerData) => 
-          MarkerService.convertToMarkerModel(markerData)
-        ).toList();
-        
-        print('📍 기준점 ${i + 1}에서 ${markers.length}개 마커 모델 변환 완료');
-        allMarkers.addAll(markers);
-      }
+      // 2. 필터 설정
+      final filters = <String, dynamic>{
+        'showCouponsOnly': _showCouponsOnly,
+        'myPostsOnly': _showMyPostsOnly,
+        'minReward': _minReward,
+      };
 
-      // 3. 중복 제거 (같은 마커가 여러 기준점에 포함될 수 있음)
-      final uniqueMarkers = <MarkerModel>[];
+      // 3. 서버에서 일반 포스트와 슈퍼포스트를 병렬로 조회
+      final futures = await Future.wait([
+        // 일반 포스트 조회
+        MarkerService.getMarkers(
+          location: _currentPosition!,
+          radiusInKm: _maxDistance / 1000.0, // km로 변환
+          additionalCenters: additionalCenters,
+          filters: filters,
+          pageSize: 500,
+        ),
+        // 슈퍼포스트 조회
+        MarkerService.getSuperPosts(
+          location: _currentPosition!,
+          radiusInKm: _maxDistance / 1000.0,
+          additionalCenters: additionalCenters,
+          pageSize: 200,
+        ),
+      ]);
+
+      final normalMarkers = futures[0] as List<MapMarkerData>;
+      final superMarkers = futures[1] as List<MapMarkerData>;
+      
+      print('📍 일반 포스트: ${normalMarkers.length}개');
+      print('⭐ 슈퍼포스트: ${superMarkers.length}개');
+
+      // 4. 모든 마커를 합치고 중복 제거
+      final allMarkers = <MapMarkerData>[];
       final seenMarkerIds = <String>{};
       
-      for (final marker in allMarkers) {
-        if (!seenMarkerIds.contains(marker.markerId)) {
-          uniqueMarkers.add(marker);
-          seenMarkerIds.add(marker.markerId);
+      // 일반 포스트 추가
+      for (final marker in normalMarkers) {
+        if (!seenMarkerIds.contains(marker.id)) {
+          allMarkers.add(marker);
+          seenMarkerIds.add(marker.id);
         }
       }
+      
+      // 슈퍼포스트 추가
+      for (final marker in superMarkers) {
+        if (!seenMarkerIds.contains(marker.id)) {
+          allMarkers.add(marker);
+          seenMarkerIds.add(marker.id);
+        }
+      }
+
+      // 5. MarkerData를 MarkerModel로 변환
+      final uniqueMarkers = allMarkers.map((markerData) => 
+        MarkerService.convertToMarkerModel(markerData)
+      ).toList();
 
       setState(() {
         _markers = uniqueMarkers;
@@ -767,9 +790,6 @@ class _MapScreenState extends State<MapScreen> {
         print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커 업데이트됨');
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
-
-      // TODO: 포그레벨 로직은 나중에 마커와 별개로 처리하거나, 마커 필터링에 통합
-      // 현재는 마커 표시를 우선으로 함
       
     } catch (e) {
       print('❌ _updatePostsBasedOnFogLevel 오류: $e');
