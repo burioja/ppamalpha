@@ -115,9 +115,17 @@ class MarkerService {
       for (final doc in snapshot.docs) {
         try {
           final data = doc.data();
+          final locationData = data['location'] as GeoPoint?;
+          
+          // location이 null인 마커는 건너뛰기
+          if (locationData == null) {
+            print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
+          continue;
+        }
+        
           final position = LatLng(
-            (data['location'] as GeoPoint).latitude,
-            (data['location'] as GeoPoint).longitude,
+            locationData.latitude,
+            locationData.longitude,
           );
           
           // 거리 필터링
@@ -141,7 +149,7 @@ class MarkerService {
           // 1km 이내 마커는 포그레벨 체크 없이 무조건 표시
           bool shouldShow = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+        final distance = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
@@ -207,9 +215,17 @@ class MarkerService {
       for (final doc in snapshot.docs) {
         try {
           final data = doc.data();
+          final locationData = data['location'] as GeoPoint?;
+          
+          // location이 null인 마커는 건너뛰기
+          if (locationData == null) {
+            print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
+            continue;
+          }
+          
           final position = LatLng(
-            (data['location'] as GeoPoint).latitude,
-            (data['location'] as GeoPoint).longitude,
+            locationData.latitude,
+            locationData.longitude,
           );
           
           // 거리 필터링

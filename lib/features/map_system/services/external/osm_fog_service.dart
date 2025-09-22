@@ -41,23 +41,6 @@ class OSMFogService {
     );
   }
 
-  /// 겹치는 구멍을 처리하는 별도의 폴리곤들 생성
-  static List<Polygon> createOverlappingHolePolygons(List<LatLng> positions) {
-    List<Polygon> polygons = [];
-    
-    // 각 위치마다 개별 원형 폴리곤 생성
-    for (final pos in positions) {
-      Polygon circlePolygon = Polygon(
-        points: _generateCirclePoints(pos, _fogRadius),
-        color: Colors.transparent, // 투명하게 설정
-        borderColor: Colors.transparent,
-        borderStrokeWidth: 0,
-      );
-      polygons.add(circlePolygon);
-    }
-    
-    return polygons;
-  }
 
   /// 여러 위치를 기반으로 개별 원형 폴리곤들 생성 (겹침 처리용)
   static List<Polygon> createIndividualCirclePolygons(List<LatLng> positions) {

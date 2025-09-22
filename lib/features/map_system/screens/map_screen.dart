@@ -18,6 +18,7 @@ import '../../post_system/controllers/post_deployment_controller.dart';
 import '../services/external/osm_fog_service.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
 import '../../../core/services/location/nominatim_service.dart';
+import '../widgets/fog_overlay_widget.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../../../core/models/map/fog_level.dart';
@@ -362,6 +363,26 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  /// 모든 위치를 반환하는 메서드 (현재 위치, 집, 근무지)
+  List<LatLng> _getAllPositions() {
+    final allPositions = <LatLng>[];
+    
+    // 현재 위치
+    if (_currentPosition != null) {
+      allPositions.add(_currentPosition!);
+    }
+    
+    // 집 위치
+    if (_homeLocation != null) {
+      allPositions.add(_homeLocation!);
+    }
+    
+    // 근무지 위치들
+    allPositions.addAll(_workLocations);
+    
+    return allPositions;
+  }
+
   void _rebuildFogWithUserLocations(LatLng currentPosition) {
     final allPositions = <LatLng>[currentPosition];
     final ringCircles = <CircleMarker>[];
@@ -391,12 +412,11 @@ class _MapScreenState extends State<MapScreen> {
 
     print('총 밝은 영역 개수: ${allPositions.length}');
 
-    // 겹치는 구멍을 처리하기 위해 별도의 폴리곤들 생성
+    // evenOdd 규칙으로 겹치는 구멍 자동 처리
     final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
-    final holePolygons = OSMFogService.createOverlappingHolePolygons(allPositions);
 
     setState(() {
-      _fogPolygons = [fogPolygon, ...holePolygons];
+      _fogPolygons = [fogPolygon];
       _ringCircles = ringCircles;
     });
 
@@ -1942,10 +1962,11 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                 ),
-                // 회색 영역들 (과거 방문 위치)
-                PolygonLayer(polygons: _grayPolygons),
-                // Fog of War 마스크 (전세계 검정 + 1km 원형 홀)
-                PolygonLayer(polygons: _fogPolygons),
+                // Fog of War 오버레이
+                FogOverlayWidget(
+                  polygons: _fogPolygons,
+                  ringCircles: _ringCircles,
+                ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
                 // CircleLayer(circles: _ringCircles),
                 // 사용자 위치 마커들
