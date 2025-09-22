@@ -352,36 +352,8 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  void _rebuildFog(LatLng currentPosition) {
-    final fogPolygon = OSMFogService.createFogPolygon(currentPosition);
-    final ringCircle = OSMFogService.createRingCircle(currentPosition);
-        
-        setState(() {
-      _fogPolygons = [fogPolygon];
-      _ringCircles = [ringCircle];
-      // 회색 영역은 _loadVisitedLocations에서 로드되므로 여기서는 유지
-    });
-  }
 
   /// 모든 위치를 반환하는 메서드 (현재 위치, 집, 근무지)
-  List<LatLng> _getAllPositions() {
-    final allPositions = <LatLng>[];
-    
-    // 현재 위치
-    if (_currentPosition != null) {
-      allPositions.add(_currentPosition!);
-    }
-    
-    // 집 위치
-    if (_homeLocation != null) {
-      allPositions.add(_homeLocation!);
-    }
-    
-    // 근무지 위치들
-    allPositions.addAll(_workLocations);
-    
-    return allPositions;
-  }
 
   void _rebuildFogWithUserLocations(LatLng currentPosition) {
     final allPositions = <LatLng>[currentPosition];

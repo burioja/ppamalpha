@@ -15,16 +15,16 @@ class FogOverlayWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          // 포그 폴리곤들만 표시 (링 서클 제거)
-          if (polygons.isNotEmpty)
-            PolygonLayer(
-              polygons: polygons,
-            ),
-        ],
-      ),
+    return Stack(
+      children: [
+        // 포그 폴리곤들
+        if (polygons.isNotEmpty)
+          PolygonLayer(polygons: polygons),
+        
+        // 링 서클들 (제거됨 - 사용자 요청)
+        // if (ringCircles.isNotEmpty)
+        //   CircleLayer(circles: ringCircles),
+      ],
     );
   }
 }
