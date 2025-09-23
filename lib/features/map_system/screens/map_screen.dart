@@ -2044,7 +2044,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           // 필터 버튼들 (상단)
           Positioned(
-            top: 60,
+            top: 10,
             left: 16,
             right: 16,
                child: Row(
