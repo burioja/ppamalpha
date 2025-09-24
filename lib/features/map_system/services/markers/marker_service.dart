@@ -131,11 +131,12 @@ class MarkerService {
           // 거리 필터링
           bool withinRadius = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= radiusInKm * 1000) { // km를 m로 변환
+            final radiusInM = radiusInKm * 1000; // km를 m로 변환
+            if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
             }
@@ -231,11 +232,12 @@ class MarkerService {
           // 거리 필터링
           bool withinRadius = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= radiusInKm * 1000) { // km를 m로 변환
+            final radiusInM = radiusInKm * 1000; // km를 m로 변환
+            if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
             }
@@ -249,11 +251,11 @@ class MarkerService {
           // 1km 이내 마커는 포그레벨 체크 없이 무조건 표시
           bool shouldShow = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= 1000) { // 1km 이내
+            if (distanceInM <= 1000) { // 1km 이내
               shouldShow = true;
               break;
             }

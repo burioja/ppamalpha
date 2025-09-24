@@ -703,18 +703,57 @@ class _MapScreenState extends State<MapScreen> {
     return set1.every((tile) => set2.contains(tile));
   }
 
+  // GPS 활성화 요청 다이얼로그
+  void _showLocationPermissionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('위치 서비스 필요'),
+            ],
+          ),
+          content: const Text(
+            '지도에서 마커를 보려면 GPS를 활성화해주세요.\n\n'
+            '설정 > 개인정보 보호 및 보안 > 위치 서비스에서\n'
+            '앱의 위치 권한을 허용해주세요.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _getCurrentLocation(); // 위치 다시 요청
+              },
+              child: const Text('다시 시도'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('나중에'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // 🚀 서버 API를 통한 마커 조회
   Future<void> _updatePostsBasedOnFogLevel() async {
-    // 🔥 Fail-open: 위치가 없어도 기본 위치로 조회
-    final centers = <LatLng>[];
-    if (_currentPosition != null) {
-      centers.add(_currentPosition!);
-      print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
-    } else {
-      // 위치가 없으면 서울시청으로 기본 설정
-      centers.add(LatLng(37.5663, 126.9779));
-      print('⚠️ 위치 없음 - 기본 위치 사용: 37.5663, 126.9779');
+    // 위치가 없으면 GPS 활성화 요청
+    if (_currentPosition == null) {
+      _showLocationPermissionDialog();
+      return;
     }
+    
+    final centers = <LatLng>[];
+    centers.add(_currentPosition!);
+    print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
     
     // 집주소 추가
     if (_homeLocation != null) {
