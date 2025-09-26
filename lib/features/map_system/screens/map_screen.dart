@@ -1716,6 +1716,10 @@ class _MapScreenState extends State<MapScreen> {
       // 마커 즉시 업데이트
       await _updatePostsBasedOnFogLevel();
       
+      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
       });
@@ -1745,6 +1749,10 @@ class _MapScreenState extends State<MapScreen> {
       // 마커 즉시 업데이트
       await _updatePostsBasedOnFogLevel();
       
+      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
       });
@@ -1772,6 +1780,10 @@ class _MapScreenState extends State<MapScreen> {
       });
       
       // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 500));
       await _updatePostsBasedOnFogLevel();
       
       setState(() {
