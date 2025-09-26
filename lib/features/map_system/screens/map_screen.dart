@@ -2037,6 +2037,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 // Fog of War 오버레이 (겹침 문제 해결)
                 FogOverlayWidget(
+                  mapController: _mapController!,
                   holeCenters: [
                     if (_currentPosition != null) _currentPosition!,
                     if (_homeLocation != null) _homeLocation!,

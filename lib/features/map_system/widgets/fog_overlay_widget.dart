@@ -1,40 +1,61 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'dart:ui' as ui;
 
-/// 포그(레벨3)를 화면 전체에 칠하고,
-/// [holeCenters] 주변을 radiusMeters 원으로 '펀칭(투명)'하는 오버레이.
-/// - 겹치는 홀에서도 항상 투명
-/// - 순서/시계·반시계/홀 교차/다중 폴리곤 이슈 없음
-/// - 반드시 flutter_map 위에서 사용 (project + pixelOrigin 활용)
-class FogOverlayWidget extends StatelessWidget {
-  final List<LatLng> holeCenters;   // 현위치, 집, 일터 등
-  final double radiusMeters;        // 기본 1000m
-  final Color fogColor;             // 레벨3 컬러(기본: 완전 검정)
-  final double? featherSigma;       // 가장자리 부드럽게(픽셀 단위 sigma). null이면 선명하게
+/// 화면 전체를 포그색으로 덮고,
+/// [holeCenters] (GPS/집/일터) 주변을 반경 [radiusMeters]만큼 '투명'으로 펀칭.
+/// - 맵 드래그/줌 시에도 지도 좌표에 고정
+/// - 맵 센터는 사용하지 않음(밝게 표시 X)
+/// - flutter_map 8.2.x 호환, 내부 CRS 의존 없음(Web Mercator 직접 계산)
+class FogOverlayWidget extends StatefulWidget {
+  final MapController mapController;     // non-null
+  final List<LatLng> holeCenters;        // GPS, 집, 일터만!
+  final double radiusMeters;             // 보통 1000m
+  final Color fogColor;                  // 레벨3(검정)
 
   const FogOverlayWidget({
     super.key,
+    required this.mapController,
     required this.holeCenters,
     this.radiusMeters = 1000.0,
     this.fogColor = const Color(0xFF000000),
-    this.featherSigma,
   });
+
+  @override
+  State<FogOverlayWidget> createState() => _FogOverlayWidgetState();
+}
+
+class _FogOverlayWidgetState extends State<FogOverlayWidget> {
+  late final StreamSubscription<MapEvent> _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    // 맵 이동/줌 이벤트마다 리페인트(구멍 좌표는 건드리지 않음)
+    _sub = widget.mapController.mapEventStream.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: RepaintBoundary(
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: _FogPunchPainter(
-            holeCenters: holeCenters,
-            radiusMeters: radiusMeters,
-            fogColor: fogColor,
-            featherSigma: featherSigma,
-            context: context,
-          ),
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _FogPunchPainter(
+          mapController: widget.mapController,
+          holeCenters: widget.holeCenters,   // ✅ GPS/집/일터만
+          radiusMeters: widget.radiusMeters,
+          fogColor: widget.fogColor,
         ),
       ),
     );
@@ -42,103 +63,80 @@ class FogOverlayWidget extends StatelessWidget {
 }
 
 class _FogPunchPainter extends CustomPainter {
+  final MapController mapController;
   final List<LatLng> holeCenters;
   final double radiusMeters;
   final Color fogColor;
-  final double? featherSigma;
-  final BuildContext context;
 
   _FogPunchPainter({
+    required this.mapController,
     required this.holeCenters,
     required this.radiusMeters,
     required this.fogColor,
-    required this.context,
-    this.featherSigma,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (holeCenters.isEmpty) {
-      // 구멍이 없어도 전체 검정은 칠해줘야 포그가 적용됨
-      final paint = Paint()
-        ..color = fogColor
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true;
-      canvas.drawRect(Offset.zero & size, paint);
-      return;
-    }
+    final camera = mapController.camera;
+    if (camera == null) return;
 
-    final mapState = FlutterMapState.maybeOf(context);
-    if (mapState == null) return;
+    final layerBounds = Offset.zero & size;
+    canvas.saveLayer(layerBounds, Paint()); // 새 레이어
 
-    final bounds = Offset.zero & size;
-
-    // 1) 레이어 시작 (clear 펀칭을 적용하려면 saveLayer 필요)
-    canvas.saveLayer(bounds, Paint());
-
-    // 2) 화면 전체 포그 채우기
-    final fogPaint = Paint()
+    // 전체 화면 포그(검정) 칠하기
+    final fog = Paint()
       ..color = fogColor
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
-    canvas.drawRect(bounds, fogPaint);
+    canvas.drawRect(layerBounds, fog);
 
-    // 3) 구멍은 clear로 '펀칭'
+    // 구멍은 clear로 '펀칭' → 겹쳐도 항상 투명
     final punch = Paint()
       ..blendMode = BlendMode.clear
       ..isAntiAlias = true;
 
-    // feather(가장자리 부드럽게) 원할 경우
-    if (featherSigma != null && featherSigma! > 0) {
-      punch.maskFilter = MaskFilter.blur(BlurStyle.normal, featherSigma!);
+    for (final center in holeCenters) {
+      final c = _toScreen(center, camera);                                  // 중심 픽셀
+      final rPx = _pixelsRadiusAt(center.latitude, radiusMeters, camera.zoom); // 반경 픽셀(zoom/lat만)
+
+      final hole = ui.Path()
+        ..addOval(ui.Rect.fromCircle(center: c, radius: rPx));
+      canvas.drawPath(hole, punch);
     }
 
-    // 미터 → 화면 픽셀 반경
-    for (final c in holeCenters) {
-      final centerPx = mapState.project(c);
-      final cx = (centerPx.x - mapState.pixelOrigin.x).toDouble();
-      final cy = (centerPx.y - mapState.pixelOrigin.y).toDouble();
-
-      final rPx = _metersToScreenPixels(c, radiusMeters, mapState);
-
-      final holePath = ui.Path()
-        ..addOval(Rect.fromCircle(center: Offset(cx, cy), radius: rPx));
-
-      canvas.drawPath(holePath, punch);
-    }
-
-    // 4) 레이어 종료(펀칭 결과 적용)
     canvas.restore();
   }
 
-  // 위도에 따른 미터→픽셀 변환 (줌/투영 반영)
-  // - 위도 1도 ≈ 111320m를 활용해 북쪽으로 meters만큼 이동한 점의 픽셀 차이를 사용
-  double _metersToScreenPixels(LatLng center, double meters, FlutterMapState mapState) {
-    const metersPerDegLat = 111320.0; // 위도 1도당 미터
-    final dLat = meters / metersPerDegLat;
+  // Web Mercator: LatLng → 월드픽셀 → 화면픽셀 (pixelOrigin 보정)
+  Offset _toScreen(LatLng ll, MapCamera camera) {
+    final z = camera.zoom;
+    final worldScale = 256.0 * math.pow(2.0, z).toDouble();
 
-    final a = mapState.project(center);
-    final b = mapState.project(LatLng(center.latitude + dLat, center.longitude));
+    final x = (ll.longitude + 180.0) / 360.0 * worldScale;
 
-    final ay = (a.y - mapState.pixelOrigin.y).toDouble();
-    final by = (b.y - mapState.pixelOrigin.y).toDouble();
+    final latClamped = ll.latitude.clamp(-85.05112878, 85.05112878);
+    final latRad = latClamped * math.pi / 180.0;
+    final y = (0.5 - (math.log((1 + math.sin(latRad)) / (1 - math.sin(latRad))) / (4 * math.pi))) * worldScale;
 
-    final pxPerMeter = (by - ay).abs() / meters;
-    // 안전 가드: 너무 작은/큰 값 방지
-    final r = (meters * pxPerMeter).clamp(2.0, 5000.0);
-    return r;
+    final topLeft = camera.pixelOrigin; // Offset(dx, dy)
+    return Offset(x - topLeft.dx, y - topLeft.dy);
+  }
+
+  /// pan 영향 X. 위도/줌 기반 meters-per-pixel로 반경 픽셀 구함.
+  double _pixelsRadiusAt(double latDeg, double meters, double zoom) {
+    const R = 6378137.0; // Web Mercator sphere radius
+    final scale = 256.0 * math.pow(2.0, zoom).toDouble();
+    final metersPerPixel = (math.cos(latDeg * math.pi / 180.0) * 2 * math.pi * R) / scale;
+    return meters / metersPerPixel;
   }
 
   @override
   bool shouldRepaint(covariant _FogPunchPainter old) {
     if (old.radiusMeters != radiusMeters ||
         old.fogColor != fogColor ||
-        old.featherSigma != featherSigma ||
-        old.pixelOrigin != pixelOrigin ||
         old.holeCenters.length != holeCenters.length) {
       return true;
     }
-    // 간단 비교(필요시 딥 이퀄 구현)
     for (int i = 0; i < holeCenters.length; i++) {
       if (holeCenters[i] != old.holeCenters[i]) return true;
     }
