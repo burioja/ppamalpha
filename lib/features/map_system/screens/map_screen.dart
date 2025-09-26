@@ -595,10 +595,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       print('🔄 지도 이동 감지 - 마커 업데이트 시작');
         
-        // 현재 위치 업데이트
-        setState(() {
-          _currentPosition = currentCenter;
-        });
+        // 현재 위치는 GPS에서만 업데이트 (맵센터로 업데이트하지 않음)
         
       // 🚀 서버 API를 통한 마커 조회
         await _updatePostsBasedOnFogLevel();
