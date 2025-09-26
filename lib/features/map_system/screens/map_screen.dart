@@ -17,8 +17,8 @@ import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../services/external/osm_fog_service.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
-import '../../../core/services/location/nominatim_service.dart';
 import '../widgets/fog_overlay_widget.dart';
+import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../../../core/models/map/fog_level.dart';
@@ -62,7 +62,6 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   // OSM 기반 Fog of War 상태
-  List<Polygon> _fogPolygons = [];
   List<Polygon> _grayPolygons = []; // 회색 영역들 (과거 방문 위치)
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
@@ -384,11 +383,7 @@ class _MapScreenState extends State<MapScreen> {
 
     print('총 밝은 영역 개수: ${allPositions.length}');
 
-    // evenOdd 규칙으로 겹치는 구멍 자동 처리
-    final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
-
     setState(() {
-      _fogPolygons = [fogPolygon];
       _ringCircles = ringCircles;
     });
 
@@ -2040,10 +2035,15 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                 ),
-                // Fog of War 오버레이
+                // Fog of War 오버레이 (겹침 문제 해결)
                 FogOverlayWidget(
-                  polygons: _fogPolygons,
-                  ringCircles: _ringCircles,
+                  holeCenters: [
+                    if (_currentPosition != null) _currentPosition!,
+                    if (_homeLocation != null) _homeLocation!,
+                    ..._workLocations,
+                  ],
+                  radiusMeters: 1000.0,
+                  fogColor: Colors.black.withOpacity(1.0),
                 ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
                 // CircleLayer(circles: _ringCircles),
