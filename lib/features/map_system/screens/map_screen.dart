@@ -1707,10 +1707,17 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
@@ -1729,10 +1736,17 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
@@ -1751,10 +1765,17 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
