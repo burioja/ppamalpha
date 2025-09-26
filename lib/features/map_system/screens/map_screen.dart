@@ -1716,8 +1716,12 @@ class _MapScreenState extends State<MapScreen> {
       // 마커 즉시 업데이트
       await _updatePostsBasedOnFogLevel();
       
-      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
-      await Future.delayed(const Duration(milliseconds: 500));
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
       await _updatePostsBasedOnFogLevel();
       
       setState(() {
@@ -1749,8 +1753,12 @@ class _MapScreenState extends State<MapScreen> {
       // 마커 즉시 업데이트
       await _updatePostsBasedOnFogLevel();
       
-      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
-      await Future.delayed(const Duration(milliseconds: 500));
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
       await _updatePostsBasedOnFogLevel();
       
       setState(() {
@@ -1782,8 +1790,12 @@ class _MapScreenState extends State<MapScreen> {
       // 마커 즉시 업데이트
       await _updatePostsBasedOnFogLevel();
       
-      // 데이터베이스 반영을 위해 잠시 대기 후 다시 한 번 업데이트
-      await Future.delayed(const Duration(milliseconds: 500));
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
       await _updatePostsBasedOnFogLevel();
       
       setState(() {
