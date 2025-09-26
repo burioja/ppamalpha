@@ -358,7 +358,7 @@ class MarkerService {
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
     return MarkerModel(
       markerId: markerData.id,
-      postId: markerData.id, // postId는 markerId와 동일하게 설정
+      postId: markerData.data['postId'] ?? markerData.id, // data에서 postId 가져오기
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
