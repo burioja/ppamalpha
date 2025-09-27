@@ -92,8 +92,8 @@ class MapMarkerData {
   }
 }
 
-/// 마커 서비스
-class MarkerService {
+/// 마커 서비스 (Map System 전용)
+class MapMarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFunctions _functions = FirebaseFunctions.instance;

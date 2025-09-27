@@ -782,7 +782,7 @@ class _MapScreenState extends State<MapScreen> {
       
       final futures = await Future.wait([
         // 일반 포스트 조회
-        MarkerService.getMarkers(
+        MapMarkerService.getMarkers(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0, // km로 변환
           additionalCenters: additionalCenters,
@@ -790,7 +790,7 @@ class _MapScreenState extends State<MapScreen> {
           pageSize: 500,
         ),
         // 슈퍼포스트 조회
-        MarkerService.getSuperPosts(
+        MapMarkerService.getSuperPosts(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0,
           additionalCenters: additionalCenters,
@@ -836,7 +836,7 @@ class _MapScreenState extends State<MapScreen> {
 
       // 5. MarkerData를 MarkerModel로 변환
       final uniqueMarkers = allMarkers.map((markerData) => 
-        MarkerService.convertToMarkerModel(markerData)
+        MapMarkerService.convertToMarkerModel(markerData)
       ).toList();
 
       // 6. 포스트 정보도 함께 가져오기
@@ -1265,7 +1265,7 @@ class _MapScreenState extends State<MapScreen> {
       await PostService().deletePost(marker.postId);
       
       // 마커도 삭제 (markers 컬렉션에서)
-      await MarkerService.deleteMarker(marker.markerId);
+      await MapMarkerService.deleteMarker(marker.markerId);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다')),

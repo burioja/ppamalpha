@@ -15,12 +15,13 @@ class MarkerService {
     required int quantity,
     required String creatorId,
     required DateTime expiresAt,
+    int? reward, // ✅ 추가 (옵셔널로 두면 기존 호출부도 안전)
   }) async {
     try {
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
       
-      final markerData = {
+      final markerData = <String, dynamic>{
         'postId': postId,
         'title': title,
         'location': GeoPoint(position.latitude, position.longitude),
@@ -33,8 +34,14 @@ class MarkerService {
         'tileId': tileId, // 타일 ID 저장
       };
 
+      // ✅ non-promotion 회피용 로컬 변수
+      final r = reward;
+      if (r != null) {
+        markerData['reward'] = r;
+      }
+
       final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id}');
+      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
       return docRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');
