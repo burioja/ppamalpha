@@ -21,14 +21,17 @@ class MarkerService {
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
       
+      // ✅ 즉시 쿼리 통과를 위한 클라이언트 시간 추가
+      final now = DateTime.now();
       final markerData = <String, dynamic>{
         'postId': postId,
         'title': title,
         'location': GeoPoint(position.latitude, position.longitude),
         'quantity': quantity,
         'creatorId': creatorId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(expiresAt),
+        'createdAt': Timestamp.fromDate(now),                 // ✅ 즉시 쿼리 통과
+        'createdAtServer': FieldValue.serverTimestamp(),      // (옵션) 보정용
+        'expiresAt': Timestamp.fromDate(expiresAt),           // ✅ null 방지
         'isActive': true,
         'collectedBy': [], // 수령한 사용자 목록 초기화
         'tileId': tileId, // 타일 ID 저장

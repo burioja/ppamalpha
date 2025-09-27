@@ -204,11 +204,14 @@ class MapMarkerService {
       final user = _auth.currentUser;
       if (user == null) return [];
 
-      // markers 컬렉션에서 직접 조회
+      // markers 컬렉션에서 직접 조회 (서버 필터 추가)
+      final now = Timestamp.now();
       final snapshot = await _firestore
           .collection('markers')
           .where('isActive', isEqualTo: true)
-          .limit(pageSize)
+          .where('expiresAt', isGreaterThan: now)     // ✅ 만료 제외 (서버 필터)
+          .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
+          .limit(pageSize)                             // 200~300 권장
           .get();
 
       final markers = <MapMarkerData>[];
@@ -392,13 +395,18 @@ class MapMarkerService {
     try {
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
       
+      // ✅ 즉시 쿼리 통과를 위한 클라이언트 시간 추가
+      final now = DateTime.now();
       final markerData = <String, dynamic>{
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
         'postId': postId, // ✅ top-level에만 저장 (중복 제거)
-        'createdAt': Timestamp.now(),
-        'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt) : null,
+        'createdAt': Timestamp.fromDate(now),                 // ✅ 즉시 쿼리 통과
+        'createdAtServer': FieldValue.serverTimestamp(),      // (옵션) 보정용
+        'expiresAt': expiresAt != null 
+            ? Timestamp.fromDate(expiresAt) 
+            : Timestamp.fromDate(now.add(const Duration(hours: 24))), // ✅ null 방지
         'isActive': true,
         'quantity': quantity, // ✅ 수량 정보를 최상위 레벨에 저장
         'tileId': tileId,

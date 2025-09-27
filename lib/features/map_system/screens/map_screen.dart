@@ -787,14 +787,14 @@ class _MapScreenState extends State<MapScreen> {
           radiusInKm: _maxDistance / 1000.0, // km로 변환
           additionalCenters: additionalCenters,
           filters: filters,
-          pageSize: 500,
+          pageSize: 300, // ✅ 성능 최적화 (500 → 300)
         ),
         // 슈퍼포스트 조회
         MapMarkerService.getSuperPosts(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0,
           additionalCenters: additionalCenters,
-          pageSize: 200,
+          pageSize: 150, // ✅ 성능 최적화 (200 → 150)
         ),
       ]);
 
