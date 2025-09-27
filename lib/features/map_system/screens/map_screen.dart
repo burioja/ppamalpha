@@ -1144,7 +1144,7 @@ class _MapScreenState extends State<MapScreen> {
       print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
       
       // ✅ 조인 제거: 마커에서 직접 reward 사용 (배포 시점 고정)
-      final int markerReward = marker.reward;
+      final int markerReward = marker.reward ?? 0; // ✅ null 체크 추가
       
       // 가격대에 따라 다른 이미지 사용
       final String imagePath = markerReward >= 1000 
@@ -1152,7 +1152,7 @@ class _MapScreenState extends State<MapScreen> {
           : 'assets/images/ppam_work.png';  // 천원 미만은 일반 이미지
       
       print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
-      print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${markerReward}, imagePath=$imagePath');
+      print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${marker.reward ?? 0}, imagePath=$imagePath');
       
       markers.add(
         Marker(

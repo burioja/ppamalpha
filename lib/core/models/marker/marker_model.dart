@@ -8,7 +8,7 @@ class MarkerModel {
   final String title; // 마커 제목 (간단한 정보)
   final LatLng position; // 마커 위치
   final int quantity; // 수량
-  final int reward; // 리워드 금액 (배포 시점 고정)
+  final int? reward; // 리워드 금액 (배포 시점 고정, 기존 마커 호환성을 위해 옵셔널)
   final String creatorId; // 마커 생성자
   final DateTime createdAt;
   final DateTime expiresAt;
@@ -21,7 +21,7 @@ class MarkerModel {
     required this.title,
     required this.position,
     required this.quantity,
-    required this.reward,
+    this.reward, // ✅ 옵셔널로 변경
     required this.creatorId,
     required this.createdAt,
     required this.expiresAt,
@@ -36,13 +36,16 @@ class MarkerModel {
     
     // reward 안전 파싱 (기존 마커 호환성)
     final rawReward = data['reward'];
-    final int parsedReward = switch (rawReward) {
-      int v => v,
-      double v => v.toInt(),
-      num v => v.toInt(),
-      String v => int.tryParse(v) ?? 0,
-      _ => 0,
-    };
+    int? parsedReward;
+    if (rawReward != null) {
+      parsedReward = switch (rawReward) {
+        int v => v,
+        double v => v.toInt(),
+        num v => v.toInt(),
+        String v => int.tryParse(v),
+        _ => null,
+      };
+    }
     
     return MarkerModel(
       markerId: doc.id,
@@ -50,7 +53,7 @@ class MarkerModel {
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
       quantity: data['quantity'] ?? 0,
-      reward: parsedReward,
+      reward: parsedReward, // ✅ null 허용
       creatorId: data['creatorId'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
@@ -61,18 +64,23 @@ class MarkerModel {
 
   /// Firestore에 저장할 데이터
   Map<String, dynamic> toFirestore() {
-    return {
+    final data = {
       'postId': postId,
       'title': title,
       'location': GeoPoint(position.latitude, position.longitude),
       'quantity': quantity,
-      'reward': reward,
       'creatorId': creatorId,
       'createdAt': Timestamp.fromDate(createdAt),
       'expiresAt': Timestamp.fromDate(expiresAt),
       'isActive': isActive,
       'collectedBy': collectedBy,
     };
+    
+    if (reward != null) { // ✅ null이 아닐 때만 저장
+      data['reward'] = reward;
+    }
+    
+    return data;
   }
 
   /// 마커 복사 (수량 변경)
@@ -95,7 +103,7 @@ class MarkerModel {
       title: title ?? this.title,
       position: position ?? this.position,
       quantity: quantity ?? this.quantity,
-      reward: reward ?? this.reward,
+      reward: reward ?? this.reward, // ✅ null 허용
       creatorId: creatorId ?? this.creatorId,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,

@@ -358,13 +358,16 @@ class MarkerService {
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
     // reward 안전 파싱 (기존 마커 호환성)
     final rawReward = markerData.data['reward'];
-    final int parsedReward = switch (rawReward) {
-      int v => v,
-      double v => v.toInt(),
-      num v => v.toInt(),
-      String v => int.tryParse(v) ?? 0,
-      _ => 0,
-    };
+    int? parsedReward;
+    if (rawReward != null) {
+      parsedReward = switch (rawReward) {
+        int v => v,
+        double v => v.toInt(),
+        num v => v.toInt(),
+        String v => int.tryParse(v),
+        _ => null,
+      };
+    }
     
     return MarkerModel(
       markerId: markerData.id,
@@ -372,7 +375,7 @@ class MarkerService {
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
-      reward: parsedReward, // ✅ reward 추가
+      reward: parsedReward, // ✅ null 허용
       creatorId: markerData.userId,
       createdAt: markerData.createdAt,
       expiresAt: markerData.expiryDate ?? markerData.createdAt.add(const Duration(days: 30)),
@@ -388,18 +391,17 @@ class MarkerService {
     required String creatorId,
     required LatLng position,
     required int quantity,
-    required int reward, // ✅ reward 추가 (배포 시점 고정)
+    int? reward, // ✅ 옵셔널로 변경 (호환성 유지)
     DateTime? expiresAt,
   }) async {
     try {
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
       
-      final markerData = {
+      final markerData = <String, dynamic>{
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
         'postId': postId, // ✅ top-level에만 저장 (중복 제거)
-        'reward': reward, // ✅ reward를 마커에 함께 저장
         'createdAt': Timestamp.now(),
         'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt) : null,
         'isActive': true,
@@ -407,8 +409,12 @@ class MarkerService {
         'tileId': tileId,
       };
 
+      if (reward != null) { // ✅ 있을 때만 저장
+        markerData['reward'] = reward;
+      }
+
       final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward}원)');
+      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
       return docRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');
