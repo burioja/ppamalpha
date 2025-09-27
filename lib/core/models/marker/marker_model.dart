@@ -8,6 +8,7 @@ class MarkerModel {
   final String title; // 마커 제목 (간단한 정보)
   final LatLng position; // 마커 위치
   final int quantity; // 수량
+  final int? reward; // 리워드 금액 (배포 시점 고정, 기존 마커 호환성을 위해 옵셔널)
   final String creatorId; // 마커 생성자
   final DateTime createdAt;
   final DateTime expiresAt;
@@ -20,6 +21,7 @@ class MarkerModel {
     required this.title,
     required this.position,
     required this.quantity,
+    this.reward, // ✅ 옵셔널로 변경
     required this.creatorId,
     required this.createdAt,
     required this.expiresAt,
@@ -29,15 +31,24 @@ class MarkerModel {
 
   /// Firestore에서 마커 생성
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
     final location = data['location'] as GeoPoint;
+    
+    // ✅ 옵셔널 안전 파싱 함수
+    int? parseNullableInt(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
     
     return MarkerModel(
       markerId: doc.id,
-      postId: data['postId'] ?? '',
+      postId: (data['postId'] as String?) ?? '',
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
       quantity: data['quantity'] ?? 0,
+      reward: parseNullableInt(data['reward']), // ✅ 옵셔널 파싱
       creatorId: data['creatorId'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
@@ -48,7 +59,7 @@ class MarkerModel {
 
   /// Firestore에 저장할 데이터
   Map<String, dynamic> toFirestore() {
-    return {
+    final data = <String, dynamic>{
       'postId': postId,
       'title': title,
       'location': GeoPoint(position.latitude, position.longitude),
@@ -59,6 +70,14 @@ class MarkerModel {
       'isActive': isActive,
       'collectedBy': collectedBy,
     };
+    
+    // ✅ nullable promotion 이슈 피하려고 로컬 변수로 받아서 체크
+    final r = reward;
+    if (r != null) {
+      data['reward'] = r;
+    }
+    
+    return data;
   }
 
   /// 마커 복사 (수량 변경)
@@ -68,6 +87,7 @@ class MarkerModel {
     String? title,
     LatLng? position,
     int? quantity,
+    int? reward,
     String? creatorId,
     DateTime? createdAt,
     DateTime? expiresAt,
@@ -80,6 +100,7 @@ class MarkerModel {
       title: title ?? this.title,
       position: position ?? this.position,
       quantity: quantity ?? this.quantity,
+      reward: reward ?? this.reward, // ✅ null 허용
       creatorId: creatorId ?? this.creatorId,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,

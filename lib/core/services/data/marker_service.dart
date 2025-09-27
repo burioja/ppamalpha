@@ -15,6 +15,7 @@ class MarkerService {
     required int quantity,
     required String creatorId,
     required DateTime expiresAt,
+    int? reward, // ✅ 추가 (옵셔널로 두면 기존 호출부도 안전)
   }) async {
     try {
       print('🚀 마커 생성 시작:');
@@ -27,9 +28,6 @@ class MarkerService {
 
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      print('🗺️ 타일 ID: $tileId');
-
-      final markerData = {
         'postId': postId,
         'title': title,
         'location': GeoPoint(position.latitude, position.longitude),
@@ -38,8 +36,9 @@ class MarkerService {
         'collectedQuantity': 0, // 수집된 수량
         'collectionRate': 0.0, // 수집률
         'creatorId': creatorId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(expiresAt),
+        'createdAt': Timestamp.fromDate(now),                 // ✅ 즉시 쿼리 통과
+        'createdAtServer': FieldValue.serverTimestamp(),      // (옵션) 보정용
+        'expiresAt': Timestamp.fromDate(expiresAt),           // ✅ null 방지
         'isActive': true,
         'collectedBy': [], // 수령한 사용자 목록 초기화
         'tileId': tileId, // 타일 ID 저장
@@ -47,31 +46,37 @@ class MarkerService {
         'quantity': quantity,
       };
 
-      // 배치 트랜잭션으로 마커 생성 + 포스트 통계 업데이트
-      final batch = _firestore.batch();
+final batch = _firestore.batch();
 
-      // 1. 마커 생성
-      final markerRef = _firestore.collection('markers').doc();
-      batch.set(markerRef, markerData);
-      print('📌 마커 문서 ID: ${markerRef.id}');
+// ✅ reward를 markerData에 안전하게 포함 (nullable non-promotion 회피)
+final r = reward;
+if (r != null) {
+  markerData['reward'] = r;
+}
 
-      // 2. 포스트 통계 업데이트
-      final postRef = _firestore.collection('posts').doc(postId);
-      batch.update(postRef, {
-        'totalDeployments': FieldValue.increment(1),
-        'totalDeployed': FieldValue.increment(quantity),
-        'lastDeployedAt': FieldValue.serverTimestamp(),
-      });
-      print('📊 포스트 통계 업데이트 예약: $postId');
+// ✅ 즉시 쿼리 통과/표시를 위한 기본값 보정 (필요 시 이미 있으면 유지)
+markerData.putIfAbsent('createdAt', () => Timestamp.fromDate(DateTime.now()));
+markerData.putIfAbsent('expiresAt', () => Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))));
+markerData.putIfAbsent('isActive', () => true);
 
-      await batch.commit();
+// ✅ 마커 생성 (수동 doc id 생성 → set)
+final markerRef = _firestore.collection('markers').doc();
+batch.set(markerRef, markerData);
+print('📌 마커 문서 ID: ${markerRef.id}');
 
-      print('✅ 마커 생성 및 통계 업데이트 완료!');
-      print('📋 Post ID: $postId');
-      print('📌 Marker ID: ${markerRef.id}');
-      print('🎯 [MARKER_CREATED] PostID: $postId | MarkerID: ${markerRef.id} | Title: $title');
+// ✅ 포스트 통계 업데이트
+final postRef = _firestore.collection('posts').doc(postId);
+// 주의: posts 문서가 없을 수 있으면 update 대신 merge set 권장
+batch.set(postRef, {
+  'totalDeployments': FieldValue.increment(1),
+  'totalDeployed': FieldValue.increment(quantity),
+  'lastDeployedAt': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
 
-      return markerRef.id;
+await batch.commit();
+
+print('✅ 마커 생성 및 통계 업데이트 완료 | markerId=${markerRef.id} | postId=$postId | title=$title | reward=${r ?? 0}원');
+return markerRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');
       rethrow;

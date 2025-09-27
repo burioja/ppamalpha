@@ -17,8 +17,8 @@ import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../services/external/osm_fog_service.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
-import '../../../core/services/location/nominatim_service.dart';
 import '../widgets/fog_overlay_widget.dart';
+import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../../../core/models/map/fog_level.dart';
@@ -62,7 +62,6 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   // OSM 기반 Fog of War 상태
-  List<Polygon> _fogPolygons = [];
   List<Polygon> _grayPolygons = []; // 회색 영역들 (과거 방문 위치)
   List<CircleMarker> _ringCircles = [];
   List<Marker> _currentMarkers = [];
@@ -384,11 +383,7 @@ class _MapScreenState extends State<MapScreen> {
 
     print('총 밝은 영역 개수: ${allPositions.length}');
 
-    // evenOdd 규칙으로 겹치는 구멍 자동 처리
-    final fogPolygon = OSMFogService.createFogPolygonWithMultipleHoles(allPositions);
-
     setState(() {
-      _fogPolygons = [fogPolygon];
       _ringCircles = ringCircles;
     });
 
@@ -600,10 +595,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       print('🔄 지도 이동 감지 - 마커 업데이트 시작');
         
-        // 현재 위치 업데이트
-        setState(() {
-          _currentPosition = currentCenter;
-        });
+        // 현재 위치는 GPS에서만 업데이트 (맵센터로 업데이트하지 않음)
         
       // 🚀 서버 API를 통한 마커 조회
         await _updatePostsBasedOnFogLevel();
@@ -703,18 +695,57 @@ class _MapScreenState extends State<MapScreen> {
     return set1.every((tile) => set2.contains(tile));
   }
 
+  // GPS 활성화 요청 다이얼로그
+  void _showLocationPermissionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('위치 서비스 필요'),
+            ],
+          ),
+          content: const Text(
+            '지도에서 마커를 보려면 GPS를 활성화해주세요.\n\n'
+            '설정 > 개인정보 보호 및 보안 > 위치 서비스에서\n'
+            '앱의 위치 권한을 허용해주세요.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _getCurrentLocation(); // 위치 다시 요청
+              },
+              child: const Text('다시 시도'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('나중에'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // 🚀 서버 API를 통한 마커 조회
   Future<void> _updatePostsBasedOnFogLevel() async {
-    // 🔥 Fail-open: 위치가 없어도 기본 위치로 조회
-    final centers = <LatLng>[];
-    if (_currentPosition != null) {
-      centers.add(_currentPosition!);
-      print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
-    } else {
-      // 위치가 없으면 서울시청으로 기본 설정
-      centers.add(LatLng(37.5663, 126.9779));
-      print('⚠️ 위치 없음 - 기본 위치 사용: 37.5663, 126.9779');
+    // 위치가 없으면 GPS 활성화 요청
+    if (_currentPosition == null) {
+      _showLocationPermissionDialog();
+      return;
     }
+    
+    final centers = <LatLng>[];
+    centers.add(_currentPosition!);
+    print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
     
     // 집주소 추가
     if (_homeLocation != null) {
@@ -751,19 +782,19 @@ class _MapScreenState extends State<MapScreen> {
       
       final futures = await Future.wait([
         // 일반 포스트 조회
-        MarkerService.getMarkers(
+        MapMarkerService.getMarkers(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0, // km로 변환
           additionalCenters: additionalCenters,
           filters: filters,
-          pageSize: 500,
+          pageSize: 300, // ✅ 성능 최적화 (500 → 300)
         ),
         // 슈퍼포스트 조회
-        MarkerService.getSuperPosts(
+        MapMarkerService.getSuperPosts(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0,
           additionalCenters: additionalCenters,
-          pageSize: 200,
+          pageSize: 150, // ✅ 성능 최적화 (200 → 150)
         ),
       ]);
 
@@ -805,13 +836,40 @@ class _MapScreenState extends State<MapScreen> {
 
       // 5. MarkerData를 MarkerModel로 변환
       final uniqueMarkers = allMarkers.map((markerData) => 
-        MarkerService.convertToMarkerModel(markerData)
+        MapMarkerService.convertToMarkerModel(markerData)
       ).toList();
+
+      // 6. 포스트 정보도 함께 가져오기
+      final postIds = uniqueMarkers.map((marker) => marker.postId).toSet().toList();
+      final posts = <PostModel>[];
+      
+      if (postIds.isNotEmpty) {
+        try {
+          final postSnapshots = await FirebaseFirestore.instance
+              .collection('posts')
+              .where('postId', whereIn: postIds)
+              .get();
+          
+          for (final doc in postSnapshots.docs) {
+            try {
+              final post = PostModel.fromFirestore(doc);
+              posts.add(post);
+            } catch (e) {
+              print('포스트 파싱 오류: $e');
+            }
+          }
+          
+          print('📄 포스트 정보 조회 완료: ${posts.length}개');
+        } catch (e) {
+          print('❌ 포스트 정보 조회 실패: $e');
+        }
+      }
 
       setState(() {
         _markers = uniqueMarkers;
+        _posts = posts; // 포스트 정보도 업데이트
         _isLoading = false;
-        print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커 업데이트됨');
+        print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커, ${_posts.length}개의 포스트 업데이트됨');
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
       
@@ -1084,6 +1142,18 @@ class _MapScreenState extends State<MapScreen> {
     // 새로운 마커 모델 사용
     for (final marker in _markers) {
       print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
+      
+      // ✅ 조인 제거: 마커에서 직접 reward 사용 (배포 시점 고정)
+      final int markerReward = marker.reward ?? 0; // ✅ null 체크 추가
+      
+      // 가격대에 따라 다른 이미지 사용
+      final String imagePath = markerReward >= 1000 
+          ? 'assets/images/ppam_super.png'  // 천원 이상은 슈퍼포스트 이미지
+          : 'assets/images/ppam_work.png';  // 천원 미만은 일반 이미지
+      
+      print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
+      print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${marker.reward ?? 0}, imagePath=$imagePath');
+      
       markers.add(
         Marker(
           key: ValueKey(marker.markerId),
@@ -1106,7 +1176,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               child: ClipOval(
                 child: Image.asset(
-                  'assets/images/ppam_work.png',
+                  imagePath,
                   width: 31,
                   height: 31,
                   fit: BoxFit.cover,
@@ -1195,7 +1265,7 @@ class _MapScreenState extends State<MapScreen> {
       await PostService().deletePost(marker.postId);
       
       // 마커도 삭제 (markers 컬렉션에서)
-      await MarkerService.deleteMarker(marker.markerId);
+      await MapMarkerService.deleteMarker(marker.markerId);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다')),
@@ -1609,10 +1679,25 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
@@ -1631,10 +1716,25 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
@@ -1653,10 +1753,25 @@ class _MapScreenState extends State<MapScreen> {
     // 포스트 배포 완료 후 처리
     if (success) {
       print('포스트 배포 완료');
-      // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await _updatePostsBasedOnFogLevel();
+      
       setState(() {
         _isLoading = false;
-        _longPressedLatLng = null; // 팝업용 변수만 초기화
       });
     } else {
       // 배포를 취소한 경우 롱프레스 위치 초기화
@@ -1934,10 +2049,16 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                 ),
-                // Fog of War 오버레이
+                // Fog of War 오버레이 (겹침 문제 해결)
                 FogOverlayWidget(
-                  polygons: _fogPolygons,
-                  ringCircles: _ringCircles,
+                  mapController: _mapController!,
+                  holeCenters: [
+                    if (_currentPosition != null) _currentPosition!,
+                    if (_homeLocation != null) _homeLocation!,
+                    ..._workLocations,
+                  ],
+                  radiusMeters: 1000.0,
+                  fogColor: Colors.black.withOpacity(1.0),
                 ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
                 // CircleLayer(circles: _ringCircles),
@@ -2044,7 +2165,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           // 필터 버튼들 (상단)
           Positioned(
-            top: 60,
+            top: 10,
             left: 16,
             right: 16,
                child: Row(

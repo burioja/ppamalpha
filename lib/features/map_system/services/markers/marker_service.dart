@@ -92,8 +92,8 @@ class MapMarkerData {
   }
 }
 
-/// 마커 서비스
-class MarkerService {
+/// 마커 서비스 (Map System 전용)
+class MapMarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -131,11 +131,12 @@ class MarkerService {
           // 거리 필터링
           bool withinRadius = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= radiusInKm * 1000) { // km를 m로 변환
+            final radiusInM = radiusInKm * 1000; // km를 m로 변환
+            if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
             }
@@ -203,11 +204,14 @@ class MarkerService {
       final user = _auth.currentUser;
       if (user == null) return [];
 
-      // markers 컬렉션에서 직접 조회
+      // markers 컬렉션에서 직접 조회 (서버 필터 추가)
+      final now = Timestamp.now();
       final snapshot = await _firestore
           .collection('markers')
           .where('isActive', isEqualTo: true)
-          .limit(pageSize)
+          .where('expiresAt', isGreaterThan: now)     // ✅ 만료 제외 (서버 필터)
+          .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
+          .limit(pageSize)                             // 200~300 권장
           .get();
 
       final markers = <MapMarkerData>[];
@@ -231,11 +235,12 @@ class MarkerService {
           // 거리 필터링
           bool withinRadius = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= radiusInKm * 1000) { // km를 m로 변환
+            final radiusInM = radiusInKm * 1000; // km를 m로 변환
+            if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
             }
@@ -249,11 +254,11 @@ class MarkerService {
           // 1km 이내 마커는 포그레벨 체크 없이 무조건 표시
           bool shouldShow = false;
           for (final center in [location, ...additionalCenters]) {
-            final distance = _calculateDistance(
+            final distanceInM = _calculateDistance(
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            if (distance <= 1000) { // 1km 이내
+            if (distanceInM <= 1000) { // 1km 이내
               shouldShow = true;
               break;
             }
@@ -354,12 +359,21 @@ class MarkerService {
 
   /// MarkerData를 MarkerModel로 변환
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
+    // ✅ 옵셔널 안전 파싱 함수
+    int? parseNullableInt(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+    
     return MarkerModel(
       markerId: markerData.id,
-      postId: markerData.id, // postId는 markerId와 동일하게 설정
+      postId: markerData.data['postId'] ?? markerData.id, // ✅ data에서 postId 가져오기
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
+      reward: parseNullableInt(markerData.data['reward']), // ✅ 옵셔널 파싱
       creatorId: markerData.userId,
       createdAt: markerData.createdAt,
       expiresAt: markerData.expiryDate ?? markerData.createdAt.add(const Duration(days: 30)),
@@ -375,6 +389,7 @@ class MarkerService {
     required String creatorId,
     required LatLng position,
     required int quantity,
+    int? reward, // ✅ 옵셔널로 변경 (호환성 유지)
     DateTime? expiresAt,
   }) async {
     try {
@@ -387,31 +402,28 @@ class MarkerService {
       print('⏰ 만료일: $expiresAt');
 
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      print('🗺️ 타일 ID: $tileId');
 
-      final markerData = {
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
-        'postId': postId,
-        'createdAt': Timestamp.now(),
-        'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt) : null,
+        'postId': postId, // ✅ top-level에만 저장 (중복 제거)
+        'createdAt': Timestamp.fromDate(now),                 // ✅ 즉시 쿼리 통과
+        'createdAtServer': FieldValue.serverTimestamp(),      // (옵션) 보정용
+        'expiresAt': expiresAt != null 
+            ? Timestamp.fromDate(expiresAt) 
+            : Timestamp.fromDate(now.add(const Duration(hours: 24))), // ✅ null 방지
         'isActive': true,
-        'quantity': quantity, // 수량 정보를 최상위 레벨에 저장
-        'data': {
-          'postId': postId,
-          'title': title,
-          'quantity': quantity,
-        },
+        'quantity': quantity, // ✅ 수량 정보를 최상위 레벨에 저장
         'tileId': tileId,
       };
 
-      final docRef = await _firestore.collection('markers').add(markerData);
+      // ✅ nullable promotion 이슈 피하려고 로컬 변수로 받아서 체크
+      final r = reward;
+      if (r != null) {
+        markerData['reward'] = r;
+      }
 
-      print('✅ Map 마커 생성 완료!');
-      print('📋 Post ID: $postId');
-      print('📌 Marker ID: ${docRef.id}');
-      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
+      final docRef = await _firestore.collection('markers').add(markerData);
 
       return docRef.id;
     } catch (e) {
@@ -419,7 +431,12 @@ class MarkerService {
       print('📋 Post ID: $postId');
       print('💥 Error: $e');
       print('🚨 [MAP_MARKER_FAILED] PostID: $postId | Error: $e');
+      print('📌 Marker ID: ${docRef.id}');
+      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
+      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
+
       rethrow;
+        
     }
   }
 
