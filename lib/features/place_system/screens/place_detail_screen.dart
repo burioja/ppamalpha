@@ -59,34 +59,22 @@ class PlaceDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 플레이스 헤더
-                  _buildPlaceHeader(place),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // 기본 정보
-                  _buildBasicInfo(place),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // 연락처 정보
-                  if (place.hasContactInfo) ...[
-                    _buildContactInfo(place),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  // 운영 시간
-                  if (place.hasOperatingHours) ...[
-                    _buildOperatingHours(place),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  // 이미지 갤러리
+                  // 상단 이미지 그리드 (3-4개 우선 표시)
                   if (place.hasImages) ...[
-                    _buildImageGallery(place),
-                    const SizedBox(height: 24),
+                    _buildImageGridHeader(place),
+                    const SizedBox(height: 16),
                   ],
-                  
+
+                  // 플레이스 헤더 (간소화)
+                  _buildSimplePlaceHeader(place),
+
+                  const SizedBox(height: 20),
+
+                  // 간결한 기본 정보
+                  _buildCompactInfo(place),
+
+                  const SizedBox(height: 24),
+
                   // 액션 버튼들
                   _buildActionButtons(context, place),
                 ],
@@ -96,6 +84,303 @@ class PlaceDetailScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  // 상단 이미지 그리드 (3-4개 이미지)
+  Widget _buildImageGridHeader(PlaceModel place) {
+    final images = place.imageUrls.take(4).toList(); // 최대 4개만 표시
+
+    return Container(
+      height: 200,
+      width: double.infinity,
+      child: images.length == 1
+          ? _buildSingleImage(images[0])
+          : images.length == 2
+              ? _buildDoubleImages(images)
+              : images.length == 3
+                  ? _buildTripleImages(images)
+                  : _buildQuadImages(images),
+    );
+  }
+
+  Widget _buildSingleImage(String imageUrl) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 200,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: double.infinity,
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.image_not_supported, size: 60, color: Colors.grey.shade400),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDoubleImages(List<String> images) {
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              bottomLeft: Radius.circular(16),
+            ),
+            child: Image.network(images[0], fit: BoxFit.cover, height: 200),
+          ),
+        ),
+        const SizedBox(width: 2),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            child: Image.network(images[1], fit: BoxFit.cover, height: 200),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTripleImages(List<String> images) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              bottomLeft: Radius.circular(16),
+            ),
+            child: Image.network(images[0], fit: BoxFit.cover, height: 200),
+          ),
+        ),
+        const SizedBox(width: 2),
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
+                  child: Image.network(images[1], fit: BoxFit.cover, width: double.infinity),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
+                  child: Image.network(images[2], fit: BoxFit.cover, width: double.infinity),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuadImages(List<String> images) {
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16)),
+                  child: Image.network(images[0], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
+                  child: Image.network(images[1], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16)),
+                  child: Image.network(images[2], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
+                  child: Image.network(images[3], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 간소화된 플레이스 헤더
+  Widget _buildSimplePlaceHeader(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          place.name,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        if (place.category != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Text(
+              place.fullCategoryPath,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 간결한 정보 카드
+  Widget _buildCompactInfo(PlaceModel place) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade100,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 기본 설명
+          if (place.description != null && place.description!.isNotEmpty) ...[
+            Text(
+              place.description!,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 위치 정보
+          _buildInfoRow(Icons.location_on, '위치', place.formattedAddress ?? '위치 정보 없음'),
+
+          // 연락처
+          if (place.phoneNumber != null && place.phoneNumber!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.phone, '전화번호', place.phoneNumber!),
+          ],
+
+          // 웹사이트
+          if (place.website != null && place.website!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.web, '웹사이트', place.website!),
+          ],
+
+          // 운영시간
+          if (place.hasOperatingHours) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.access_time, '운영시간', _getOperatingHoursSummary(place)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: Colors.blue.shade600),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getOperatingHoursSummary(PlaceModel place) {
+    // 간단한 운영시간 요약 (예: "월-금 09:00-18:00")
+    if (place.operatingHours == null || place.operatingHours!.isEmpty) {
+      return '운영시간 정보 없음';
+    }
+
+    // 첫 번째 요일의 운영시간을 표시
+    final firstDay = place.operatingHours!.keys.first;
+    final hours = place.operatingHours![firstDay];
+    if (hours != null) {
+      return '$firstDay ${hours['hour']?.toString().padLeft(2, '0')}:${hours['minute']?.toString().padLeft(2, '0')} 등';
+    }
+    return '운영시간 정보 없음';
   }
 
   Widget _buildPlaceHeader(PlaceModel place) {
@@ -380,35 +665,6 @@ class PlaceDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.grey.shade600),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   IconData _getCategoryIcon(String? category) {
     switch (category) {

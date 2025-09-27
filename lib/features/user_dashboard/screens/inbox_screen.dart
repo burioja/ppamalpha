@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/services/data/post_service.dart';
+import '../../../core/services/data/post_statistics_service.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../post_system/widgets/post_card.dart';
 import '../../post_system/widgets/post_tile_card.dart';
@@ -16,13 +17,15 @@ class InboxScreen extends StatefulWidget {
 class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final PostService _postService = PostService();
+  final PostStatisticsService _statisticsService = PostStatisticsService();
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
   
   // 검색 및 필터링 상태
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showFilters = false;
-  String _statusFilter = 'all'; // all, active, inactive, expired
+  String _statusFilter = 'all'; // all, active, inactive, deleted
   String _periodFilter = 'all'; // all, today, week, month
   String _sortBy = 'createdAt'; // createdAt, title, reward, expiresAt
   String _sortOrder = 'desc'; // asc, desc
@@ -138,6 +141,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     _filteredPosts.addAll(_filterAndSortPosts(_allPosts));
   }
 
+
+
   // 상태 필터 변경
   void _onStatusFilterChanged(String? value) {
     if (value != null) {
@@ -192,13 +197,13 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       if (_statusFilter != 'all') {
         switch (_statusFilter) {
           case 'active':
-            if (!post.isActive || post.isExpired()) return false;
+            if (post.status != PostStatus.DEPLOYED) return false;
             break;
           case 'inactive':
-            if (post.isActive) return false;
+            if (post.status != PostStatus.DRAFT) return false;
             break;
-          case 'expired':
-            if (!post.isExpired()) return false;
+          case 'deleted':
+            if (post.status != PostStatus.DELETED) return false;
             break;
         }
       }
@@ -259,13 +264,13 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   }
 
   int _getCrossAxisCount(double width) {
-    // 반응형 그리드 컬럼 수 계산
+    // 반응형 그리드 컬럼 수 계산 (3열 기본으로 조정)
     if (width < 600) {
-      return 2; // 모바일: 2열
-    } else if (width < 900) {
-      return 3; // 태블릿: 3열  
+      return 3; // 모바일: 3열 (기본)
+    } else if (width < 1000) {
+      return 3; // 태블릿: 3열 (웹에서 4열이 너무 작아서 3열 유지)
     } else {
-      return 4; // 데스크톱: 4열
+      return 4; // 데스크톱: 4열 (큰 화면에서만 4열)
     }
   }
 
@@ -322,6 +327,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       ),
       body: Column(
         children: [
+
           // 검색 및 필터 영역
           Container(
             padding: const EdgeInsets.all(16),
@@ -384,7 +390,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                            DropdownMenuItem(value: 'all', child: Text('전체')),
                            DropdownMenuItem(value: 'active', child: Text('활성')),
                            DropdownMenuItem(value: 'inactive', child: Text('비활성')),
-                           DropdownMenuItem(value: 'expired', child: Text('만료됨')),
+                           DropdownMenuItem(value: 'deleted', child: Text('삭제됨')),
                          ],
                          onChanged: _onStatusFilterChanged,
                          hint: const Text('상태를 선택하세요'),
@@ -633,12 +639,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
                             
                             return GridView.builder(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(12),
                               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 0.8,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                                childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
                               ),
                           itemCount: filteredPosts.length + (_hasMoreData ? 1 : 0),
                           itemBuilder: (context, index) {
@@ -652,6 +658,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                               post: post,
                               showDeleteButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 삭제 버튼 표시
                               onDelete: () => _showDeleteConfirmation(post),
+                              showStatisticsButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 통계 버튼 표시
+                              onStatistics: () => _showPostStatistics(post),
                               onTap: () async {
                                 // 포스트 상세 화면으로 이동
                                 final result = await Navigator.pushNamed(
@@ -773,12 +781,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
                           
                           return GridView.builder(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(12),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: crossAxisCount,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 0.8,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
                             ),
                         itemCount: filteredPosts.length,
                         itemBuilder: (context, index) {
@@ -923,8 +931,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 return const Text('아직 배포한 포스트가 없습니다.');
               } else {
                 final distributedPosts = snapshot.data!;
-                final activePosts = distributedPosts.where((post) => post.isActive && !post.isExpired()).length;
-                final expiredPosts = distributedPosts.where((post) => post.isExpired()).length;
+                final activePosts = distributedPosts.where((post) => post.status == PostStatus.DEPLOYED).length;
+                final deletedPosts = distributedPosts.where((post) => post.status == PostStatus.DELETED).length;
                 final totalReward = distributedPosts.fold<int>(0, (total, post) => total + post.reward);
                 
                 return Column(
@@ -933,7 +941,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                   children: [
                     Text('총 배포 포스트: ${distributedPosts.length}개'),
                     Text('활성 포스트: $activePosts개'),
-                    Text('만료 포스트: $expiredPosts개'),
+                    Text('삭제된 포스트: $deletedPosts개'),
                     Text('총 리워드: $totalReward포인트'),
                   ],
                 );
@@ -949,6 +957,249 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         );
       },
     );
+  }
+
+  // 포스트 통계 표시
+  void _showPostStatistics(PostModel post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(20),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 헤더
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4D4DFF).withValues(alpha: 0.1),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.analytics, color: Color(0xFF4D4DFF)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '포스트 통계',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4D4DFF),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                // 내용
+                Expanded(
+                  child: FutureBuilder<Map<String, dynamic>>(
+                    future: _statisticsService.getPostStatistics(post.postId),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('통계를 불러오는 중...'),
+                            ],
+                          ),
+                        );
+                      } else if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                                const SizedBox(height: 16),
+                                Text('통계 로드 오류: ${snapshot.error}'),
+                              ],
+                            ),
+                          ),
+                        );
+                      } else if (!snapshot.hasData) {
+                        return const Center(child: Text('통계 데이터가 없습니다.'));
+                      }
+
+                      final stats = snapshot.data!;
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 기본 정보
+                            _buildStatCard(
+                              '기본 정보',
+                              Icons.info_outline,
+                              [
+                                '제목: ${post.title}',
+                                '리워드: ₩${post.reward}',
+                                '생성일: ${post.createdAt.toString().substring(0, 16)}',
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 배포 통계
+                            _buildStatCard(
+                              '배포 현황',
+                              Icons.launch,
+                              [
+                                '총 배포 수: ${stats['totalDeployments']}개',
+                                '배포 수량: ${stats['totalQuantityDeployed']}개',
+                                '수집률: ${((stats['collectionRate'] ?? 0) * 100).toStringAsFixed(1)}%',
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 수집 통계
+                            _buildStatCard(
+                              '수집 현황',
+                              Icons.collections,
+                              [
+                                '총 수집 수: ${stats['totalCollected']}개',
+                                '사용 완료: ${stats['totalUsed']}개',
+                                '사용률: ${((stats['usageRate'] ?? 0) * 100).toStringAsFixed(1)}%',
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 수집자 분석
+                            if (stats['collectors'] != null)
+                              _buildStatCard(
+                                '수집자 분석',
+                                Icons.people,
+                                [
+                                  '고유 수집자: ${stats['collectors']['uniqueCount']}명',
+                                  '평균 수집/사용자: ${(stats['collectors']['averagePerUser'] ?? 0).toStringAsFixed(1)}개',
+                                  '총 수집 횟수: ${stats['collectors']['totalCollections']}회',
+                                ],
+                              ),
+                            const SizedBox(height: 16),
+
+                            // 시간 패턴 (간략하게)
+                            if (stats['timePattern'] != null)
+                              _buildStatCard(
+                                '활동 패턴',
+                                Icons.access_time,
+                                [
+                                  '가장 활발한 시간대: ${_getMostActiveHour(stats['timePattern']['hourly'])}',
+                                  '가장 활발한 요일: ${_getMostActiveDay(stats['timePattern']['daily'])}',
+                                ],
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // 하단 버튼
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4D4DFF),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('닫기'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(String title, IconData icon, List<String> items) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: const Color(0xFF4D4DFF)),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4D4DFF),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...items.map((item) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '• $item',
+              style: const TextStyle(fontSize: 14),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  String _getMostActiveHour(Map<String, dynamic>? hourlyData) {
+    if (hourlyData == null || hourlyData.isEmpty) return '데이터 없음';
+
+    String maxHour = '00';
+    int maxCount = 0;
+
+    hourlyData.forEach((hour, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        maxHour = hour;
+      }
+    });
+
+    return '${maxHour}시 ($maxCount회)';
+  }
+
+  String _getMostActiveDay(Map<String, dynamic>? dailyData) {
+    if (dailyData == null || dailyData.isEmpty) return '데이터 없음';
+
+    String maxDay = '';
+    int maxCount = 0;
+
+    dailyData.forEach((day, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        maxDay = day;
+      }
+    });
+
+    return '$maxDay요일 ($maxCount회)';
   }
 
   // 내 스토어로 이동 (PRD 요구사항)

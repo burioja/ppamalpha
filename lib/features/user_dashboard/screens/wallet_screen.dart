@@ -8,6 +8,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image/image.dart' as img;
 import '../../../core/services/data/post_service.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/points_service.dart';
+import '../../../core/models/user/user_points_model.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -20,16 +22,21 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   final ImagePicker picker = ImagePicker();
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
   final PostService _postService = PostService();
+  final PointsService _pointsService = PointsService();
   List<Map<String, dynamic>> walletItems = [];
   List<PostModel> collectedPosts = [];
+  UserPointsModel? userPoints;
+  List<Map<String, dynamic>> pointsHistory = [];
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadWalletItems();
     _loadCollectedPosts();
+    _loadUserPoints();
+    _loadPointsHistory();
   }
 
   @override
@@ -256,6 +263,217 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _loadUserPoints() async {
+    if (userId == null) return;
+
+    try {
+      final points = await _pointsService.getUserPoints(userId!);
+      setState(() {
+        userPoints = points;
+      });
+    } catch (e) {
+      debugPrint('포인트 정보 로드 오류: $e');
+    }
+  }
+
+  Future<void> _loadPointsHistory() async {
+    if (userId == null) return;
+
+    try {
+      final history = await _pointsService.getPointsHistory(userId!);
+      setState(() {
+        pointsHistory = history;
+      });
+    } catch (e) {
+      debugPrint('포인트 히스토리 로드 오류: $e');
+    }
+  }
+
+  Widget _buildPointsTab() {
+    if (userPoints == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        // 포인트 정보 카드
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(userPoints!.gradeColor),
+                Color(userPoints!.gradeColor).withOpacity(0.7),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '보유 포인트',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${userPoints!.formattedPoints}P',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      userPoints!.grade,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Level ${userPoints!.level}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(
+                          value: userPoints!.levelProgress,
+                          backgroundColor: Colors.white.withOpacity(0.3),
+                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '다음 레벨까지 ${userPoints!.pointsToNextLevel}P',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // 포인트 히스토리
+        Expanded(
+          child: pointsHistory.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.history,
+                        size: 80,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        '포인트 사용 기록이 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: pointsHistory.length,
+                  itemBuilder: (context, index) {
+                    return _buildPointsHistoryItem(pointsHistory[index]);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPointsHistoryItem(Map<String, dynamic> item) {
+    final isEarned = item['type'] == 'earned';
+    final points = item['points'] as int;
+    final reason = item['reason'] as String;
+    final timestamp = item['timestamp'] as DateTime;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isEarned ? Colors.green.shade100 : Colors.red.shade100,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(
+            isEarned ? Icons.add : Icons.remove,
+            color: isEarned ? Colors.green : Colors.red,
+          ),
+        ),
+        title: Text(
+          reason,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Text(
+          _formatDate(timestamp),
+          style: const TextStyle(color: Colors.grey),
+        ),
+        trailing: Text(
+          '${isEarned ? '+' : '-'}${points}P',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isEarned ? Colors.green : Colors.red,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWalletItem(Map<String, dynamic> item) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -403,6 +621,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
+            Tab(text: '포인트'),
             Tab(text: '이미지'),
             Tab(text: '회수한 전단지'),
           ],
@@ -448,6 +667,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       body: TabBarView(
         controller: _tabController,
         children: [
+          // 포인트 탭
+          _buildPointsTab(),
           // 이미지 탭
           walletItems.isEmpty
               ? const Center(

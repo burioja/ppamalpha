@@ -133,8 +133,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 flex: 2,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    children: [
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                       const SizedBox(height: 24),
                       const Align(
                         alignment: Alignment.centerLeft,
@@ -218,6 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       SizedBox(height: bottomInset + 120), // 버튼과 간섭 안되게 추가 여백
                     ],
+                    ),
                   ),
                 ),
               ),

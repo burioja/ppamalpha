@@ -1,6 +1,54 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 
+// 포스트 상태 열거형
+enum PostStatus {
+  DRAFT,     // 배포 대기 (수정 가능)
+  DEPLOYED,  // 배포됨 (수정 불가, 만료 시 자동 삭제)
+  DELETED,   // 삭제됨
+}
+
+// 포스트 상태 확장 메서드
+extension PostStatusExtension on PostStatus {
+  String get name {
+    switch (this) {
+      case PostStatus.DRAFT:
+        return '배포 대기';
+      case PostStatus.DEPLOYED:
+        return '배포됨';
+      case PostStatus.DELETED:
+        return '삭제됨';
+    }
+  }
+
+  String get value {
+    switch (this) {
+      case PostStatus.DRAFT:
+        return 'draft';
+      case PostStatus.DEPLOYED:
+        return 'deployed';
+      case PostStatus.DELETED:
+        return 'deleted';
+    }
+  }
+
+  static PostStatus fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'draft':
+        return PostStatus.DRAFT;
+      case 'deployed':
+        return PostStatus.DEPLOYED;
+      case 'deleted':
+        return PostStatus.DELETED;
+      // 기존 expired 데이터 호환성을 위해 deleted로 변환
+      case 'expired':
+        return PostStatus.DELETED;
+      default:
+        return PostStatus.DRAFT;
+    }
+  }
+}
+
 class PostModel {
   // 필수 메타데이터
   final String postId;
@@ -62,6 +110,29 @@ class PostModel {
   final DateTime? usedAt; // 사용 일시
   final bool isUsedByCurrentUser; // 현재 사용자가 사용했는지 여부
 
+  // 새로운 포스트 상태 관리 시스템
+  final PostStatus status; // 포스트 상태
+  final int? deployQuantity; // 배포 수량 (Map에서 설정)
+  final GeoPoint? deployLocation; // 배포 위치 (Map에서 설정)
+  final DateTime? deployStartDate; // 배포 시작일 (Map에서 설정)
+  final DateTime? deployEndDate; // 배포 종료일 (Map에서 설정)
+  final DocumentSnapshot? rawSnapshot; // 페이지네이션용 Firebase DocumentSnapshot
+
+  // 쿠폰 시스템 (추후 구현)
+  final bool isCoupon; // 쿠폰 여부
+  final Map<String, dynamic>? couponData; // 쿠폰 정보 (JSON 형태)
+
+  // 통계 추적 필드들 (기존)
+  final int totalDeployed; // 총 배포 수량
+  final int totalCollected; // 수집된 수량
+  final int totalUsed; // 사용된 수량
+
+  // 마커 배포 관련 통계 필드들 (새로 추가)
+  final int totalDeployments; // 생성된 마커 수 (배포 횟수)
+  final int totalInstances; // 생성된 인스턴스 수 (수집된 총 개수)
+  final DateTime? lastDeployedAt; // 마지막 배포 시점
+  final DateTime? lastCollectedAt; // 마지막 수집 시점
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -103,6 +174,21 @@ class PostModel {
     this.tileId_fog1,
     this.usedAt,
     this.isUsedByCurrentUser = false,
+    this.status = PostStatus.DRAFT,
+    this.deployQuantity,
+    this.deployLocation,
+    this.deployStartDate,
+    this.deployEndDate,
+    this.rawSnapshot,
+    this.isCoupon = false,
+    this.couponData,
+    this.totalDeployed = 0,
+    this.totalCollected = 0,
+    this.totalUsed = 0,
+    this.totalDeployments = 0,
+    this.totalInstances = 0,
+    this.lastDeployedAt,
+    this.lastCollectedAt,
   }) : markerId = markerId ?? '${creatorId}_$postId';
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -167,6 +253,29 @@ class PostModel {
           ? (data['usedAt'] as Timestamp).toDate()
           : null,
       isUsedByCurrentUser: data['isUsedByCurrentUser'] ?? false,
+      status: PostStatusExtension.fromString(data['status'] ?? 'draft'),
+      deployQuantity: data['deployQuantity'],
+      deployLocation: data['deployLocation'],
+      deployStartDate: data['deployStartDate'] != null
+          ? (data['deployStartDate'] as Timestamp).toDate()
+          : null,
+      deployEndDate: data['deployEndDate'] != null
+          ? (data['deployEndDate'] as Timestamp).toDate()
+          : null,
+      rawSnapshot: doc, // DocumentSnapshot 저장
+      isCoupon: data['isCoupon'] ?? false,
+      couponData: data['couponData'],
+      totalDeployed: data['totalDeployed'] ?? 0,
+      totalCollected: data['totalCollected'] ?? 0,
+      totalUsed: data['totalUsed'] ?? 0,
+      totalDeployments: data['totalDeployments'] ?? 0,
+      totalInstances: data['totalInstances'] ?? 0,
+      lastDeployedAt: data['lastDeployedAt'] != null
+          ? (data['lastDeployedAt'] as Timestamp).toDate()
+          : null,
+      lastCollectedAt: data['lastCollectedAt'] != null
+          ? (data['lastCollectedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -206,6 +315,20 @@ class PostModel {
       'isSuperPost': isSuperPost,
       'usedAt': usedAt != null ? Timestamp.fromDate(usedAt!) : null,
       'isUsedByCurrentUser': isUsedByCurrentUser,
+      'status': status.value,
+      'deployQuantity': deployQuantity,
+      'deployLocation': deployLocation,
+      'deployStartDate': deployStartDate != null ? Timestamp.fromDate(deployStartDate!) : null,
+      'deployEndDate': deployEndDate != null ? Timestamp.fromDate(deployEndDate!) : null,
+      'isCoupon': isCoupon,
+      'couponData': couponData,
+      'totalDeployed': totalDeployed,
+      'totalCollected': totalCollected,
+      'totalUsed': totalUsed,
+      'totalDeployments': totalDeployments,
+      'totalInstances': totalInstances,
+      'lastDeployedAt': lastDeployedAt != null ? Timestamp.fromDate(lastDeployedAt!) : null,
+      'lastCollectedAt': lastCollectedAt != null ? Timestamp.fromDate(lastCollectedAt!) : null,
     };
   }
 
@@ -233,6 +356,56 @@ class PostModel {
   // 조건 확인 메서드들
   bool isExpired() {
     return DateTime.now().isAfter(expiresAt);
+  }
+
+  // 새로운 상태 관리 메서드들
+  bool get isDraft => status == PostStatus.DRAFT;
+  bool get isDeployed => status == PostStatus.DEPLOYED;
+  bool get canEdit => status == PostStatus.DRAFT; // 배포 대기 상태에서만 수정 가능
+  bool get canDeploy => status == PostStatus.DRAFT; // DRAFT 상태에서만 배포 가능
+  bool get canDelete => status == PostStatus.DRAFT || status == PostStatus.DEPLOYED;
+
+  // 배포 관련 메서드들
+  PostModel markAsDeployed({
+    required int quantity,
+    required GeoPoint location,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    return copyWith(
+      status: PostStatus.DEPLOYED,
+      deployQuantity: quantity,
+      deployLocation: location,
+      deployStartDate: startDate ?? DateTime.now(),
+      deployEndDate: endDate ?? expiresAt,
+      distributedAt: DateTime.now(),
+      isDistributed: true,
+      totalDeployed: quantity,
+    );
+  }
+
+  PostModel markAsExpired() {
+    // 만료된 포스트는 자동으로 삭제됨 상태로 변경
+    return copyWith(
+      status: PostStatus.DELETED,
+      isActive: false,
+    );
+  }
+
+  PostModel markAsDeleted() {
+    return copyWith(
+      status: PostStatus.DELETED,
+      isActive: false,
+    );
+  }
+
+  // 자동 상태 업데이트 메서드
+  PostModel updateStatus() {
+    // 배포된 포스트가 배포 종료일을 넘었다면 삭제됨 상태로 변경
+    if (status == PostStatus.DEPLOYED && deployEndDate != null && DateTime.now().isAfter(deployEndDate!)) {
+      return markAsExpired(); // 배포 기간 종료 시 삭제됨 상태로 변경
+    }
+    return this;
   }
 
   bool isInRadius(GeoPoint userLocation) {
@@ -304,7 +477,7 @@ class PostModel {
   // 포스트 사용 관련 메서드
   bool get isUsed => usedAt != null;
 
-  bool get canBeUsed => canUse && !isUsed && !isUsedByCurrentUser && !isExpired() && isActive;
+  bool get canBeUsed => canUse && !isUsed && !isUsedByCurrentUser && status == PostStatus.DEPLOYED && isActive;
 
   PostModel markAsUsed() {
     return copyWith(
@@ -355,6 +528,17 @@ class PostModel {
     bool? isSuperPost,
     DateTime? usedAt,
     bool? isUsedByCurrentUser,
+    PostStatus? status,
+    int? deployQuantity,
+    GeoPoint? deployLocation,
+    DateTime? deployStartDate,
+    DateTime? deployEndDate,
+    DocumentSnapshot? rawSnapshot,
+    bool? isCoupon,
+    Map<String, dynamic>? couponData,
+    int? totalDeployed,
+    int? totalCollected,
+    int? totalUsed,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -391,6 +575,17 @@ class PostModel {
       isSuperPost: isSuperPost ?? this.isSuperPost,
       usedAt: usedAt ?? this.usedAt,
       isUsedByCurrentUser: isUsedByCurrentUser ?? this.isUsedByCurrentUser,
+      status: status ?? this.status,
+      deployQuantity: deployQuantity ?? this.deployQuantity,
+      deployLocation: deployLocation ?? this.deployLocation,
+      deployStartDate: deployStartDate ?? this.deployStartDate,
+      deployEndDate: deployEndDate ?? this.deployEndDate,
+      rawSnapshot: rawSnapshot ?? this.rawSnapshot,
+      isCoupon: isCoupon ?? this.isCoupon,
+      couponData: couponData ?? this.couponData,
+      totalDeployed: totalDeployed ?? this.totalDeployed,
+      totalCollected: totalCollected ?? this.totalCollected,
+      totalUsed: totalUsed ?? this.totalUsed,
     );
   }
 } 

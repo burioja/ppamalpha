@@ -22,7 +22,7 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isExpired = post.isExpired();
+    final isDeleted = post.status == PostStatus.DELETED;
     final isCollected = post.isCollected;
     final daysUntilExpiry = post.expiresAt.difference(DateTime.now()).inDays;
     
@@ -54,7 +54,7 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _buildStatusChip(isExpired, isCollected),
+                  _buildStatusChip(isDeleted, isCollected),
                   // 삭제 버튼 (내 포스트인 경우에만 표시)
                   if (showDeleteButton && onDelete != null) ...[
                     const SizedBox(width: 8),
@@ -177,20 +177,20 @@ class PostCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                                                      Icon(
-                             isExpired ? Icons.access_time_filled : Icons.timer,
+                             isDeleted ? Icons.access_time_filled : Icons.timer,
                              size: 14, 
-                             color: isExpired ? Colors.red.shade500 : Colors.orange.shade500,
+                             color: isDeleted ? Colors.red.shade500 : Colors.orange.shade500,
                            ),
                           const SizedBox(width: 4),
                           Text(
-                            isExpired 
-                              ? '만료됨' 
+                            isDeleted
+                              ? '삭제됨' 
                               : daysUntilExpiry > 0 
                                 ? '$daysUntilExpiry일 남음'
                                 : '오늘 만료',
                             style: TextStyle(
                               fontSize: 12, 
-                              color: isExpired ? Colors.red.shade500 : Colors.orange.shade500,
+                              color: isDeleted ? Colors.red.shade500 : Colors.orange.shade500,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -322,8 +322,8 @@ class PostCard extends StatelessWidget {
     return null;
   }
 
-  Widget _buildStatusChip(bool isExpired, bool isCollected) {
-    if (isExpired) {
+  Widget _buildStatusChip(bool isDeleted, bool isCollected) {
+    if (isDeleted) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -337,7 +337,7 @@ class PostCard extends StatelessWidget {
                          Icon(Icons.access_time_filled, size: 14, color: Colors.red.shade600),
             const SizedBox(width: 4),
             Text(
-              '만료',
+              '삭제',
               style: TextStyle(
                 fontSize: 11, 
                 color: Colors.red.shade600,

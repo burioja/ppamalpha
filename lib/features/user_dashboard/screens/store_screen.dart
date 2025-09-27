@@ -261,7 +261,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
   int get _totalReward {
     return _collectedPosts
-        .where((post) => post.canUse && !post.isExpired())
+        .where((post) => post.canUse && post.status != PostStatus.DELETED)
         .fold<int>(0, (sum, post) => sum + post.reward);
   }
 
@@ -325,8 +325,8 @@ class _StoreScreenState extends State<StoreScreen> {
       String message = '';
       if (post.isUsed || post.isUsedByCurrentUser) {
         message = '이미 사용된 포스트입니다.';
-      } else if (post.isExpired()) {
-        message = '만료된 포스트입니다.';
+      } else if (post.status == PostStatus.DELETED) {
+        message = '삭제된 포스트입니다.';
       } else if (!post.canUse) {
         message = '사용할 수 없는 포스트입니다.';
       } else if (!post.isActive) {

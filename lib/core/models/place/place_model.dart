@@ -18,6 +18,10 @@ class PlaceModel {
   final bool isActive;
   final Map<String, dynamic>? originalData;
 
+  // 쿠폰 시스템
+  final String? couponPassword; // 플레이스 주인이 설정한 쿠폰 사용 암호
+  final bool isCouponEnabled; // 쿠폰 사용 활성화 여부
+
   PlaceModel({
     required this.id,
     required this.name,
@@ -35,6 +39,8 @@ class PlaceModel {
     this.updatedAt,
     this.isActive = true,
     this.originalData,
+    this.couponPassword,
+    this.isCouponEnabled = false,
   });
 
   factory PlaceModel.fromFirestore(DocumentSnapshot doc) {
@@ -57,6 +63,8 @@ class PlaceModel {
       updatedAt: data['updatedAt']?.toDate(),
       isActive: data['isActive'] ?? true,
       originalData: data['originalData'],
+      couponPassword: data['couponPassword'],
+      isCouponEnabled: data['isCouponEnabled'] ?? false,
     );
   }
 
@@ -77,6 +85,8 @@ class PlaceModel {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isActive': isActive,
       'originalData': originalData,
+      'couponPassword': couponPassword,
+      'isCouponEnabled': isCouponEnabled,
     };
   }
 
@@ -97,6 +107,8 @@ class PlaceModel {
     DateTime? updatedAt,
     bool? isActive,
     Map<String, dynamic>? originalData,
+    String? couponPassword,
+    bool? isCouponEnabled,
   }) {
     return PlaceModel(
       id: id ?? this.id,
@@ -115,6 +127,8 @@ class PlaceModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isActive: isActive ?? this.isActive,
       originalData: originalData ?? this.originalData,
+      couponPassword: couponPassword ?? this.couponPassword,
+      isCouponEnabled: isCouponEnabled ?? this.isCouponEnabled,
     );
   }
 
@@ -138,6 +152,11 @@ class PlaceModel {
 
   // 연락처 정보가 있는지 확인
   bool get hasContactInfo => contactInfo != null && contactInfo!.isNotEmpty;
+
+  // 추가 getter들
+  String? get formattedAddress => address;
+  String? get phoneNumber => contactInfo?['phone'];
+  String? get website => contactInfo?['website'];
 }
 
 

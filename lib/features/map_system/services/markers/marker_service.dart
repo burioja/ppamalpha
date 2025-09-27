@@ -378,8 +378,17 @@ class MarkerService {
     DateTime? expiresAt,
   }) async {
     try {
+      print('🚀 Map 마커 생성 시작:');
+      print('📋 Post ID: $postId');
+      print('📝 제목: $title');
+      print('👤 생성자: $creatorId');
+      print('📍 위치: ${position.latitude}, ${position.longitude}');
+      print('📦 수량: $quantity');
+      print('⏰ 만료일: $expiresAt');
+
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      
+      print('🗺️ 타일 ID: $tileId');
+
       final markerData = {
         'title': title,
         'creatorId': creatorId,
@@ -398,10 +407,18 @@ class MarkerService {
       };
 
       final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id}');
+
+      print('✅ Map 마커 생성 완료!');
+      print('📋 Post ID: $postId');
+      print('📌 Marker ID: ${docRef.id}');
+      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
+
       return docRef.id;
     } catch (e) {
-      print('❌ 마커 생성 실패: $e');
+      print('❌ Map 마커 생성 실패:');
+      print('📋 Post ID: $postId');
+      print('💥 Error: $e');
+      print('🚨 [MAP_MARKER_FAILED] PostID: $postId | Error: $e');
       rethrow;
     }
   }
