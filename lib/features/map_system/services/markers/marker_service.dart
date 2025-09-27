@@ -402,7 +402,9 @@ class MapMarkerService {
       print('⏰ 만료일: $expiresAt');
 
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-
+      
+      final now = DateTime.now();
+      final markerData = <String, dynamic>{
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
@@ -425,18 +427,19 @@ class MapMarkerService {
 
       final docRef = await _firestore.collection('markers').add(markerData);
 
+      print('✅ Map 마커 생성 완료!');
+      print('📋 Post ID: $postId');
+      print('📌 Marker ID: ${docRef.id}');
+      print('💰 Reward: ${reward ?? 0}원');
+      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
+
       return docRef.id;
     } catch (e) {
       print('❌ Map 마커 생성 실패:');
       print('📋 Post ID: $postId');
       print('💥 Error: $e');
       print('🚨 [MAP_MARKER_FAILED] PostID: $postId | Error: $e');
-      print('📌 Marker ID: ${docRef.id}');
-      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
-      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
-
       rethrow;
-        
     }
   }
 
