@@ -356,17 +356,12 @@ class MarkerService {
 
   /// MarkerData를 MarkerModel로 변환
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
-    // reward 안전 파싱 (기존 마커 호환성)
-    final rawReward = markerData.data['reward'];
-    int? parsedReward;
-    if (rawReward != null) {
-      parsedReward = switch (rawReward) {
-        int v => v,
-        double v => v.toInt(),
-        num v => v.toInt(),
-        String v => int.tryParse(v),
-        _ => null,
-      };
+    // ✅ 옵셔널 안전 파싱 함수
+    int? parseNullableInt(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
     }
     
     return MarkerModel(
@@ -375,7 +370,7 @@ class MarkerService {
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
-      reward: parsedReward, // ✅ null 허용
+      reward: parseNullableInt(markerData.data['reward']), // ✅ 옵셔널 파싱
       creatorId: markerData.userId,
       createdAt: markerData.createdAt,
       expiresAt: markerData.expiryDate ?? markerData.createdAt.add(const Duration(days: 30)),
@@ -409,8 +404,10 @@ class MarkerService {
         'tileId': tileId,
       };
 
-      if (reward != null) { // ✅ 있을 때만 저장
-        markerData['reward'] = reward;
+      // ✅ nullable promotion 이슈 피하려고 로컬 변수로 받아서 체크
+      final r = reward;
+      if (r != null) {
+        markerData['reward'] = r;
       }
 
       final docRef = await _firestore.collection('markers').add(markerData);

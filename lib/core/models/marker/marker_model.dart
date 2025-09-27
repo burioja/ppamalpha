@@ -31,29 +31,24 @@ class MarkerModel {
 
   /// Firestore에서 마커 생성
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
     final location = data['location'] as GeoPoint;
     
-    // reward 안전 파싱 (기존 마커 호환성)
-    final rawReward = data['reward'];
-    int? parsedReward;
-    if (rawReward != null) {
-      parsedReward = switch (rawReward) {
-        int v => v,
-        double v => v.toInt(),
-        num v => v.toInt(),
-        String v => int.tryParse(v),
-        _ => null,
-      };
+    // ✅ 옵셔널 안전 파싱 함수
+    int? parseNullableInt(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
     }
     
     return MarkerModel(
       markerId: doc.id,
-      postId: data['postId'] ?? '',
+      postId: (data['postId'] as String?) ?? '',
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
       quantity: data['quantity'] ?? 0,
-      reward: parsedReward, // ✅ null 허용
+      reward: parseNullableInt(data['reward']), // ✅ 옵셔널 파싱
       creatorId: data['creatorId'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
@@ -64,7 +59,7 @@ class MarkerModel {
 
   /// Firestore에 저장할 데이터
   Map<String, dynamic> toFirestore() {
-    final data = {
+    final data = <String, dynamic>{
       'postId': postId,
       'title': title,
       'location': GeoPoint(position.latitude, position.longitude),
@@ -76,8 +71,10 @@ class MarkerModel {
       'collectedBy': collectedBy,
     };
     
-    if (reward != null) { // ✅ null이 아닐 때만 저장
-      data['reward'] = reward;
+    // ✅ nullable promotion 이슈 피하려고 로컬 변수로 받아서 체크
+    final r = reward;
+    if (r != null) {
+      data['reward'] = r;
     }
     
     return data;
