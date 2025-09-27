@@ -356,12 +356,23 @@ class MarkerService {
 
   /// MarkerData를 MarkerModel로 변환
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
+    // reward 안전 파싱 (기존 마커 호환성)
+    final rawReward = markerData.data['reward'];
+    final int parsedReward = switch (rawReward) {
+      int v => v,
+      double v => v.toInt(),
+      num v => v.toInt(),
+      String v => int.tryParse(v) ?? 0,
+      _ => 0,
+    };
+    
     return MarkerModel(
       markerId: markerData.id,
-      postId: markerData.data['postId'] ?? markerData.id, // data에서 postId 가져오기
+      postId: markerData.data['postId'] ?? markerData.id, // ✅ data에서 postId 가져오기
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
+      reward: parsedReward, // ✅ reward 추가
       creatorId: markerData.userId,
       createdAt: markerData.createdAt,
       expiresAt: markerData.expiryDate ?? markerData.createdAt.add(const Duration(days: 30)),
@@ -377,6 +388,7 @@ class MarkerService {
     required String creatorId,
     required LatLng position,
     required int quantity,
+    required int reward, // ✅ reward 추가 (배포 시점 고정)
     DateTime? expiresAt,
   }) async {
     try {
@@ -386,21 +398,17 @@ class MarkerService {
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
-        'postId': postId,
+        'postId': postId, // ✅ top-level에만 저장 (중복 제거)
+        'reward': reward, // ✅ reward를 마커에 함께 저장
         'createdAt': Timestamp.now(),
         'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt) : null,
         'isActive': true,
-        'quantity': quantity, // 수량 정보를 최상위 레벨에 저장
-        'data': {
-          'postId': postId,
-          'title': title,
-          'quantity': quantity,
-        },
+        'quantity': quantity, // ✅ 수량 정보를 최상위 레벨에 저장
         'tileId': tileId,
       };
 
       final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id}');
+      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward}원)');
       return docRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');

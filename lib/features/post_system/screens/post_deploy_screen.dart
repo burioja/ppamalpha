@@ -192,6 +192,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         title: _selectedPost!.title,
         position: _selectedLocation!,
         quantity: quantity, // 전체 수량을 하나의 마커에
+        reward: _selectedPost!.reward, // ✅ reward 전달
         creatorId: _selectedPost!.creatorId,
         expiresAt: _selectedPost!.expiresAt,
       );

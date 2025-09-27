@@ -114,6 +114,16 @@ class PostModel {
       postId = doc.id; // 문서 ID를 fallback으로 사용
     }
     
+    // reward 안전 파싱 (int/double/String 혼재 대응)
+    final rawReward = data['reward'];
+    final int parsedReward = switch (rawReward) {
+      int v => v,
+      double v => v.toInt(),
+      num v => v.toInt(),
+      String v => int.tryParse(v) ?? 0,
+      _ => 0,
+    };
+    
     return PostModel(
       postId: postId, // 이제 항상 유효한 ID 보장
       creatorId: data['creatorId'] ?? '',
@@ -126,7 +136,7 @@ class PostModel {
       expiresAt: data['expiresAt'] != null 
           ? (data['expiresAt'] as Timestamp).toDate()
           : DateTime.now().add(const Duration(days: 30)),
-      reward: data['reward'] ?? 0,
+      reward: parsedReward,
       quantity: data['quantity'] ?? 1,
       targetAge: List<int>.from(data['targetAge'] ?? [20, 30]),
       targetGender: data['targetGender'] ?? 'all',

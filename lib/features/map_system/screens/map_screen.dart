@@ -1143,46 +1143,16 @@ class _MapScreenState extends State<MapScreen> {
     for (final marker in _markers) {
       print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
       
-      // 포스트 정보에서 가격 확인
-      final post = _posts.firstWhere(
-        (p) => p.postId == marker.postId,
-        orElse: () {
-          print('⚠️ 포스트 정보를 찾을 수 없음: ${marker.postId}');
-          print('📄 현재 _posts 개수: ${_posts.length}');
-          print('📄 _posts의 postId들: ${_posts.map((p) => p.postId).toList()}');
-          print('🔍 마커 정보: markerId=${marker.markerId}, title=${marker.title}');
-          return PostModel(
-            postId: '',
-            creatorId: '',
-            creatorName: '',
-            location: const GeoPoint(0, 0),
-            radius: 1000,
-            createdAt: DateTime.now(),
-            expiresAt: DateTime.now(),
-            reward: 0,
-            targetAge: [20, 30],
-            targetGender: 'all',
-            targetInterest: [],
-            targetPurchaseHistory: [],
-            mediaType: ['text'],
-            mediaUrl: [],
-            title: '',
-            description: '',
-            canRespond: false,
-            canForward: false,
-            canRequestReward: false,
-            canUse: false,
-          );
-        },
-      );
+      // ✅ 조인 제거: 마커에서 직접 reward 사용 (배포 시점 고정)
+      final int markerReward = marker.reward;
       
       // 가격대에 따라 다른 이미지 사용
-      final String imagePath = post.reward >= 1000 
+      final String imagePath = markerReward >= 1000 
           ? 'assets/images/ppam_super.png'  // 천원 이상은 슈퍼포스트 이미지
           : 'assets/images/ppam_work.png';  // 천원 미만은 일반 이미지
       
-      print('💰 마커 ${marker.title}: 가격 ${post.reward}원 -> ${post.reward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
-      print('🔍 디버그: marker.postId=${marker.postId}, post.postId=${post.postId}, post.reward=${post.reward}, imagePath=$imagePath');
+      print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
+      print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${markerReward}, imagePath=$imagePath');
       
       markers.add(
         Marker(

@@ -8,6 +8,7 @@ class MarkerModel {
   final String title; // 마커 제목 (간단한 정보)
   final LatLng position; // 마커 위치
   final int quantity; // 수량
+  final int reward; // 리워드 금액 (배포 시점 고정)
   final String creatorId; // 마커 생성자
   final DateTime createdAt;
   final DateTime expiresAt;
@@ -20,6 +21,7 @@ class MarkerModel {
     required this.title,
     required this.position,
     required this.quantity,
+    required this.reward,
     required this.creatorId,
     required this.createdAt,
     required this.expiresAt,
@@ -32,12 +34,23 @@ class MarkerModel {
     final data = doc.data() as Map<String, dynamic>;
     final location = data['location'] as GeoPoint;
     
+    // reward 안전 파싱 (기존 마커 호환성)
+    final rawReward = data['reward'];
+    final int parsedReward = switch (rawReward) {
+      int v => v,
+      double v => v.toInt(),
+      num v => v.toInt(),
+      String v => int.tryParse(v) ?? 0,
+      _ => 0,
+    };
+    
     return MarkerModel(
       markerId: doc.id,
       postId: data['postId'] ?? '',
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
       quantity: data['quantity'] ?? 0,
+      reward: parsedReward,
       creatorId: data['creatorId'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
@@ -53,6 +66,7 @@ class MarkerModel {
       'title': title,
       'location': GeoPoint(position.latitude, position.longitude),
       'quantity': quantity,
+      'reward': reward,
       'creatorId': creatorId,
       'createdAt': Timestamp.fromDate(createdAt),
       'expiresAt': Timestamp.fromDate(expiresAt),
@@ -68,6 +82,7 @@ class MarkerModel {
     String? title,
     LatLng? position,
     int? quantity,
+    int? reward,
     String? creatorId,
     DateTime? createdAt,
     DateTime? expiresAt,
@@ -80,6 +95,7 @@ class MarkerModel {
       title: title ?? this.title,
       position: position ?? this.position,
       quantity: quantity ?? this.quantity,
+      reward: reward ?? this.reward,
       creatorId: creatorId ?? this.creatorId,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
