@@ -7,7 +7,7 @@ import '../../../utils/tile_utils.dart';
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 마커 생성 (포스트 ID와 연결)
+  /// 마커 생성 (포스트 ID와 연결) - 통계 집계 포함
   static Future<String> createMarker({
     required String postId,
     required String title,
@@ -18,16 +18,23 @@ class MarkerService {
     int? reward, // ✅ 추가 (옵셔널로 두면 기존 호출부도 안전)
   }) async {
     try {
+      print('🚀 마커 생성 시작:');
+      print('📋 Post ID: $postId');
+      print('📝 제목: $title');
+      print('📍 위치: ${position.latitude}, ${position.longitude}');
+      print('📦 수량: $quantity');
+      print('👤 생성자: $creatorId');
+      print('⏰ 만료일: $expiresAt');
+
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      
-      // ✅ 즉시 쿼리 통과를 위한 클라이언트 시간 추가
-      final now = DateTime.now();
-      final markerData = <String, dynamic>{
         'postId': postId,
         'title': title,
         'location': GeoPoint(position.latitude, position.longitude),
-        'quantity': quantity,
+        'totalQuantity': quantity, // 총 배포 수량
+        'remainingQuantity': quantity, // 남은 수량
+        'collectedQuantity': 0, // 수집된 수량
+        'collectionRate': 0.0, // 수집률
         'creatorId': creatorId,
         'createdAt': Timestamp.fromDate(now),                 // ✅ 즉시 쿼리 통과
         'createdAtServer': FieldValue.serverTimestamp(),      // (옵션) 보정용
@@ -35,17 +42,41 @@ class MarkerService {
         'isActive': true,
         'collectedBy': [], // 수령한 사용자 목록 초기화
         'tileId': tileId, // 타일 ID 저장
+        // 호환성을 위해 기존 quantity 필드도 유지
+        'quantity': quantity,
       };
 
-      // ✅ non-promotion 회피용 로컬 변수
-      final r = reward;
-      if (r != null) {
-        markerData['reward'] = r;
-      }
+final batch = _firestore.batch();
 
-      final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
-      return docRef.id;
+// ✅ reward를 markerData에 안전하게 포함 (nullable non-promotion 회피)
+final r = reward;
+if (r != null) {
+  markerData['reward'] = r;
+}
+
+// ✅ 즉시 쿼리 통과/표시를 위한 기본값 보정 (필요 시 이미 있으면 유지)
+markerData.putIfAbsent('createdAt', () => Timestamp.fromDate(DateTime.now()));
+markerData.putIfAbsent('expiresAt', () => Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))));
+markerData.putIfAbsent('isActive', () => true);
+
+// ✅ 마커 생성 (수동 doc id 생성 → set)
+final markerRef = _firestore.collection('markers').doc();
+batch.set(markerRef, markerData);
+print('📌 마커 문서 ID: ${markerRef.id}');
+
+// ✅ 포스트 통계 업데이트
+final postRef = _firestore.collection('posts').doc(postId);
+// 주의: posts 문서가 없을 수 있으면 update 대신 merge set 권장
+batch.set(postRef, {
+  'totalDeployments': FieldValue.increment(1),
+  'totalDeployed': FieldValue.increment(quantity),
+  'lastDeployedAt': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
+
+await batch.commit();
+
+print('✅ 마커 생성 및 통계 업데이트 완료 | markerId=${markerRef.id} | postId=$postId | title=$title | reward=${r ?? 0}원');
+return markerRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');
       rethrow;
@@ -102,50 +133,66 @@ class MarkerService {
     });
   }
 
-  /// 마커에서 포스트 수령
+  /// 마커에서 포스트 수령 - 통계 집계 포함
   static Future<bool> collectPostFromMarker({
     required String markerId,
     required String userId,
   }) async {
     try {
       final docRef = _firestore.collection('markers').doc(markerId);
-      
+
       await _firestore.runTransaction((transaction) async {
         final doc = await transaction.get(docRef);
-        
+
         if (!doc.exists) {
           throw Exception('마커를 찾을 수 없습니다');
         }
-        
+
         final data = doc.data()!;
-        final currentQuantity = data['quantity'] ?? 0;
+        final remainingQuantity = data['remainingQuantity'] ?? data['quantity'] ?? 0;
+        final collectedQuantity = data['collectedQuantity'] ?? 0;
+        final totalQuantity = data['totalQuantity'] ?? data['quantity'] ?? 0;
         final collectedBy = List<String>.from(data['collectedBy'] ?? []);
-        
+        final postId = data['postId'];
+
         if (collectedBy.contains(userId)) {
           throw Exception('이미 수령한 포스트입니다');
         }
-        
-        if (currentQuantity <= 0) {
+
+        if (remainingQuantity <= 0) {
           throw Exception('수량이 부족합니다');
         }
-        
-        final newQuantity = currentQuantity - 1;
+
+        final newRemainingQuantity = remainingQuantity - 1;
+        final newCollectedQuantity = collectedQuantity + 1;
+        final newCollectionRate = totalQuantity > 0 ? newCollectedQuantity / totalQuantity : 0.0;
         collectedBy.add(userId);
-        
-        if (newQuantity <= 0) {
-          transaction.update(docRef, {
-            'quantity': 0,
-            'isActive': false,
-            'collectedBy': collectedBy,
-          });
-        } else {
-          transaction.update(docRef, {
-            'quantity': newQuantity,
-            'collectedBy': collectedBy,
+
+        // 마커 수량 업데이트
+        final markerUpdate = {
+          'remainingQuantity': newRemainingQuantity,
+          'collectedQuantity': newCollectedQuantity,
+          'collectionRate': newCollectionRate,
+          'collectedBy': collectedBy,
+          'quantity': newRemainingQuantity, // 호환성 유지
+        };
+
+        if (newRemainingQuantity <= 0) {
+          markerUpdate['isActive'] = false;
+        }
+
+        transaction.update(docRef, markerUpdate);
+
+        // 포스트 통계 업데이트 (이미 PostInstanceService에서 처리하지만 직접 수령 시에도 업데이트)
+        if (postId != null) {
+          final postRef = _firestore.collection('posts').doc(postId);
+          transaction.update(postRef, {
+            'totalCollected': FieldValue.increment(1),
+            'lastCollectedAt': FieldValue.serverTimestamp(),
           });
         }
       });
-      
+
       print('✅ 마커에서 포스트 수령 완료: $markerId, 사용자: $userId');
       return true;
     } catch (e) {

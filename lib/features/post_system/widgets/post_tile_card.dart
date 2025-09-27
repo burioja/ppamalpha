@@ -9,6 +9,8 @@ class PostTileCard extends StatelessWidget {
   final bool isSelected;
   final bool showDeleteButton;
   final VoidCallback? onDelete;
+  final bool showStatisticsButton;
+  final VoidCallback? onStatistics;
 
   const PostTileCard({
     super.key,
@@ -17,11 +19,13 @@ class PostTileCard extends StatelessWidget {
     this.isSelected = false,
     this.showDeleteButton = false,
     this.onDelete,
+    this.showStatisticsButton = false,
+    this.onStatistics,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isExpired = post.isExpired();
+    final isDeleted = post.status == PostStatus.DELETED;
     final isCollected = post.isCollected;
     final isUsed = post.isUsed || post.isUsedByCurrentUser;
     
@@ -78,7 +82,7 @@ class PostTileCard extends StatelessWidget {
                     Positioned(
                       top: 8,
                       right: 8,
-                      child: _buildStatusBadge(isExpired, isCollected, isUsed),
+                      child: _buildStatusBadge(isDeleted, isCollected, isUsed),
                     ),
                     // 삭제 버튼 (좌상단)
                     if (showDeleteButton && onDelete != null)
@@ -95,6 +99,27 @@ class PostTileCard extends StatelessWidget {
                             ),
                             child: const Icon(
                               Icons.delete,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    // 통계 버튼 (좌상단, 삭제 버튼 옆)
+                    if (showStatisticsButton && onStatistics != null)
+                      Positioned(
+                        top: 8,
+                        left: showDeleteButton && onDelete != null ? 44 : 8, // 삭제 버튼이 있으면 옆에, 없으면 처음 위치
+                        child: GestureDetector(
+                          onTap: onStatistics,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4D4DFF).withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.analytics,
                               size: 16,
                               color: Colors.white,
                             ),
@@ -128,10 +153,11 @@ class PostTileCard extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // 제목
                     Text(
@@ -145,29 +171,35 @@ class PostTileCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     // 하단 정보 (리워드, 만료일)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         // 리워드
-                        Text(
-                          isUsed ? '사용완료' : '₩${NumberFormat('#,###').format(post.reward)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isUsed ? Colors.grey.shade600 : const Color(0xFF4D4DFF),
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          flex: 2,
+                          child: Text(
+                            isUsed ? '사용완료' : '₩${NumberFormat('#,###').format(post.reward)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isUsed ? Colors.grey.shade600 : const Color(0xFF4D4DFF),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
+                        const SizedBox(width: 4),
                         // 만료일
                         Text(
-                          isExpired 
-                            ? '만료됨'
+                          isDeleted
+                            ? '삭제됨'
                             : DateFormat('MM/dd').format(post.expiresAt),
                           style: TextStyle(
                             fontSize: 10,
-                            color: isExpired ? Colors.red.shade500 : Colors.grey.shade600,
-                            fontWeight: isExpired ? FontWeight.w500 : FontWeight.normal,
+                            color: isDeleted ? Colors.red.shade500 : Colors.grey.shade600,
+                            fontWeight: isDeleted ? FontWeight.w500 : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -217,7 +249,7 @@ class PostTileCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBadge(bool isExpired, bool isCollected, bool isUsed) {
+  Widget _buildStatusBadge(bool isDeleted, bool isCollected, bool isUsed) {
     // 사용 상태가 최우선
     if (isUsed) {
       return Container(
@@ -236,8 +268,8 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    // 만료 상태
-    if (isExpired) {
+    // 삭제된 상태
+    if (isDeleted) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -245,7 +277,7 @@ class PostTileCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Text(
-          '만료',
+          '삭제',
           style: TextStyle(
             fontSize: 10,
             color: Colors.white,

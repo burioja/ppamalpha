@@ -8,9 +8,11 @@ import '../../models/post/post_model.dart';
 import '../../../features/map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
 import 'post_search_service.dart';
+import 'points_service.dart';
 
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final PointsService _pointsService = PointsService();
 
   // 포스트 생성 (Firestore + Meilisearch)
   Future<String> createPost({
@@ -36,9 +38,11 @@ class PostService {
     bool isSuperPost = false, // 슈퍼포스트 여부
   }) async {
     try {
+      debugPrint('🚀 포스트 생성 시작: title="$title", creator=$creatorId');
+
       // 타일 ID 자동 계산
       final tileId = TileUtils.getTileId(location.latitude, location.longitude);
-      
+
       // Firestore에 먼저 저장하여 문서 ID 생성
       final docRef = await _firestore.collection('posts').add({
         'postId': '', // 임시로 빈 문자열, 문서 ID 생성 후 업데이트
@@ -69,15 +73,27 @@ class PostService {
         'collectedBy': null,
         'collectedAt': null,
       });
-      
+
       final postId = docRef.id;
-      
+
+      // 🎯 생성된 포스트 ID 로깅
+      debugPrint('✅ 포스트 생성 완료!');
+      debugPrint('📋 Post ID: $postId');
+      debugPrint('📝 제목: $title');
+      debugPrint('👤 생성자: $creatorName ($creatorId)');
+      debugPrint('💰 리워드: ${reward}원');
+      debugPrint('📍 위치: ${location.latitude}, ${location.longitude}');
+      debugPrint('⏰ 만료일: $expiresAt');
+      print('🆔 [POST_CREATED] ID: $postId | Title: $title');
+
       // 생성된 문서 ID를 postId 필드에 업데이트
       await docRef.update({'postId': postId});
-      
+      debugPrint('🔄 postId 필드 업데이트 완료: $postId');
+
       // S2 타일 ID 자동 설정
       await PostSearchService.updatePostS2Tiles(postId);
-      
+      debugPrint('🗺️ S2 타일 업데이트 완료: $postId');
+
       final post = PostModel(
         postId: postId,
         creatorId: creatorId,
@@ -106,9 +122,15 @@ class PostService {
 
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
       await _indexToMeilisearch(post);
-      
+      debugPrint('🔍 Meilisearch 인덱싱 완료: $postId');
+
+      // 최종 요약 로그
+      print('🎉 [POST_CREATION_SUCCESS] PostID: $postId | "$title" 생성 완료');
+
       return postId;
     } catch (e) {
+      debugPrint('❌ 포스트 생성 실패: $e');
+      print('💥 [POST_CREATION_FAILED] Error: $e');
       throw Exception('포스트 생성 실패: $e');
     }
   }
@@ -179,27 +201,39 @@ class PostService {
       if (postId.isEmpty || postId.trim().isEmpty) {
         throw Exception('포스트 ID가 비어있습니다. postId: "$postId"');
       }
-      
-      debugPrint('🔄 PostService.updatePost 호출:');
-      debugPrint('  - postId: $postId');
-      debugPrint('  - updates: $updates');
-      
+
+      debugPrint('🔄 포스트 업데이트 시작:');
+      debugPrint('📋 Post ID: $postId');
+      debugPrint('📝 Updates: $updates');
+      print('🔧 [POST_UPDATE_START] ID: $postId');
+
       // 문서 존재 여부 확인
       final docRef = _firestore.collection('posts').doc(postId);
       final docSnapshot = await docRef.get();
-      
+
       if (!docSnapshot.exists) {
+        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
+        print('💥 [POST_UPDATE_FAILED] ID: $postId | Reason: Post not found');
         throw Exception('포스트를 찾을 수 없습니다. postId: $postId');
       }
-      
+
+      // 기존 포스트 정보 로깅 (업데이트 전)
+      final currentData = docSnapshot.data() as Map<String, dynamic>;
+      debugPrint('📄 업데이트 전 포스트 제목: ${currentData['title']}');
+
       await docRef.update(updates);
-      
-      debugPrint('✅ 포스트 업데이트 완료: $postId');
-      
+
+      debugPrint('✅ 포스트 업데이트 완료!');
+      debugPrint('📋 Post ID: $postId');
+      debugPrint('🔄 업데이트된 필드: ${updates.keys.join(', ')}');
+      print('🎉 [POST_UPDATE_SUCCESS] ID: $postId | Fields: ${updates.keys.join(', ')}');
+
       // Meilisearch 업데이트 (실제 구현 시)
       // await _updateMeilisearch(postId, updates);
+      debugPrint('🔍 Meilisearch 업데이트 스킵 (미구현): $postId');
     } catch (e) {
       debugPrint('❌ 포스트 업데이트 실패: $e');
+      print('💥 [POST_UPDATE_FAILED] ID: $postId | Error: $e');
       throw Exception('포스트 업데이트 실패: $e');
     }
   }
@@ -305,8 +339,8 @@ class PostService {
       for (var doc in querySnapshot.docs) {
         final post = PostModel.fromFirestore(doc);
         
-        // 만료 확인
-        if (post.isExpired()) continue;
+        // 삭제된 포스트 제외
+        if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
         final distance = _calculateDistance(
@@ -361,7 +395,7 @@ class PostService {
 
         for (var doc in normalPostsQuery.docs) {
           final post = PostModel.fromFirestore(doc);
-          if (!post.isExpired()) {
+          if (post.status != PostStatus.DELETED) {
             posts.add(post);
           }
         }
@@ -377,7 +411,7 @@ class PostService {
 
       for (var doc in superPostsQuery.docs) {
         final post = PostModel.fromFirestore(doc);
-        if (!post.isExpired()) {
+        if (post.status != PostStatus.DELETED) {
           // 거리 확인 (슈퍼포스트는 반경 내에서만)
           final distance = _calculateDistance(
             location.latitude, location.longitude,
@@ -427,8 +461,8 @@ class PostService {
       for (var doc in querySnapshot.docs) {
         final post = PostModel.fromFirestore(doc);
         
-        // 만료 확인
-        if (post.isExpired()) continue;
+        // 삭제된 포스트 제외
+        if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
         final distance = _calculateDistance(
@@ -531,7 +565,7 @@ class PostService {
           print('  - 포스트: ${post.title} - 만료: $isExpired (${timeDiff}분 남음)');
         }
         
-        final posts = allPosts.where((post) => !post.isExpired()).toList();
+        final posts = allPosts.where((post) => post.status != PostStatus.DELETED).toList();
         print('  - 만료 제외 후: ${posts.length}개 포스트');
         return posts;
       });
@@ -565,7 +599,7 @@ class PostService {
       }
       
       final posts = allPosts
-          .where((post) => !post.isExpired()) // 만료 확인
+          .where((post) => post.status != PostStatus.DELETED) // 삭제된 포스트 제외
           .where((post) {
             // 거리 계산 (지정된 반경 이내)
             final distance = _calculateDistance(
@@ -601,8 +635,8 @@ class PostService {
       for (var doc in snapshot.docs) {
         final post = PostModel.fromFirestore(doc);
         
-        // 만료 확인
-        if (post.isExpired()) continue;
+        // 삭제된 포스트 제외
+        if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
         final distance = _calculateDistance(
@@ -634,8 +668,8 @@ class PostService {
       for (var doc in querySnapshot.docs) {
         final post = PostModel.fromFirestore(doc);
         
-        // 만료 확인
-        if (post.isExpired()) continue;
+        // 삭제된 포스트 제외
+        if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
         final distance = _calculateDistance(
@@ -744,63 +778,170 @@ class PostService {
     }
   }
 
-  // 일반 사용자가 다른 사용자의 포스트를 수령하는 메서드 (수량 차감 방식)
+  // 일반 사용자가 다른 사용자의 포스트를 수령하는 메서드 (통합 수령 로직)
   Future<void> collectPost({
     required String postId,
     required String userId,
   }) async {
     try {
       debugPrint('🔄 collectPost 호출: postId=$postId, userId=$userId');
-      
-      // 포스트 존재 확인
+
+      // 1단계: posts 컬렉션에서 포스트 확인
       final postDoc = await _firestore.collection('posts').doc(postId).get();
-      if (!postDoc.exists) {
-        debugPrint('❌ 포스트를 찾을 수 없음: $postId');
-        throw Exception('포스트를 찾을 수 없습니다.');
+
+      if (postDoc.exists) {
+        debugPrint('✅ posts 컬렉션에서 포스트 발견: $postId');
+        await _collectFromPostsCollection(postDoc, userId);
+        return;
       }
-      
+
+      debugPrint('⚠️ posts 컬렉션에서 포스트 없음, markers 컬렉션 확인 중: $postId');
+
+      // 2단계: markers 컬렉션에서 해당 postId를 가진 마커 확인
+      final markersQuery = await _firestore
+          .collection('markers')
+          .where('postId', isEqualTo: postId)
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (markersQuery.docs.isNotEmpty) {
+        debugPrint('✅ markers 컬렉션에서 관련 마커 발견: $postId');
+        final markerDoc = markersQuery.docs.first;
+        await _collectFromMarkersCollection(markerDoc, userId, postId);
+        return;
+      }
+
+      // 3단계: 둘 다 없으면 에러
+      debugPrint('❌ posts와 markers 모두에서 포스트를 찾을 수 없음: $postId');
+      debugPrint('💡 힌트: 포스트가 완전히 삭제되었거나 ID가 잘못되었습니다.');
+      throw Exception('포스트를 찾을 수 없습니다. (ID: $postId)\n\n💡 가능한 원인:\n- 포스트가 완전히 삭제됨\n- 잘못된 포스트 ID\n- 모든 수량이 소진됨\n\n🔧 해결 방법:\n1. 관리자 도구에서 Firebase 상태 확인\n2. 포스트 목록 새로고침\n3. 마커가 여전히 표시되면 앱 재시작');
+    } catch (e) {
+      debugPrint('❌ collectPost 실패: $e');
+      throw Exception('포스트 수령 실패: $e');
+    }
+  }
+
+  // posts 컬렉션에서 수령 처리 (기존 로직)
+  Future<void> _collectFromPostsCollection(DocumentSnapshot postDoc, String userId) async {
+    try {
       final post = PostModel.fromFirestore(postDoc);
-      debugPrint('📝 포스트 정보: ${post.title}, creatorId: ${post.creatorId}, quantity: ${post.quantity}');
-      
+      debugPrint('📝 posts 컬렉션 포스트 정보: ${post.title}, creatorId: ${post.creatorId}, quantity: ${post.quantity}');
+
       // 수량이 0인지 확인
       if (post.quantity <= 0) {
         debugPrint('❌ 수령 가능한 수량이 없음: quantity=${post.quantity}');
         throw Exception('수령 가능한 수량이 없습니다.');
       }
-      
+
       // 자신의 포스트는 수령할 수 없음
       if (post.creatorId == userId) {
         debugPrint('❌ 자신의 포스트는 수령할 수 없음: creatorId=${post.creatorId}, userId=$userId');
         throw Exception('자신의 포스트는 수령할 수 없습니다.');
       }
-      
-      debugPrint('✅ 수령 조건 확인 완료, 수령 처리 시작');
-      
+
+      debugPrint('✅ posts 컬렉션 수령 조건 확인 완료, 수령 처리 시작');
+
       // 수량 차감 처리
-      await _firestore.collection('posts').doc(postId).update({
+      await _firestore.collection('posts').doc(post.postId).update({
         'quantity': post.quantity - 1,
         'updatedAt': Timestamp.now(),
       });
-      
+
       // 수령 기록을 별도 컬렉션에 저장
       await _firestore.collection('post_collections').add({
-        'postId': postId,
+        'postId': post.postId,
         'userId': userId,
         'collectedAt': Timestamp.now(),
         'postTitle': post.title,
         'postCreatorId': post.creatorId,
       });
-      
-      debugPrint('✅ 포스트 수령 완료: $postId, 수령자: $userId, 남은 수량: ${post.quantity - 1}');
-      
+
+      debugPrint('✅ posts 컬렉션 포스트 수령 완료: ${post.postId}, 수령자: $userId, 남은 수량: ${post.quantity - 1}');
+
       // 수량이 0이 되면 Meilisearch에서 제거
       if (post.quantity - 1 <= 0) {
-        await _removeFromMeilisearch(postId);
-        debugPrint('📤 수량 소진으로 Meilisearch에서 제거: $postId');
+        await _removeFromMeilisearch(post.postId);
+        debugPrint('📤 수량 소진으로 Meilisearch에서 제거: ${post.postId}');
       }
     } catch (e) {
-      debugPrint('❌ collectPost 실패: $e');
-      throw Exception('포스트 수령 실패: $e');
+      debugPrint('❌ posts 컬렉션 수령 실패: $e');
+      rethrow;
+    }
+  }
+
+  // markers 컬렉션에서 수령 처리 (새로운 로직)
+  Future<void> _collectFromMarkersCollection(DocumentSnapshot markerDoc, String userId, String originalPostId) async {
+    try {
+      final markerData = markerDoc.data() as Map<String, dynamic>;
+      final markerId = markerDoc.id;
+      final title = markerData['title'] ?? 'Unknown Title';
+      final creatorId = markerData['creatorId'] ?? '';
+      final quantity = (markerData['quantity'] as num?)?.toInt() ?? 0;
+      final remainingQuantity = (markerData['remainingQuantity'] as num?)?.toInt() ?? quantity;
+      final collectedBy = List<String>.from(markerData['collectedBy'] ?? []);
+
+      debugPrint('📝 markers 컬렉션 마커 정보: $title, creatorId: $creatorId, quantity: $remainingQuantity');
+
+      // 이미 수령했는지 확인
+      if (collectedBy.contains(userId)) {
+        debugPrint('❌ 이미 수령한 마커: markerId=$markerId, userId=$userId');
+        throw Exception('이미 수령한 포스트입니다.');
+      }
+
+      // 수량이 0인지 확인
+      if (remainingQuantity <= 0) {
+        debugPrint('❌ 마커 수령 가능한 수량이 없음: remainingQuantity=$remainingQuantity');
+        throw Exception('수령 가능한 수량이 없습니다.');
+      }
+
+      // 자신의 마커는 수령할 수 없음
+      if (creatorId == userId) {
+        debugPrint('❌ 자신의 마커는 수령할 수 없음: creatorId=$creatorId, userId=$userId');
+        throw Exception('자신의 포스트는 수령할 수 없습니다.');
+      }
+
+      debugPrint('✅ markers 컬렉션 수령 조건 확인 완료, 수령 처리 시작');
+
+      // 트랜잭션으로 마커 수량 차감 및 수령자 추가
+      await _firestore.runTransaction((transaction) async {
+        final newRemainingQuantity = remainingQuantity - 1;
+        final newCollectedQuantity = (markerData['collectedQuantity'] as num?)?.toInt() ?? 0;
+        final totalQuantity = (markerData['totalQuantity'] as num?)?.toInt() ?? quantity;
+        final newCollectionRate = totalQuantity > 0 ? (newCollectedQuantity + 1) / totalQuantity : 0.0;
+
+        collectedBy.add(userId);
+
+        final markerUpdate = {
+          'remainingQuantity': newRemainingQuantity,
+          'collectedQuantity': newCollectedQuantity + 1,
+          'collectionRate': newCollectionRate,
+          'collectedBy': collectedBy,
+          'quantity': newRemainingQuantity, // 호환성 유지
+        };
+
+        if (newRemainingQuantity <= 0) {
+          markerUpdate['isActive'] = false;
+        }
+
+        transaction.update(_firestore.collection('markers').doc(markerId), markerUpdate);
+      });
+
+      // 수령 기록을 별도 컬렉션에 저장
+      await _firestore.collection('post_collections').add({
+        'postId': originalPostId,
+        'userId': userId,
+        'collectedAt': Timestamp.now(),
+        'postTitle': title,
+        'postCreatorId': creatorId,
+        'markerId': markerId, // 마커에서 수령했음을 표시
+        'source': 'marker', // 수령 소스 표시
+      });
+
+      debugPrint('✅ markers 컬렉션 포스트 수령 완료: markerId=$markerId, 수령자: $userId, 남은 수량: ${remainingQuantity - 1}');
+    } catch (e) {
+      debugPrint('❌ markers 컬렉션 수령 실패: $e');
+      rethrow;
     }
   }
 
@@ -821,18 +962,33 @@ class PostService {
       debugPrint('🔍 getCollectedPosts 호출: userId=$userId');
       
       // post_collections 컬렉션에서 수령 기록 조회
+      // Firebase 인덱스 오류 방지를 위해 임시로 정렬 제거
       final collectionSnapshot = await _firestore
           .collection('post_collections')
           .where('userId', isEqualTo: userId)
-          .orderBy('collectedAt', descending: true)
           .get();
 
       debugPrint('📊 수령 기록 조회 결과: ${collectionSnapshot.docs.length}개');
-      
+
+      // 메모리에서 정렬 수행
+      final sortedDocs = collectionSnapshot.docs.toList();
+      sortedDocs.sort((a, b) {
+        final aData = a.data() as Map<String, dynamic>;
+        final bData = b.data() as Map<String, dynamic>;
+        final aTime = aData['collectedAt'] as Timestamp?;
+        final bTime = bData['collectedAt'] as Timestamp?;
+
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+
+        return bTime.compareTo(aTime); // 내림차순 정렬
+      });
+
       final posts = <PostModel>[];
-      
+
       // 각 수령 기록에 대해 원본 포스트 정보 조회
-      for (final collectionDoc in collectionSnapshot.docs) {
+      for (final collectionDoc in sortedDocs) {
         try {
           final collectionData = collectionDoc.data();
           final postId = collectionData['postId'] as String;
@@ -1034,8 +1190,8 @@ class PostService {
         throw Exception('사용할 수 없는 포스트입니다.');
       }
 
-      if (post.isExpired()) {
-        throw Exception('만료된 포스트입니다.');
+      if (post.status == PostStatus.DELETED) {
+        throw Exception('삭제된 포스트입니다.');
       }
 
       // 이미 사용했는지 확인
@@ -1196,4 +1352,224 @@ class PostService {
       };
     }
   }
-} 
+
+  // ==================== 새로운 포스트 상태 관리 기능 ====================
+
+  /// 상태별 포스트 조회
+  Future<List<PostModel>> getPostsByStatus(String userId, PostStatus status) async {
+    try {
+      debugPrint('🔍 getPostsByStatus 호출: userId=$userId, status=${status.value}');
+
+      Query query = _firestore
+          .collection('posts')
+          .where('creatorId', isEqualTo: userId)
+          .where('status', isEqualTo: status.value)
+          .orderBy('createdAt', descending: true);
+
+      final querySnapshot = await query.get();
+
+      final posts = querySnapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      debugPrint('✅ 상태별 포스트 조회 완료: ${posts.length}개');
+      return posts;
+    } catch (e) {
+      debugPrint('❌ getPostsByStatus 에러: $e');
+      throw Exception('상태별 포스트 조회 실패: $e');
+    }
+  }
+
+  /// 배포 대기 중인 포스트 조회 (DRAFT 상태)
+  Future<List<PostModel>> getDraftPosts(String userId) async {
+    return await getPostsByStatus(userId, PostStatus.DRAFT);
+  }
+
+  /// 배포된 포스트 조회 (DEPLOYED 상태)
+  Future<List<PostModel>> getDeployedPosts(String userId) async {
+    return await getPostsByStatus(userId, PostStatus.DEPLOYED);
+  }
+
+  /// 만료된 포스트 조회 (삭제됨 상태로 변경됨)
+  Future<List<PostModel>> getExpiredPosts(String userId) async {
+    return await getPostsByStatus(userId, PostStatus.DELETED);
+  }
+
+  /// 포스트 배포 (Map에서 호출)
+  Future<void> deployPost(
+    String postId, {
+    required int quantity,
+    required GeoPoint location,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      debugPrint('🚀 deployPost 시작: postId=$postId, quantity=$quantity');
+
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        throw Exception('포스트를 찾을 수 없습니다.');
+      }
+
+      final post = PostModel.fromFirestore(postDoc);
+
+      // 배포 가능 여부 확인
+      if (!post.canDeploy) {
+        throw Exception('배포할 수 없는 포스트입니다. 현재 상태: ${post.status.name}');
+      }
+
+      final now = DateTime.now();
+      final deployData = {
+        'status': PostStatus.DEPLOYED.value,
+        'deployQuantity': quantity,
+        'deployLocation': location,
+        'deployStartDate': Timestamp.fromDate(startDate ?? now),
+        'deployEndDate': Timestamp.fromDate(endDate ?? post.expiresAt),
+        'distributedAt': Timestamp.fromDate(now),
+        'isDistributed': true,
+        'totalDeployed': quantity,
+        'updatedAt': Timestamp.fromDate(now),
+      };
+
+      await _firestore.collection('posts').doc(postId).update(deployData);
+
+      debugPrint('✅ 포스트 배포 완료: $postId');
+    } catch (e) {
+      debugPrint('❌ deployPost 에러: $e');
+      throw Exception('포스트 배포 실패: $e');
+    }
+  }
+
+  /// 포스트 상태 업데이트
+  Future<void> updatePostStatus(String postId, PostStatus status) async {
+    try {
+      final updateData = {
+        'status': status.value,
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+      };
+
+      // 상태에 따른 추가 필드 업데이트
+      switch (status) {
+        case PostStatus.DELETED:
+          updateData['isActive'] = false;
+          break;
+        default:
+          break;
+      }
+
+      await _firestore.collection('posts').doc(postId).update(updateData);
+
+      debugPrint('✅ 포스트 상태 업데이트 완료: $postId -> ${status.name}');
+    } catch (e) {
+      debugPrint('❌ updatePostStatus 에러: $e');
+      throw Exception('포스트 상태 업데이트 실패: $e');
+    }
+  }
+
+  /// 포스트를 배포됨 상태로 변경
+  Future<void> markPostAsDeployed(
+    String postId, {
+    required int quantity,
+    required GeoPoint location,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    await deployPost(
+      postId,
+      quantity: quantity,
+      location: location,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
+
+  /// 포스트를 만료됨 상태로 변경 (삭제됨 상태로 변경)
+  Future<void> markPostAsExpired(String postId) async {
+    await updatePostStatus(postId, PostStatus.DELETED);
+  }
+
+  /// 포스트를 삭제됨 상태로 변경
+  Future<void> markPostAsDeleted(String postId) async {
+    await updatePostStatus(postId, PostStatus.DELETED);
+  }
+
+  /// 만료된 포스트들 자동 상태 업데이트
+  Future<void> updateExpiredPostsStatus() async {
+    try {
+      final now = DateTime.now();
+
+      // 배포되어 만료되었지만 아직 삭제되지 않은 포스트들 조회
+      final querySnapshot = await _firestore
+          .collection('posts')
+          .where('expiresAt', isLessThan: Timestamp.fromDate(now))
+          .where('status', isEqualTo: 'deployed') // 배포된 포스트만 대상
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint('⏰ 자동 만료 처리할 포스트가 없습니다.');
+        return;
+      }
+
+      final batch = _firestore.batch();
+      for (var doc in querySnapshot.docs) {
+        batch.update(doc.reference, {
+          'status': PostStatus.DELETED.value,
+          'isActive': false,
+          'updatedAt': Timestamp.fromDate(now),
+        });
+      }
+      await batch.commit();
+
+      debugPrint('✅ 만료된 포스트 자동 상태 업데이트 완료: ${querySnapshot.docs.length}개');
+    } catch (e) {
+      debugPrint('❌ updateExpiredPostsStatus 에러: $e');
+      throw Exception('만료된 포스트 상태 업데이트 실패: $e');
+    }
+  }
+
+  /// 포스트 수정 가능 여부 확인
+  Future<bool> canEditPost(String postId, String userId) async {
+    try {
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        return false;
+      }
+
+      final post = PostModel.fromFirestore(postDoc);
+
+      // 작성자가 아니면 수정 불가
+      if (post.creatorId != userId) {
+        return false;
+      }
+
+      // DRAFT 상태에서만 수정 가능
+      return post.canEdit;
+    } catch (e) {
+      debugPrint('❌ canEditPost 에러: $e');
+      return false;
+    }
+  }
+
+  /// 포스트 배포 가능 여부 확인
+  Future<bool> canDeployPost(String postId, String userId) async {
+    try {
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        return false;
+      }
+
+      final post = PostModel.fromFirestore(postDoc);
+
+      // 작성자가 아니면 배포 불가
+      if (post.creatorId != userId) {
+        return false;
+      }
+
+      // 배포 가능 조건 확인
+      return post.canDeploy;
+    } catch (e) {
+      debugPrint('❌ canDeployPost 에러: $e');
+      return false;
+    }
+  }
+}

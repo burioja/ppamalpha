@@ -4,6 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/user_provider.dart';
 import '../../../core/services/location/nominatim_service.dart';
+import '../../../core/services/data/user_service.dart';
+import '../widgets/profile_header_card.dart';
+import '../widgets/info_section_card.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +18,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _auth = FirebaseAuth.instance;
   final _formKey = GlobalKey<FormState>();
+  final UserService _userService = UserService();
   
   // 개인정보 컨트롤러들
   final TextEditingController _nicknameController = TextEditingController();
@@ -26,9 +30,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   
   // 상태 변수들
   String? _selectedGender;
+  String? _profileImageUrl;
+  String _userEmail = '';
   bool _allowSexualContent = false;
   bool _allowViolentContent = false;
   bool _allowHateContent = false;
+
+  // 섹션 확장/축소 상태
+  bool _personalInfoExpanded = true;
+  bool _addressInfoExpanded = true;
+  bool _accountInfoExpanded = true;
+  bool _workplaceInfoExpanded = true;
+  bool _contentFilterExpanded = true;
   
   // 워크플레이스 관련
   final List<Map<String, String>> _workplaces = [];
@@ -62,6 +75,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 사용자 기본 정보 로드
+      setState(() {
+        _userEmail = user.email ?? '';
+      });
+
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -69,7 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data()!;
-        
+
         setState(() {
           _nicknameController.text = userData['nickname'] ?? '';
           _phoneController.text = userData['phone'] ?? '';
@@ -77,14 +95,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _secondAddressController.text = userData['secondAddress'] ?? '';
           _accountController.text = userData['account'] ?? '';
           _birthController.text = userData['birthDate'] ?? '';
-          _selectedGender = userData['gender'] ?? 'male';
+          final genderValue = userData['gender'] as String?;
+          _selectedGender = (genderValue == 'male' || genderValue == 'female') ? genderValue : null;
+          _profileImageUrl = userData['profileImageUrl'];
           _allowSexualContent = userData['allowSexualContent'] ?? false;
           _allowViolentContent = userData['allowViolentContent'] ?? false;
           _allowHateContent = userData['allowHateContent'] ?? false;
-          
+
           // 워크플레이스 로드
           final workplaces = userData['workplaces'] as List<dynamic>?;
-          _workplaces.clear(); // 항상 초기화
+          _workplaces.clear();
           if (workplaces != null && workplaces.isNotEmpty) {
             for (final workplace in workplaces) {
               final workplaceMap = workplace as Map<String, dynamic>;
@@ -112,34 +132,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      await _userService.updateUserProfile(
+        nickname: _nicknameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+        secondAddress: _secondAddressController.text.trim(),
+        account: _accountController.text.trim(),
+        birth: _birthController.text.trim(),
+        gender: _selectedGender,
+        profileImageUrl: _profileImageUrl,
+      );
 
-      print('사용자 데이터 저장 시작');
-      print('저장할 근무지 개수: ${_workplaces.length}');
-      for (int i = 0; i < _workplaces.length; i++) {
-        print('근무지 $i: ${_workplaces[i]}');
+      // 워크플레이스 및 콘텐츠 필터는 별도 저장
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'allowSexualContent': _allowSexualContent,
+          'allowViolentContent': _allowViolentContent,
+          'allowHateContent': _allowHateContent,
+          'workplaces': _workplaces,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'nickname': _nicknameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'secondAddress': _secondAddressController.text.trim(),
-        'account': _accountController.text.trim(),
-        'birthDate': _birthController.text.trim(),
-        'gender': _selectedGender,
-        'allowSexualContent': _allowSexualContent,
-        'allowViolentContent': _allowViolentContent,
-        'allowHateContent': _allowHateContent,
-        'workplaces': _workplaces,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print('사용자 데이터 저장 완료');
       _showToast('개인정보가 성공적으로 저장되었습니다');
     } catch (e) {
       print('사용자 데이터 저장 실패: $e');
@@ -250,292 +268,510 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _onProfileUpdated() {
+    setState(() {
+      _loadUserData();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text("개인정보 설정"),
-        backgroundColor: Colors.blue,
+        backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 프로필 헤더
+                    ProfileHeaderCard(
+                      profileImageUrl: _profileImageUrl,
+                      nickname: _nicknameController.text,
+                      email: _userEmail,
+                      onProfileUpdated: _onProfileUpdated,
+                    ),
+
                     // 기본 정보 섹션
-                    _buildSectionTitle("기본 정보"),
-                    const SizedBox(height: 16),
-                    
-                    // 닉네임
-                    TextFormField(
-                      controller: _nicknameController,
-                      decoration: const InputDecoration(
-                        labelText: '닉네임 *',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return '닉네임을 입력해주세요';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 전화번호
-                    TextFormField(
-                      controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: '전화번호 *',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return '전화번호를 입력해주세요';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 생년월일
-                    TextFormField(
-                      controller: _birthController,
-                      decoration: const InputDecoration(
-                        labelText: '생년월일 * (YYYY-MM-DD)',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.datetime,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return '생년월일을 입력해주세요';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 성별
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: "성별 *",
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _selectedGender,
-                      items: const [
-                        DropdownMenuItem(value: "male", child: Text("남성")),
-                        DropdownMenuItem(value: "female", child: Text("여성")),
-                      ],
-                      onChanged: (value) => setState(() => _selectedGender = value),
-                      hint: const Text('성별을 선택하세요'),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return '성별을 선택해주세요';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // 주소 정보 섹션
-                    _buildSectionTitle("주소 정보"),
-                    const SizedBox(height: 16),
-                    
-                    // 주소
-                    Row(
+                    InfoSectionCard(
+                      title: '기본 정보',
+                      icon: Icons.person,
+                      isCollapsible: true,
+                      isExpanded: _personalInfoExpanded,
+                      onToggle: () => setState(() => _personalInfoExpanded = !_personalInfoExpanded),
                       children: [
-                        Expanded(
+                        InfoField(
+                          label: '닉네임',
+                          isRequired: true,
                           child: TextFormField(
-                            controller: _addressController,
-                            decoration: const InputDecoration(
-                              labelText: '주소 *',
-                              border: OutlineInputBorder(),
+                            controller: _nicknameController,
+                            decoration: InputDecoration(
+                              hintText: '닉네임을 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
                             ),
-                            readOnly: true,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return '주소를 입력해주세요';
+                                return '닉네임을 입력해주세요';
+                              }
+                              return null;
+                            },
+                            onChanged: (value) => setState(() {}),
+                          ),
+                        ),
+                        InfoField(
+                          label: '전화번호',
+                          isRequired: true,
+                          child: TextFormField(
+                            controller: _phoneController,
+                            decoration: InputDecoration(
+                              hintText: '010-0000-0000',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                            ),
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return '전화번호를 입력해주세요';
                               }
                               return null;
                             },
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _pickAddress,
-                          child: const Text('주소 검색'),
+                        InfoField(
+                          label: '생년월일',
+                          isRequired: true,
+                          child: TextFormField(
+                            controller: _birthController,
+                            decoration: InputDecoration(
+                              hintText: 'YYYY-MM-DD',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                            ),
+                            keyboardType: TextInputType.datetime,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return '생년월일을 입력해주세요';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        InfoField(
+                          label: '성별',
+                          isRequired: true,
+                          child: DropdownButtonFormField<String>(
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                            ),
+                            value: (_selectedGender == 'male' || _selectedGender == 'female')
+                                ? _selectedGender
+                                : null,
+                            items: const [
+                              DropdownMenuItem(value: "male", child: Text("남성")),
+                              DropdownMenuItem(value: "female", child: Text("여성")),
+                            ],
+                            onChanged: (value) => setState(() => _selectedGender = value),
+                            hint: const Text('성별을 선택하세요'),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return '성별을 선택해주세요';
+                              }
+                              return null;
+                            },
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    
-                    // 상세주소
-                    TextFormField(
-                      controller: _secondAddressController,
-                      decoration: const InputDecoration(
-                        labelText: '상세주소',
-                        border: OutlineInputBorder(),
-                      ),
+
+                    // 주소 정보 섹션
+                    InfoSectionCard(
+                      title: '주소 정보',
+                      icon: Icons.location_on,
+                      accentColor: Colors.orange,
+                      isCollapsible: true,
+                      isExpanded: _addressInfoExpanded,
+                      onToggle: () => setState(() => _addressInfoExpanded = !_addressInfoExpanded),
+                      children: [
+                        InfoField(
+                          label: '주소',
+                          isRequired: true,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _addressController,
+                                  decoration: InputDecoration(
+                                    hintText: '주소 검색을 눌러주세요',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  readOnly: true,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return '주소를 입력해주세요';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: _pickAddress,
+                                icon: const Icon(Icons.search, size: 18),
+                                label: const Text('검색'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        InfoField(
+                          label: '상세주소',
+                          child: TextFormField(
+                            controller: _secondAddressController,
+                            decoration: InputDecoration(
+                              hintText: '동, 호수 등 상세주소를 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 24),
-                    
+
                     // 계정 정보 섹션
-                    _buildSectionTitle("계정 정보"),
-                    const SizedBox(height: 16),
-                    
-                    // 계좌번호
-                    TextFormField(
-                      controller: _accountController,
-                      decoration: const InputDecoration(
-                        labelText: '계좌번호 * (리워드 지급용)',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return '계좌번호를 입력해주세요';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // 근무지 섹션
-                    _buildSectionTitle("근무지"),
-                    const SizedBox(height: 16),
-                    
-                    // 근무지 추가
-                    Row(
+                    InfoSectionCard(
+                      title: '계정 정보',
+                      icon: Icons.account_balance,
+                      accentColor: Colors.green,
+                      isCollapsible: true,
+                      isExpanded: _accountInfoExpanded,
+                      onToggle: () => setState(() => _accountInfoExpanded = !_accountInfoExpanded),
                       children: [
-                        Expanded(
+                        InfoField(
+                          label: '계좌번호 (리워드 지급용)',
+                          isRequired: true,
                           child: TextFormField(
-                            controller: _workplaceNameController,
-                            decoration: const InputDecoration(
-                              hintText: '근무지명',
-                              border: OutlineInputBorder(),
+                            controller: _accountController,
+                            decoration: InputDecoration(
+                              hintText: '은행명과 계좌번호를 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return '계좌번호를 입력해주세요';
+                              }
+                              return null;
+                            },
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _workplaceAddressController,
-                            decoration: const InputDecoration(
-                              hintText: '주소',
-                              border: OutlineInputBorder(),
-                            ),
-                            readOnly: true,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _pickWorkplaceAddress,
-                          child: const Text('주소 검색'),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _addWorkplace,
-                        child: const Text('근무지 추가'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 근무지 목록
-                    ..._workplaces.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final workplace = entry.value;
-                      return Card(
-                        child: ListTile(
-                          title: Text(workplace['name']!),
-                          subtitle: Text(workplace['address']!),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => _removeWorkplace(index),
+
+                    // 근무지 섹션
+                    InfoSectionCard(
+                      title: '근무지',
+                      icon: Icons.work,
+                      accentColor: Colors.purple,
+                      isCollapsible: true,
+                      isExpanded: _workplaceInfoExpanded,
+                      onToggle: () => setState(() => _workplaceInfoExpanded = !_workplaceInfoExpanded),
+                      children: [
+                        // 근무지 추가 폼
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.purple.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      controller: _workplaceNameController,
+                                      decoration: InputDecoration(
+                                        labelText: '근무지명',
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      controller: _workplaceAddressController,
+                                      decoration: InputDecoration(
+                                        labelText: '주소',
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 14,
+                                        ),
+                                      ),
+                                      readOnly: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: _pickWorkplaceAddress,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.purple,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Icon(Icons.search),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _addWorkplace,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('근무지 추가'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.purple,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    }).toList(),
-                    
-                    const SizedBox(height: 24),
-                    
+
+                        if (_workplaces.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          // 근무지 목록
+                          ..._workplaces.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final workplace = entry.value;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.grey[300]!,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.business,
+                                    color: Colors.purple,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          workplace['name']!,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        Text(
+                                          workplace['address']!,
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => _removeWorkplace(index),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ],
+                    ),
+
                     // 콘텐츠 필터 섹션
-                    _buildSectionTitle("콘텐츠 필터 설정"),
-                    const SizedBox(height: 16),
-                    
-                    // 선정적인 자료
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    InfoSectionCard(
+                      title: '콘텐츠 필터 설정',
+                      icon: Icons.filter_alt,
+                      accentColor: Colors.red,
+                      isCollapsible: true,
+                      isExpanded: _contentFilterExpanded,
+                      onToggle: () => setState(() => _contentFilterExpanded = !_contentFilterExpanded),
                       children: [
-                        const Text('선정적인 자료'),
-                        Switch(
+                        InfoToggle(
+                          label: '선정적인 자료',
                           value: _allowSexualContent,
                           onChanged: (value) => setState(() => _allowSexualContent = value),
+                          description: '성인 콘텐츠 표시 여부를 설정합니다',
                         ),
-                      ],
-                    ),
-                    
-                    // 폭력적인 자료
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('폭력적인 자료'),
-                        Switch(
+                        InfoToggle(
+                          label: '폭력적인 자료',
                           value: _allowViolentContent,
                           onChanged: (value) => setState(() => _allowViolentContent = value),
+                          description: '폭력적인 콘텐츠 표시 여부를 설정합니다',
                         ),
-                      ],
-                    ),
-                    
-                    // 혐오 자료
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('혐오 자료'),
-                        Switch(
+                        InfoToggle(
+                          label: '혐오 자료',
                           value: _allowHateContent,
                           onChanged: (value) => setState(() => _allowHateContent = value),
+                          description: '혐오 표현이 포함된 콘텐츠 표시 여부를 설정합니다',
                         ),
                       ],
                     ),
-                    
-                    const SizedBox(height: 32),
-                    
+
                     // 저장/로그아웃 버튼
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _saveUserData,
-                            child: _isLoading 
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Text('저장'),
+                    Container(
+                      margin: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _saveUserData,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      '변경사항 저장',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _logout,
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                            child: const Text('로그아웃'),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: OutlinedButton(
+                              onPressed: _logout,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                '로그아웃',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+                          // 관리자 도구 버튼 (개발/디버그용)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/admin-cleanup');
+                              },
+                              icon: const Icon(Icons.admin_panel_settings),
+                              label: const Text('관리자 도구'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    
+
                     const SizedBox(height: 32),
                   ],
                 ),

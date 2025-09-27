@@ -19,6 +19,7 @@ import '../features/user_dashboard/screens/search_screen.dart';
 import '../features/user_dashboard/screens/settings_screen.dart';
 import '../features/user_dashboard/screens/location_picker_screen.dart';
 import '../features/user_dashboard/screens/store_screen.dart';
+import '../features/user_dashboard/screens/points_screen.dart';
 
 // Post System
 import '../features/post_system/screens/post_place_screen.dart';
@@ -33,6 +34,9 @@ import '../features/place_system/screens/place_detail_screen.dart';
 import '../features/place_system/screens/place_image_viewer_screen.dart';
 import '../features/place_system/screens/place_search_screen.dart';
 
+// Admin System
+import '../features/admin/admin_cleanup_screen.dart';
+
 
 class AppRoutes {
   static const String login = '/login';
@@ -44,6 +48,7 @@ class AppRoutes {
   static const String budget = '/budget';
   static const String search = '/search';
   static const String settings = '/settings';
+  static const String points = '/points';
   static const String postPlace = '/post-place';
   static const String postPlaceSelection = '/post-place-selection';
   static const String postDetail = '/post-detail';
@@ -55,6 +60,9 @@ class AppRoutes {
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
+
+  // Admin routes
+  static const String adminCleanup = '/admin-cleanup';
   static const String store = '/store';
 
   static Map<String, WidgetBuilder> get routes => {
@@ -67,6 +75,7 @@ class AppRoutes {
     budget: (context) => const BudgetScreen(),
     search: (context) => const SearchScreen(),
     settings: (context) => const SettingsScreen(),
+    points: (context) => const PointsScreen(),
     postPlace: (context) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final place = args?['place'] as PlaceModel?;
@@ -130,5 +139,6 @@ class AppRoutes {
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
     store: (context) => const StoreScreen(),
+    adminCleanup: (context) => const AdminCleanupScreen(),
   };
 } 

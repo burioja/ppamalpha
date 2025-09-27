@@ -393,11 +393,16 @@ class MapMarkerService {
     DateTime? expiresAt,
   }) async {
     try {
+      print('🚀 Map 마커 생성 시작:');
+      print('📋 Post ID: $postId');
+      print('📝 제목: $title');
+      print('👤 생성자: $creatorId');
+      print('📍 위치: ${position.latitude}, ${position.longitude}');
+      print('📦 수량: $quantity');
+      print('⏰ 만료일: $expiresAt');
+
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      
-      // ✅ 즉시 쿼리 통과를 위한 클라이언트 시간 추가
-      final now = DateTime.now();
-      final markerData = <String, dynamic>{
+
         'title': title,
         'creatorId': creatorId,
         'location': GeoPoint(position.latitude, position.longitude),
@@ -419,11 +424,19 @@ class MapMarkerService {
       }
 
       final docRef = await _firestore.collection('markers').add(markerData);
-      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
+
       return docRef.id;
     } catch (e) {
-      print('❌ 마커 생성 실패: $e');
+      print('❌ Map 마커 생성 실패:');
+      print('📋 Post ID: $postId');
+      print('💥 Error: $e');
+      print('🚨 [MAP_MARKER_FAILED] PostID: $postId | Error: $e');
+      print('📌 Marker ID: ${docRef.id}');
+      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
+      print('✅ 마커 생성 완료: ${docRef.id} (reward: ${reward ?? 0}원)');
+
       rethrow;
+        
     }
   }
 

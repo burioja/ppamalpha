@@ -46,6 +46,11 @@ class PlaceService {
     }
   }
 
+  // getPlace 메서드 (getPlaceById의 별칭)
+  Future<PlaceModel?> getPlace(String placeId) async {
+    return await getPlaceById(placeId);
+  }
+
   // 사용자가 생성한 플레이스 목록 조회
   Future<List<PlaceModel>> getPlacesByUser(String userId) async {
     try {

@@ -61,6 +61,15 @@ class _PostEditScreenState extends State<PostEditScreen> {
   @override
   void initState() {
     super.initState();
+
+    // 수정 권한 확인 - 배포되거나 만료된 포스트는 수정 불가
+    if (!widget.post.canEdit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCannotEditDialog();
+      });
+      return;
+    }
+
     _titleController = TextEditingController(text: widget.post.title);
     _rewardController = TextEditingController(text: widget.post.reward.toString());
     _contentController = TextEditingController(text: _extractExistingTextContent());
@@ -222,7 +231,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
         title: const Text('포스트 수정'),
         actions: [
           TextButton(
-            onPressed: _isSaving || widget.post.isDistributed ? null : _save,
+            onPressed: _isSaving || !widget.post.canEdit ? null : _save,
             child: _isSaving
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('저장'),
@@ -236,21 +245,21 @@ class _PostEditScreenState extends State<PostEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.post.isDistributed)
+              if (!widget.post.canEdit)
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
+                    border: Border.all(color: Colors.red.shade200),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.lock, color: Colors.orange),
+                      Icon(Icons.block, color: Colors.red.shade600),
                       const SizedBox(width: 8),
-                      Expanded(child: Text('이미 배포된 포스트입니다. 수정할 수 없습니다.', style: TextStyle(color: Colors.orange.shade800))),
+                      Expanded(child: Text('${widget.post.status.name} 상태의 포스트는 수정할 수 없습니다.', style: TextStyle(color: Colors.red.shade800))),
                     ],
                   ),
                 ),
@@ -336,7 +345,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              _buildSectionTitle('단가 및 기간'),
+              _buildSectionTitle('단가'),
               PriceCalculator(
                 images: _selectedImages,
                 sound: _selectedSound,
@@ -352,20 +361,38 @@ class _PostEditScreenState extends State<PostEditScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              PeriodSliderWithInput(
-                initialValue: _selectedPeriod,
-                onChanged: widget.post.isDistributed ? null : (period) {
-                  setState(() {
-                    _selectedPeriod = period;
-                  });
-                },
-                validator: (period) {
-                  if (period < 1 || period > 30) {
-                    return '1~30일 사이의 값을 입력해주세요.';
-                  }
-                  return null;
-                },
+              const SizedBox(height: 8),
+              // 배포된 포스트인지 여부에 따라 다른 안내 메시지 표시
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: widget.post.isDistributed ? Colors.orange.shade50 : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: widget.post.isDistributed ? Colors.orange.shade200 : Colors.blue.shade200
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.post.isDistributed ? Icons.schedule : Icons.info_outline,
+                      color: widget.post.isDistributed ? Colors.orange.shade600 : Colors.blue.shade600,
+                      size: 20
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.post.isDistributed
+                          ? '이미 배포된 포스트는 배포 기간을 변경할 수 없습니다'
+                          : '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
+                        style: TextStyle(
+                          color: widget.post.isDistributed ? Colors.orange.shade700 : Colors.blue.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               _buildReadonlyInfo('생성일', widget.post.createdAt),
@@ -378,7 +405,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton.icon(
-                  onPressed: _isSaving || widget.post.isDistributed ? null : _save,
+                  onPressed: _isSaving || !widget.post.canEdit ? null : _save,
                   icon: _isSaving
                       ? const SizedBox(
                           width: 20,
@@ -903,6 +930,95 @@ class _PostEditScreenState extends State<PostEditScreen> {
         ),
         const SizedBox(height: 12),
       ],
+    );
+  }
+
+  // 수정 불가 다이얼로그 표시
+  void _showCannotEditDialog() {
+    String message;
+    String statusText;
+
+    switch (widget.post.status) {
+      case PostStatus.DEPLOYED:
+        statusText = '배포됨';
+        message = '이 포스트는 이미 지도에 배포되어 수정할 수 없습니다.';
+        break;
+      case PostStatus.DELETED:
+        statusText = '삭제됨';
+        message = '이 포스트는 삭제되어 수정할 수 없습니다.';
+        break;
+      default:
+        statusText = '알 수 없음';
+        message = '이 포스트는 현재 수정할 수 없는 상태입니다.';
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.block, color: Colors.red.shade600, size: 24),
+              const SizedBox(width: 8),
+              const Text('수정 불가'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.red.shade600, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '포스트 상태: $statusText',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '배포 대기 상태의 포스트만 수정 가능합니다.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // 다이얼로그 닫기
+                Navigator.of(context).pop(); // 편집 화면 닫기
+              },
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

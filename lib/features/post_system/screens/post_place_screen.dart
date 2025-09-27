@@ -31,6 +31,7 @@ class PostPlaceScreen extends StatefulWidget {
 
 class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _priceCalculatorKey = GlobalKey<PriceCalculatorState>();
   final _postService = PostService();
   final _firebaseService = FirebaseService();
   static const GeoPoint _kRefLocation = GeoPoint(37.5665, 126.9780); // 기본 참조 위치 (서울시청 인근)
@@ -179,6 +180,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               }
               _imageNames.add(file.name);
             });
+            // 가격 계산기 강제 재계산
+            print('[PostPlaceScreen] 이미지 추가됨 - 가격 재계산 요청');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _priceCalculatorKey.currentState?.forceRecalculate();
+            });
           }
         }
       }
@@ -205,6 +211,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         setState(() {
           _selectedImages.add(File(image.path));
           _imageNames.add(image.name);
+        });
+        // 가격 계산기 강제 재계산
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _priceCalculatorKey.currentState?.forceRecalculate();
         });
       }
     }
@@ -252,6 +262,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             }
             _soundFileName = file.name;
           });
+          // 가격 계산기 강제 재계산
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _priceCalculatorKey.currentState?.forceRecalculate();
+          });
         }
       }
     } catch (e) {
@@ -273,6 +287,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             _selectedSound = File(file.path!);
             _soundFileName = file.name;
           });
+          // 가격 계산기 강제 재계산
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _priceCalculatorKey.currentState?.forceRecalculate();
+          });
         }
       }
     }
@@ -283,12 +301,20 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       _selectedSound = null;
       _soundFileName = '';
     });
+    // 가격 계산기 강제 재계산
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _priceCalculatorKey.currentState?.forceRecalculate();
+    });
   }
 
   Future<void> _removeImage(int index) async {
     setState(() {
       _selectedImages.removeAt(index);
       _imageNames.removeAt(index);
+    });
+    // 가격 계산기 강제 재계산
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _priceCalculatorKey.currentState?.forceRecalculate();
     });
   }
 
@@ -696,21 +722,37 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 단가 및 기간 섹션
-              _buildSectionTitle('단가 및 기간'),
+              // 단가 섹션 (기간은 마커 뿌릴 때 설정)
+              _buildSectionTitle('단가'),
               PriceCalculator(
+                key: _priceCalculatorKey,
                 images: _selectedImages,
                 sound: _selectedSound,
                 priceController: _priceController,
               ),
-              const SizedBox(height: 16),
-              PeriodSliderWithInput(
-                initialValue: _selectedPeriod,
-                onChanged: (period) {
-                  setState(() {
-                    _selectedPeriod = period;
-                  });
-                },
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
 
