@@ -178,7 +178,9 @@ class MapMarkerService {
             expiryDate: data['expiryDate'] != null 
                 ? (data['expiryDate'] as Timestamp).toDate() 
                 : null,
-            data: Map<String, dynamic>.from(data['data'] ?? {}),
+            data: Map<String, dynamic>.from(data['data'] ?? {})
+              ..['reward'] = data['reward']  // ✅ reward 추가
+              ..['isSuperMarker'] = data['isSuperMarker'],  // ✅ isSuperMarker 추가
             isCollected: data['isCollected'] ?? false,
             type: MarkerType.post,
           );
@@ -287,7 +289,10 @@ class MapMarkerService {
             position: position,
             createdAt: (data['createdAt'] as Timestamp).toDate(),
             expiryDate: (data['expiresAt'] as Timestamp).toDate(),
-            data: Map<String, dynamic>.from(data['data'] ?? {})..['quantity'] = quantity,
+            data: Map<String, dynamic>.from(data['data'] ?? {})
+              ..['quantity'] = quantity
+              ..['reward'] = data['reward']  // ✅ reward 추가
+              ..['isSuperMarker'] = data['isSuperMarker'],  // ✅ isSuperMarker 추가
             isCollected: false, // markers는 수령되지 않음
             collectedBy: null,
             collectedAt: null,
@@ -373,7 +378,10 @@ class MapMarkerService {
             position: position,
             createdAt: (data['createdAt'] as Timestamp).toDate(),
             expiryDate: (data['expiresAt'] as Timestamp).toDate(),
-            data: Map<String, dynamic>.from(data['data'] ?? {})..['quantity'] = quantity,
+            data: Map<String, dynamic>.from(data['data'] ?? {})
+              ..['quantity'] = quantity
+              ..['reward'] = data['reward']  // ✅ reward 추가
+              ..['isSuperMarker'] = data['isSuperMarker'],  // ✅ isSuperMarker 추가
             isCollected: false,
             type: MarkerType.superPost, // ✅ 슈퍼포스트 타입
           );
