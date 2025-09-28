@@ -689,11 +689,34 @@ class PlaceDetailScreen extends StatelessWidget {
     return '${date.year}년 ${date.month}월 ${date.day}일';
   }
 
-  void _editPlace(BuildContext context) {
-    // TODO: 플레이스 수정 화면으로 이동
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('플레이스 수정 기능은 준비 중입니다.')),
-    );
+  void _editPlace(BuildContext context) async {
+    // 현재 플레이스 정보를 가져온 후 수정 화면으로 이동
+    try {
+      final place = await _placeService.getPlaceById(placeId);
+      if (place != null && context.mounted) {
+        final result = await Navigator.pushNamed(
+          context,
+          '/edit-place',
+          arguments: place,
+        );
+
+        // 수정이 완료되었다면 현재 화면 새로고침
+        if (result == true && context.mounted) {
+          // StatelessWidget이므로 새로고침을 위해 화면을 다시 빌드하도록 강제
+          Navigator.pushReplacementNamed(
+            context,
+            '/place-detail',
+            arguments: placeId,
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('플레이스 수정 실패: $e')),
+        );
+      }
+    }
   }
 
   void _viewOnMap(BuildContext context, PlaceModel place) {

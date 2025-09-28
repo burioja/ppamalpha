@@ -510,8 +510,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       final postId = await _postService.createPost(
         creatorId: _firebaseService.currentUser?.uid ?? '',
         creatorName: _firebaseService.currentUser?.displayName ?? '익명',
-        location: _currentLocation!,
-        radius: 1000, // 기본 반경 1km
+        defaultRadius: 1000, // 기본 반경 1km
         reward: int.tryParse(_priceController.text) ?? 0,
         targetAge: [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
         targetGender: _getGenderFromTarget(_selectedGenders),
@@ -526,8 +525,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         canForward: _canForward,
         canRequestReward: _canTransfer,
         canUse: _selectedFunction == 'Using',
-        expiresAt: calculatedExpiresAt,
-        isSuperPost: false, // 일반 포스트
+        defaultExpiresAt: calculatedExpiresAt,
       );
 
       if (mounted) {

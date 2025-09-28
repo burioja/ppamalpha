@@ -455,6 +455,15 @@ class MapMarkerService {
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
+      // 🚀 Firebase 실제 데이터와 일치하는 새로운 필드들
+      totalQuantity: (markerData.data['totalQuantity'] as num?)?.toInt() ?? ((markerData.data['quantity'] as num?)?.toInt() ?? 1),
+      remainingQuantity: (markerData.data['remainingQuantity'] as num?)?.toInt() ?? ((markerData.data['quantity'] as num?)?.toInt() ?? 1),
+      collectedQuantity: (markerData.data['collectedQuantity'] as num?)?.toInt() ?? 0,
+      collectionRate: (markerData.data['collectionRate'] as num?)?.toDouble() ?? 0.0,
+      tileId: markerData.data['tileId'] as String? ?? '',
+      s2_10: markerData.data['s2_10'] as String?,
+      s2_12: markerData.data['s2_12'] as String?,
+      fogLevel: (markerData.data['fogLevel'] as num?)?.toInt(),
       reward: parseNullableInt(markerData.data['reward']), // ✅ 옵셔널 파싱
       creatorId: markerData.userId,
       createdAt: markerData.createdAt,

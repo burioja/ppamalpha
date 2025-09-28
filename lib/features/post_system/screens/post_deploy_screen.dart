@@ -25,13 +25,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   final PostService _postService = PostService();
   final TextEditingController _quantityController = TextEditingController(text: '1');
   final TextEditingController _priceController = TextEditingController(text: '100');
-  
+
   LatLng? _selectedLocation;
   String? _deployType;
   List<PostModel> _userPosts = [];
   PostModel? _selectedPost;
   bool _isLoading = false;
   bool _isDeploying = false;
+
+  // 기간 관련 필드 추가
+  int _selectedDuration = 7; // 기본 7일
+  final List<int> _durationOptions = [1, 3, 7, 14, 30]; // 1일, 3일, 7일, 14일, 30일
 
   @override
   void initState() {
@@ -78,8 +82,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         debugPrint('사용자 ID: $uid');
-        // 사용자의 최근 50개 포스트 로드 (새로 생성된 포스트 포함)
-        final posts = await _postService.getUserPosts(uid, limit: 50);
+        // DRAFT 상태 포스트만 로드 (배포 가능한 포스트만)
+        final posts = await _postService.getDraftPosts(uid);
         debugPrint('사용자 포스트 로드 완료: ${posts.length}개');
         setState(() {
           _userPosts = posts;
@@ -108,6 +112,15 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
 
   void _calculateTotal() {
     setState(() {});
+  }
+
+  void _onPostSelected(PostModel post) {
+    setState(() {
+      _selectedPost = post;
+      // 선택된 포스트의 리워드(단가)를 가격 필드에 자동 설정
+      _priceController.text = post.reward.toString();
+    });
+    _calculateTotal();
   }
 
   double get _totalPrice {
@@ -186,7 +199,9 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       // 3. 포스트는 업데이트하지 않고 마커만 생성 (중복 배포 허용)
       // 포스트 자체는 원본 그대로 유지하고, 마커만 새로 생성
 
-      // 4. 마커 생성 (새로운 구조)
+      // 4. 마커 생성 (커스텀 기간 적용)
+      final customExpiresAt = DateTime.now().add(Duration(days: _selectedDuration));
+
       await MarkerService.createMarker(
         postId: _selectedPost!.postId,
         title: _selectedPost!.title,
@@ -194,7 +209,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         quantity: quantity, // 전체 수량을 하나의 마커에
         reward: _selectedPost!.reward, // ✅ reward 전달
         creatorId: _selectedPost!.creatorId,
-        expiresAt: _selectedPost!.expiresAt,
+        expiresAt: customExpiresAt, // 사용자가 선택한 기간 적용
       );
       print('✅ 마커 생성 완료: ${_selectedPost!.title} (${quantity}개 수량)');
 
@@ -439,9 +454,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         
         return GestureDetector(
           onTap: () {
-            setState(() {
-              _selectedPost = post;
-            });
+            _onPostSelected(post);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -498,7 +511,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '만료: ${_formatDate(post.expiresAt)}',
+                        '기본 만료: ${_formatDate(post.defaultExpiresAt)}',
                         style: const TextStyle(
                           fontSize: 10,
                           color: Colors.grey,
@@ -566,21 +579,66 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                   TextField(
                     controller: _priceController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: '가격 입력',
-                      border: OutlineInputBorder(),
+                    enabled: false, // 수정 불가능하게 변경
+                    decoration: InputDecoration(
+                      hintText: _selectedPost != null ? '${_selectedPost!.reward}원 (고정)' : '포스트를 선택하세요',
+                      border: const OutlineInputBorder(),
                       suffixText: '원',
+                      filled: true,
+                      fillColor: Colors.grey.shade100, // 비활성화 상태 시각적 표시
                     ),
-                    onChanged: (_) => _calculateTotal(),
+                    style: const TextStyle(
+                      color: Colors.black54, // 읽기 전용 필드 스타일
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        
+
         const SizedBox(height: 16),
-        
+
+        // 기간 선택 필드 추가
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '배포 기간',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _selectedDuration,
+                  isExpanded: true,
+                  items: _durationOptions.map((duration) {
+                    return DropdownMenuItem<int>(
+                      value: duration,
+                      child: Text('${duration}일'),
+                    );
+                  }).toList(),
+                  onChanged: (int? value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedDuration = value;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(

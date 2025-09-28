@@ -180,6 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
+                        onSubmitted: (_) => _login(),
                         decoration: const InputDecoration(
                           hintText: '비밀번호를 입력하세요',
                           hintStyle: TextStyle(color: Colors.grey),

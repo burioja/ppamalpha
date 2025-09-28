@@ -2,11 +2,111 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/marker/marker_model.dart';
+import '../../models/post/post_model.dart';
 import '../../../utils/tile_utils.dart';
 import '../../constants/app_constants.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// 🚀 포스트 템플릿에서 마커 배포 (트랜잭션 처리 강화)
+  static Future<String> deployPostAsMarker({
+    required String postId,
+    required LatLng deployLocation,
+    required int quantity,
+    int? customRadius, // 커스텀 반경 (지정하지 않으면 템플릿 기본값 사용)
+    DateTime? customExpiresAt, // 커스텀 만료일 (지정하지 않으면 템플릿 기본값 사용)
+    String? s2_10,
+    String? s2_12,
+    int? fogLevel,
+  }) async {
+    String? markerId;
+
+    try {
+      print('🚀 포스트 템플릿에서 마커 배포 시작: postId=$postId, location=${deployLocation.latitude},${deployLocation.longitude}');
+
+      // 트랜잭션으로 마커 생성과 포스트 상태 변경을 원자적으로 처리
+      await _firestore.runTransaction((transaction) async {
+        // 1. 포스트 템플릿 정보 가져오기
+        final postDoc = await transaction.get(_firestore.collection('posts').doc(postId));
+        if (!postDoc.exists) {
+          throw Exception('포스트 템플릿을 찾을 수 없습니다: $postId');
+        }
+
+        final post = PostModel.fromFirestore(postDoc);
+
+        // 2. 배포 설정 (템플릿 기본값 + 커스텀 값)
+        final deployRadius = customRadius ?? post.defaultRadius;
+        final deployExpiresAt = customExpiresAt ?? post.defaultExpiresAt;
+
+        // 3. 타일 ID 계산
+        final tileId = TileUtils.getKm1TileId(deployLocation.latitude, deployLocation.longitude);
+
+        // 4. 마커 데이터 생성
+        final markerData = <String, dynamic>{
+          'postId': postId,
+          'title': post.title,
+          'location': GeoPoint(deployLocation.latitude, deployLocation.longitude),
+          'totalQuantity': quantity,
+          'remainingQuantity': quantity,
+          'collectedQuantity': 0,
+          'collectionRate': 0.0,
+          'creatorId': post.creatorId,
+          'createdAt': Timestamp.fromDate(DateTime.now()),
+          'createdAtServer': FieldValue.serverTimestamp(),
+          'expiresAt': Timestamp.fromDate(deployExpiresAt),
+          'isActive': true,
+          'collectedBy': [],
+          'tileId': tileId,
+          'quantity': quantity, // 호환성 유지
+        };
+
+        // reward 및 파생 필드 추가
+        final r = post.reward;
+        if (r != null) {
+          markerData['reward'] = r;
+          final isSuperMarker = r >= AppConsts.superRewardThreshold;
+          markerData['isSuperMarker'] = isSuperMarker;
+        }
+
+        // S2 타일 ID 추가
+        if (s2_10 != null) markerData['s2_10'] = s2_10;
+        if (s2_12 != null) markerData['s2_12'] = s2_12;
+        if (fogLevel != null) markerData['fogLevel'] = fogLevel;
+
+        // 5. 마커 생성 (트랜잭션 내에서)
+        final markerRef = _firestore.collection('markers').doc();
+        markerId = markerRef.id;
+        transaction.set(markerRef, markerData);
+
+        // 6. 포스트 상태를 DEPLOYED로 변경 및 통계 업데이트 (트랜잭션 내에서)
+        transaction.update(postDoc.reference, {
+          'status': PostStatus.DEPLOYED.value,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'totalDeployments': FieldValue.increment(1),
+          'totalDeployed': FieldValue.increment(quantity),
+          'lastDeployedAt': FieldValue.serverTimestamp(),
+        });
+
+        print('✅ 트랜잭션 내에서 마커 생성 및 포스트 상태 변경 완료: markerId=$markerId');
+      });
+
+      print('✅ 포스트 템플릿 배포 완료: postId=$postId, markerId=$markerId');
+      return markerId!;
+    } catch (e) {
+      print('❌ 포스트 템플릿 배포 실패: $e');
+      // 마커가 생성되었지만 트랜잭션이 실패한 경우를 대비한 정리 로직
+      if (markerId != null) {
+        try {
+          await _firestore.collection('markers').doc(markerId!).delete();
+          print('🧹 실패한 마커 정리 완료: $markerId');
+        } catch (cleanupError) {
+          print('⚠️ 마커 정리 실패: $cleanupError');
+        }
+      }
+      rethrow;
+    }
+  }
 
   /// 마커 생성 (포스트 ID와 연결) - 통계 집계 포함
   static Future<String> createMarker({
@@ -17,6 +117,9 @@ class MarkerService {
     required String creatorId,
     required DateTime expiresAt,
     int? reward, // ✅ 추가 (옵셔널로 두면 기존 호출부도 안전)
+    String? s2_10, // S2 level 10 추가
+    String? s2_12, // S2 level 12 추가
+    int? fogLevel, // 포그 레벨 추가
   }) async {
     try {
       print('🚀 마커 생성 시작:');
@@ -29,7 +132,7 @@ class MarkerService {
 
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
-      
+
       final markerData = <String, dynamic>{
         'postId': postId,
         'title': title,
@@ -54,10 +157,21 @@ class MarkerService {
       if (r != null) {
         markerData['reward'] = r;
       }
-      
+
       // ✅ 파생 필드 저장 (쿼리 최적화용)
       final isSuperMarker = (r ?? 0) >= AppConsts.superRewardThreshold;
       markerData['isSuperMarker'] = isSuperMarker;
+
+      // 🚀 S2 타일 ID 추가
+      if (s2_10 != null) {
+        markerData['s2_10'] = s2_10;
+      }
+      if (s2_12 != null) {
+        markerData['s2_12'] = s2_12;
+      }
+      if (fogLevel != null) {
+        markerData['fogLevel'] = fogLevel;
+      }
 
       // ✅ 즉시 쿼리 통과/표시를 위한 기본값 보정 (필요 시 이미 있으면 유지)
       markerData.putIfAbsent('createdAt', () => Timestamp.fromDate(DateTime.now()));
@@ -113,8 +227,8 @@ class MarkerService {
             marker.position.latitude, marker.position.longitude,
           );
           
-          // 반경 내에 있고 수량이 0보다 큰 마커만 포함
-          if (distance <= radiusKm && marker.quantity > 0) {
+          // 반경 내에 있고 수량이 0보다 큰 마커만 포함 (remainingQuantity 기준)
+          if (distance <= radiusKm && marker.remainingQuantity > 0) {
             markers.add(marker);
           }
         } catch (e) {
@@ -261,19 +375,102 @@ class MarkerService {
     }
   }
 
+  /// 🚀 위치 기반 마커 조회 (포그 레벨 고려)
+  static Future<List<MarkerModel>> getMarkersInArea({
+    required LatLng center,
+    required double radiusKm,
+    int? fogLevel,
+    bool? superOnly,
+  }) async {
+    try {
+      Query query = _firestore
+          .collection('markers')
+          .where('isActive', isEqualTo: true)
+          .where('expiresAt', isGreaterThan: Timestamp.now());
+
+      // 포그 레벨 필터링
+      if (fogLevel != null) {
+        query = query.where('fogLevel', isEqualTo: fogLevel);
+      }
+
+      // 슈퍼마커만 조회
+      if (superOnly == true) {
+        query = query.where('isSuperMarker', isEqualTo: true);
+      }
+
+      final querySnapshot = await query.get();
+      final markers = <MarkerModel>[];
+
+      for (final doc in querySnapshot.docs) {
+        try {
+          final marker = MarkerModel.fromFirestore(doc);
+
+          // 거리 계산
+          final distance = _calculateDistance(
+            center.latitude, center.longitude,
+            marker.position.latitude, marker.position.longitude,
+          );
+
+          // 반경 내에 있고 수량이 0보다 큰 마커만 포함
+          if (distance <= radiusKm && marker.remainingQuantity > 0) {
+            markers.add(marker);
+          }
+        } catch (e) {
+          print('❌ 마커 파싱 실패: $e');
+        }
+      }
+
+      // 거리순으로 정렬
+      markers.sort((a, b) {
+        final distanceA = _calculateDistance(
+          center.latitude, center.longitude,
+          a.position.latitude, a.position.longitude,
+        );
+        final distanceB = _calculateDistance(
+          center.latitude, center.longitude,
+          b.position.latitude, b.position.longitude,
+        );
+        return distanceA.compareTo(distanceB);
+      });
+
+      print('📍 반경 ${radiusKm}km 내 마커 ${markers.length}개 발견 (fogLevel: $fogLevel)');
+      return markers;
+    } catch (e) {
+      print('❌ 위치 기반 마커 조회 실패: $e');
+      return [];
+    }
+  }
+
+  /// 🚀 실시간 마커 스트림 (포그 레벨 고려)
+  static Stream<List<MarkerModel>> getMarkersInAreaStream({
+    required LatLng center,
+    required double radiusKm,
+    int? fogLevel,
+    bool? superOnly,
+  }) {
+    return Stream.periodic(const Duration(seconds: 5)).asyncMap((_) async {
+      return await getMarkersInArea(
+        center: center,
+        radiusKm: radiusKm,
+        fogLevel: fogLevel,
+        superOnly: superOnly,
+      );
+    });
+  }
+
   /// 거리 계산 (Haversine 공식)
   static double _calculateDistance(double lat1, double lng1, double lat2, double lng2) {
     const double earthRadius = 6371; // 지구 반지름 (km)
-    
+
     final dLat = (lat2 - lat1) * (math.pi / 180);
     final dLng = (lng2 - lng1) * (math.pi / 180);
-    
+
     final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(lat1 * math.pi / 180) * math.cos(lat2 * math.pi / 180) *
         math.sin(dLng / 2) * math.sin(dLng / 2);
-    
+
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    
+
     return earthRadius * c;
   }
 }

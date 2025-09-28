@@ -14,12 +14,10 @@ class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final PointsService _pointsService = PointsService();
 
-  // 포스트 생성 (Firestore + Meilisearch)
+  // 🚀 포스트 템플릿 생성 (위치 정보 제거)
   Future<String> createPost({
     required String creatorId,
     required String creatorName,
-    required GeoPoint location,
-    required int radius,
     required int reward,
     required List<int> targetAge,
     required String targetGender,
@@ -34,25 +32,25 @@ class PostService {
     required bool canForward,
     required bool canRequestReward,
     required bool canUse,
-    required DateTime expiresAt,
-    bool isSuperPost = false, // 슈퍼포스트 여부
+    int defaultRadius = 1000, // 기본 반경 (m)
+    DateTime? defaultExpiresAt, // 기본 만료일
   }) async {
     try {
-      debugPrint('🚀 포스트 생성 시작: title="$title", creator=$creatorId');
+      debugPrint('🚀 포스트 템플릿 생성 시작: title="$title", creator=$creatorId');
 
-      // 타일 ID 자동 계산
-      final tileId = TileUtils.getTileId(location.latitude, location.longitude);
+      final now = DateTime.now();
+      final expiresAt = defaultExpiresAt ?? now.add(const Duration(days: 30));
 
       // Firestore에 먼저 저장하여 문서 ID 생성
       final docRef = await _firestore.collection('posts').add({
         'postId': '', // 임시로 빈 문자열, 문서 ID 생성 후 업데이트
         'creatorId': creatorId,
         'creatorName': creatorName,
-        'location': location,
-        'radius': radius,
-        'createdAt': DateTime.now(),
-        'expiresAt': expiresAt,
+        'createdAt': now,
         'reward': reward,
+        // 🚀 템플릿 기본 설정
+        'defaultRadius': defaultRadius,
+        'defaultExpiresAt': expiresAt,
         'targetAge': targetAge,
         'targetGender': targetGender,
         'targetInterest': targetInterest,
@@ -66,43 +64,33 @@ class PostService {
         'canForward': canForward,
         'canRequestReward': canRequestReward,
         'canUse': canUse,
-        'tileId': tileId, // 타일 ID 자동 설정
-        'isSuperPost': isSuperPost, // 슈퍼포스트 여부
-        'isActive': true,
-        'isCollected': false,
-        'collectedBy': null,
-        'collectedAt': null,
+        'status': 'draft', // 기본적으로 초안 상태
       });
 
       final postId = docRef.id;
 
       // 🎯 생성된 포스트 ID 로깅
-      debugPrint('✅ 포스트 생성 완료!');
+      debugPrint('✅ 포스트 템플릿 생성 완료!');
       debugPrint('📋 Post ID: $postId');
       debugPrint('📝 제목: $title');
       debugPrint('👤 생성자: $creatorName ($creatorId)');
       debugPrint('💰 리워드: ${reward}원');
-      debugPrint('📍 위치: ${location.latitude}, ${location.longitude}');
-      debugPrint('⏰ 만료일: $expiresAt');
-      print('🆔 [POST_CREATED] ID: $postId | Title: $title');
+      debugPrint('🎯 기본 반경: ${defaultRadius}m');
+      debugPrint('⏰ 기본 만료일: $expiresAt');
+      print('🆔 [POST_TEMPLATE_CREATED] ID: $postId | Title: $title');
 
       // 생성된 문서 ID를 postId 필드에 업데이트
       await docRef.update({'postId': postId});
       debugPrint('🔄 postId 필드 업데이트 완료: $postId');
 
-      // S2 타일 ID 자동 설정
-      await PostSearchService.updatePostS2Tiles(postId);
-      debugPrint('🗺️ S2 타일 업데이트 완료: $postId');
-
       final post = PostModel(
         postId: postId,
         creatorId: creatorId,
         creatorName: creatorName,
-        location: location,
-        radius: radius,
-        createdAt: DateTime.now(),
-        expiresAt: expiresAt,
+        createdAt: now,
         reward: reward,
+        defaultRadius: defaultRadius,
+        defaultExpiresAt: expiresAt,
         targetAge: targetAge,
         targetGender: targetGender,
         targetInterest: targetInterest,
@@ -116,8 +104,6 @@ class PostService {
         canForward: canForward,
         canRequestReward: canRequestReward,
         canUse: canUse,
-        tileId: tileId, // 타일 ID 자동 설정
-        isSuperPost: isSuperPost, // 슈퍼포스트 여부
       );
 
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
@@ -125,13 +111,13 @@ class PostService {
       debugPrint('🔍 Meilisearch 인덱싱 완료: $postId');
 
       // 최종 요약 로그
-      print('🎉 [POST_CREATION_SUCCESS] PostID: $postId | "$title" 생성 완료');
+      print('🎉 [POST_TEMPLATE_SUCCESS] PostID: $postId | "$title" 생성 완료');
 
       return postId;
     } catch (e) {
-      debugPrint('❌ 포스트 생성 실패: $e');
-      print('💥 [POST_CREATION_FAILED] Error: $e');
-      throw Exception('포스트 생성 실패: $e');
+      debugPrint('❌ 포스트 템플릿 생성 실패: $e');
+      print('💥 [POST_TEMPLATE_FAILED] Error: $e');
+      throw Exception('포스트 템플릿 생성 실패: $e');
     }
   }
 
@@ -174,8 +160,7 @@ class PostService {
     return await createPost(
       creatorId: creatorId,
       creatorName: creatorName,
-      location: location,
-      radius: radius,
+      defaultRadius: radius,
       reward: reward,
       targetAge: targetAge,
       targetGender: targetGender,
@@ -189,8 +174,8 @@ class PostService {
       canForward: canForward,
       canRequestReward: canRequestReward,
       canUse: canUse,
-      expiresAt: expiresAt,
-      isSuperPost: true, // 슈퍼포스트로 생성
+      defaultExpiresAt: expiresAt, // TODO: expiresAt -> defaultExpiresAt
+      // TODO: isSuperPost 파라미터 제거됨, 필요시 다른 방식으로 구분
     );
   }
 
@@ -343,10 +328,8 @@ class PostService {
         if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
-        final distance = _calculateDistance(
-          location.latitude, location.longitude,
-          post.location.latitude, post.location.longitude,
-        );
+        // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+        final distance = 0.0; // 임시: 위치 필터링 제거
         if (distance > radiusInKm * 1000) continue;
         
         // 2단계: 타겟 조건 필터링 (임시로 비활성화하여 모든 post 표시)
@@ -413,10 +396,8 @@ class PostService {
         final post = PostModel.fromFirestore(doc);
         if (post.status != PostStatus.DELETED) {
           // 거리 확인 (슈퍼포스트는 반경 내에서만)
-          final distance = _calculateDistance(
-            location.latitude, location.longitude,
-            post.location.latitude, post.location.longitude,
-          );
+          // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+          final distance = 0.0; // 임시: 위치 필터링 제거
           if (distance <= radiusInKm * 1000) {
             posts.add(post);
           }
@@ -465,10 +446,8 @@ class PostService {
         if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
-        final distance = _calculateDistance(
-          location.latitude, location.longitude,
-          post.location.latitude, post.location.longitude,
-        );
+        // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+        final distance = 0.0; // 임시: 위치 필터링 제거
         if (distance > radiusInKm * 1000) continue;
         
         superPosts.add(post);
@@ -532,10 +511,8 @@ class PostService {
           
           // 거리 기반 필터링 (클라이언트 사이드)
           final filteredPosts = allPosts.where((post) {
-            final distance = _calculateDistance(
-              location.latitude, location.longitude,
-              post.location.latitude, post.location.longitude,
-            );
+            // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+            final distance = 0.0; // 임시: 위치 필터링 제거
             return distance <= radiusInKm;
           }).toList();
           
@@ -560,8 +537,8 @@ class PostService {
         // 만료 상태 상세 확인
         for (final post in allPosts) {
           final now = DateTime.now();
-          final isExpired = now.isAfter(post.expiresAt);
-          final timeDiff = post.expiresAt.difference(now).inMinutes;
+          final isExpired = now.isAfter(post.defaultExpiresAt);
+          final timeDiff = post.defaultExpiresAt.difference(now).inMinutes;
           print('  - 포스트: ${post.title} - 만료: $isExpired (${timeDiff}분 남음)');
         }
         
@@ -593,8 +570,8 @@ class PostService {
       // 만료 상태 상세 확인
       for (final post in allPosts) {
         final now = DateTime.now();
-        final isExpired = now.isAfter(post.expiresAt);
-        final timeDiff = post.expiresAt.difference(now).inMinutes;
+        final isExpired = now.isAfter(post.defaultExpiresAt);
+        final timeDiff = post.defaultExpiresAt.difference(now).inMinutes;
         print('  - 슈퍼포스트: ${post.title} - 만료: $isExpired (${timeDiff}분 남음)');
       }
       
@@ -602,10 +579,8 @@ class PostService {
           .where((post) => post.status != PostStatus.DELETED) // 삭제된 포스트 제외
           .where((post) {
             // 거리 계산 (지정된 반경 이내)
-            final distance = _calculateDistance(
-              location.latitude, location.longitude,
-              post.location.latitude, post.location.longitude,
-            );
+            // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+            final distance = 0.0; // 임시: 위치 필터링 제거
             final isInRange = distance <= radiusInKm * 1000;
             if (isInRange) {
               print('  - 슈퍼포스트: ${post.title} (거리: ${(distance/1000).toStringAsFixed(2)}km)');
@@ -639,10 +614,8 @@ class PostService {
         if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
-        final distance = _calculateDistance(
-          location.latitude, location.longitude,
-          post.location.latitude, post.location.longitude,
-        );
+        // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+        final distance = 0.0; // 임시: 위치 필터링 제거
         if (distance <= radiusInKm * 1000) {
           superPosts.add(post);
         }
@@ -672,10 +645,8 @@ class PostService {
         if (post.status == PostStatus.DELETED) continue;
         
         // 거리 확인 (반경을 km로 변환)
-        final distance = _calculateDistance(
-          location.latitude, location.longitude,
-          post.location.latitude, post.location.longitude,
-        );
+        // TODO: 거리 계산 제거됨 - Posts는 템플릿이므로 위치 없음
+        final distance = 0.0; // 임시: 위치 필터링 제거
         if (distance <= radiusInKm * 1000) {
           posts.add(post);
         }
@@ -786,18 +757,7 @@ class PostService {
     try {
       debugPrint('🔄 collectPost 호출: postId=$postId, userId=$userId');
 
-      // 1단계: posts 컬렉션에서 포스트 확인
-      final postDoc = await _firestore.collection('posts').doc(postId).get();
-
-      if (postDoc.exists) {
-        debugPrint('✅ posts 컬렉션에서 포스트 발견: $postId');
-        await _collectFromPostsCollection(postDoc, userId);
-        return;
-      }
-
-      debugPrint('⚠️ posts 컬렉션에서 포스트 없음, markers 컬렉션 확인 중: $postId');
-
-      // 2단계: markers 컬렉션에서 해당 postId를 가진 마커 확인
+      // 1단계: markers 컬렉션에서 먼저 확인 (배포된 포스트는 마커에서 수령)
       final markersQuery = await _firestore
           .collection('markers')
           .where('postId', isEqualTo: postId)
@@ -812,13 +772,53 @@ class PostService {
         return;
       }
 
-      // 3단계: 둘 다 없으면 에러
-      debugPrint('❌ posts와 markers 모두에서 포스트를 찾을 수 없음: $postId');
-      debugPrint('💡 힌트: 포스트가 완전히 삭제되었거나 ID가 잘못되었습니다.');
-      throw Exception('포스트를 찾을 수 없습니다. (ID: $postId)\n\n💡 가능한 원인:\n- 포스트가 완전히 삭제됨\n- 잘못된 포스트 ID\n- 모든 수량이 소진됨\n\n🔧 해결 방법:\n1. 관리자 도구에서 Firebase 상태 확인\n2. 포스트 목록 새로고침\n3. 마커가 여전히 표시되면 앱 재시작');
+      debugPrint('⚠️ markers 컬렉션에서 마커 없음, posts 컬렉션 확인 중: $postId');
+
+      // 2단계: posts 컬렉션에서 포스트 확인 (DRAFT 상태 또는 배포되지 않은 포스트)
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+
+      if (postDoc.exists) {
+        final post = PostModel.fromFirestore(postDoc);
+
+        // DEPLOYED 상태인 포스트는 마커에서만 수령 가능
+        if (post.status == PostStatus.DEPLOYED) {
+          debugPrint('❌ DEPLOYED 상태 포스트는 마커에서만 수령 가능: $postId');
+          throw Exception('이 포스트는 이미 배포되었습니다. 지도에서 마커를 통해 수령해주세요.');
+        }
+
+        // DRAFT 상태 포스트는 posts 컬렉션에서 수령 (테스트용)
+        if (post.status == PostStatus.DRAFT) {
+          debugPrint('⚠️ DRAFT 상태 포스트 수령 시도: $postId (테스트 모드)');
+          await _collectFromPostsCollection(postDoc, userId);
+          return;
+        }
+
+        // DELETED 상태 포스트는 수령 불가
+        if (post.status == PostStatus.DELETED) {
+          debugPrint('❌ DELETED 상태 포스트 수령 불가: $postId');
+          throw Exception('삭제된 포스트는 수령할 수 없습니다.');
+        }
+      }
+
+      // 3단계: 둘 다 없거나 수령할 수 없는 상태
+      debugPrint('❌ 수령 가능한 포스트/마커를 찾을 수 없음: $postId');
+      debugPrint('💡 가능한 원인:');
+      debugPrint('  - 포스트가 완전히 삭제됨');
+      debugPrint('  - 잘못된 포스트 ID');
+      debugPrint('  - 마커의 수량이 모두 소진됨');
+      debugPrint('  - 배포된 포스트인데 마커가 비활성화됨');
+
+      throw Exception('포스트를 찾을 수 없습니다. (ID: $postId)\n\n💡 가능한 원인:\n- 포스트가 완전히 삭제됨\n- 잘못된 포스트 ID\n- 마커의 모든 수량이 소진됨\n- 배포된 포스트인데 마커가 비활성화됨\n\n🔧 해결 방법:\n1. 지도를 새로고침하여 최신 마커 상태 확인\n2. 포스트 목록 새로고침\n3. 마커가 여전히 표시되면 앱 재시작');
     } catch (e) {
       debugPrint('❌ collectPost 실패: $e');
-      throw Exception('포스트 수령 실패: $e');
+
+      // 사용자 친화적인 에러 메시지 제공
+      if (e.toString().contains('마커에서만 수령 가능') ||
+          e.toString().contains('삭제된 포스트')) {
+        rethrow; // 이미 친화적인 메시지이므로 그대로 전달
+      }
+
+      throw Exception('포스트 수령 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.\n\n오류 세부사항: ${e.toString()}');
     }
   }
 
@@ -826,13 +826,14 @@ class PostService {
   Future<void> _collectFromPostsCollection(DocumentSnapshot postDoc, String userId) async {
     try {
       final post = PostModel.fromFirestore(postDoc);
-      debugPrint('📝 posts 컬렉션 포스트 정보: ${post.title}, creatorId: ${post.creatorId}, quantity: ${post.quantity}');
+      debugPrint('📝 posts 컬렉션 포스트 정보: ${post.title}, creatorId: ${post.creatorId}');
+      // TODO: quantity 필드 제거됨, 마커에서 관리
 
-      // 수량이 0인지 확인
-      if (post.quantity <= 0) {
-        debugPrint('❌ 수령 가능한 수량이 없음: quantity=${post.quantity}');
-        throw Exception('수령 가능한 수량이 없습니다.');
-      }
+      // TODO: 수량 확인은 이제 마커에서 수행
+      // Posts는 템플릿이므로 quantity 필드가 없음
+      // if (quantity <= 0) {
+      //   throw Exception('수령 가능한 수량이 없습니다.');
+      // }
 
       // 자신의 포스트는 수령할 수 없음
       if (post.creatorId == userId) {
@@ -842,9 +843,10 @@ class PostService {
 
       debugPrint('✅ posts 컬렉션 수령 조건 확인 완료, 수령 처리 시작');
 
-      // 수량 차감 처리
+      // TODO: 수량 차감 처리는 이제 마커에서 수행
+      // Posts는 템플릿이므로 quantity 필드가 없음
       await _firestore.collection('posts').doc(post.postId).update({
-        'quantity': post.quantity - 1,
+        // 'quantity': post.quantity - 1,
         'updatedAt': Timestamp.now(),
       });
 
@@ -857,13 +859,14 @@ class PostService {
         'postCreatorId': post.creatorId,
       });
 
-      debugPrint('✅ posts 컬렉션 포스트 수령 완료: ${post.postId}, 수령자: $userId, 남은 수량: ${post.quantity - 1}');
+      debugPrint('✅ posts 컬렉션 포스트 수령 완료: ${post.postId}, 수령자: $userId');
+      // TODO: quantity 필드 제거됨, 마커에서 관리
 
-      // 수량이 0이 되면 Meilisearch에서 제거
-      if (post.quantity - 1 <= 0) {
-        await _removeFromMeilisearch(post.postId);
-        debugPrint('📤 수량 소진으로 Meilisearch에서 제거: ${post.postId}');
-      }
+      // TODO: 수량 확인은 이제 마커에서 수행
+      // if (post.quantity - 1 <= 0) {
+      //   await _removeFromMeilisearch(post.postId);
+      //   debugPrint('📤 수량 소진으로 Meilisearch에서 제거: ${post.postId}');
+      // }
     } catch (e) {
       debugPrint('❌ posts 컬렉션 수령 실패: $e');
       rethrow;
@@ -875,13 +878,38 @@ class PostService {
     try {
       final markerData = markerDoc.data() as Map<String, dynamic>;
       final markerId = markerDoc.id;
+
+      // 마커 데이터 검증
+      if (markerData.isEmpty) {
+        debugPrint('❌ 마커 데이터가 비어있음: markerId=$markerId');
+        throw Exception('마커 데이터를 읽을 수 없습니다.');
+      }
+
       final title = markerData['title'] ?? 'Unknown Title';
       final creatorId = markerData['creatorId'] ?? '';
+      final isActive = markerData['isActive'] ?? false;
       final quantity = (markerData['quantity'] as num?)?.toInt() ?? 0;
       final remainingQuantity = (markerData['remainingQuantity'] as num?)?.toInt() ?? quantity;
       final collectedBy = List<String>.from(markerData['collectedBy'] ?? []);
 
-      debugPrint('📝 markers 컬렉션 마커 정보: $title, creatorId: $creatorId, quantity: $remainingQuantity');
+      debugPrint('📝 markers 컬렉션 마커 정보:');
+      debugPrint('  - 제목: $title');
+      debugPrint('  - 생성자: $creatorId');
+      debugPrint('  - 활성화: $isActive');
+      debugPrint('  - 남은 수량: $remainingQuantity');
+      debugPrint('  - 수령자 수: ${collectedBy.length}');
+
+      // 마커가 비활성화된 경우
+      if (!isActive) {
+        debugPrint('❌ 비활성화된 마커: markerId=$markerId');
+        throw Exception('이 마커는 더 이상 활성화되어 있지 않습니다.');
+      }
+
+      // 생성자 정보가 없는 경우
+      if (creatorId.isEmpty) {
+        debugPrint('❌ 마커 생성자 정보 없음: markerId=$markerId');
+        throw Exception('마커 생성자 정보를 찾을 수 없습니다.');
+      }
 
       // 이미 수령했는지 확인
       if (collectedBy.contains(userId)) {
@@ -892,7 +920,7 @@ class PostService {
       // 수량이 0인지 확인
       if (remainingQuantity <= 0) {
         debugPrint('❌ 마커 수령 가능한 수량이 없음: remainingQuantity=$remainingQuantity');
-        throw Exception('수령 가능한 수량이 없습니다.');
+        throw Exception('수령 가능한 수량이 없습니다. 다른 사용자가 모두 수령했을 수 있습니다.');
       }
 
       // 자신의 마커는 수령할 수 없음
@@ -941,7 +969,19 @@ class PostService {
       debugPrint('✅ markers 컬렉션 포스트 수령 완료: markerId=$markerId, 수령자: $userId, 남은 수량: ${remainingQuantity - 1}');
     } catch (e) {
       debugPrint('❌ markers 컬렉션 수령 실패: $e');
-      rethrow;
+
+      // 사용자 친화적인 에러 메시지 제공
+      if (e.toString().contains('이미 수령한 포스트') ||
+          e.toString().contains('수령 가능한 수량이 없습니다') ||
+          e.toString().contains('자신의 포스트는 수령할 수 없습니다') ||
+          e.toString().contains('마커는 더 이상 활성화') ||
+          e.toString().contains('마커 데이터를 읽을 수 없습니다') ||
+          e.toString().contains('마커 생성자 정보를 찾을 수 없습니다')) {
+        rethrow; // 이미 친화적인 메시지이므로 그대로 전달
+      }
+
+      // 알 수 없는 오류의 경우 일반적인 메시지 제공
+      throw Exception('마커에서 포스트 수령 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.\n\n오류 세부사항: ${e.toString()}');
     }
   }
 
@@ -1025,7 +1065,8 @@ class PostService {
       for (final post in collectedPosts) {
         // TODO: 향후 PostClaim 모델 구현 시 실제 사용 상태 확인
         // 현재는 collectedAt이 있으면 수집된 것으로 간주
-        usageStatus[post.postId] = post.collectedAt != null;
+        // TODO: collectedAt 필드 제거됨, 쿼리에서 확인 필요
+        usageStatus[post.postId] = false; // 임시: 쿼리에서 확인해야 함
       }
       
       return usageStatus;
@@ -1122,7 +1163,7 @@ class PostService {
             .get();
         final items = fallbackSnapshot.docs
             .map((doc) => PostModel.fromFirestore(doc))
-            .where((post) => post.isActive) // 클라이언트에서 활성 상태 필터링
+            .where((post) => post.status != PostStatus.DELETED) // TODO: isActive 필드 제거됨, status로 대체
             .toList();
         items.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // DESC
         return items;
@@ -1424,7 +1465,7 @@ class PostService {
         'deployQuantity': quantity,
         'deployLocation': location,
         'deployStartDate': Timestamp.fromDate(startDate ?? now),
-        'deployEndDate': Timestamp.fromDate(endDate ?? post.expiresAt),
+        'deployEndDate': Timestamp.fromDate(endDate ?? post.defaultExpiresAt),
         'distributedAt': Timestamp.fromDate(now),
         'isDistributed': true,
         'totalDeployed': quantity,

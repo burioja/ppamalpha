@@ -30,6 +30,7 @@ import '../features/post_system/screens/post_deploy_screen.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
+import '../features/place_system/screens/edit_place_screen.dart';
 import '../features/place_system/screens/place_detail_screen.dart';
 import '../features/place_system/screens/place_image_viewer_screen.dart';
 import '../features/place_system/screens/place_search_screen.dart';
@@ -57,6 +58,7 @@ class AppRoutes {
   static const String locationPicker = '/location-picker';
   static const String postDeploy = '/post-deploy';
   static const String createPlace = '/create-place';
+  static const String editPlace = '/edit-place';
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
@@ -122,6 +124,15 @@ class AppRoutes {
       return PostEditScreen(post: post);
     },
     createPlace: (context) => const CreatePlaceScreen(),
+    editPlace: (context) {
+      final place = ModalRoute.of(context)?.settings.arguments as PlaceModel?;
+      if (place == null) {
+        return const Scaffold(
+          body: Center(child: Text('플레이스 정보를 찾을 수 없습니다.')),
+        );
+      }
+      return EditPlaceScreen(place: place);
+    },
     placeDetail: (context) {
       final placeId = ModalRoute.of(context)?.settings.arguments as String?;
       if (placeId == null) {

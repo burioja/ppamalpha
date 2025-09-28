@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 
@@ -27,11 +28,14 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     });
 
     try {
-      // TODO: 현재 로그인한 사용자 ID를 가져와야 함
-      // 임시로 하드코딩된 사용자 ID 사용 (실제로는 AuthService에서 가져와야 함)
-      const String userId = 'v1W8RxAGO8REFnIIBTt1jMQXDOM2'; // 테스트용
-      
-      _userPlaces = await _placeService.getPlacesByUser(userId);
+      // 현재 로그인한 사용자 ID 가져오기
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        debugPrint('사용자가 로그인되어 있지 않습니다');
+        return;
+      }
+
+      _userPlaces = await _placeService.getPlacesByUser(currentUser.uid);
     } catch (e) {
       debugPrint('플레이스 로드 오류: $e');
     } finally {

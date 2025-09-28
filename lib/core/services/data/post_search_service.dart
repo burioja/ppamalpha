@@ -103,7 +103,8 @@ class PostSearchService {
           try {
             final post = PostModel.fromFirestore(doc);
             allPosts.add(post);
-            print('  - 포스트 추가: ${post.title} at (${post.location.latitude}, ${post.location.longitude})');
+            // TODO: 위치 정보 표시 제거됨 - Posts는 템플릿이므로 위치 없음
+            print('  - 포스트 추가: ${post.title} (템플릿)');
           } catch (e) {
             print('  - 포스트 변환 실패: $e');
           }
@@ -113,29 +114,14 @@ class PostSearchService {
         print('  - 간단한 쿼리 실패: $e');
       }
       
-      // 4. 거리 기반 정밀 필터링
-      final filteredPosts = allPosts.where((post) {
-        final distance = S2TileUtils.calculateDistance(
-          centerLat, centerLng,
-          post.location.latitude, post.location.longitude,
-        );
-        return distance <= radiusKm;
-      }).toList();
+      // TODO: 거리 기반 필터링은 이제 마커에서 수행
+      // Posts는 템플릿이므로 위치 정보가 없음
+      final filteredPosts = allPosts; // 임시: 모든 포스트 반환
       
-      // 5. 정렬 (거리순, 생성일순)
+      // TODO: 정렬은 이제 생성일순마
+      // 거리 정렬은 마커에서 수행
       filteredPosts.sort((a, b) {
-        final distanceA = S2TileUtils.calculateDistance(
-          centerLat, centerLng,
-          a.location.latitude, a.location.longitude,
-        );
-        final distanceB = S2TileUtils.calculateDistance(
-          centerLat, centerLng,
-          b.location.latitude, b.location.longitude,
-        );
-        
-        if (distanceA != distanceB) {
-          return distanceA.compareTo(distanceB);
-        }
+        // Posts는 템플릿이므로 위치 정보가 없음, 생성일순으로만 정렬
         return b.createdAt.compareTo(a.createdAt);
       });
       

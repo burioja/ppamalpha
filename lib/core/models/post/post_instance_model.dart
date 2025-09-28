@@ -243,7 +243,7 @@ class PostInstanceModel {
   bool get isExpired => status == PostInstanceStatus.EXPIRED || DateTime.now().isAfter(expiresAt);
   bool get canBeUsed => canUse && isCollected && !isExpired;
   bool get canBeForwarded => canForward && isCollected && !isExpired;
-  bool get canRequestReward => canRequestReward && isCollected;
+  bool get canRequestRewardNow => canRequestReward && isCollected;
 
   // 사용 처리
   PostInstanceModel markAsUsed({

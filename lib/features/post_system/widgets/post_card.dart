@@ -23,8 +23,7 @@ class PostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDeleted = post.status == PostStatus.DELETED;
-    final isCollected = post.isCollected;
-    final daysUntilExpiry = post.expiresAt.difference(DateTime.now()).inDays;
+    final daysUntilExpiry = post.defaultExpiresAt.difference(DateTime.now()).inDays;
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -54,7 +53,8 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _buildStatusChip(isDeleted, isCollected),
+                  // TODO: isCollected 필드 제거됨, 쿼리 기반으로 대체
+                  _buildStatusChip(isDeleted, false), // 임시: 쿼리에서 확인 필요
                   // 삭제 버튼 (내 포스트인 경우에만 표시)
                   if (showDeleteButton && onDelete != null) ...[
                     const SizedBox(width: 8),
@@ -202,7 +202,8 @@ class PostCard extends StatelessWidget {
               ),
               
               // 수집 정보 (주운 포스트인 경우)
-              if (isCollected && post.collectedAt != null) ...[
+              // TODO: collectedAt 필드 제거됨, 쿼리 기반으로 대체
+              if (false) ... [ // 임시: 수집 정보는 쿼리에서 확인
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -217,7 +218,8 @@ class PostCard extends StatelessWidget {
                       Icon(Icons.check_circle, size: 14, color: Colors.green.shade600),
                       const SizedBox(width: 4),
                       Text(
-                        '${DateFormat('MM/dd HH:mm').format(post.collectedAt!)} 수집',
+                        // TODO: collectedAt 필드 제거됨
+                        '수집 시간: 쿼리에서 확인',
                         style: TextStyle(
                           fontSize: 12, 
                           color: Colors.green.shade600,
@@ -349,7 +351,8 @@ class PostCard extends StatelessWidget {
       );
     }
     
-    if (isCollected) {
+    // TODO: isCollected 필드 제거됨, 쿼리 기반으로 대체
+    if (false) { // 임시: 수집 상태는 쿼리에서 확인
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -375,7 +378,8 @@ class PostCard extends StatelessWidget {
       );
     }
     
-    if (!post.isActive) {
+    // TODO: isActive 필드 제거됨, status로 대체
+    if (post.status == PostStatus.DELETED) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(

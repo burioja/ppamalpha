@@ -8,11 +8,21 @@ class MarkerModel {
   final String postId; // 연결된 포스트 ID
   final String title; // 마커 제목 (간단한 정보)
   final LatLng position; // 마커 위치
-  final int quantity; // 수량
+  final int quantity; // 수량 (호환성 유지, remainingQuantity와 동일)
   final int? reward; // 리워드 금액 (배포 시점 고정, 기존 마커 호환성을 위해 옵셔널)
   final bool? isSuperMarker; // 슈퍼마커 여부 (파생 저장, nullable 허용)
   final String creatorId; // 마커 생성자
-  
+
+  // 🚀 Firebase 실제 데이터와 일치하는 새로운 필드들
+  final int totalQuantity; // 총 배포 수량
+  final int remainingQuantity; // 남은 수량
+  final int collectedQuantity; // 수집된 수량
+  final double collectionRate; // 수집률 (0.0 ~ 1.0)
+  final String tileId; // 타일 ID
+  final String? s2_10; // S2 level 10 cell id
+  final String? s2_12; // S2 level 12 cell id
+  final int? fogLevel; // 포그 레벨 (1: Clear, 2: Partial, 3: Dark)
+
   // 계산된 슈퍼마커 여부 (reward 기준)
   bool get computedIsSuper => (reward ?? 0) >= AppConsts.superRewardThreshold;
   final DateTime createdAt;
@@ -29,34 +39,74 @@ class MarkerModel {
     this.reward, // ✅ 옵셔널로 변경
     this.isSuperMarker,
     required this.creatorId,
+    // 🚀 새로운 필드들
+    required this.totalQuantity,
+    required this.remainingQuantity,
+    this.collectedQuantity = 0,
+    this.collectionRate = 0.0,
+    required this.tileId,
+    this.s2_10,
+    this.s2_12,
+    this.fogLevel,
     required this.createdAt,
     required this.expiresAt,
     required this.isActive,
     this.collectedBy = const [],
-  });
+  }) :
+    // quantity는 remainingQuantity와 동일하게 유지 (호환성)
+    assert(quantity == remainingQuantity, 'quantity must equal remainingQuantity for compatibility');
 
   /// Firestore에서 마커 생성
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final location = data['location'] as GeoPoint;
-    
-    // ✅ 옵셔널 안전 파싱 함수
+
+    // ✅ 안전 파싱 함수들
     int? parseNullableInt(dynamic v) {
       if (v is int) return v;
       if (v is double) return v.toInt();
       if (v is String) return int.tryParse(v);
       return null;
     }
-    
+
+    int parseRequiredInt(dynamic v, int defaultValue) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? defaultValue;
+      return defaultValue;
+    }
+
+    double parseDouble(dynamic v, double defaultValue) {
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? defaultValue;
+      return defaultValue;
+    }
+
+    // 🚀 새로운 필드들을 안전하게 파싱
+    final totalQuantity = parseRequiredInt(data['totalQuantity'], parseRequiredInt(data['quantity'], 1));
+    final remainingQuantity = parseRequiredInt(data['remainingQuantity'], parseRequiredInt(data['quantity'], 1));
+    final collectedQuantity = parseRequiredInt(data['collectedQuantity'], 0);
+    final collectionRate = parseDouble(data['collectionRate'], 0.0);
+
     return MarkerModel(
       markerId: doc.id,
       postId: (data['postId'] as String?) ?? '',
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
-      quantity: data['quantity'] ?? 0,
+      quantity: remainingQuantity, // quantity는 remainingQuantity와 동일
       reward: parseNullableInt(data['reward']), // ✅ 옵셔널 파싱
       isSuperMarker: data['isSuperMarker'] as bool?,
       creatorId: data['creatorId'] ?? '',
+      // 🚀 새로운 필드들
+      totalQuantity: totalQuantity,
+      remainingQuantity: remainingQuantity,
+      collectedQuantity: collectedQuantity,
+      collectionRate: collectionRate,
+      tileId: data['tileId'] ?? 'unknown',
+      s2_10: data['s2_10'],
+      s2_12: data['s2_12'],
+      fogLevel: parseNullableInt(data['fogLevel']),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
       isActive: data['isActive'] ?? true,
@@ -70,25 +120,46 @@ class MarkerModel {
       'postId': postId,
       'title': title,
       'location': GeoPoint(position.latitude, position.longitude),
-      'quantity': quantity,
+      'quantity': quantity, // 호환성 유지
       'creatorId': creatorId,
       'createdAt': Timestamp.fromDate(createdAt),
       'expiresAt': Timestamp.fromDate(expiresAt),
       'isActive': isActive,
       'collectedBy': collectedBy,
+      // 🚀 새로운 필드들
+      'totalQuantity': totalQuantity,
+      'remainingQuantity': remainingQuantity,
+      'collectedQuantity': collectedQuantity,
+      'collectionRate': collectionRate,
+      'tileId': tileId,
     };
-    
+
     // ✅ nullable promotion 이슈 피하려고 로컬 변수로 받아서 체크
     final r = reward;
     if (r != null) {
       data['reward'] = r;
     }
-    
+
     final s = isSuperMarker;
     if (s != null) {
       data['isSuperMarker'] = s;
     }
-    
+
+    final s2Level10 = s2_10;
+    if (s2Level10 != null) {
+      data['s2_10'] = s2Level10;
+    }
+
+    final s2Level12 = s2_12;
+    if (s2Level12 != null) {
+      data['s2_12'] = s2Level12;
+    }
+
+    final fog = fogLevel;
+    if (fog != null) {
+      data['fogLevel'] = fog;
+    }
+
     return data;
   }
 
@@ -102,20 +173,42 @@ class MarkerModel {
     int? reward,
     bool? isSuperMarker,
     String? creatorId,
+    // 🚀 새로운 필드들
+    int? totalQuantity,
+    int? remainingQuantity,
+    int? collectedQuantity,
+    double? collectionRate,
+    String? tileId,
+    String? s2_10,
+    String? s2_12,
+    int? fogLevel,
     DateTime? createdAt,
     DateTime? expiresAt,
     bool? isActive,
     List<String>? collectedBy,
   }) {
+    // quantity가 지정되면 remainingQuantity도 동일하게 설정 (호환성)
+    final newRemainingQuantity = remainingQuantity ?? quantity ?? this.remainingQuantity;
+    final newQuantity = quantity ?? newRemainingQuantity;
+
     return MarkerModel(
       markerId: markerId ?? this.markerId,
       postId: postId ?? this.postId,
       title: title ?? this.title,
       position: position ?? this.position,
-      quantity: quantity ?? this.quantity,
+      quantity: newQuantity,
       reward: reward ?? this.reward, // ✅ null 허용
       isSuperMarker: isSuperMarker ?? this.isSuperMarker,
       creatorId: creatorId ?? this.creatorId,
+      // 🚀 새로운 필드들
+      totalQuantity: totalQuantity ?? this.totalQuantity,
+      remainingQuantity: newRemainingQuantity,
+      collectedQuantity: collectedQuantity ?? this.collectedQuantity,
+      collectionRate: collectionRate ?? this.collectionRate,
+      tileId: tileId ?? this.tileId,
+      s2_10: s2_10 ?? this.s2_10,
+      s2_12: s2_12 ?? this.s2_12,
+      fogLevel: fogLevel ?? this.fogLevel,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
       isActive: isActive ?? this.isActive,

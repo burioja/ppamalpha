@@ -243,7 +243,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           comparison = a.reward.compareTo(b.reward);
           break;
         case 'expiresAt':
-          comparison = a.expiresAt.compareTo(b.expiresAt);
+          comparison = a.defaultExpiresAt.compareTo(b.defaultExpiresAt);
           break;
         default:
           comparison = a.createdAt.compareTo(b.createdAt);

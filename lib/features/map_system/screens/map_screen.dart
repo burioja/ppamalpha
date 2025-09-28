@@ -1340,7 +1340,7 @@ class _MapScreenState extends State<MapScreen> {
             children: [
             Text('리워드: ${post.reward}원'),
             Text('설명: ${post.description}'),
-            Text('만료일: ${post.expiresAt.toString().split(' ')[0]}'),
+            Text('기본 만료일: ${post.defaultExpiresAt.toString().split(' ')[0]}'),
             if (isOwner)
               Text('배포자: 본인', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
             ],

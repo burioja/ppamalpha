@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // 배포 상태 열거형
@@ -240,10 +241,10 @@ class PostDeploymentModel {
     final double dLat = _degreesToRadians(lat2 - lat1);
     final double dLon = _degreesToRadians(lon2 - lon1);
 
-    final double a = (dLat / 2).sin() * (dLat / 2).sin() +
-        _degreesToRadians(lat1).cos() * _degreesToRadians(lat2).cos() *
-        (dLon / 2).sin() * (dLon / 2).sin();
-    final double c = 2 * a.sqrt().asin();
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
+        sin(dLon / 2) * sin(dLon / 2);
+    final double c = 2 * asin(sqrt(a));
 
     return earthRadius * c;
   }

@@ -108,7 +108,7 @@ class PostInstanceService {
       batch.update(markerDoc.reference, {
         'remainingQuantity': FieldValue.increment(-1),
         'collectedQuantity': FieldValue.increment(1),
-        'collectionRate': (markerData['collectedQuantity'] as int + 1) / (markerData['totalQuantity'] as int),
+        'collectionRate': ((markerData['collectedQuantity'] as int) + 1) / (markerData['totalQuantity'] as int),
       });
 
       // 5-3. 템플릿 통계 업데이트

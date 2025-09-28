@@ -266,9 +266,8 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   int get _usablePostsCount {
-    return _collectedPosts
-        .where((post) => post.canBeUsed)
-        .length;
+    // TODO: 쿼리 기반으로 변경 필요 - 현재는 모든 포스트를 사용 가능으로 가정
+    return _collectedPosts.length;
   }
 
   Future<void> _performPostUsage(PostModel post) async {
@@ -321,16 +320,15 @@ class _StoreScreenState extends State<StoreScreen> {
 
   void _usePost(PostModel post) {
     // 사용 가능 여부 확인
-    if (!post.canBeUsed) {
+    // TODO: 쿼리 기반 사용 가능 여부 확인으로 변경 필요
+    final canBeUsed = true; // 임시: 모든 수집된 포스트는 사용 가능으로 가정
+
+    if (!canBeUsed) {
       String message = '';
-      if (post.isUsed || post.isUsedByCurrentUser) {
-        message = '이미 사용된 포스트입니다.';
-      } else if (post.status == PostStatus.DELETED) {
+      if (post.status == PostStatus.DELETED) {
         message = '삭제된 포스트입니다.';
       } else if (!post.canUse) {
         message = '사용할 수 없는 포스트입니다.';
-      } else if (!post.isActive) {
-        message = '비활성화된 포스트입니다.';
       } else {
         message = '포스트를 사용할 수 없습니다.';
       }
@@ -954,7 +952,8 @@ class _StoreScreenState extends State<StoreScreen> {
                           }
                         },
                       ),
-                      if (post.canBeUsed)
+                      // TODO: 쿼리 기반으로 사용 가능 여부 확인
+                      if (true) // 임시: 모든 수집된 포스트는 사용 가능으로 가정
                         Positioned(
                           bottom: 8,
                           right: 8,

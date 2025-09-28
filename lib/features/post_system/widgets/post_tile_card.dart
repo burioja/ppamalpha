@@ -26,8 +26,10 @@ class PostTileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDeleted = post.status == PostStatus.DELETED;
-    final isCollected = post.isCollected;
-    final isUsed = post.isUsed || post.isUsedByCurrentUser;
+    // 🚀 제거된 필드들: isCollected, isUsed, isUsedByCurrentUser
+    // 이들은 이제 post_collections 컬렉션에서 쿼리해야 함
+    final isCollected = false; // TODO: 쿼리 기반으로 변경 필요
+    final isUsed = false; // TODO: 쿼리 기반으로 변경 필요
     
     return GestureDetector(
       onTap: onTap,
@@ -195,7 +197,7 @@ class PostTileCard extends StatelessWidget {
                         Text(
                           isDeleted
                             ? '삭제됨'
-                            : DateFormat('MM/dd').format(post.expiresAt),
+                            : DateFormat('MM/dd').format(post.defaultExpiresAt),
                           style: TextStyle(
                             fontSize: 10,
                             color: isDeleted ? Colors.red.shade500 : Colors.grey.shade600,
@@ -305,7 +307,8 @@ class PostTileCard extends StatelessWidget {
       );
     }
     
-    if (!post.isActive) {
+    // TODO: isActive 필드 제거됨, status로 대체
+    if (post.status == PostStatus.DELETED) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(

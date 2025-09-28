@@ -130,12 +130,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
             const SizedBox(height: 24),
 
+            // 포스트 상태 표시
+            _buildStatusCard(),
+
+            const SizedBox(height: 24),
+
             // 기본 정보
             _buildInfoSection('기본 정보', [
+              _buildInfoRow(Icons.tag, '포스트 ID', currentPost.postId),
               _buildInfoRow(Icons.person, '발행자', currentPost.creatorName),
               _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(currentPost.createdAt)),
-              _buildInfoRow(Icons.timer, '만료일', _formatDate(currentPost.expiresAt)),
-              _buildInfoRow(Icons.location_on, '위치', '${currentPost.location.latitude.toStringAsFixed(4)}, ${currentPost.location.longitude.toStringAsFixed(4)}'),
+              _buildInfoRow(Icons.timer, '기본 만료일', _formatDate(currentPost.defaultExpiresAt)),
+              // TODO: 위치 정보는 배포된 마커에서 조회해야 함
+              _buildInfoRow(Icons.location_on, '위치', '템플릿 - 배포 시 설정됨'),
               _buildInfoRow(Icons.price_change, '리워드', '${currentPost.reward}'),
               _buildInfoRow(Icons.settings, '기능', _buildCapabilitiesText()),
               _buildInfoRow(Icons.group, '타겟', _buildTargetText()),
@@ -143,67 +150,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
             const SizedBox(height: 24),
 
-            // 액션 버튼들
-            if (!widget.isEditable) ...[
-              // 쿠폰 사용 버튼 (쿠폰인 포스트이고 사용 가능한 경우에만 표시)
-              if (currentPost.canUse && currentPost.isCoupon && !currentPost.isUsedByCurrentUser)
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _useCoupon(context),
-                    icon: const Icon(Icons.card_giftcard),
-                    label: const Text('쿠폰 사용하기'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-
-              // 쿠폰 사용 완료 표시 (이미 사용된 쿠폰인 경우)
-              if (currentPost.isCoupon && (currentPost.isUsedByCurrentUser || currentPost.usedAt != null))
-                Container(
-                  width: double.infinity,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[400]!),
-                  ),
-                  child: const Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text(
-                          '이미 사용된 쿠폰입니다',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: () => _forwardPost(context),
-                  icon: const Icon(Icons.share),
-                  label: const Text('포스트 전달하기'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    side: const BorderSide(color: Colors.blue),
-                  ),
-                ),
-              ),
-            ],
+            // 액션 버튼들 (상태별 분기)
+            ..._buildStatusBasedActions(),
 
             const SizedBox(height: 24),
 
@@ -430,7 +378,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
 
     // 이미 사용된 쿠폰인지 체크
-    if (currentPost.isUsedByCurrentUser || currentPost.usedAt != null) {
+    // TODO: 쿼리 기반으로 사용 여부 확인
+    final isUsedByCurrentUser = false; // 임시: 쿼리에서 확인 필요
+    if (isUsedByCurrentUser) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('이미 사용된 쿠폰입니다.'),
@@ -584,11 +534,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
       // 로컬 상태 업데이트
       setState(() {
-        currentPost = currentPost.copyWith(
-          usedAt: DateTime.now(),
-          isUsedByCurrentUser: true,
-          totalUsed: currentPost.totalUsed + 1,
-        );
+        // TODO: 사용 통계는 별도 컬렉션에서 관리
+        // usedAt, isUsedByCurrentUser, totalUsed는 PostModel에서 제거됨
+        // 사용 기록은 post_collections 컬렉션에 저장될 예정
       });
 
       // 성공 다이얼로그 표시
@@ -676,92 +624,152 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 플레이스 섹션 제목 추가
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.place, color: Colors.blue.shade600, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    '연결된 플레이스',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: InkWell(
                 onTap: () {
                   Navigator.pushNamed(context, AppRoutes.placeDetail, arguments: place.id);
                 },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: double.infinity,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Colors.blue.shade400, Colors.blue.shade600],
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.shade100,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Stack(
-                      children: [
-                        // 배경 패턴
-                        Positioned.fill(
-                          child: Opacity(
-                            opacity: 0.1,
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                image: DecorationImage(
-                                  image: AssetImage('assets/images/map_pattern.png'),
-                                  fit: BoxFit.cover,
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: double.infinity,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Colors.blue.shade50, Colors.blue.shade100],
+                        ),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Stack(
+                        children: [
+                          // 배경 패턴
+                          Positioned.fill(
+                            child: Opacity(
+                              opacity: 0.1,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  image: DecorationImage(
+                                    image: AssetImage('assets/images/map_pattern.png'),
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        // 콘텐츠
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.place,
-                                size: 32,
+                          // 콘텐츠
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade600,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.place,
+                                    size: 24,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        place.name,
+                                        style: TextStyle(
+                                          color: Colors.blue.shade800,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.touch_app,
+                                            size: 16,
+                                            color: Colors.blue.shade600,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '플레이스 상세보기',
+                                            style: TextStyle(
+                                              color: Colors.blue.shade600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.blue.shade600,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                          // 클릭 표시
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
                                 color: Colors.white,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '플레이스로 이동',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                place.name,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 12,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 클릭 표시
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.arrow_forward_ios,
-                              size: 12,
-                              color: Colors.white,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1428,39 +1436,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          if (currentPost.deployQuantity != null) ...[
-            Row(
-              children: [
-                Icon(Icons.numbers, size: 16, color: Colors.green.shade600),
-                const SizedBox(width: 8),
-                Text('배포 수량: ${currentPost.deployQuantity}개'),
-              ],
-            ),
-            const SizedBox(height: 4),
-          ],
-          if (currentPost.distributedAt != null) ...[
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: Colors.green.shade600),
-                const SizedBox(width: 8),
-                Text('배포 시간: ${_formatDateTime(currentPost.distributedAt!)}'),
-              ],
-            ),
-            const SizedBox(height: 4),
-          ],
-          if (currentPost.deployLocation != null) ...[
-            Row(
-              children: [
-                Icon(Icons.place, size: 16, color: Colors.green.shade600),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '배포 위치: ${currentPost.deployLocation!.latitude.toStringAsFixed(6)}, ${currentPost.deployLocation!.longitude.toStringAsFixed(6)}',
-                  ),
-                ),
-              ],
-            ),
-          ],
+          // TODO: 배포 수량은 마커에서 조회해야 함
+          Row(
+            children: [
+              Icon(Icons.numbers, size: 16, color: Colors.green.shade600),
+              const SizedBox(width: 8),
+              const Text('배포 수량: 마커에서 확인 가능'),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // TODO: 배포 시간은 마커에서 조회해야 함
+          Row(
+            children: [
+              Icon(Icons.access_time, size: 16, color: Colors.green.shade600),
+              const SizedBox(width: 8),
+              const Text('배포 시간: 마커에서 확인 가능'),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // TODO: 배포 위치는 마커에서 조회해야 함
+          Row(
+            children: [
+              Icon(Icons.place, size: 16, color: Colors.green.shade600),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('배포 위치: 마커에서 확인 가능'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1470,5 +1473,265 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
            '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  // 포스트 상태 카드
+  Widget _buildStatusCard() {
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+    String statusDescription;
+
+    switch (currentPost.status) {
+      case PostStatus.DRAFT:
+        statusColor = Colors.blue;
+        statusIcon = Icons.edit_note;
+        statusText = '초안 상태';
+        statusDescription = '아직 배포되지 않았습니다. 수정 및 배포가 가능합니다.';
+        break;
+      case PostStatus.DEPLOYED:
+        statusColor = Colors.green;
+        statusIcon = Icons.public;
+        statusText = '배포 완료';
+        statusDescription = '지도에 배포되어 사용자들이 볼 수 있습니다.';
+        break;
+      case PostStatus.DELETED:
+        statusColor = Colors.red;
+        statusIcon = Icons.delete;
+        statusText = '삭제됨';
+        statusDescription = '이 포스트는 삭제되었습니다.';
+        break;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: statusColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(statusIcon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusDescription,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: statusColor.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 상태별 액션 버튼들
+  List<Widget> _buildStatusBasedActions() {
+    final List<Widget> actions = [];
+
+    switch (currentPost.status) {
+      case PostStatus.DRAFT:
+        // 초안 상태: 편집 및 배포 가능
+        if (widget.isEditable) {
+          actions.addAll([
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => _editPost(context),
+                icon: const Icon(Icons.edit),
+                label: const Text('포스트 편집'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => _deployPost(context),
+                icon: const Icon(Icons.publish),
+                label: const Text('포스트 배포하기'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ]);
+        }
+        break;
+
+      case PostStatus.DEPLOYED:
+        // 배포된 상태: 쿠폰 사용, 공유 등 가능
+        if (!widget.isEditable) {
+          if (currentPost.canUse && currentPost.isCoupon) {
+            actions.add(
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () => _useCoupon(context),
+                  icon: const Icon(Icons.card_giftcard),
+                  label: const Text('쿠폰 사용하기'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            );
+            actions.add(const SizedBox(height: 12));
+          }
+
+          actions.add(
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () => _forwardPost(context),
+                icon: const Icon(Icons.share),
+                label: const Text('포스트 공유하기'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  side: const BorderSide(color: Colors.blue),
+                ),
+              ),
+            ),
+          );
+        } else {
+          // 본인의 배포된 포스트: 통계 보기
+          actions.add(
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () => _showPostStatistics(context),
+                icon: const Icon(Icons.analytics),
+                label: const Text('배포 통계 보기'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                  side: const BorderSide(color: Colors.green),
+                ),
+              ),
+            ),
+          );
+        }
+        break;
+
+      case PostStatus.DELETED:
+        // 삭제된 상태: 복원 옵션 (본인의 경우)
+        if (widget.isEditable) {
+          actions.add(
+            Container(
+              width: double.infinity,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[400]!),
+              ),
+              child: const Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.delete, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text(
+                      '삭제된 포스트입니다',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        break;
+    }
+
+    if (actions.isNotEmpty) {
+      actions.add(const SizedBox(height: 24));
+    }
+
+    return actions;
+  }
+
+  // 포스트 배포하기
+  void _deployPost(BuildContext context) {
+    // TODO: 포스트 배포 화면으로 이동
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('포스트 배포 기능을 구현 중입니다.'),
+        backgroundColor: Colors.blue,
+      ),
+    );
+  }
+
+  // 포스트 통계 보기
+  void _showPostStatistics(BuildContext context) {
+    // TODO: 포스트 통계 다이얼로그 표시
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('포스트 통계'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('• 총 수령 횟수: 마커에서 확인 가능'),
+            Text('• 남은 수량: 마커에서 확인 가능'),
+            Text('• 배포 위치: 마커에서 확인 가능'),
+            Text('• 배포 시간: 마커에서 확인 가능'),
+            SizedBox(height: 16),
+            Text(
+              '상세한 통계는 마커 정보에서 확인할 수 있습니다.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 }

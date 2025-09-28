@@ -92,7 +92,9 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _save() async {
-    if (widget.post.isDistributed) {
+    // TODO: 마커 배포 여부 쿼리로 대체
+    final isDistributed = false; // 임시: 공백 포스트는 모두 수정 가능
+    if (isDistributed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('배포된 포스트는 수정할 수 없습니다.')),
@@ -268,14 +270,14 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: '제목', border: OutlineInputBorder()),
                 validator: (v) => (v == null || v.trim().isEmpty) ? '제목을 입력해주세요.' : null,
-                enabled: !widget.post.isDistributed,
+                enabled: true, // TODO: 마커 배포 여부로 대체
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _contentController,
                 decoration: const InputDecoration(labelText: '내용 (선택사항)', border: OutlineInputBorder()),
                 maxLines: 5,
-                enabled: !widget.post.isDistributed,
+                enabled: true, // TODO: 마커 배포 여부로 대체
               ),
               const SizedBox(height: 16),
               _buildFunctionDropdown(),
@@ -292,26 +294,27 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('응답 허용'),
                 value: _canRespond,
-                onChanged: widget.post.isDistributed ? null : (v) { setState(() { _canRespond = v ?? false; }); },
+                onChanged: (v) { setState(() { _canRespond = v ?? false; }); }, // TODO: 마커 배포 여부로 대체
               ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('전달 허용'),
                 value: _canForward,
-                onChanged: widget.post.isDistributed ? null : (v) { setState(() { _canForward = v ?? false; }); },
+                onChanged: (v) { setState(() { _canForward = v ?? false; }); }, // TODO: 마커 배포 여부로 대체
               ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('리워드 수령 허용'),
                 value: _canRequestReward,
-                onChanged: widget.post.isDistributed ? null : (v) { setState(() { _canRequestReward = v ?? true; }); },
+                onChanged: (v) { setState(() { _canRequestReward = v ?? true; }); }, // TODO: 마커 배포 여부로 대체
               ),
               const SizedBox(height: 24),
               _buildSectionTitle('타겟팅 옵션'),
               GenderCheckboxGroup(
                 selectedGenders: _selectedGenders,
                 onChanged: (genders) {
-                  if (!widget.post.isDistributed) {
+                  // TODO: 마커 배포 여부로 대체
+                  if (!false) {
                     setState(() {
                       _selectedGenders = genders;
                     });
@@ -331,11 +334,11 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 min: 10,
                 max: 90,
                 divisions: 80,
-                onChanged: widget.post.isDistributed ? null : (range) {
+                onChanged: (range) {
                   setState(() {
                     _selectedAgeRange = range;
                   });
-                },
+                }, // TODO: 마커 배포 여부로 대체
                 labelBuilder: (value) => '${value.toInt()}세',
                 validator: (range) {
                   if (range.start < 10 || range.end > 90) {
@@ -366,27 +369,25 @@ class _PostEditScreenState extends State<PostEditScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: widget.post.isDistributed ? Colors.orange.shade50 : Colors.blue.shade50,
+                  color: Colors.blue.shade50, // TODO: 마커 배포 여부로 대체
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: widget.post.isDistributed ? Colors.orange.shade200 : Colors.blue.shade200
+                    color: Colors.blue.shade200, // TODO: 마커 배포 여부로 대체
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      widget.post.isDistributed ? Icons.schedule : Icons.info_outline,
-                      color: widget.post.isDistributed ? Colors.orange.shade600 : Colors.blue.shade600,
-                      size: 20
+                      Icons.info_outline, // TODO: 마커 배포 여부로 대체
+                      color: Colors.blue.shade600, // TODO: 마커 배포 여부로 대체
+                      size: 20,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        widget.post.isDistributed
-                          ? '이미 배포된 포스트는 배포 기간을 변경할 수 없습니다'
-                          : '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
+                        '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다', // TODO: 마커 배포 여부로 대체
                         style: TextStyle(
-                          color: widget.post.isDistributed ? Colors.orange.shade700 : Colors.blue.shade700,
+                          color: Colors.blue.shade700, // TODO: 마커 배포 여부로 대체
                           fontSize: 12,
                         ),
                       ),
@@ -396,8 +397,9 @@ class _PostEditScreenState extends State<PostEditScreen> {
               ),
               const SizedBox(height: 24),
               _buildReadonlyInfo('생성일', widget.post.createdAt),
-              _buildReadonlyInfo('만료일', widget.post.expiresAt),
-              _buildReadonlyInfo('위치', widget.post.location),
+              _buildReadonlyInfo('기본 만료일', widget.post.defaultExpiresAt),
+              // TODO: 위치는 템플릿에서 제거됨, 배포된 마커에서 확인
+              _buildReadonlyInfo('위치', '템플릿 - 배포 시 설정됨'),
               
               const SizedBox(height: 32),
               // 하단 완료 버튼
@@ -466,8 +468,8 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   void _initPeriodFromPost() {
     final now = DateTime.now();
-    if (widget.post.expiresAt.isAfter(now)) {
-      final diff = widget.post.expiresAt.difference(now);
+    if (widget.post.defaultExpiresAt.isAfter(now)) {
+      final diff = widget.post.defaultExpiresAt.difference(now);
       _selectedPeriod = diff.inDays.clamp(1, 30);
     } else {
       _selectedPeriod = 7; // 기본값
@@ -524,7 +526,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
         border: OutlineInputBorder(),
       ),
       items: _functions.map((f) => DropdownMenuItem<String>(value: f, child: Text(_getFunctionDisplayName(f)))).toList(),
-      onChanged: widget.post.isDistributed ? null : (v) { setState(() { _selectedFunction = v!; }); },
+      onChanged: null, // TODO: 마커 배포 여부로 대체
     );
   }
 
@@ -554,7 +556,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ElevatedButton.icon(
-          onPressed: widget.post.isDistributed ? null : _pickImage,
+          onPressed: null, // TODO: 마커 배포 여부로 대체
           icon: const Icon(Icons.add_photo_alternate),
           label: const Text('이미지 추가'),
         ),
@@ -602,7 +604,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ElevatedButton.icon(
-          onPressed: widget.post.isDistributed ? null : _pickSound,
+          onPressed: null, // TODO: 마커 배포 여부로 대체
           icon: const Icon(Icons.audiotrack),
           label: const Text('사운드 선택'),
         ),
@@ -627,7 +629,8 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
-                  onPressed: widget.post.isDistributed
+                  // TODO: 마커 배포 여부로 대체
+                  onPressed: false
                       ? null
                       : () {
                           setState(() {
@@ -672,7 +675,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 const SizedBox(width: 8),
                 Expanded(child: Text(item['url']!, overflow: TextOverflow.ellipsis)),
                 IconButton(
-                  onPressed: widget.post.isDistributed ? null : () { setState(() { _existingMedia.removeAt(idx); }); },
+                  onPressed: null, // TODO: 마커 배포 여부로 대체
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -693,7 +696,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 const SizedBox(width: 8),
                 Expanded(child: Text(_existingAudioUrl, overflow: TextOverflow.ellipsis)),
                 IconButton(
-                  onPressed: widget.post.isDistributed ? null : () { setState(() { _existingAudioUrl = ''; }); },
+                  onPressed: null, // TODO: 마커 배포 여부로 대체
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
