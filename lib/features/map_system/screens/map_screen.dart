@@ -1137,39 +1137,63 @@ class _MapScreenState extends State<MapScreen> {
 
   void _updateMarkers() {
     print('🔧 _updateMarkers 호출됨 - _markers 개수: ${_markers.length}');
+
+    // 1) 수퍼/일반 분리
+    final supers = <MarkerModel>[];
+    final normals = <MarkerModel>[];
+    for (final m in _markers) {
+      final r = m.reward ?? 0;
+      (r >= 1000 ? supers : normals).add(m);
+    }
+
+    // 2) 일반 먼저, 수퍼 나중 -> 수퍼가 항상 위에 그림
+    final drawOrder = <MarkerModel>[
+      ...normals,
+      ...supers,
+    ];
+
+    // (선택) 동일 그룹 내에서 최신이 위에 오게 하고 싶으면:
+    // normals.sort((a,b)=> (a.createdAt??DateTime(0)).compareTo(b.createdAt??DateTime(0)));
+    // supers.sort((a,b)=> (a.createdAt??DateTime(0)).compareTo(b.createdAt??DateTime(0)));
+
     final markers = <Marker>[];
-    
-    // 새로운 마커 모델 사용
-    for (final marker in _markers) {
+    for (final marker in drawOrder) {
       print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
       
-      // ✅ 조인 제거: 마커에서 직접 reward 사용 (배포 시점 고정)
-      final int markerReward = marker.reward ?? 0; // ✅ null 체크 추가
-      
-      // 가격대에 따라 다른 이미지 사용
-      final String imagePath = markerReward >= 1000 
-          ? 'assets/images/ppam_super.png'  // 천원 이상은 슈퍼포스트 이미지
-          : 'assets/images/ppam_work.png';  // 천원 미만은 일반 이미지
-      
+      final markerReward = marker.reward ?? 0;
+      final imagePath = markerReward >= 1000
+          ? 'assets/images/ppam_super.png'
+          : 'assets/images/ppam_work.png';
+
       print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
       print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${marker.reward ?? 0}, imagePath=$imagePath');
+
+      // 수퍼포스트는 조금 더 크게 표시
+      final isSuper = markerReward >= 1000;
+      final markerSize = isSuper ? 40.0 : 35.0;
+      final imageSize = isSuper ? 36.0 : 31.0;
       
       markers.add(
         Marker(
           key: ValueKey(marker.markerId),
           point: marker.position,
-          width: 35,
-          height: 35,
+          width: markerSize,
+          height: markerSize,
           child: GestureDetector(
             onTap: () => _showMarkerDetails(marker),
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(
+                  color: isSuper ? Colors.amber : Colors.white, 
+                  width: isSuper ? 3 : 2
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 4,
+                    color: isSuper 
+                        ? Colors.amber.withOpacity(0.4)
+                        : Colors.black.withOpacity(0.3),
+                    blurRadius: isSuper ? 6 : 4,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -1177,8 +1201,8 @@ class _MapScreenState extends State<MapScreen> {
               child: ClipOval(
                 child: Image.asset(
                   imagePath,
-                  width: 31,
-                  height: 31,
+                  width: imageSize,
+                  height: imageSize,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -1188,10 +1212,9 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-
-    print('🎯 최종 마커 개수: ${markers.length}개');
+    print('🎯 최종 마커 개수: ${markers.length}개 (일반: ${normals.length}개, 수퍼: ${supers.length}개)');
     setState(() {
-      _clusteredMarkers = markers;
+      _clusteredMarkers = List<Marker>.from(markers); // 새 인스턴스로 교체
     });
     print('✅ _clusteredMarkers 업데이트 완료: ${_clusteredMarkers.length}개');
     
