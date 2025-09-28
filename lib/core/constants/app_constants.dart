@@ -1,10 +1,8 @@
-/// 앱 전체에서 사용하는 상수들
+// lib/core/constants/app_constants.dart
 class AppConsts {
-  /// 슈퍼포스트 판별 기준 (리워드 금액)
+  /// 슈퍼포스트 기준 리워드 (원)
   static const int superRewardThreshold = 1000;
-  
-  /// 기타 상수들...
-  static const int defaultPageSize = 300;
-  static const int superPostPageSize = 150;
-  static const double defaultSearchRadiusKm = 1.0;
+
+  // (옵션) 여기에 공용 상수 계속 추가
+  // static const double someRadiusKm = 1.0;
 }

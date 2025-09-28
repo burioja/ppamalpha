@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
-import '../constants/app_constants.dart';
+import '../../constants/app_constants.dart';
 
 /// 마커 모델 - 포스트에 접근하는 연결고리
 class MarkerModel {

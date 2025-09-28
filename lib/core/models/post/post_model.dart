@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
-import '../constants/app_constants.dart';
+import '../../constants/app_constants.dart';
 
 // 포스트 상태 열거형
 enum PostStatus {
