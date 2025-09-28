@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
+import '../../../core/constants/app_constants.dart';
 import '../services/markers/marker_service.dart';
 import '../../../core/models/marker/marker_model.dart';
 import 'package:latlong2/latlong.dart';
@@ -789,8 +790,8 @@ class _MapScreenState extends State<MapScreen> {
           filters: filters,
           pageSize: 300, // ✅ 성능 최적화 (500 → 300)
         ),
-        // 슈퍼포스트 조회
-        MapMarkerService.getSuperPosts(
+        // 슈퍼마커 조회
+        MapMarkerService.getSuperMarkers(
           location: primaryCenter,
           radiusInKm: _maxDistance / 1000.0,
           additionalCenters: additionalCenters,
@@ -802,8 +803,8 @@ class _MapScreenState extends State<MapScreen> {
       final superMarkers = futures[1] as List<MapMarkerData>;
       
       print('📍 서버 응답:');
-      print('  - 일반 포스트: ${normalMarkers.length}개');
-      print('  - 슈퍼포스트: ${superMarkers.length}개');
+      print('  - 일반 마커: ${normalMarkers.length}개');
+      print('  - 슈퍼마커: ${superMarkers.length}개');
       
       // 🔥 Fail-open: 마커가 없으면 경고 메시지
       if (normalMarkers.isEmpty && superMarkers.isEmpty) {
@@ -826,7 +827,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
       
-      // 슈퍼포스트 추가
+      // 슈퍼마커 추가
       for (final marker in superMarkers) {
         if (!seenMarkerIds.contains(marker.id)) {
           allMarkers.add(marker);
@@ -1161,15 +1162,15 @@ class _MapScreenState extends State<MapScreen> {
       print('📍 마커 생성: ${marker.title} at (${marker.position.latitude}, ${marker.position.longitude}) - 수량: ${marker.quantity}');
       
       final markerReward = marker.reward ?? 0;
-      final imagePath = markerReward >= 1000
+      final imagePath = markerReward >= AppConsts.superRewardThreshold
           ? 'assets/images/ppam_super.png'
           : 'assets/images/ppam_work.png';
 
-      print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= 1000 ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
+      print('💰 마커 ${marker.title}: 가격 ${markerReward}원 -> ${markerReward >= AppConsts.superRewardThreshold ? "슈퍼포스트" : "일반포스트"} 이미지 사용');
       print('🔍 디버그: marker.postId=${marker.postId}, marker.reward=${marker.reward ?? 0}, imagePath=$imagePath');
 
       // 수퍼포스트는 조금 더 크게 표시
-      final isSuper = markerReward >= 1000;
+      final isSuper = markerReward >= AppConsts.superRewardThreshold;
       final markerSize = isSuper ? 40.0 : 35.0;
       final imageSize = isSuper ? 36.0 : 31.0;
       

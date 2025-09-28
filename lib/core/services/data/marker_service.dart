@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/marker/marker_model.dart';
 import '../../../utils/tile_utils.dart';
+import '../../constants/app_constants.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -53,6 +54,10 @@ class MarkerService {
       if (r != null) {
         markerData['reward'] = r;
       }
+      
+      // ✅ 파생 필드 저장 (쿼리 최적화용)
+      final isSuperMarker = (r ?? 0) >= AppConsts.superRewardThreshold;
+      markerData['isSuperMarker'] = isSuperMarker;
 
       // ✅ 즉시 쿼리 통과/표시를 위한 기본값 보정 (필요 시 이미 있으면 유지)
       markerData.putIfAbsent('createdAt', () => Timestamp.fromDate(DateTime.now()));

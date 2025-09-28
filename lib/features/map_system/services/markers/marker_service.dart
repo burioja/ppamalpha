@@ -8,6 +8,7 @@ import '../../../../core/models/post/post_model.dart';
 import '../fog_of_war/visit_tile_service.dart';
 import '../../../../core/models/map/fog_level.dart';
 import '../../../../utils/tile_utils.dart';
+import '../../../../core/constants/app_constants.dart';
 
 /// 마커 타입 열거형
 enum MarkerType {
@@ -192,13 +193,13 @@ class MapMarkerService {
     });
   }
   
-  /// 일반 포스트 마커 가져오기 (markers 컬렉션에서 직접 조회)
+  /// 모든 마커 가져오기 (일반 + 슈퍼포스트 통합 조회)
   static Future<List<MapMarkerData>> getMarkers({
     required LatLng location,
     double radiusInKm = 1.0,
     List<LatLng> additionalCenters = const [],
     Map<String, dynamic> filters = const {},
-    int pageSize = 500,
+    int pageSize = 300,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -307,15 +308,88 @@ class MapMarkerService {
     }
   }
 
-  /// 슈퍼포스트 마커 가져오기 (마커는 슈퍼포스트가 없으므로 빈 리스트 반환)
-  static Future<List<MapMarkerData>> getSuperPosts({
+  /// 슈퍼마커만 가져오기 (서버 필터 사용)
+  static Future<List<MapMarkerData>> getSuperMarkers({
     required LatLng location,
     double radiusInKm = 1.0,
     List<LatLng> additionalCenters = const [],
-    int pageSize = 200,
+    int pageSize = 150,
   }) async {
-    // 마커는 슈퍼포스트가 없으므로 빈 리스트 반환
-    return [];
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return [];
+
+      // 슈퍼마커만 조회 (서버 필터 사용)
+      final now = Timestamp.now();
+      final snapshot = await _firestore
+          .collection('markers')
+          .where('isActive', isEqualTo: true)
+          .where('isSuperMarker', isEqualTo: true) // ✅ 서버 필터
+          .where('expiresAt', isGreaterThan: now)
+          .orderBy('expiresAt')
+          .limit(pageSize)
+          .get();
+
+      final markers = <MapMarkerData>[];
+      
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          final locationData = data['location'] as GeoPoint?;
+          
+          if (locationData == null) continue;
+          
+          final position = LatLng(
+            locationData.latitude,
+            locationData.longitude,
+          );
+          
+          // 거리 필터링
+          bool withinRadius = false;
+          for (final center in [location, ...additionalCenters]) {
+            final distanceInM = _calculateDistance(
+              center.latitude, center.longitude,
+              position.latitude, position.longitude,
+            );
+            final radiusInM = radiusInKm * 1000;
+            if (distanceInM <= radiusInM) {
+              withinRadius = true;
+              break;
+            }
+          }
+          
+          if (!withinRadius) continue;
+          
+          // 수량 확인
+          final quantity = (data['quantity'] as num?)?.toInt() ?? 0;
+          if (quantity <= 0) continue;
+          
+          // 마커 데이터 생성
+          final marker = MapMarkerData(
+            id: doc.id,
+            title: data['title'] ?? '',
+            description: '',
+            userId: data['creatorId'] ?? '',
+            position: position,
+            createdAt: (data['createdAt'] as Timestamp).toDate(),
+            expiryDate: (data['expiresAt'] as Timestamp).toDate(),
+            data: Map<String, dynamic>.from(data['data'] ?? {})..['quantity'] = quantity,
+            isCollected: false,
+            type: MarkerType.superPost, // ✅ 슈퍼포스트 타입
+          );
+          
+          markers.add(marker);
+        } catch (e) {
+          print('슈퍼마커 변환 오류: $e');
+          continue;
+        }
+      }
+      
+      return markers;
+    } catch (e) {
+      print('슈퍼마커 조회 오류: $e');
+      return [];
+    }
   }
 
   /// 포그레벨 1 타일 가져오기 (캐시 포함)

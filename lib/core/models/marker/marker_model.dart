@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
+import '../constants/app_constants.dart';
 
 /// 마커 모델 - 포스트에 접근하는 연결고리
 class MarkerModel {
@@ -9,7 +10,11 @@ class MarkerModel {
   final LatLng position; // 마커 위치
   final int quantity; // 수량
   final int? reward; // 리워드 금액 (배포 시점 고정, 기존 마커 호환성을 위해 옵셔널)
+  final bool? isSuperMarker; // 슈퍼마커 여부 (파생 저장, nullable 허용)
   final String creatorId; // 마커 생성자
+  
+  // 계산된 슈퍼마커 여부 (reward 기준)
+  bool get computedIsSuper => (reward ?? 0) >= AppConsts.superRewardThreshold;
   final DateTime createdAt;
   final DateTime expiresAt;
   final bool isActive;
@@ -22,6 +27,7 @@ class MarkerModel {
     required this.position,
     required this.quantity,
     this.reward, // ✅ 옵셔널로 변경
+    this.isSuperMarker,
     required this.creatorId,
     required this.createdAt,
     required this.expiresAt,
@@ -49,6 +55,7 @@ class MarkerModel {
       position: LatLng(location.latitude, location.longitude),
       quantity: data['quantity'] ?? 0,
       reward: parseNullableInt(data['reward']), // ✅ 옵셔널 파싱
+      isSuperMarker: data['isSuperMarker'] as bool?,
       creatorId: data['creatorId'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
@@ -77,6 +84,11 @@ class MarkerModel {
       data['reward'] = r;
     }
     
+    final s = isSuperMarker;
+    if (s != null) {
+      data['isSuperMarker'] = s;
+    }
+    
     return data;
   }
 
@@ -88,6 +100,7 @@ class MarkerModel {
     LatLng? position,
     int? quantity,
     int? reward,
+    bool? isSuperMarker,
     String? creatorId,
     DateTime? createdAt,
     DateTime? expiresAt,
@@ -101,6 +114,7 @@ class MarkerModel {
       position: position ?? this.position,
       quantity: quantity ?? this.quantity,
       reward: reward ?? this.reward, // ✅ null 허용
+      isSuperMarker: isSuperMarker ?? this.isSuperMarker,
       creatorId: creatorId ?? this.creatorId,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,

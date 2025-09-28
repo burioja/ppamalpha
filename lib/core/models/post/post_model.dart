@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
+import '../constants/app_constants.dart';
 
 // 포스트 상태 열거형
 enum PostStatus {
@@ -95,7 +96,10 @@ class PostModel {
   
   // 타일 관련 (성능 최적화용)
   final String? tileId; // 포스트가 위치한 타일 ID
-  final bool isSuperPost; // 슈퍼포스트 여부 (검은 영역에서도 표시)
+  final bool? isSuperPost; // 슈퍼포스트 여부 (파생 저장, nullable 허용)
+  
+  // 계산된 슈퍼포스트 여부 (reward 기준)
+  bool get computedIsSuper => reward >= AppConsts.superRewardThreshold;
   
   // S2 타일 ID (서버 사이드 필터링용)
   final String? s2_10; // S2 level 10 cell id (쿼리용)
@@ -166,7 +170,7 @@ class PostModel {
     this.isDistributed = false,
     this.distributedAt,
     this.tileId,
-    this.isSuperPost = false,
+    this.isSuperPost,
     this.s2_10,
     this.s2_12,
     this.rewardType = 'normal',
@@ -253,7 +257,7 @@ class PostModel {
           ? (data['distributedAt'] as Timestamp).toDate()
           : null,
       tileId: data['tileId'],
-      isSuperPost: data['isSuperPost'] ?? false,
+      isSuperPost: data['isSuperPost'] as bool?,
       s2_10: data['s2_10'],
       s2_12: data['s2_12'],
       rewardType: data['rewardType'] ?? 'normal',
