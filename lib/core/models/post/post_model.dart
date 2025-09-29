@@ -91,6 +91,10 @@ class PostModel {
   final PostStatus status; // 포스트 상태 (DRAFT, PUBLISHED, DELETED)
   final DocumentSnapshot? rawSnapshot; // 페이지네이션용 Firebase DocumentSnapshot
 
+  // 사용자 수집 관련 필드 (wallet_screen.dart에서 사용)
+  final DateTime? collectedAt; // 사용자가 포스트를 수집한 시간
+  final DateTime? expiresAt; // 포스트 만료 시간 (collectedAt 기준)
+
   // 쿠폰 시스템 (추후 구현)
   final bool isCoupon; // 쿠폰 여부
   final Map<String, dynamic>? couponData; // 쿠폰 정보 (JSON 형태)
@@ -121,6 +125,8 @@ class PostModel {
     this.updatedAt,
     this.status = PostStatus.DRAFT,
     this.rawSnapshot,
+    this.collectedAt,
+    this.expiresAt,
     this.isCoupon = false,
     this.couponData,
   });
@@ -183,6 +189,12 @@ class PostModel {
           : null,
       status: PostStatusExtension.fromString(data['status'] ?? 'draft'),
       rawSnapshot: doc, // DocumentSnapshot 저장
+      collectedAt: data['collectedAt'] != null
+          ? (data['collectedAt'] as Timestamp).toDate()
+          : null,
+      expiresAt: data['expiresAt'] != null
+          ? (data['expiresAt'] as Timestamp).toDate()
+          : null,
       isCoupon: data['isCoupon'] ?? false,
       couponData: data['couponData'],
     );
@@ -214,6 +226,8 @@ class PostModel {
       'placeId': placeId,
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'status': status.value,
+      'collectedAt': collectedAt != null ? Timestamp.fromDate(collectedAt!) : null,
+      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
       'isCoupon': isCoupon,
       'couponData': couponData,
     };
@@ -332,6 +346,8 @@ class PostModel {
     DateTime? updatedAt,
     PostStatus? status,
     DocumentSnapshot? rawSnapshot,
+    DateTime? collectedAt,
+    DateTime? expiresAt,
     bool? isCoupon,
     Map<String, dynamic>? couponData,
   }) {
@@ -360,6 +376,8 @@ class PostModel {
       updatedAt: updatedAt ?? this.updatedAt,
       status: status ?? this.status,
       rawSnapshot: rawSnapshot ?? this.rawSnapshot,
+      collectedAt: collectedAt ?? this.collectedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
       isCoupon: isCoupon ?? this.isCoupon,
       couponData: couponData ?? this.couponData,
     );

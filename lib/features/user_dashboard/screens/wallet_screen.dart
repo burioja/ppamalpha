@@ -583,7 +583,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               const SizedBox(height: 8),
               Text('타겟: ${post.targetGender == 'all' ? '전체' : post.targetGender == 'male' ? '남성' : '여성'} ${post.targetAge[0]}~${post.targetAge[1]}세'),
               const SizedBox(height: 8),
-              Text('만료일: ${_formatDate(post.expiresAt)}'),
+              Text('만료일: ${_formatDate(post.expiresAt ?? post.defaultExpiresAt)}'),
               const SizedBox(height: 8),
               Text('회수일: ${_formatDate(post.collectedAt ?? post.createdAt)}'),
             ],

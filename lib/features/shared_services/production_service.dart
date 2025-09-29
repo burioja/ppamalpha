@@ -3,10 +3,10 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
-import 'performance_monitor.dart';
-import 'load_testing_service.dart';
-import 'benchmark_service.dart';
-import 'optimization_service.dart';
+// import 'performance_monitor.dart';
+// import 'load_testing_service.dart';
+// import 'benchmark_service.dart';
+// import 'optimization_service.dart';
 
 /// 프로덕션 서비스
 class ProductionService {
@@ -16,10 +16,10 @@ class ProductionService {
   
   final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
   final FirebasePerformance _performance = FirebasePerformance.instance;
-  final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
-  final LoadTestingService _loadTestingService = LoadTestingService();
-  final BenchmarkService _benchmarkService = BenchmarkService();
-  final OptimizationService _optimizationService = OptimizationService();
+  // final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
+  // final LoadTestingService _loadTestingService = LoadTestingService();
+  // final BenchmarkService _benchmarkService = BenchmarkService();
+  // final OptimizationService _optimizationService = OptimizationService();
   
   // 프로덕션 설정
   bool _isProductionMode = false;
@@ -51,7 +51,7 @@ class ProductionService {
     
     // 3. 자동 최적화 시작
     if (_autoOptimizationEnabled) {
-      _optimizationService.startAutoOptimization();
+      // _optimizationService.startAutoOptimization();
     }
     
     // 4. 헬스 체크 시작
@@ -411,8 +411,8 @@ class ProductionService {
     // 1. 인시던트 로그 기록
     await _logIncident('warning_health_issue', healthStatus.toString());
     
-    // 2. 자동 최적화 실행
-    await _optimizationService.runManualOptimization();
+      // 2. 자동 최적화 실행
+      // await _optimizationService.runManualOptimization();
   }
   
   /// 자동 복구 시도
@@ -427,7 +427,7 @@ class ProductionService {
       await _clearCaches();
       
       // 3. 최적화 실행
-      await _optimizationService.runManualOptimization();
+      // await _optimizationService.runManualOptimization();
       
       debugPrint('✅ 자동 복구 완료');
       
@@ -515,7 +515,7 @@ class ProductionService {
     _healthCheckTimer?.cancel();
     
     // 서비스 정리
-    _optimizationService.dispose();
+    // _optimizationService.dispose();
     
     // 종료 이벤트 로깅
     await _logProductionEvent('production_mode_shutdown', {

@@ -119,7 +119,7 @@ class _FogPunchPainter extends CustomPainter {
     final y = (0.5 - (math.log((1 + math.sin(latRad)) / (1 - math.sin(latRad))) / (4 * math.pi))) * worldScale;
 
     final topLeft = camera.pixelOrigin; // Point<double>
-    return Offset(x - topLeft.x, y - topLeft.y);
+    return Offset(x - topLeft.dx, y - topLeft.dy);
   }
 
   /// pan 영향 X. 위도/줌 기반 meters-per-pixel로 반경 픽셀 구함.
