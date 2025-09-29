@@ -59,6 +59,12 @@ class MarkerModel {
   /// Firestore에서 마커 생성
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    // 🔍 디버깅: 실제 Firestore 데이터 확인
+    print('[MARKER_MODEL_DEBUG] fromFirestore 호출: ${doc.id}');
+    print('  - postId 필드: "${data['postId']}"');
+    print('  - title 필드: "${data['title']}"');
+
     final location = data['location'] as GeoPoint;
 
     // ✅ 안전 파싱 함수들
@@ -89,9 +95,15 @@ class MarkerModel {
     final collectedQuantity = parseRequiredInt(data['collectedQuantity'], 0);
     final collectionRate = parseDouble(data['collectionRate'], 0.0);
 
-    return MarkerModel(
+    final postIdValue = (data['postId'] as String?) ?? '';
+
+    // 🔍 디버깅: postId 값 처리 과정 확인
+    print('  - 처리된 postId 값: "$postIdValue"');
+    print('  - markerId와 동일한가: ${postIdValue == doc.id}');
+
+    final result = MarkerModel(
       markerId: doc.id,
-      postId: (data['postId'] as String?) ?? '',
+      postId: postIdValue,
       title: data['title'] ?? '',
       position: LatLng(location.latitude, location.longitude),
       quantity: remainingQuantity, // quantity는 remainingQuantity와 동일
@@ -112,6 +124,11 @@ class MarkerModel {
       isActive: data['isActive'] ?? true,
       collectedBy: List<String>.from(data['collectedBy'] ?? []),
     );
+
+    // 🔍 디버깅: 생성된 MarkerModel 최종 확인
+    print('  - 최종 MarkerModel.markerId: "${result.markerId}"');
+    print('  - 최종 MarkerModel.postId: "${result.postId}"');
+    return result;
   }
 
   /// Firestore에 저장할 데이터
