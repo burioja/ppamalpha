@@ -16,10 +16,10 @@ class PointsService {
         return UserPointsModel.fromFirestore(doc);
       }
 
-      // 포인트 정보가 없으면 기본값으로 생성 (임시로 100만 포인트 지급)
+      // 포인트 정보가 없으면 기본값으로 생성 (신규 사용자 10만 포인트 지급)
       final newUserPoints = UserPointsModel(
         userId: userId,
-        totalPoints: 1000000, // 임시로 100만 포인트 지급
+        totalPoints: 100000, // 신규 사용자 10만 포인트 지급
         createdAt: DateTime.now(),
         lastUpdated: DateTime.now(),
       );
@@ -29,9 +29,9 @@ class PointsService {
       // 포인트 지급 히스토리 기록
       await _addPointsHistory(
         userId: userId,
-        amount: 1000000,
+        amount: 100000,
         type: 'system_grant',
-        reason: '가입 축하 포인트 (임시 지급)',
+        reason: '가입 축하 포인트 (10만 포인트)',
         relatedId: null,
       );
 
@@ -82,6 +82,11 @@ class PointsService {
   /// 포인트 추가
   Future<UserPointsModel?> addPoints(String userId, int points, String reason) async {
     try {
+      print('💰 addPoints 호출:');
+      print('  - 사용자 ID: $userId');
+      print('  - 추가할 포인트: $points');
+      print('  - 사유: $reason');
+
       final batch = _firestore.batch();
 
       // 1. 포인트 정보 업데이트
@@ -89,6 +94,7 @@ class PointsService {
           .collection('user_points')
           .doc(userId);
 
+      print('📝 user_points 문서 업데이트 중...');
       batch.update(userPointsRef, {
         'totalPoints': FieldValue.increment(points),
         'lastUpdated': Timestamp.fromDate(DateTime.now()),
@@ -101,6 +107,7 @@ class PointsService {
           .collection('history')
           .doc();
 
+      print('📝 포인트 히스토리 기록 중...');
       batch.set(historyRef, {
         'points': points,
         'type': 'earned',
@@ -109,12 +116,22 @@ class PointsService {
       });
 
       // 배치 실행
+      print('🚀 Firestore 배치 커밋 중...');
       await batch.commit();
+      print('✅ Firestore 배치 커밋 완료');
 
       // 업데이트된 포인트 정보 반환
-      return await getUserPoints(userId);
+      print('🔄 업데이트된 포인트 정보 조회 중...');
+      final result = await getUserPoints(userId);
+      if (result != null) {
+        print('✅ addPoints 성공 - 현재 총 포인트: ${result.totalPoints}');
+      } else {
+        print('⚠️ getUserPoints 결과가 null');
+      }
+      return result;
     } catch (e) {
-      print('포인트 추가 실패: $e');
+      print('❌ 포인트 추가 실패: $e');
+      print('스택 트레이스: $e');
       return null;
     }
   }
@@ -320,19 +337,30 @@ class PointsService {
   /// 포스트 수집 시 포인트 지급 (수집자에게)
   Future<bool> rewardPostCollection(String collectorId, int reward, String postId, String creatorId) async {
     try {
-      print('🎁 포스트 수집 보상 지급: 수집자=$collectorId, 보상=$reward');
+      print('🎁 포스트 수집 보상 지급 시작:');
+      print('  - 수집자 ID: $collectorId');
+      print('  - 보상 포인트: $reward');
+      print('  - 포스트 ID: $postId');
+      print('  - 생성자 ID: $creatorId');
 
-      await addPoints(
+      final result = await addPoints(
         collectorId,
         reward,
         '포스트 수집 보상 (PostID: $postId, 생성자: $creatorId)',
       );
 
-      print('✅ 포스트 수집 보상 지급 완료');
-      return true;
+      if (result != null) {
+        print('✅ 포스트 수집 보상 지급 완료');
+        print('  - 업데이트된 총 포인트: ${result.totalPoints}');
+        return true;
+      } else {
+        print('❌ addPoints 결과가 null');
+        return false;
+      }
 
     } catch (e) {
       print('❌ 포스트 수집 보상 지급 실패: $e');
+      print('스택 트레이스: $e');
       return false;
     }
   }
@@ -358,21 +386,132 @@ class PointsService {
     }
   }
 
-  /// 사용자의 포인트가 100만 이상인지 확인하고, 부족하면 보충
+  /// 사용자의 포인트가 10만 이상인지 확인하고, 부족하면 보충
   Future<void> ensureMinimumPoints(String userId) async {
     try {
       final userPoints = await getUserPoints(userId);
-      if (userPoints != null && userPoints.totalPoints < 1000000) {
-        final pointsToAdd = 1000000 - userPoints.totalPoints;
+      if (userPoints != null && userPoints.totalPoints < 100000) {
+        final pointsToAdd = 100000 - userPoints.totalPoints;
         await addPoints(
           userId,
           pointsToAdd,
-          '최소 포인트 보장 (100만 포인트)',
+          '최소 포인트 보장 (10만 포인트)',
         );
         print('✅ 사용자 $userId에게 $pointsToAdd 포인트 보충 완료');
       }
     } catch (e) {
       print('❌ 최소 포인트 보장 실패: $e');
+    }
+  }
+
+  /// 특정 사용자에게 포인트 지급 (관리자용)
+  Future<void> grantPointsToUser(String userEmail, int points) async {
+    try {
+      print('🎯 특정 사용자에게 포인트 지급: $userEmail -> $points 포인트');
+
+      // 이메일로 사용자 찾기 (Firebase Auth에서)
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: userEmail)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        print('❌ 사용자를 찾을 수 없습니다: $userEmail');
+        return;
+      }
+
+      final userDoc = userQuery.docs.first;
+      final userId = userDoc.id;
+
+      // 사용자 포인트 정보 확인
+      final userPoints = await getUserPoints(userId);
+      if (userPoints == null) {
+        print('📝 사용자 포인트 정보가 없어 새로 생성합니다: $userEmail');
+        // 새로운 포인트 정보 생성
+        final newUserPoints = UserPointsModel(
+          userId: userId,
+          totalPoints: points,
+          createdAt: DateTime.now(),
+          lastUpdated: DateTime.now(),
+        );
+        await _createUserPoints(newUserPoints);
+
+        // 포인트 지급 히스토리 기록
+        await _addPointsHistory(
+          userId: userId,
+          amount: points,
+          type: 'system_grant',
+          reason: '관리자 포인트 지급 ($userEmail)',
+          relatedId: null,
+        );
+      } else {
+        print('📝 기존 포인트: ${userPoints.totalPoints}, 추가 지급: $points');
+        await addPoints(userId, points, '관리자 포인트 지급 ($userEmail)');
+      }
+
+      print('✅ $userEmail에게 $points 포인트 지급 완료');
+
+    } catch (e) {
+      print('❌ 포인트 지급 실패: $e');
+      rethrow;
+    }
+  }
+
+  /// 모든 기존 사용자에게 10만 포인트로 조정 (관리자용)
+  Future<void> adjustToHundredThousandPoints() async {
+    try {
+      print('🎯 모든 사용자 포인트를 10만으로 조정 시작');
+
+      // 모든 사용자 포인트 문서 조회
+      final querySnapshot = await _firestore
+          .collection('user_points')
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('📝 사용자가 없습니다.');
+        return;
+      }
+
+      final batch = _firestore.batch();
+      int updateCount = 0;
+
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+        final currentPoints = data['totalPoints'] ?? 0;
+
+        // 100만 포인트 이상 보유자를 10만 포인트로 조정
+        if (currentPoints >= 1000000) {
+          // 사용자 포인트 업데이트
+          batch.update(doc.reference, {
+            'totalPoints': 100000,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+
+          // 히스토리 추가
+          final historyRef = doc.reference.collection('history').doc();
+          batch.set(historyRef, {
+            'points': 100000 - currentPoints, // 음수값
+            'type': 'system_adjustment',
+            'reason': '포인트 정책 변경 (10만 포인트 조정)',
+            'timestamp': FieldValue.serverTimestamp(),
+            'relatedId': null,
+          });
+
+          updateCount++;
+        }
+      }
+
+      if (updateCount > 0) {
+        await batch.commit();
+        print('✅ $updateCount명의 사용자 포인트를 10만으로 조정 완료');
+      } else {
+        print('📝 조정할 사용자가 없습니다 (모든 사용자가 이미 100만 포인트 미만)');
+      }
+
+    } catch (e) {
+      print('❌ 포인트 조정 실패: $e');
+      rethrow;
     }
   }
 }

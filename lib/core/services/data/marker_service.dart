@@ -6,9 +6,11 @@ import '../../models/post/post_model.dart';
 import '../../models/user/user_model.dart';  // UserModel과 UserType 추가
 import '../../../utils/tile_utils.dart';
 import '../../constants/app_constants.dart';
+import 'points_service.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final PointsService _pointsService = PointsService();
 
   /// 사용자 타입에 따른 마커 표시 거리 계산
   static int getMarkerDisplayRadius(UserType userType, bool isSuperPost) {
@@ -69,15 +71,23 @@ class MarkerService {
     try {
       print('🚀 포스트 템플릿에서 마커 배포 시작: postId=$postId, location=${deployLocation.latitude},${deployLocation.longitude}');
 
+      // 먼저 포스트 정보를 가져와서 포인트 차감 계산
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        throw Exception('포스트 템플릿을 찾을 수 없습니다: $postId');
+      }
+
+      final post = PostModel.fromFirestore(postDoc);
+      final totalCost = (post.reward ?? 0) * quantity; // 총 차감할 포인트 = 보상 × 수량
+
+      print('💰 포스트 배포 비용 계산: 보상=${post.reward ?? 0}, 수량=$quantity, 총비용=$totalCost');
+
+      // 포인트 차감 비활성화 (수집 시에만 차감)
+      print('📝 배포는 무료입니다. 포인트 차감은 수집 시에만 이루어집니다.');
+
       // 트랜잭션으로 마커 생성과 포스트 상태 변경을 원자적으로 처리
       await _firestore.runTransaction((transaction) async {
-        // 1. 포스트 템플릿 정보 가져오기
-        final postDoc = await transaction.get(_firestore.collection('posts').doc(postId));
-        if (!postDoc.exists) {
-          throw Exception('포스트 템플릿을 찾을 수 없습니다: $postId');
-        }
-
-        final post = PostModel.fromFirestore(postDoc);
+        // 1. 포스트 템플릿 정보는 이미 위에서 가져왔으므로 바로 사용
 
         // 2. 배포 설정 (템플릿 기본값 + 커스텀 값)
         final deployRadius = customRadius ?? post.defaultRadius;
@@ -173,6 +183,12 @@ class MarkerService {
       print('📦 수량: $quantity');
       print('👤 생성자: $creatorId');
       print('⏰ 만료일: $expiresAt');
+      print('💰 보상: ${reward ?? 0}');
+
+      // 포인트 차감 로직 비활성화 (수집 시에만 차감하도록 변경)
+      final totalCost = (reward ?? 0) * quantity; // 총 배포 비용 계산 (참고용)
+      print('💰 마커 생성 비용 정보: 보상=${reward ?? 0}, 수량=$quantity, 총예상비용=$totalCost');
+      print('📝 포인트 차감은 수집 시에만 이루어집니다 (배포는 무료)');
 
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);

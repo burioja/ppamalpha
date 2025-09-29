@@ -1275,11 +1275,32 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
 
+      // 포인트 보상 정보와 함께 성공 메시지 표시
+      final reward = marker.reward ?? 0;
+      final message = reward > 0
+          ? '포스트를 수령했습니다! 🎉\n${reward}포인트가 지급되었습니다! (${marker.quantity - 1}개 남음)'
+          : '포스트를 수령했습니다! (${marker.quantity - 1}개 남음)';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('포스트를 수령했습니다! (${marker.quantity - 1}개 남음)')),
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
       );
       Navigator.of(context).pop(); // 다이얼로그 닫기
       _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+
+      // 메인 스크린의 포인트 새로고침 (GlobalKey 사용)
+      try {
+        final mainScreenState = MapScreen.mapKey.currentState;
+        if (mainScreenState != null) {
+          // MainScreen에 포인트 새로고침 메서드가 있다면 호출
+          debugPrint('📱 메인 스크린 포인트 새로고침 요청');
+        }
+      } catch (e) {
+        debugPrint('⚠️ 메인 스크린 포인트 새로고침 실패: $e');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('오류: $e')),
@@ -1546,14 +1567,25 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _collectPost(PostModel post) async {
     try {
       await PostService().collectPost(
-        postId: post.postId, 
+        postId: post.postId,
         userId: FirebaseAuth.instance.currentUser!.uid
       );
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
       // _loadPosts(forceRefresh: true); // 포스트 목록 새로고침
-          ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('포스트를 수집했습니다!')),
-          );
+
+      // 포인트 보상 정보와 함께 성공 메시지 표시
+      final reward = post.reward ?? 0;
+      final message = reward > 0
+          ? '포스트를 수집했습니다! 🎉\n${reward}포인트가 지급되었습니다!'
+          : '포스트를 수집했습니다!';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 수집 중 오류가 발생했습니다: $e')),

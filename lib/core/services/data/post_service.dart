@@ -966,6 +966,48 @@ class PostService {
         'source': 'marker', // 수령 소스 표시
       });
 
+      // 포인트 처리 (수집자에게 지급 + 생성자에서 차감)
+      try {
+        final reward = (markerData['reward'] as num?)?.toInt() ?? 0;
+        debugPrint('🔍 포인트 처리 시도:');
+        debugPrint('  - 마커 데이터에서 reward 값: ${markerData['reward']}');
+        debugPrint('  - 파싱된 reward 값: $reward');
+        debugPrint('  - 수집자 ID: $userId');
+        debugPrint('  - 포스트 ID: $originalPostId');
+        debugPrint('  - 생성자 ID: $creatorId');
+
+        if (reward > 0) {
+          // 1. 수집자에게 포인트 지급
+          debugPrint('💰 수집자 포인트 지급 중...');
+          await _pointsService.rewardPostCollection(
+            userId,
+            reward,
+            originalPostId,
+            creatorId,
+          );
+          debugPrint('✅ 수집자 포인트 지급 완료: $reward 포인트');
+
+          // 2. 생성자에서 포인트 차감
+          debugPrint('💳 생성자 포인트 차감 중...');
+          final deductionResult = await _pointsService.deductPoints(
+            creatorId,
+            reward,
+            '포스트 수집으로 인한 차감 (PostID: $originalPostId, 수집자: $userId)',
+          );
+
+          if (deductionResult != null) {
+            debugPrint('✅ 생성자 포인트 차감 완료: $reward 포인트');
+          } else {
+            debugPrint('⚠️ 생성자 포인트 차감 실패 (수집은 완료됨)');
+          }
+        } else {
+          debugPrint('⚠️ 포인트 보상이 0이거나 없음: $reward');
+        }
+      } catch (pointsError) {
+        debugPrint('❌ 포인트 처리 실패 (수집은 완료됨): $pointsError');
+        debugPrint('스택 트레이스: $pointsError');
+      }
+
       debugPrint('✅ markers 컬렉션 포스트 수령 완료: markerId=$markerId, 수령자: $userId, 남은 수량: ${remainingQuantity - 1}');
     } catch (e) {
       debugPrint('❌ markers 컬렉션 수령 실패: $e');
