@@ -355,7 +355,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                     label: const Text('이미지 추가'),
                   ),
                   const SizedBox(width: 8),
-                  const Text('정사각형 권장, 최대 5장'),
+                  const Text('최대 5장'),
                 ],
               ),
               if (_selectedImages.isNotEmpty) ...[

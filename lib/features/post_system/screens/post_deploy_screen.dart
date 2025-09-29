@@ -268,32 +268,24 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_getScreenTitle()),
-        backgroundColor: const Color(0xFF4D4DFF),
+        backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
       ),
       body: _selectedLocation == null
           ? const Center(child: Text('위치 정보가 없습니다.'))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 위치 정보 표시
-                  _buildLocationSection(),
-                  const SizedBox(height: 24),
-                  
-                  // 포스트 선택 섹션
-                  _buildPostSelectionSection(),
-                  const SizedBox(height: 24),
-                  
-                  // 배포 설정 섹션
-                  _buildDeploySettingsSection(),
-                  const SizedBox(height: 32),
-                  
-                  // 배포 버튼
-                  _buildDeployButton(),
-                ],
-              ),
+          : Column(
+              children: [
+                // 상단 위치 정보 영역
+                _buildLocationInfo(),
+
+                // 포스트 선택 리스트 (확장 가능)
+                Expanded(
+                  child: _buildPostList(),
+                ),
+
+                // 하단 고정 뿌리기 영역
+                _buildBottomDeploySection(),
+              ],
             ),
     );
   }
@@ -671,34 +663,452 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     );
   }
 
-  Widget _buildDeployButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: _selectedPost != null && !_isDeploying ? _deployPostToLocation : null,
-        icon: _isDeploying
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Icon(Icons.rocket_launch, color: Colors.white),
-        label: Text(
-          _isDeploying ? '배포 중...' : '배포하기',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+  Widget _buildLocationInfo() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        border: Border(
+          bottom: BorderSide(color: Colors.blue[200]!),
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF4D4DFF),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.location_on,
+            color: Colors.blue[600],
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '위도: ${_selectedLocation!.latitude.toStringAsFixed(6)}, 경도: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.blue[800],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostList() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        border: Border(
+          top: BorderSide(color: Colors.grey[300]!),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              '뿌릴 포스트 선택',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _userPosts.isEmpty
+                    ? _buildEmptyState()
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
+                        ),
+                        itemCount: _userPosts.length,
+                        itemBuilder: (context, index) {
+                          final post = _userPosts[index];
+                          return _buildPostGridCard(post);
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostGridCard(PostModel post) {
+    final isSelected = _selectedPost?.postId == post.postId;
+
+    return Card(
+      elevation: isSelected ? 4 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isSelected ? Colors.blue[400]! : Colors.grey[300]!,
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _onPostSelected(post),
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 포스트 이미지
+            Expanded(
+              flex: 3,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  color: Colors.grey[200],
+                ),
+                child: Stack(
+                  children: [
+                    // 포스트 이미지 (PostTileCard와 동일한 로직)
+                    _buildImageWidget(post),
+
+                    // 선택 표시
+                    if (isSelected)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[400],
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 포스트 정보
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 제목
+                    Text(
+                      post.title,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+
+                    // 설명
+                    Text(
+                      post.description,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+
+                    // 리워드
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${post.reward}원',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(PostModel post) {
+    if (post.mediaUrl.isNotEmpty) {
+      // 이미지 타입 체크를 더 관대하게 변경
+      bool hasImageMedia = post.mediaType.isNotEmpty &&
+          (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
+           post.mediaUrl.first.toLowerCase().contains('.jpg') ||
+           post.mediaUrl.first.toLowerCase().contains('.jpeg') ||
+           post.mediaUrl.first.toLowerCase().contains('.png') ||
+           post.mediaUrl.first.toLowerCase().contains('.gif') ||
+           post.mediaUrl.first.toLowerCase().contains('firebasestorage'));
+
+      if (hasImageMedia) {
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+          child: Image.network(
+            post.mediaUrl.first,
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                Center(child: Icon(Icons.image, color: Colors.grey[400])),
+          ),
+        );
+      }
+    }
+
+    // 이미지가 없거나 이미지 타입이 아닌 경우 기본 아이콘 표시
+    return Center(
+      child: Icon(
+        Icons.image,
+        size: 32,
+        color: Colors.grey[400],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.post_add,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '저장된 포스트가 없습니다',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '새로운 포스트를 만들어보세요',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomDeploySection() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 선택된 포스트 요약
+              if (_selectedPost != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: Colors.blue[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '선택된 포스트: ${_selectedPost!.title}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue[800],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${_selectedPost!.reward}원',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // 배포 설정 (간소화)
+              Row(
+                children: [
+                  // 수량 설정
+                  Expanded(
+                    child: TextFormField(
+                      controller: _quantityController,
+                      decoration: const InputDecoration(
+                        labelText: '수량',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => _calculateTotal(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // 기간 설정
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedDuration,
+                      decoration: const InputDecoration(
+                        labelText: '기간',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: _durationOptions.map((duration) {
+                        return DropdownMenuItem(
+                          value: duration,
+                          child: Text('${duration}일'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedDuration = value!;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // 총 비용 및 뿌리기 버튼
+              Row(
+                children: [
+                  // 총 비용 표시
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '총 비용',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text(
+                            '${_totalPrice.toStringAsFixed(0)}원',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // 뿌리기 버튼
+                  SizedBox(
+                    width: 120,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _selectedPost != null && !_isDeploying
+                          ? _deployPostToLocation
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: _isDeploying
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              '뿌리기',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
