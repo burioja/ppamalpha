@@ -169,7 +169,6 @@ class FogTileService extends TileProvider {
     return Polygon(
       points: _worldCoverRect,
       holePointsList: [circleHole], // 원형 홀
-      isFilled: true,
       color: Colors.black.withOpacity(1.0), // 완전 검정
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,
@@ -183,7 +182,6 @@ class FogTileService extends TileProvider {
     return Polygon(
       points: _worldCoverRect,
       holePointsList: circleHoles, // 여러 원형 홀
-      isFilled: true,
       color: Colors.black.withOpacity(1.0),
       borderColor: Colors.transparent,
       borderStrokeWidth: 0,

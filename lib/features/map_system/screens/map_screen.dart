@@ -8,7 +8,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../../core/models/user/user_model.dart';  // UserModel과 UserType 추가
 import '../../../core/services/data/post_service.dart';
+import '../../../core/services/data/marker_service.dart';  // MarkerService 추가
 import '../../../core/constants/app_constants.dart';
 import '../services/markers/marker_service.dart';
 import '../../../core/models/marker/marker_model.dart';
@@ -94,6 +96,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _showCouponsOnly = false;
   bool _showMyPostsOnly = false;
   bool _isPremiumUser = false; // 유료 사용자 여부
+  UserType _userType = UserType.normal; // 사용자 타입 추가
   
   // 실시간 업데이트 관련
   Timer? _mapMoveTimer;
@@ -153,6 +156,15 @@ class _MapScreenState extends State<MapScreen> {
         if (data != null) {
           final workplaces = data['workplaces'] as List<dynamic>?;
           print('변경된 근무지 개수: ${workplaces?.length ?? 0}');
+          
+          // 사용자 타입 로드
+          final userModel = UserModel.fromFirestore(snapshot);
+          if (mounted) {
+            setState(() {
+              _userType = userModel.userType;
+              _isPremiumUser = userModel.userType == UserType.superSite;
+            });
+          }
         }
         _loadUserLocations();
       } else {
@@ -776,16 +788,21 @@ class _MapScreenState extends State<MapScreen> {
       final primaryCenter = centers.first; // 첫 번째 중심점 사용
       final additionalCenters = centers.skip(1).toList(); // 나머지는 추가 중심점
       
+      // 사용자 타입에 따른 거리 계산
+      final normalRadiusKm = MarkerService.getMarkerDisplayRadius(_userType, false) / 1000.0;
+      final superRadiusKm = MarkerService.getMarkerDisplayRadius(_userType, true) / 1000.0;
+      
       print('🔍 서버 호출 시작:');
       print('  - 주 중심점: ${primaryCenter.latitude}, ${primaryCenter.longitude}');
       print('  - 추가 중심점: ${additionalCenters.length}개');
-      print('  - 반경: ${_maxDistance / 1000.0}km');
+      print('  - 일반 포스트 반경: ${normalRadiusKm}km');
+      print('  - 슈퍼포스트 반경: ${superRadiusKm}km');
       
       final futures = await Future.wait([
         // 일반 포스트 조회
         MapMarkerService.getMarkers(
           location: primaryCenter,
-          radiusInKm: _maxDistance / 1000.0, // km로 변환
+          radiusInKm: normalRadiusKm, // 사용자 타입에 따른 거리
           additionalCenters: additionalCenters,
           filters: filters,
           pageSize: 300, // ✅ 성능 최적화 (500 → 300)
@@ -793,7 +810,7 @@ class _MapScreenState extends State<MapScreen> {
         // 슈퍼마커 조회
         MapMarkerService.getSuperMarkers(
           location: primaryCenter,
-          radiusInKm: _maxDistance / 1000.0,
+          radiusInKm: superRadiusKm, // 슈퍼포스트는 항상 5km
           additionalCenters: additionalCenters,
           pageSize: 150, // ✅ 성능 최적화 (200 → 150)
         ),
@@ -901,6 +918,46 @@ class _MapScreenState extends State<MapScreen> {
     } catch (e) {
       print('마커 필터링 실패: $e');
     }
+  }
+
+  /// 현재위치, 집, 일터 주변에서 롱프레스 가능한지 확인
+  bool _canLongPressAtLocation(LatLng point) {
+    final maxRadius = MarkerService.getMarkerDisplayRadius(_userType, false);
+    
+    // 현재 위치 주변 확인
+    if (_currentPosition != null) {
+      final distanceToCurrent = MarkerService.calculateDistance(
+        LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+        point,
+      );
+      if (distanceToCurrent <= maxRadius) {
+        return true;
+      }
+    }
+    
+    // 집 주변 확인
+    if (_homeLocation != null) {
+      final distanceToHome = MarkerService.calculateDistance(
+        LatLng(_homeLocation!.latitude, _homeLocation!.longitude),
+        point,
+      );
+      if (distanceToHome <= maxRadius) {
+        return true;
+      }
+    }
+    
+    // 일터 주변 확인
+    for (final workLocation in _workLocations) {
+      final distanceToWork = MarkerService.calculateDistance(
+        LatLng(workLocation.latitude, workLocation.longitude),
+        point,
+      );
+      if (distanceToWork <= maxRadius) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   // 🚀 포그레벨 확인 후 롱프레스 메뉴 표시
@@ -1107,6 +1164,27 @@ class _MapScreenState extends State<MapScreen> {
       if (user == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('로그인이 필요합니다')),
+        );
+        return;
+      }
+
+      // 현재 위치 확인
+      if (_currentPosition == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
+        );
+        return;
+      }
+
+      // 마커 수집 가능 거리 확인 (50m 이내)
+      final canCollect = MarkerService.canCollectMarker(
+        _currentPosition!,
+        LatLng(marker.position.latitude, marker.position.longitude),
+      );
+
+      if (!canCollect) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('마커에서 50m 이내로 접근해주세요')),
         );
         return;
       }
@@ -1697,6 +1775,26 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _navigateToPostPlace() async {
     if (_longPressedLatLng == null) return;
 
+    // 현재 위치 확인
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
+      );
+      return;
+    }
+
+    // 마커 배포 가능 거리 확인 (1단계 영역에서만 가능)
+    final canDeploy = MarkerService.canDeployMarker(
+      _userType,
+      _currentPosition!,
+      _longPressedLatLng!,
+    );
+
+    if (!canDeploy) {
+      // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
+      return;
+    }
+
     // PostDeploymentController를 사용한 위치 기반 포스트 배포
     final success = await PostDeploymentController.deployPostFromLocation(context, _longPressedLatLng!);
 
@@ -1733,6 +1831,26 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _navigateToPostAddress() async {
     if (_longPressedLatLng == null) return;
+
+    // 현재 위치 확인
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
+      );
+      return;
+    }
+
+    // 마커 배포 가능 거리 확인 (1단계 영역에서만 가능)
+    final canDeploy = MarkerService.canDeployMarker(
+      _userType,
+      _currentPosition!,
+      _longPressedLatLng!,
+    );
+
+    if (!canDeploy) {
+      // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
+      return;
+    }
 
     // PostDeploymentController를 사용한 주소 기반 포스트 배포
     final success = await PostDeploymentController.deployPostFromAddress(context, _longPressedLatLng!);
@@ -2055,15 +2173,27 @@ class _MapScreenState extends State<MapScreen> {
                   });
                 },
                 onLongPress: (tapPosition, point) async {
-                  // 롱프레스 위치만 저장하고 마커는 표시하지 않음
+                  // 현재 위치 확인
+                  if (_currentPosition == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
+                    );
+                    return;
+                  }
+
+                  // 현재위치, 집, 일터 주변에서 롱프레스 가능한지 확인
+                  final canLongPress = _canLongPressAtLocation(point);
+
+                  if (!canLongPress) {
+                    // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
+                    return;
+                  }
+
+                  // 롱프레스 위치 저장
                   _longPressedLatLng = point;
                   
-                  // 🚀 임시로 포그레벨 확인 비활성화 - 기본 배포 메뉴 표시
-                  print('🔍 롱프레스 위치: ${point.latitude}, ${point.longitude}');
+                  // 바로 배포 메뉴 표시 (포그레벨 확인 생략)
                   _showLongPressMenu();
-                  
-                  // TODO: 포그레벨 확인 로직 수정 후 활성화
-                  // await _checkFogLevelAndShowMenu(point);
                 },
               ),
         children: [
@@ -2081,7 +2211,8 @@ class _MapScreenState extends State<MapScreen> {
                     if (_homeLocation != null) _homeLocation!,
                     ..._workLocations,
                   ],
-                  radiusMeters: 1000.0,
+                  userType: _userType,  // 사용자 타입 전달
+                  isSuperPost: false,   // 일반 포스트 기준
                   fogColor: Colors.black.withOpacity(1.0),
                 ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)

@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/models/user/user_model.dart';
+import '../../../core/constants/app_constants.dart';
 
 /// 화면 전체를 포그색으로 덮고,
 /// [holeCenters] (GPS/집/일터) 주변을 반경 [radiusMeters]만큼 '투명'으로 펀칭.
@@ -13,14 +15,16 @@ import 'package:latlong2/latlong.dart';
 class FogOverlayWidget extends StatefulWidget {
   final MapController mapController;     // non-null
   final List<LatLng> holeCenters;        // GPS, 집, 일터만!
-  final double radiusMeters;             // 보통 1000m
+  final UserType userType;               // 사용자 타입
+  final bool isSuperPost;                // 슈퍼포스트 여부
   final Color fogColor;                  // 레벨3(검정)
 
   const FogOverlayWidget({
     super.key,
     required this.mapController,
     required this.holeCenters,
-    this.radiusMeters = 1000.0,
+    required this.userType,
+    this.isSuperPost = false,
     this.fogColor = const Color(0xFF000000),
   });
 
@@ -48,17 +52,34 @@ class _FogOverlayWidgetState extends State<FogOverlayWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // 사용자 타입에 따른 거리 계산
+    final radiusMeters = _getRadiusForUserType();
+    
     return IgnorePointer(
       child: CustomPaint(
         size: Size.infinite,
         painter: _FogPunchPainter(
           mapController: widget.mapController,
           holeCenters: widget.holeCenters,   // ✅ GPS/집/일터만
-          radiusMeters: widget.radiusMeters,
+          radiusMeters: radiusMeters,
           fogColor: widget.fogColor,
         ),
       ),
     );
+  }
+
+  /// 사용자 타입에 따른 반경 계산
+  double _getRadiusForUserType() {
+    if (widget.isSuperPost) {
+      return AppConsts.superPostRadius5km.toDouble();  // 슈퍼포스트는 5km
+    }
+    
+    switch (widget.userType) {
+      case UserType.normal:
+        return AppConsts.normalUserRadius1km.toDouble();  // 일반사용자 1km
+      case UserType.superSite:
+        return AppConsts.superSiteUserRadius3km.toDouble();  // 수퍼사이트 3km
+    }
   }
 }
 

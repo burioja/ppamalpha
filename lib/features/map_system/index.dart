@@ -23,4 +23,4 @@ export 'providers/map_filter_provider.dart';
 // Utils
 export 'utils/fog_tile_generator.dart';
 export 'utils/tile_image_generator.dart';
-export 'utils/tile_utils.dart';
+export '../../utils/tile_utils.dart';

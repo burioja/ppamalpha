@@ -3,11 +3,55 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/marker/marker_model.dart';
 import '../../models/post/post_model.dart';
+import '../../models/user/user_model.dart';  // UserModel과 UserType 추가
 import '../../../utils/tile_utils.dart';
 import '../../constants/app_constants.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// 사용자 타입에 따른 마커 표시 거리 계산
+  static int getMarkerDisplayRadius(UserType userType, bool isSuperPost) {
+    if (isSuperPost) {
+      return AppConsts.superPostRadius5km;  // 슈퍼포스트는 항상 5km
+    }
+    
+    switch (userType) {
+      case UserType.normal:
+        return AppConsts.normalUserRadius1km;  // 일반사용자 1km
+      case UserType.superSite:
+        return AppConsts.superSiteUserRadius3km;  // 수퍼사이트 3km
+    }
+  }
+
+  /// 사용자 타입에 따른 2단계 영역 거리 계산 (30일 방문 경로)
+  static int getSecondLevelRadius(UserType userType) {
+    switch (userType) {
+      case UserType.normal:
+        return AppConsts.normalUserRadius2km;  // 일반사용자 1km
+      case UserType.superSite:
+        return AppConsts.superSiteUserRadius2km;  // 수퍼사이트 3km
+    }
+  }
+
+  /// 마커 배포 가능 여부 확인 (1단계 영역에서만 가능)
+  static bool canDeployMarker(UserType userType, LatLng userLocation, LatLng deployLocation) {
+    final radius = getMarkerDisplayRadius(userType, false);  // 일반 포스트 기준
+    final distance = calculateDistance(userLocation, deployLocation);
+    return distance <= radius;
+  }
+
+  /// 마커 수집 가능 여부 확인 (현위치 50m 이내)
+  static bool canCollectMarker(LatLng userLocation, LatLng markerLocation) {
+    final distance = calculateDistance(userLocation, markerLocation);
+    return distance <= AppConsts.markerCollectRadius;
+  }
+
+  /// 두 좌표 간의 거리 계산 (미터 단위)
+  static double calculateDistance(LatLng point1, LatLng point2) {
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Meter, point1, point2);
+  }
 
   /// 🚀 포스트 템플릿에서 마커 배포 (트랜잭션 처리 강화)
   static Future<String> deployPostAsMarker({
@@ -222,9 +266,9 @@ class MarkerService {
           final marker = MarkerModel.fromFirestore(doc);
           
           // 거리 계산
-          final distance = _calculateDistance(
-            center.latitude, center.longitude,
-            marker.position.latitude, marker.position.longitude,
+          final distance = calculateDistance(
+            LatLng(center.latitude, center.longitude),
+            LatLng(marker.position.latitude, marker.position.longitude),
           );
           
           // 반경 내에 있고 수량이 0보다 큰 마커만 포함 (remainingQuantity 기준)
@@ -238,13 +282,13 @@ class MarkerService {
       
       // 거리순으로 정렬
       markers.sort((a, b) {
-        final distanceA = _calculateDistance(
-          center.latitude, center.longitude,
-          a.position.latitude, a.position.longitude,
+        final distanceA = calculateDistance(
+          LatLng(center.latitude, center.longitude),
+          LatLng(a.position.latitude, a.position.longitude),
         );
-        final distanceB = _calculateDistance(
-          center.latitude, center.longitude,
-          b.position.latitude, b.position.longitude,
+        final distanceB = calculateDistance(
+          LatLng(center.latitude, center.longitude),
+          LatLng(b.position.latitude, b.position.longitude),
         );
         return distanceA.compareTo(distanceB);
       });
@@ -406,9 +450,9 @@ class MarkerService {
           final marker = MarkerModel.fromFirestore(doc);
 
           // 거리 계산
-          final distance = _calculateDistance(
-            center.latitude, center.longitude,
-            marker.position.latitude, marker.position.longitude,
+          final distance = calculateDistance(
+            LatLng(center.latitude, center.longitude),
+            LatLng(marker.position.latitude, marker.position.longitude),
           );
 
           // 반경 내에 있고 수량이 0보다 큰 마커만 포함
@@ -422,13 +466,13 @@ class MarkerService {
 
       // 거리순으로 정렬
       markers.sort((a, b) {
-        final distanceA = _calculateDistance(
-          center.latitude, center.longitude,
-          a.position.latitude, a.position.longitude,
+        final distanceA = calculateDistance(
+          LatLng(center.latitude, center.longitude),
+          LatLng(a.position.latitude, a.position.longitude),
         );
-        final distanceB = _calculateDistance(
-          center.latitude, center.longitude,
-          b.position.latitude, b.position.longitude,
+        final distanceB = calculateDistance(
+          LatLng(center.latitude, center.longitude),
+          LatLng(b.position.latitude, b.position.longitude),
         );
         return distanceA.compareTo(distanceB);
       });
@@ -456,21 +500,5 @@ class MarkerService {
         superOnly: superOnly,
       );
     });
-  }
-
-  /// 거리 계산 (Haversine 공식)
-  static double _calculateDistance(double lat1, double lng1, double lat2, double lng2) {
-    const double earthRadius = 6371; // 지구 반지름 (km)
-
-    final dLat = (lat2 - lat1) * (math.pi / 180);
-    final dLng = (lng2 - lng1) * (math.pi / 180);
-
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) * math.cos(lat2 * math.pi / 180) *
-        math.sin(dLng / 2) * math.sin(dLng / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return earthRadius * c;
   }
 }

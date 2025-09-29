@@ -5,24 +5,16 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "fogLevel",
+          "fieldPath": "creatorId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isActive",
+          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "s2_12",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expiresAt",
-          "order": "ASCENDING"
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -31,24 +23,12 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "isActive",
+          "fieldPath": "creatorId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expiresAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "s2_12",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "rewardType",
-          "order": "ASCENDING"
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -57,20 +37,12 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "isActive",
+          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expiresAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "rewardType",
-          "order": "ASCENDING"
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -79,11 +51,43 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "isActive",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "markers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "remainingQuantity",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "markers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
           "order": "ASCENDING"
         },
         {
@@ -97,46 +101,98 @@
       ]
     },
     {
-      "collectionGroup": "posts",
+      "collectionGroup": "markers",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "postId",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "isActive",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isSuperPost",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expiresAt",
-          "order": "ASCENDING"
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "posts",
+      "collectionGroup": "markers",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "isActive",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isCollected",
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "post_collections",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "tileId",
+          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "expiresAt",
+          "fieldPath": "collectedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "post_collections",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "collectedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "post_usage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "post_usage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "postId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
         }
       ]
     }
