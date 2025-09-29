@@ -83,10 +83,18 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       if (uid != null) {
         debugPrint('사용자 ID: $uid');
         // DRAFT 상태 포스트만 로드 (배포 가능한 포스트만)
+        // 배포된 포스트(DEPLOYED)는 추가 배포 불가
         final posts = await _postService.getDraftPosts(uid);
-        debugPrint('사용자 포스트 로드 완료: ${posts.length}개');
+        debugPrint('배포 가능한 포스트 로드 완료: ${posts.length}개 (DRAFT 상태만)');
+
+        // 추가 검증: DRAFT 상태가 아닌 포스트 필터링
+        final draftPosts = posts.where((post) => post.isDraft).toList();
+        if (draftPosts.length != posts.length) {
+          debugPrint('⚠️ 배포 불가능한 포스트 필터링됨: ${posts.length - draftPosts.length}개');
+        }
+
         setState(() {
-          _userPosts = posts;
+          _userPosts = draftPosts;
         });
       } else {
         debugPrint('사용자가 로그인되어 있지 않습니다');
@@ -130,48 +138,96 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   Future<void> _deployPostToLocation() async {
+    // 1. 포스트 선택 검증
     if (_selectedPost == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('포스트를 선택해주세요.'),
-          backgroundColor: Colors.red,
-        ),
+      _showErrorDialog(
+        title: '포스트 선택 필요',
+        message: '배포할 포스트를 먼저 선택해주세요.',
+        action: '확인',
       );
       return;
     }
 
-    // postId 검증 추가
+    // 2. 포스트 ID 검증
     if (_selectedPost!.postId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('포스트 정보가 올바르지 않습니다. 포스트를 다시 선택해주세요.'),
-          backgroundColor: Colors.red,
-        ),
+      _showErrorDialog(
+        title: '포스트 오류',
+        message: '포스트 정보가 올바르지 않습니다.\n포스트를 다시 선택하거나 새로 생성해주세요.',
+        action: '확인',
       );
       return;
     }
 
+    // 3. 배포 가능 상태 검증 (DRAFT만 배포 가능)
+    if (!_selectedPost!.canDeploy) {
+      _showErrorDialog(
+        title: '배포 불가',
+        message: '이미 배포된 포스트는 추가로 배포할 수 없습니다.\n\n현재 상태: ${_selectedPost!.status.name}\n배포 가능 상태: 배포 대기 (DRAFT)',
+        action: '확인',
+      );
+      return;
+    }
+
+    // 3. 수량 검증
     final quantity = int.tryParse(_quantityController.text);
-    final price = int.tryParse(_priceController.text);
-
     if (quantity == null || quantity <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('유효한 수량을 입력해주세요.'),
-          backgroundColor: Colors.red,
-        ),
+      _showErrorDialog(
+        title: '수량 입력 오류',
+        message: '배포 수량은 1개 이상이어야 합니다.\n현재 입력: "${_quantityController.text}"',
+        action: '확인',
       );
       return;
     }
 
-    if (price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('유효한 가격을 입력해주세요.'),
-          backgroundColor: Colors.red,
-        ),
+    if (quantity > 1000) {
+      _showErrorDialog(
+        title: '수량 제한 초과',
+        message: '한 번에 최대 1,000개까지만 배포할 수 있습니다.\n현재 입력: $quantity개',
+        action: '확인',
       );
       return;
+    }
+
+    // 4. 가격 검증
+    final price = int.tryParse(_priceController.text);
+    if (price == null || price <= 0) {
+      _showErrorDialog(
+        title: '가격 입력 오류',
+        message: '단가는 0원보다 커야 합니다.\n현재 입력: "${_priceController.text}"',
+        action: '확인',
+      );
+      return;
+    }
+
+    if (price % 100 != 0) {
+      _showErrorDialog(
+        title: '가격 형식 오류',
+        message: '단가는 100원 단위여야 합니다.\n현재 입력: $price원\n권장: ${((price / 100).ceil() * 100)}원',
+        action: '확인',
+      );
+      return;
+    }
+
+    // 5. 위치 정보 검증
+    if (_selectedLocation == null) {
+      _showErrorDialog(
+        title: '위치 정보 없음',
+        message: '배포 위치 정보를 찾을 수 없습니다.\n지도에서 위치를 다시 선택해주세요.',
+        action: '확인',
+      );
+      return;
+    }
+
+    // 6. 총 비용 계산 및 확인
+    final totalCost = quantity * price;
+    if (totalCost > 10000000) {
+      final confirmed = await _showConfirmDialog(
+        title: '고액 배포 확인',
+        message: '총 ${totalCost.toStringAsFixed(0)}원을 배포하시겠습니까?\n수량: $quantity개 × 단가: $price원',
+        confirmText: '배포',
+        cancelText: '취소',
+      );
+      if (confirmed != true) return;
     }
 
     // 🚀 임시로 포그레벨 체크 비활성화 - 모든 위치에서 배포 허용
@@ -192,74 +248,82 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       _isDeploying = true;
     });
 
-    try {
-      // 1. 지갑 잔액 확인 (구현 필요)
-      // 2. 예치(escrow) 홀드 (구현 필요)
-      
-      // 3. 포스트는 업데이트하지 않고 마커만 생성 (중복 배포 허용)
-      // 포스트 자체는 원본 그대로 유지하고, 마커만 새로 생성
+    int retryCount = 0;
+    const maxRetries = 3;
 
-      // 4. 마커 생성 (커스텀 기간 적용)
-      final customExpiresAt = DateTime.now().add(Duration(days: _selectedDuration));
+    while (retryCount < maxRetries) {
+      try {
+        // 1. 지갑 잔액 확인 (구현 필요)
+        // 2. 예치(escrow) 홀드 (구현 필요)
 
-      await MarkerService.createMarker(
-        postId: _selectedPost!.postId,
-        title: _selectedPost!.title,
-        position: _selectedLocation!,
-        quantity: quantity, // 전체 수량을 하나의 마커에
-        reward: _selectedPost!.reward, // ✅ reward 전달
-        creatorId: _selectedPost!.creatorId,
-        expiresAt: customExpiresAt, // 사용자가 선택한 기간 적용
-      );
-      print('✅ 마커 생성 완료: ${_selectedPost!.title} (${quantity}개 수량)');
+        // 3. 포스트는 업데이트하지 않고 마커만 생성 (중복 배포 허용)
+        // 포스트 자체는 원본 그대로 유지하고, 마커만 새로 생성
 
-      print('✅ 포스트 배포 완료: ${_selectedPost!.postId} (${quantity}개 마커 생성)');
+        // 4. 마커 생성 (커스텀 기간 적용)
+        final customExpiresAt = DateTime.now().add(Duration(days: _selectedDuration));
 
-      if (mounted) {
-        // 성공 메시지 표시
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('포스트가 성공적으로 배포되었습니다! (${quantity}개 마커 생성)'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
+        await MarkerService.createMarker(
+          postId: _selectedPost!.postId,
+          title: _selectedPost!.title,
+          position: _selectedLocation!,
+          quantity: quantity, // 전체 수량을 하나의 마커에
+          reward: _selectedPost!.reward, // ✅ reward 전달
+          creatorId: _selectedPost!.creatorId,
+          expiresAt: customExpiresAt, // 사용자가 선택한 기간 적용
         );
-        
-        Navigator.pop(context, {
-          'location': _selectedLocation,
-          'postId': _selectedPost!.postId,
-          'address': null,
-          'quantity': quantity,
-          'price': price,
-          'totalPrice': _totalPrice,
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ 포스트 배포 실패: $e');
-      if (mounted) {
-        String errorMessage = '배포 실패: ';
-        if (e.toString().contains('포스트 ID가 비어있습니다')) {
-          errorMessage += '포스트 정보가 올바르지 않습니다. 포스트를 다시 선택해주세요.';
-        } else if (e.toString().contains('포스트를 찾을 수 없습니다')) {
-          errorMessage += '선택한 포스트를 찾을 수 없습니다. 포스트를 다시 선택해주세요.';
-        } else {
-          errorMessage += e.toString();
+        print('✅ 마커 생성 완료: ${_selectedPost!.title} (${quantity}개 수량)');
+
+        print('✅ 포스트 배포 완료: ${_selectedPost!.postId} (${quantity}개 마커 생성)');
+
+        if (mounted) {
+          // 성공 메시지 표시
+          await _showSuccessDialog(
+            title: '배포 완료',
+            message: '포스트가 성공적으로 배포되었습니다!\n\n수량: $quantity개\n기간: $_selectedDuration일\n총 비용: ${totalCost.toStringAsFixed(0)}원',
+          );
+
+          Navigator.pop(context, {
+            'location': _selectedLocation,
+            'postId': _selectedPost!.postId,
+            'address': null,
+            'quantity': quantity,
+            'price': price,
+            'totalPrice': _totalPrice,
+          });
         }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+        break; // 성공하면 루프 종료
+
+      } catch (e, stackTrace) {
+        retryCount++;
+        debugPrint('❌ 포스트 배포 실패 (시도 $retryCount/$maxRetries): $e');
+        debugPrint('스택 트레이스: $stackTrace');
+
+        if (!mounted) break;
+
+        // 마지막 시도가 실패한 경우
+        if (retryCount >= maxRetries) {
+          await _showDetailedErrorDialog(e, quantity, price);
+          break;
+        }
+
+        // 재시도 전 사용자에게 확인
+        final shouldRetry = await _showRetryDialog(
+          attempt: retryCount,
+          maxAttempts: maxRetries,
+          error: e.toString(),
         );
+
+        if (shouldRetry != true) break;
+
+        // 재시도 전 잠시 대기 (exponential backoff)
+        await Future.delayed(Duration(seconds: retryCount * 2));
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDeploying = false;
-        });
-      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isDeploying = false;
+      });
     }
   }
 
@@ -1131,6 +1195,254 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     }
   }
 
+
+  // 오류 처리 헬퍼 메서드들
+  void _showErrorDialog({
+    required String title,
+    required String message,
+    String action = '확인',
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 28),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showConfirmDialog({
+    required String title,
+    required String message,
+    required String confirmText,
+    required String cancelText,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.orange, size: 28),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(cancelText),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[600],
+              foregroundColor: Colors.white,
+            ),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSuccessDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 28),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDetailedErrorDialog(Object error, int quantity, int price) {
+    String title = '배포 실패';
+    String message = '';
+    String suggestion = '';
+
+    final errorString = error.toString();
+
+    // 에러 타입별 상세 메시지
+    if (errorString.contains('permission-denied') || errorString.contains('권한')) {
+      title = '권한 오류';
+      message = '마커를 생성할 권한이 없습니다.';
+      suggestion = '로그인 상태를 확인하거나, 앱을 재시작해주세요.';
+    } else if (errorString.contains('network') || errorString.contains('네트워크')) {
+      title = '네트워크 오류';
+      message = '인터넷 연결을 확인할 수 없습니다.';
+      suggestion = 'Wi-Fi 또는 모바일 데이터 연결을 확인해주세요.';
+    } else if (errorString.contains('timeout') || errorString.contains('시간 초과')) {
+      title = '시간 초과';
+      message = '서버 응답 시간이 초과되었습니다.';
+      suggestion = '잠시 후 다시 시도해주세요.';
+    } else if (errorString.contains('포스트 ID가 비어있습니다')) {
+      title = '포스트 ID 오류';
+      message = '포스트 정보가 올바르지 않습니다.';
+      suggestion = '포스트를 다시 선택하거나 새로 생성해주세요.';
+    } else if (errorString.contains('포스트를 찾을 수 없습니다')) {
+      title = '포스트 없음';
+      message = '선택한 포스트를 찾을 수 없습니다.';
+      suggestion = '포스트가 삭제되었거나 접근 권한이 없을 수 있습니다.';
+    } else if (errorString.contains('insufficient') || errorString.contains('잔액')) {
+      title = '잔액 부족';
+      message = '포인트 잔액이 부족합니다.';
+      suggestion = '필요 금액: ${(quantity * price).toStringAsFixed(0)}원\n포인트를 충전하거나 배포 수량을 줄여주세요.';
+    } else {
+      title = '알 수 없는 오류';
+      message = '배포 중 오류가 발생했습니다.';
+      suggestion = '오류 내용: ${errorString.length > 100 ? errorString.substring(0, 100) + "..." : errorString}';
+    }
+
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.red, size: 28),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  suggestion,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '문제가 계속되면 고객센터에 문의해주세요.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showRetryDialog({
+    required int attempt,
+    required int maxAttempts,
+    required String error,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.refresh, color: Colors.orange, size: 28),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('재시도 확인')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('배포에 실패했습니다. ($attempt/$maxAttempts 시도)'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Text(
+                error.length > 100 ? error.substring(0, 100) + '...' : error,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '다시 시도하시겠습니까?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('재시도'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {

@@ -96,6 +96,13 @@ class PriceCalculatorState extends State<PriceCalculator> {
     }
   }
 
+  /// 100원 단위로 올림
+  /// 예: 149원 → 200원, 251원 → 300원, 300원 → 300원
+  double _roundUpToHundred(double price) {
+    if (price <= 0) return 0;
+    return ((price / 100).ceil() * 100).toDouble();
+  }
+
   void _calculateMinimumPrice() {
     print('=== [_calculateMinimumPrice] 시작 ===');
     _totalSizeKB = 0.0;
@@ -139,7 +146,7 @@ class PriceCalculatorState extends State<PriceCalculator> {
 
       _totalSizeKB += imageSizeKB;
     }
-    
+
     // 사운드 크기 계산
     double soundSizeKB = 0.0;
     if (widget.sound != null) {
@@ -161,9 +168,13 @@ class PriceCalculatorState extends State<PriceCalculator> {
     print('총 미디어 크기: ${_totalSizeKB.toStringAsFixed(2)} KB');
 
     // 최소 단가 계산 (100KB당 100원)
-    _minimumPrice = (_totalSizeKB / 100.0) * _basePricePer100KB;
+    final rawPrice = (_totalSizeKB / 100.0) * _basePricePer100KB;
 
-    print('계산된 최소 단가: ${_minimumPrice.toStringAsFixed(0)}원');
+    // 100원 단위로 올림 적용
+    _minimumPrice = _roundUpToHundred(rawPrice);
+
+    print('계산된 원본 가격: ${rawPrice.toStringAsFixed(2)}원');
+    print('100원 단위 올림 후 최소 단가: ${_minimumPrice.toStringAsFixed(0)}원');
     print('=== [_calculateMinimumPrice] 완료 ===');
 
     setState(() {});
@@ -180,26 +191,32 @@ class PriceCalculatorState extends State<PriceCalculator> {
     if (value == null || value.isEmpty) {
       return '단가를 입력해주세요';
     }
-    
+
     final double? price = double.tryParse(value);
     if (price == null) {
       return '올바른 숫자를 입력해주세요';
     }
-    
+
     if (price < 0) {
       return '단가는 0 이상이어야 합니다';
     }
-    
-    // 미디어가 있는 경우 최소 단가 검증
-    if (_totalSizeKB > 0 && price < _minimumPrice) {
-      return '최소 단가는 ${_minimumPrice.toInt()}원 이상이어야 합니다';
+
+    // 100원 단위 검증
+    if (price % 100 != 0) {
+      final roundedPrice = _roundUpToHundred(price);
+      return '단가는 100원 단위여야 합니다 (${roundedPrice.toInt()}원으로 올림됩니다)';
     }
-    
+
+    // 미디어가 있는 경우 최소 단가 검증 (100원 단위 올림 적용된 값)
+    if (_totalSizeKB > 0 && price < _minimumPrice) {
+      return '최소 단가는 ${_minimumPrice.toInt()}원 이상이어야 합니다\n(미디어 용량 기준, 100원 단위 올림 적용)';
+    }
+
     // 사용자 정의 validator가 있는 경우 호출
     if (widget.validator != null) {
       return widget.validator!(value);
     }
-    
+
     return null;
   }
 
@@ -224,8 +241,8 @@ class PriceCalculatorState extends State<PriceCalculator> {
             border: const OutlineInputBorder(),
             suffixText: '원',
             helperText: _totalSizeKB > 0
-                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 100KB당 100원)'
-                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다',
+                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 100원 단위 올림 적용)'
+                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다 (100원 단위 올림)',
           ),
           keyboardType: TextInputType.number,
           validator: _validatePrice,

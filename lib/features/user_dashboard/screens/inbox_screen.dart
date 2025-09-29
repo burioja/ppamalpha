@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/data/post_statistics_service.dart';
 import '../../../core/models/post/post_model.dart';
-import '../../post_system/widgets/post_card.dart';
 import '../../post_system/widgets/post_tile_card.dart';
 
 class InboxScreen extends StatefulWidget {
@@ -17,7 +15,6 @@ class InboxScreen extends StatefulWidget {
 class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final PostService _postService = PostService();
-  final PostStatisticsService _statisticsService = PostStatisticsService();
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
   
@@ -959,8 +956,20 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 포스트 통계 표시
+  // 포스트 통계 화면으로 이동
   void _showPostStatistics(PostModel post) {
+    Navigator.pushNamed(
+      context,
+      '/post-statistics',
+      arguments: {
+        'post': post,
+      },
+    );
+  }
+
+  // 이전 Dialog 방식 통계 표시 (참고용으로 주석 처리)
+  /*
+  void _showPostStatisticsDialog(PostModel post) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1201,6 +1210,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
     return '$maxDay요일 ($maxCount회)';
   }
+  */
 
   // 내 스토어로 이동 (PRD 요구사항)
   void _navigateToMyStore(BuildContext context) {

@@ -119,12 +119,45 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         );
         Navigator.pop(context, true);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ 플레이스 생성 실패: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('플레이스 생성 실패: $e'),
-            backgroundColor: Colors.red,
+        String errorMessage = '플레이스 생성 실패';
+        String suggestion = '';
+
+        final errorString = e.toString();
+        if (errorString.contains('permission-denied')) {
+          errorMessage = '권한 오류';
+          suggestion = '플레이스를 생성할 권한이 없습니다.';
+        } else if (errorString.contains('network')) {
+          errorMessage = '네트워크 오류';
+          suggestion = '인터넷 연결을 확인해주세요.';
+        } else if (errorString.contains('storage')) {
+          errorMessage = '이미지 업로드 실패';
+          suggestion = '이미지 크기를 줄이거나 다시 시도해주세요.';
+        } else {
+          suggestion = errorString.length > 80 ? errorString.substring(0, 80) + '...' : errorString;
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 8),
+                Expanded(child: Text(errorMessage)),
+              ],
+            ),
+            content: Text(suggestion),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
         );
       }

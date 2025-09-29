@@ -27,6 +27,7 @@ import '../features/post_system/screens/post_place_selection_screen.dart';
 import '../features/post_system/screens/post_detail_screen.dart';
 import '../features/post_system/screens/post_edit_screen.dart';
 import '../features/post_system/screens/post_deploy_screen.dart';
+import '../features/post_system/screens/post_statistics_screen.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
@@ -54,6 +55,7 @@ class AppRoutes {
   static const String postPlaceSelection = '/post-place-selection';
   static const String postDetail = '/post-detail';
   static const String postEdit = '/post-edit';
+  static const String postStatistics = '/post-statistics';
 
   static const String locationPicker = '/location-picker';
   static const String postDeploy = '/post-deploy';
@@ -122,6 +124,16 @@ class AppRoutes {
         );
       }
       return PostEditScreen(post: post);
+    },
+    postStatistics: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final post = args?['post'] as PostModel?;
+      if (post == null) {
+        return const Scaffold(
+          body: Center(child: Text('포스트 정보를 찾을 수 없습니다.')),
+        );
+      }
+      return PostStatisticsScreen(post: post);
     },
     createPlace: (context) => const CreatePlaceScreen(),
     editPlace: (context) {
