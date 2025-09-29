@@ -83,7 +83,7 @@ class _MapScreenState extends State<MapScreen> {
   // 기본 상태
   MapController? _mapController;
   LatLng? _currentPosition;
-  double _currentZoom = 15.0;
+  double _currentZoom = 14.0;
   String _currentAddress = '위치 불러오는 중...';
   LatLng? _longPressedLatLng;
   Widget? _customMarkerIcon;
@@ -1315,12 +1315,50 @@ class _MapScreenState extends State<MapScreen> {
     _updateClusteredMarkers();
   }
 
+  // 클러스터링 한계치 상수
+  static const double MIN_CLUSTER_ZOOM = 10.0;   // 최소 클러스터링 줌 (더 멀리서는 클러스터링 안함)
+  static const double MAX_CLUSTER_ZOOM = 16.0;   // 최대 클러스터링 줌 (더 가까이서는 개별 마커)
+  static const double MAX_SINGLE_MARKER_ZOOM = 18.0; // 개별 마커만 표시하는 줌
+
   // 클러스터링된 마커 업데이트
   void _updateClusteredMarkers() {
     if (_markers.isEmpty) {
       setState(() {
         _clusteredMarkers = [];
       });
+      return;
+    }
+
+    // 줌 한계치 체크
+    if (_mapZoom < MIN_CLUSTER_ZOOM) {
+      // 너무 멀리서 보기 - 마커 숨김 (성능 최적화)
+      setState(() {
+        _clusteredMarkers = [];
+      });
+      print('🔧 줌 레벨 ${_mapZoom.toStringAsFixed(1)} - 마커 숨김 (너무 멀리서)');
+      return;
+    }
+
+    if (_mapZoom >= MAX_SINGLE_MARKER_ZOOM) {
+      // 매우 가까이서 보기 - 모든 마커를 개별 표시
+      final markers = _markers.map((marker) {
+        final clusterMarker = ClusterMarkerModel(
+          markerId: marker.markerId,
+          position: marker.position,
+        );
+        return Marker(
+          key: ValueKey('single_${marker.markerId}'),
+          point: marker.position,
+          width: 35,
+          height: 35,
+          child: _buildSingleMarker(clusterMarker),
+        );
+      }).toList();
+      
+      setState(() {
+        _clusteredMarkers = markers;
+      });
+      print('🔧 줌 레벨 ${_mapZoom.toStringAsFixed(1)} - 모든 마커 개별 표시 (${markers.length}개)');
       return;
     }
 
@@ -1338,14 +1376,26 @@ class _MapScreenState extends State<MapScreen> {
       position: m.position,
     )).toList();
 
-    // 3) 클러스터링 수행
+    // 3) 줌 레벨에 따른 셀 크기 결정
+    double cellPx;
+    if (_mapZoom >= MAX_CLUSTER_ZOOM) {
+      cellPx = 20; // 매우 작은 셀 (거의 개별 마커 수준)
+    } else if (_mapZoom < 12) {
+      cellPx = 80; // 큰 셀 (멀리서 보기)
+    } else if (_mapZoom < 15) {
+      cellPx = 60; // 중간 셀
+    } else {
+      cellPx = 40; // 작은 셀 (가까이서 보기)
+    }
+
+    // 4) 클러스터링 수행
     final buckets = buildClusters(
       source: clusterMarkers,
       toScreen: toScreen,
-      cellPx: _mapZoom < 12 ? 80 : (_mapZoom < 15 ? 60 : 40), // 줌에 따른 셀 크기 조정
+      cellPx: cellPx,
     );
 
-    // 3) FlutterMap Marker로 변환
+    // 5) FlutterMap Marker로 변환
     final markers = clustersToFlutterMarkers(
       buckets: buckets,
       buildSingle: (m) => _buildSingleMarker(m),
@@ -1358,7 +1408,7 @@ class _MapScreenState extends State<MapScreen> {
       _clusteredMarkers = markers;
     });
 
-    print('🔧 클러스터링 완료: ${buckets.length}개 그룹, ${markers.length}개 마커');
+    print('🔧 클러스터링 완료 (줌 ${_mapZoom.toStringAsFixed(1)}, 셀 ${cellPx.toInt()}px): ${buckets.length}개 그룹, ${markers.length}개 마커');
   }
 
   // 단일 마커 위젯 생성
@@ -2291,6 +2341,8 @@ class _MapScreenState extends State<MapScreen> {
         options: MapOptions(
                 initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
                 initialZoom: _currentZoom,
+                minZoom: 14.0,  // 최소 줌 레벨 (줌 아웃 한계)
+                maxZoom: 17.0,  // 최대 줌 레벨 (줌 인 한계)
           onMapReady: _onMapReady,
                 onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
                 onTap: (tapPosition, point) {
@@ -2316,10 +2368,10 @@ class _MapScreenState extends State<MapScreen> {
                   }
 
                   // 롱프레스 위치 저장
-                  _longPressedLatLng = point;
+                    _longPressedLatLng = point;
                   
                   // 바로 배포 메뉴 표시 (포그레벨 확인 생략)
-                  _showLongPressMenu();
+                    _showLongPressMenu();
                 },
               ),
         children: [
@@ -2328,6 +2380,9 @@ class _MapScreenState extends State<MapScreen> {
                   urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
+                  minZoom: 14.0,  // 타일 서버 최소 줌
+                  maxZoom: 16.0,  // 타일 서버 최대 줌
+                  tileSize: 256,
                 ),
                 // Fog of War 오버레이 (겹침 문제 해결)
                 FogOverlayWidget(
@@ -2340,7 +2395,7 @@ class _MapScreenState extends State<MapScreen> {
                   userType: _userType,  // 사용자 타입 전달
                   isSuperPost: false,   // 일반 포스트 기준
                   fogColor: Colors.black.withOpacity(1.0),
-                ),
+                    ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
                 // CircleLayer(circles: _ringCircles),
                 // 사용자 위치 마커들
