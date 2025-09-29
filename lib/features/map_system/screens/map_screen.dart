@@ -1097,6 +1097,13 @@ class _MapScreenState extends State<MapScreen> {
 
   // 마커 상세 정보 표시
   void _showMarkerDetails(MarkerModel marker) {
+    // 🔍 마커 탭 시 데이터 확인
+    print('[MARKER_TAP_DEBUG] 마커 탭됨:');
+    print('  - markerId: "${marker.markerId}"');
+    print('  - postId: "${marker.postId}"');
+    print('  - title: "${marker.title}"');
+    print('  - postId == markerId: ${marker.postId == marker.markerId}');
+
     // 거리 체크
     if (_currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1219,10 +1226,54 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      await PostService().collectPost(
-        postId: marker.postId,
-        userId: user.uid,
-      );
+      // 🔍 수령 시도 전 데이터 확인
+      print('[COLLECT_DEBUG] 수령 시도:');
+      print('  - markerId: "${marker.markerId}"');
+      print('  - 현재 postId: "${marker.postId}"');
+      print('  - postId == markerId: ${marker.postId == marker.markerId}');
+
+      // 🚨 CRITICAL FIX: markerId로 실제 마커를 조회해서 올바른 postId 가져오기
+      if (marker.postId == marker.markerId || marker.postId.isEmpty) {
+        print('[COLLECT_FIX] postId가 잘못됨. markerId로 실제 마커 조회 중...');
+
+        try {
+          final markerDoc = await FirebaseFirestore.instance
+              .collection('markers')
+              .doc(marker.markerId)
+              .get();
+
+          if (markerDoc.exists && markerDoc.data() != null) {
+            final markerData = markerDoc.data()!;
+            final realPostId = markerData['postId'] as String?;
+
+            print('[COLLECT_FIX] 실제 마커 데이터에서 postId 발견: "$realPostId"');
+
+            if (realPostId != null && realPostId.isNotEmpty && realPostId != marker.markerId) {
+              print('[COLLECT_FIX] 올바른 postId로 수령 진행: $realPostId');
+              await PostService().collectPost(
+                postId: realPostId,
+                userId: user.uid,
+              );
+            } else {
+              throw Exception('마커에서 유효한 postId를 찾을 수 없습니다');
+            }
+          } else {
+            throw Exception('마커 문서를 찾을 수 없습니다: ${marker.markerId}');
+          }
+        } catch (e) {
+          print('[COLLECT_FIX] 마커 조회 실패: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('마커 정보를 가져올 수 없습니다: $e')),
+          );
+          return;
+        }
+      } else {
+        print('[COLLECT_DEBUG] 기존 postId 사용: ${marker.postId}');
+        await PostService().collectPost(
+          postId: marker.postId,
+          userId: user.uid,
+        );
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트를 수령했습니다! (${marker.quantity - 1}개 남음)')),
