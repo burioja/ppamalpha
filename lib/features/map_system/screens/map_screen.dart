@@ -836,14 +836,15 @@ class _MapScreenState extends State<MapScreen> {
           radiusInKm: normalRadiusKm, // 사용자 타입에 따른 거리
           additionalCenters: additionalCenters,
           filters: filters,
-          pageSize: 300, // ✅ 성능 최적화 (500 → 300)
+          pageSize: 1000, // ✅ 제한 증가 (영역 내에서만 조회하므로)
         ),
         // 슈퍼마커 조회
         MapMarkerService.getSuperMarkers(
           location: primaryCenter,
           radiusInKm: superRadiusKm, // 슈퍼포스트는 항상 5km
           additionalCenters: additionalCenters,
-          pageSize: 150, // ✅ 성능 최적화 (200 → 150)
+          filters: filters, // ✅ 필터 전달
+          pageSize: 500, // ✅ 제한 증가
         ),
       ]);
 
@@ -1507,26 +1508,8 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  bool _matchesFilter(PostModel post) {
-    // 쿠폰만 보기 필터
-    if (_showCouponsOnly && !post.canUse) return false;
-    
-    // 내 포스트만 보기 필터
-    if (_showMyPostsOnly) {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null || post.creatorId != currentUser.uid) return false;
-    }
-    
-    // 카테고리 필터 (현재는 모든 포스트 허용)
-    if (_selectedCategory != 'all') {
-      // 카테고리 필터링 로직 구현
-    }
-    
-    // 리워드 필터
-    if (post.reward < _minReward) return false;
-    
-    return true;
-  }
+  // 클라이언트사이드 필터링 제거됨 - 서버사이드에서 처리
+  // bool _matchesFilter(PostModel post) { ... } // 제거됨
 
 
   void _showPostDetail(PostModel post) {

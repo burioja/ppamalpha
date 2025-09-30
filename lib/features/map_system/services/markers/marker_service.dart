@@ -201,7 +201,7 @@ class MapMarkerService {
     double radiusInKm = 1.0,
     List<LatLng> additionalCenters = const [],
     Map<String, dynamic> filters = const {},
-    int pageSize = 300,
+    int pageSize = 1000, // 제한 증가 (영역 내에서만 조회하므로)
   }) async {
     try {
       final user = _auth.currentUser;
@@ -209,19 +209,39 @@ class MapMarkerService {
 
       // markers 컬렉션에서 직접 조회 (서버 필터 추가)
       final now = Timestamp.now();
-      final snapshot = await _firestore
+      Query query = _firestore
           .collection('markers')
           .where('isActive', isEqualTo: true)
-          .where('expiresAt', isGreaterThan: now)     // ✅ 만료 제외 (서버 필터)
+          .where('expiresAt', isGreaterThan: now);     // ✅ 만료 제외 (서버 필터)
+
+      // 서버사이드 필터링 적용
+      if (filters['myPostsOnly'] == true && user != null) {
+        query = query.where('creatorId', isEqualTo: user.uid);
+        print('🔍 서버사이드 필터: 내 포스트만 조회 (creatorId: ${user.uid})');
+      }
+
+      if (filters['showCouponsOnly'] == true) {
+        query = query.where('isCoupon', isEqualTo: true);
+        print('🔍 서버사이드 필터: 쿠폰만 조회');
+      }
+
+      if (filters['minReward'] != null && filters['minReward'] > 0) {
+        query = query.where('reward', isGreaterThanOrEqualTo: filters['minReward']);
+        print('🔍 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
+      }
+
+      final snapshot = await query
           .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
-          .limit(pageSize)                             // 200~300 권장
+          .limit(pageSize)                             // 제한 증가
           .get();
 
       final markers = <MapMarkerData>[];
       
       for (final doc in snapshot.docs) {
         try {
-          final data = doc.data();
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) continue;
+          
           final locationData = data['location'] as GeoPoint?;
           
           // location이 null인 마커는 건너뛰기
@@ -318,7 +338,8 @@ class MapMarkerService {
     required LatLng location,
     double radiusInKm = 1.0,
     List<LatLng> additionalCenters = const [],
-    int pageSize = 150,
+    Map<String, dynamic> filters = const {},
+    int pageSize = 500, // 제한 증가
   }) async {
     try {
       final user = _auth.currentUser;
@@ -326,11 +347,29 @@ class MapMarkerService {
 
       // 슈퍼마커만 조회 (서버 필터 사용)
       final now = Timestamp.now();
-      final snapshot = await _firestore
+      Query query = _firestore
           .collection('markers')
           .where('isActive', isEqualTo: true)
           .where('isSuperMarker', isEqualTo: true) // ✅ 서버 필터
-          .where('expiresAt', isGreaterThan: now)
+          .where('expiresAt', isGreaterThan: now);
+
+      // 서버사이드 필터링 적용 (슈퍼마커용)
+      if (filters['myPostsOnly'] == true && user != null) {
+        query = query.where('creatorId', isEqualTo: user.uid);
+        print('🔍 슈퍼마커 서버사이드 필터: 내 포스트만 조회 (creatorId: ${user.uid})');
+      }
+
+      if (filters['showCouponsOnly'] == true) {
+        query = query.where('isCoupon', isEqualTo: true);
+        print('🔍 슈퍼마커 서버사이드 필터: 쿠폰만 조회');
+      }
+
+      if (filters['minReward'] != null && filters['minReward'] > 0) {
+        query = query.where('reward', isGreaterThanOrEqualTo: filters['minReward']);
+        print('🔍 슈퍼마커 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
+      }
+
+      final snapshot = await query
           .orderBy('expiresAt')
           .limit(pageSize)
           .get();
@@ -339,7 +378,9 @@ class MapMarkerService {
       
       for (final doc in snapshot.docs) {
         try {
-          final data = doc.data();
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) continue;
+          
           final locationData = data['location'] as GeoPoint?;
           
           if (locationData == null) continue;
