@@ -16,7 +16,8 @@ import '../services/markers/marker_service.dart';
 import '../../../core/models/marker/marker_model.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/marker_layer_widget.dart';
-import '../utils/client_side_cluster.dart';
+import '../utils/client_cluster.dart';
+import '../widgets/cluster_widgets.dart';
 import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../services/external/osm_fog_service.dart';
@@ -75,6 +76,10 @@ class _MapScreenState extends State<MapScreen> {
   Size _lastMapSize = const Size(0, 0);
   LatLng _mapCenter = const LatLng(37.5665, 126.9780); // 서울 기본값
   double _mapZoom = 10.0;
+  
+  // 새로운 클러스터링 시스템용 변수들
+  Timer? _clusterDebounceTimer;
+  List<ClusterMarkerModel> _visibleMarkerModels = [];
   
   // 사용자 위치 정보
   LatLng? _homeLocation;
@@ -588,6 +593,10 @@ class _MapScreenState extends State<MapScreen> {
       // 화면 크기 업데이트 (MediaQuery 사용)
       final size = MediaQuery.of(context).size;
       _lastMapSize = size;
+      
+      // 클러스터링 디바운스 타이머
+      _clusterDebounceTimer?.cancel();
+      _clusterDebounceTimer = Timer(const Duration(milliseconds: 32), _rebuildClusters);
     }
   }
 
@@ -1311,170 +1320,121 @@ class _MapScreenState extends State<MapScreen> {
   void _updateMarkers() {
     print('🔧 _updateMarkers 호출됨 - _markers 개수: ${_markers.length}');
 
-    // 클러스터링 적용
-    _updateClusteredMarkers();
-  }
-
-  // 클러스터링 한계치 상수
-  static const double MIN_CLUSTER_ZOOM = 10.0;   // 최소 클러스터링 줌 (더 멀리서는 클러스터링 안함)
-  static const double MAX_CLUSTER_ZOOM = 16.0;   // 최대 클러스터링 줌 (더 가까이서는 개별 마커)
-  static const double MAX_SINGLE_MARKER_ZOOM = 18.0; // 개별 마커만 표시하는 줌
-
-  // 클러스터링된 마커 업데이트
-  void _updateClusteredMarkers() {
-    if (_markers.isEmpty) {
-      setState(() {
-        _clusteredMarkers = [];
-      });
-      return;
-    }
-
-    // 줌 한계치 체크
-    if (_mapZoom < MIN_CLUSTER_ZOOM) {
-      // 너무 멀리서 보기 - 마커 숨김 (성능 최적화)
-      setState(() {
-        _clusteredMarkers = [];
-      });
-      print('🔧 줌 레벨 ${_mapZoom.toStringAsFixed(1)} - 마커 숨김 (너무 멀리서)');
-      return;
-    }
-
-    if (_mapZoom >= MAX_SINGLE_MARKER_ZOOM) {
-      // 매우 가까이서 보기 - 모든 마커를 개별 표시
-      final markers = _markers.map((marker) {
-        final clusterMarker = ClusterMarkerModel(
-          markerId: marker.markerId,
-          position: marker.position,
-        );
-        return Marker(
-          key: ValueKey('single_${marker.markerId}'),
-          point: marker.position,
-          width: 35,
-          height: 35,
-          child: _buildSingleMarker(clusterMarker),
-        );
-      }).toList();
-      
-      setState(() {
-        _clusteredMarkers = markers;
-      });
-      print('🔧 줌 레벨 ${_mapZoom.toStringAsFixed(1)} - 모든 마커 개별 표시 (${markers.length}개)');
-      return;
-    }
-
-    // 1) 화면 좌표 변환 함수 준비
-    Offset toScreen(LatLng ll) => latLngToScreenWebMercator(
-      ll,
-      mapCenter: _mapCenter,
-      zoom: _mapZoom,
-      viewSize: _lastMapSize,
-    );
-
-    // 2) MarkerModel을 ClusterMarkerModel로 변환
-    final clusterMarkers = _markers.map((m) => ClusterMarkerModel(
-      markerId: m.markerId,
-      position: m.position,
+    // MarkerModel을 새로운 클러스터링 시스템용으로 변환
+    _visibleMarkerModels = _markers.map((marker) => ClusterMarkerModel(
+      markerId: marker.markerId,
+      position: marker.position,
     )).toList();
 
-    // 3) 줌 레벨에 따른 셀 크기 결정
-    double cellPx;
-    if (_mapZoom >= MAX_CLUSTER_ZOOM) {
-      cellPx = 20; // 매우 작은 셀 (거의 개별 마커 수준)
-    } else if (_mapZoom < 12) {
-      cellPx = 80; // 큰 셀 (멀리서 보기)
-    } else if (_mapZoom < 15) {
-      cellPx = 60; // 중간 셀
-    } else {
-      cellPx = 40; // 작은 셀 (가까이서 보기)
+    // 새로운 클러스터링 시스템 적용
+    _rebuildClusters();
+  }
+
+  // LatLng -> 화면 좌표 변환 함수
+  Offset _latLngToScreen(LatLng ll) {
+    return latLngToScreenWebMercator(
+      ll, 
+      mapCenter: _mapCenter, 
+      zoom: _mapZoom, 
+      viewSize: _lastMapSize,
+    );
+  }
+
+  // 새로운 클러스터링 시스템 - 근접 기반
+  void _rebuildClusters() {
+    if (_visibleMarkerModels.isEmpty) {
+      setState(() {
+        _clusteredMarkers = [];
+      });
+      return;
     }
 
-    // 4) 클러스터링 수행
-    final buckets = buildClusters(
-      source: clusterMarkers,
-      toScreen: toScreen,
-      cellPx: cellPx,
+    final thresholdPx = clusterThresholdPx(_mapZoom);
+    
+    // 근접 클러스터링 수행
+    final buckets = buildProximityClusters(
+      source: _visibleMarkerModels,
+      toScreen: _latLngToScreen,
+      thresholdPx: thresholdPx,
     );
 
-    // 5) FlutterMap Marker로 변환
-    final markers = clustersToFlutterMarkers(
-      buckets: buckets,
-      buildSingle: (m) => _buildSingleMarker(m),
-      buildCluster: (count, rep) => _buildClusterMarker(count, rep),
-      singleSize: 35,
-      clusterSize: 36,
-    );
+    final markers = <Marker>[];
+    
+    for (final bucket in buckets) {
+      if (!bucket.isCluster) {
+        // 단일 마커
+        final marker = bucket.single!;
+        final isSuper = _isSuperMarker(marker);
+        final imagePath = isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png';
+        final imageSize = isSuper ? 36.0 : 31.0;
+        
+        markers.add(
+          Marker(
+            key: ValueKey('single_${marker.markerId}'),
+            point: marker.position,
+            width: 35,
+            height: 35,
+            child: SingleMarkerWidget(
+              imagePath: imagePath,
+              size: imageSize,
+              isSuper: isSuper,
+              onTap: () => _onTapSingleMarker(marker),
+            ),
+          ),
+        );
+      } else {
+        // 클러스터 마커
+        final rep = bucket.representative!;
+        markers.add(
+          Marker(
+            key: ValueKey('cluster_${rep.markerId}_${bucket.items!.length}'),
+            point: rep.position,
+            width: 40,
+            height: 40,
+            child: GestureDetector(
+              onTap: () => _zoomIntoCluster(bucket),
+              child: SimpleClusterDot(count: bucket.items!.length),
+            ),
+          ),
+        );
+      }
+    }
 
     setState(() {
       _clusteredMarkers = markers;
     });
 
-    print('🔧 클러스터링 완료 (줌 ${_mapZoom.toStringAsFixed(1)}, 셀 ${cellPx.toInt()}px): ${buckets.length}개 그룹, ${markers.length}개 마커');
+    print('🔧 근접 클러스터링 완료 (줌 ${_mapZoom.toStringAsFixed(1)}, 임계값 ${thresholdPx.toInt()}px): ${buckets.length}개 그룹, ${markers.length}개 마커');
   }
 
-  // 단일 마커 위젯 생성
-  Widget _buildSingleMarker(ClusterMarkerModel clusterMarker) {
-    // ClusterMarkerModel에서 원본 MarkerModel 찾기
-    final marker = _markers.firstWhere((m) => m.markerId == clusterMarker.markerId);
-    final markerReward = marker.reward ?? 0;
-      final isSuper = markerReward >= AppConsts.superRewardThreshold;
-    final imagePath = isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png';
-      final imageSize = isSuper ? 36.0 : 31.0;
-      
-    return GestureDetector(
-            onTap: () => _showMarkerDetails(marker),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSuper ? Colors.amber : Colors.white, 
-                  width: isSuper ? 3 : 2
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isSuper 
-                        ? Colors.amber.withOpacity(0.4)
-                        : Colors.black.withOpacity(0.3),
-                    blurRadius: isSuper ? 6 : 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  imagePath,
-                  width: imageSize,
-                  height: imageSize,
-                  fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      );
-    }
-
-  // 클러스터 마커 위젯 생성
-  Widget _buildClusterMarker(int count, ClusterMarkerModel representative) {
-    return GestureDetector(
-      onTap: () => _showClusterDetails(count, representative),
-      child: SimpleClusterDot(count: count),
+  // 슈퍼 마커인지 확인
+  bool _isSuperMarker(ClusterMarkerModel marker) {
+    // 원본 MarkerModel에서 reward 확인
+    final originalMarker = _markers.firstWhere(
+      (m) => m.markerId == marker.markerId,
+      orElse: () => throw Exception('Marker not found'),
     );
+    final markerReward = originalMarker.reward ?? 0;
+    return markerReward >= AppConsts.superRewardThreshold;
   }
 
-  // 클러스터 상세 정보 표시
-  void _showClusterDetails(int count, ClusterMarkerModel representative) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('클러스터 ($count개 마커)'),
-        content: Text('이 위치에 $count개의 마커가 있습니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('닫기'),
-          ),
-        ],
-      ),
+  // 단일 마커 탭 처리
+  void _onTapSingleMarker(ClusterMarkerModel marker) {
+    // 기존 MarkerModel을 찾아서 상세 정보 표시
+    final originalMarker = _markers.firstWhere(
+      (m) => m.markerId == marker.markerId,
+      orElse: () => throw Exception('Marker not found'),
     );
+    _showMarkerDetails(originalMarker);
   }
+
+  // 클러스터 탭 시 확대
+  void _zoomIntoCluster(ClusterOrMarker cluster) {
+    final rep = cluster.representative!;
+    final targetZoom = (_mapZoom + 1.5).clamp(14.0, 16.0); // 앱의 줌 범위 내에서
+    _mapController?.move(rep.position, targetZoom);
+  }
+
 
 
 
@@ -2314,6 +2274,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _mapMoveTimer?.cancel(); // 타이머 정리
+    _clusterDebounceTimer?.cancel(); // 클러스터 디바운스 타이머 정리
     super.dispose();
   }
 
@@ -2342,7 +2303,7 @@ class _MapScreenState extends State<MapScreen> {
                 initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
                 initialZoom: _currentZoom,
                 minZoom: 14.0,  // 최소 줌 레벨 (줌 아웃 한계)
-                maxZoom: 17.0,  // 최대 줌 레벨 (줌 인 한계)
+                maxZoom: 16.0,  // 최대 줌 레벨 (줌 인 한계)
           onMapReady: _onMapReady,
                 onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
                 onTap: (tapPosition, point) {
