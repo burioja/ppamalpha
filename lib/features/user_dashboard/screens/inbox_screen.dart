@@ -36,10 +36,15 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   DocumentSnapshot? _lastDocument;
   static const int _pageSize = 20;
 
+  // 내 포스트 캐싱
+  List<PostModel> _cachedDraftPosts = [];
+  List<PostModel> _cachedDeployedPosts = [];
+  bool _myPostsLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this); // PRD에 맞게 2개 탭으로 변경
+    _tabController = TabController(length: 2, vsync: this); // 내 포스트/받은 포스트 2개 탭
     _tabController.addListener(() {
       setState(() {});
     });
@@ -79,13 +84,14 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   // 데이터 초기 로딩
   Future<void> _loadInitialData() async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
       _allPosts.clear();
       _filteredPosts.clear();
       _lastDocument = null;
       _hasMoreData = true;
+      _myPostsLoaded = false; // 내 포스트도 새로고침
     });
 
     try {
@@ -311,6 +317,15 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         title: const Text('인박스'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          // 새로고침 버튼
+          if (_tabController.index == 0) // 내 포스트 탭일 때만 표시
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _refreshMyPosts,
+              tooltip: '새로고침',
+            ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.black87,
@@ -510,108 +525,143 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 내 포스트 탭
+  // 내 포스트 탭 (배포 전/배포된 nested tabs)
   Widget _buildMyPostsTab() {
-    return FutureBuilder<List<PostModel>>(
-      future: _postService.getUserAllMyPosts(_currentUserId!),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('내 포스트를 불러오는 중...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+    // 첫 로드 시에만 데이터 가져오기
+    if (!_myPostsLoaded) {
+      _loadMyPosts();
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('포스트를 불러오는 중...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            color: Colors.grey.shade100,
+            child: const TabBar(
+              labelColor: Colors.blue,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Colors.blue,
+              tabs: [
+                Tab(text: '배포 전'),
+                Tab(text: '배포된'),
               ],
             ),
-          );
-        } else if (snapshot.hasError) {
-          debugPrint('❌ 내 포스트 탭 에러: ${snapshot.error}');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ),
+          Expanded(
+            child: TabBarView(
               children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-                const SizedBox(height: 16),
-                Text('내 포스트 로드 오류', style: TextStyle(fontSize: 18, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Text('${snapshot.error}', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {}); // 재시도
-                  },
-                  child: const Text('다시 시도'),
-                ),
+                _buildDraftPostsTabContent(_cachedDraftPosts, _cachedDeployedPosts),
+                _buildDeployedPostsTabContent(_cachedDeployedPosts),
               ],
             ),
-          );
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          debugPrint('📭 내 포스트 없음: 데이터 ${snapshot.data?.length ?? 0}개');
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.post_add, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('아직 만든 포스트가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                SizedBox(height: 8),
-                Text('우측 하단 + 버튼을 눌러 포스트를 만들어보세요!', 
-                     style: TextStyle(fontSize: 14, color: Colors.grey)),
-              ],
-            ),
-          );
-        } else {
-          final filteredPosts = _filterAndSortPosts(snapshot.data!);
-          debugPrint('✅ 내 포스트 로드 성공: ${snapshot.data!.length}개, 필터링 후: ${filteredPosts.length}개');
-          
-          return Column(
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 내 포스트 새로고침
+  Future<void> _refreshMyPosts() async {
+    setState(() {
+      _myPostsLoaded = false;
+    });
+    await _loadMyPosts();
+  }
+
+  // 내 포스트 로드 (한 번만 실행)
+  Future<void> _loadMyPosts() async {
+    if (_myPostsLoaded) return;
+
+    try {
+      final results = await Future.wait([
+        _postService.getDraftPosts(_currentUserId!),
+        _postService.getDeployedPosts(_currentUserId!),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _cachedDraftPosts = results[0];
+          _cachedDeployedPosts = results[1];
+          _myPostsLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ 내 포스트 로드 에러: $e');
+      if (mounted) {
+        setState(() {
+          _myPostsLoaded = true; // 에러여도 재시도 방지
+        });
+      }
+    }
+  }
+
+  // 배포 전 포스트 탭 콘텐츠 (데이터 이미 로드됨)
+  Widget _buildDraftPostsTabContent(List<PostModel> draftPosts, List<PostModel> deployedPosts) {
+    final totalPosts = draftPosts.length + deployedPosts.length;
+    final filteredPosts = _filterAndSortPosts(draftPosts);
+
+    return Column(
+      children: [
+        // 데이터 정보 헤더
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+          ),
+          child: Row(
             children: [
-              // 데이터 정보 헤더
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.blue.shade600),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '총 ${snapshot.data!.length}개 중 ${filteredPosts.length}개 표시',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    // 배포 포스트 통계 링크 (PRD 요구사항)
-                    TextButton.icon(
-                      onPressed: () => _showDistributedPostsStats(context),
-                      icon: Icon(Icons.analytics, size: 16, color: Colors.blue.shade700),
-                      label: Text(
-                        '배포 통계',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+              Icon(Icons.info_outline, size: 16, color: Colors.blue.shade600),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '총 ${totalPosts}개 중 ${filteredPosts.length}개 표시',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-              // 포스트 목록
-              Expanded(
-                child: filteredPosts.isEmpty
-                    ? const Center(
+              // 배포 포스트 통계 링크 (PRD 요구사항)
+              TextButton.icon(
+                onPressed: () => _showDistributedPostsStats(context),
+                icon: Icon(Icons.analytics, size: 16, color: Colors.blue.shade700),
+                label: Text(
+                  '배포 통계',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // 포스트 목록
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadInitialData,
+            child: filteredPosts.isEmpty
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 200),
+                      Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -622,27 +672,29 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             Text('검색어나 필터를 변경해보세요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
                           ],
                         ),
-                      )
-                    : NotificationListener<ScrollNotification>(
-                        onNotification: (ScrollNotification scrollInfo) {
-                          if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
-                            // 스크롤이 끝에 도달했을 때 추가 데이터 로딩
-                            _loadMoreData();
-                          }
-                          return true;
-                        },
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
-                            
-                            return GridView.builder(
-                              padding: const EdgeInsets.all(12),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                crossAxisSpacing: 8,
-                                mainAxisSpacing: 8,
-                                childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
-                              ),
+                      ),
+                    ],
+                  )
+              : NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification scrollInfo) {
+                    if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+                      // 스크롤이 끝에 도달했을 때 추가 데이터 로딩
+                      _loadMoreData();
+                    }
+                    return true;
+                  },
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
+                        ),
                           itemCount: filteredPosts.length + (_hasMoreData ? 1 : 0),
                           itemBuilder: (context, index) {
                             // 로딩 인디케이터 표시
@@ -655,8 +707,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                               post: post,
                               showDeleteButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 삭제 버튼 표시
                               onDelete: () => _showDeleteConfirmation(post),
-                              showStatisticsButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 통계 버튼 표시
-                              onStatistics: () => _showPostStatistics(post),
+                              showStatisticsButton: false, // 배포 전 포스트는 통계 버튼 표시 안함
+                              onStatistics: null,
                               onTap: () async {
                                 // 포스트 상세 화면으로 이동
                                 final result = await Navigator.pushNamed(
@@ -677,6 +729,287 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                               },
                             );
                           },
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 배포된 포스트 탭 콘텐츠 (데이터 이미 로드됨)
+  Widget _buildDeployedPostsTabContent(List<PostModel> deployedPosts) {
+    debugPrint('✅ 배포된 포스트 로드 성공: ${deployedPosts.length}개');
+
+    // 디버그: 각 포스트 정보 출력
+    for (var post in deployedPosts) {
+      debugPrint('  📦 배포된 포스트: ${post.title} (status: ${post.status.name})');
+    }
+
+    return Column(
+      children: [
+        // 데이터 정보 헤더
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: Colors.green.shade600),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '총 ${deployedPosts.length}개 배포됨',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.green.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 포스트 그리드
+        Expanded(
+          child: deployedPosts.isEmpty
+              ? const Center(
+                  child: Text(
+                    '배포된 포스트가 없습니다.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadInitialData,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 0.65, // 오버플로우 방지를 위해 높이 증가
+                        ),
+                        itemCount: deployedPosts.length,
+                        itemBuilder: (context, index) {
+                          try {
+                            final post = deployedPosts[index];
+
+                            return PostTileCard(
+                              post: post,
+                              showStatisticsButton: true,
+                              onTap: () async {
+                                final result = await Navigator.pushNamed(
+                                  context,
+                                  '/post-detail',
+                                  arguments: {
+                                    'post': post,
+                                    'isEditable': false,
+                                  },
+                                );
+                                if (result == true && mounted) {
+                                  setState(() {});
+                                }
+                              },
+                              onStatistics: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/post-statistics',
+                                  arguments: {
+                                    'post': post,
+                                  },
+                                );
+                              },
+                            );
+                          } catch (e, stackTrace) {
+                            debugPrint('❌ PostTileCard 렌더링 에러 (index=$index): $e');
+                            debugPrint('스택 트레이스: $stackTrace');
+                            return Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                border: Border.all(color: Colors.red),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('포스트 로드 오류: $e', style: const TextStyle(color: Colors.red)),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // 배포된 포스트 탭 (DEPLOYED 상태만) - 하위 호환성 유지
+  Widget _buildDeployedPostsTab() {
+    return FutureBuilder<List<PostModel>>(
+      future: _postService.getDeployedPosts(_currentUserId!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('배포된 포스트를 불러오는 중...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+              ],
+            ),
+          );
+        } else if (snapshot.hasError) {
+          debugPrint('❌ 배포된 포스트 탭 에러: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+                const SizedBox(height: 16),
+                Text('배포된 포스트 로드 오류', style: TextStyle(fontSize: 18, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text('${snapshot.error}', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {}); // 재시도
+                  },
+                  child: const Text('다시 시도'),
+                ),
+              ],
+            ),
+          );
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          debugPrint('📭 배포된 포스트 없음: 데이터 ${snapshot.data?.length ?? 0}개');
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.rocket_launch, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('아직 배포된 포스트가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                SizedBox(height: 8),
+                Text('배포 전 포스트를 마커에 배포해보세요!',
+                     style: TextStyle(fontSize: 14, color: Colors.grey)),
+              ],
+            ),
+          );
+        } else {
+          final deployedPosts = snapshot.data!;
+          debugPrint('✅ 배포된 포스트 로드 성공: ${deployedPosts.length}개');
+
+          // 디버그: 각 포스트 정보 출력
+          for (var post in deployedPosts) {
+            debugPrint('  📦 배포된 포스트: ${post.title} (status: ${post.status.name})');
+          }
+
+          return Column(
+            children: [
+              // 데이터 정보 헤더
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.green.shade600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '총 ${deployedPosts.length}개 배포됨',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 포스트 그리드
+              Expanded(
+                child: deployedPosts.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '배포된 포스트가 없습니다.',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadInitialData,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+
+                            return GridView.builder(
+                              padding: const EdgeInsets.all(12),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                                childAspectRatio: 0.70, // 오버플로우 방지를 위해 높이 증가
+                              ),
+                              itemCount: deployedPosts.length,
+                              itemBuilder: (context, index) {
+                                try {
+                                  final post = deployedPosts[index];
+                                  debugPrint('🎨 렌더링 중: index=$index, postId=${post.postId}, title=${post.title}');
+
+                                  return PostTileCard(
+                                    post: post,
+                                    showStatisticsButton: true, // 배포된 포스트는 항상 통계 버튼 표시
+                                    onTap: () async {
+                                      final result = await Navigator.pushNamed(
+                                        context,
+                                        '/post-detail',
+                                        arguments: post,
+                                      );
+                                      if (result == true && mounted) {
+                                        setState(() {});
+                                      }
+                                    },
+                                    onStatistics: () {
+                                      Navigator.pushNamed(
+                                        context,
+                                        '/post-statistics',
+                                        arguments: post,
+                                      );
+                                    },
+                                  );
+                                } catch (e, stackTrace) {
+                                  debugPrint('❌ PostTileCard 렌더링 에러 (index=$index): $e');
+                                  debugPrint('스택 트레이스: $stackTrace');
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      border: Border.all(color: Colors.red),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text('포스트 로드 오류: $e', style: const TextStyle(color: Colors.red)),
+                                  );
+                                }
+                              },
                             );
                           },
                         ),
@@ -688,8 +1021,6 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       },
     );
   }
-
-
 
   // 받은 포스트 탭 (PRD에 맞게 수정)
   Widget _buildCollectedPostsTab() {
@@ -760,20 +1091,27 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
               ),
               // 포스트 목록
               Expanded(
-                child: filteredPosts.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.filter_list, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                            SizedBox(height: 8),
-                            Text('검색어나 필터를 변경해보세요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                child: RefreshIndicator(
+                  onRefresh: _loadInitialData,
+                  child: filteredPosts.isEmpty
+                      ? ListView(
+                          children: const [
+                            SizedBox(height: 200),
+                            Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.filter_list, size: 64, color: Colors.grey),
+                                  SizedBox(height: 16),
+                                  Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                                  SizedBox(height: 8),
+                                  Text('검색어나 필터를 변경해보세요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                                ],
+                              ),
+                            ),
                           ],
-                        ),
-                      )
-                    : LayoutBuilder(
+                        )
+                      : LayoutBuilder(
                         builder: (context, constraints) {
                           int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
                           
@@ -813,6 +1151,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           );
                         },
                       ),
+                ),
               ),
             ],
           );

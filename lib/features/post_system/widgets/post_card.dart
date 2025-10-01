@@ -62,16 +62,19 @@ class PostCard extends StatelessWidget {
                   // 통계 버튼 (배포된 포스트에만 표시)
                   if (showStatisticsButton && post.isDeployed && onStatistics != null) ...[
                     const SizedBox(width: 8),
-                    IconButton(
+                    ElevatedButton.icon(
                       onPressed: onStatistics,
-                      icon: const Icon(Icons.bar_chart, color: Colors.blue),
-                      iconSize: 20,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
+                      icon: const Icon(Icons.bar_chart, size: 18),
+                      label: const Text('통계', style: TextStyle(fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: const Size(80, 36),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      tooltip: '통계 보기',
                     ),
                   ],
                   // 삭제 버튼 (내 포스트인 경우에만 표시)

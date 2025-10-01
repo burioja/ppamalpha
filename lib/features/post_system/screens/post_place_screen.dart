@@ -526,6 +526,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         canRequestReward: _canTransfer,
         canUse: _selectedFunction == 'Using',
         defaultExpiresAt: calculatedExpiresAt,
+        placeId: widget.place.id, // 스토어 ID 추가
+        isCoupon: _selectedPostType == '쿠폰', // 쿠폰 여부 추가
       );
 
       if (mounted) {

@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 enum PostStatus {
   DRAFT,     // 배포 대기 (수정 가능)
   DEPLOYED,  // 배포됨 (수정 불가, 만료 시 자동 삭제)
+  RECALLED,  // 회수됨 (재배포 불가)
   DELETED,   // 삭제됨
 }
 
@@ -16,6 +17,8 @@ extension PostStatusExtension on PostStatus {
         return '배포 대기';
       case PostStatus.DEPLOYED:
         return '배포됨';
+      case PostStatus.RECALLED:
+        return '회수됨';
       case PostStatus.DELETED:
         return '삭제됨';
     }
@@ -27,6 +30,8 @@ extension PostStatusExtension on PostStatus {
         return 'draft';
       case PostStatus.DEPLOYED:
         return 'deployed';
+      case PostStatus.RECALLED:
+        return 'recalled';
       case PostStatus.DELETED:
         return 'deleted';
     }
@@ -38,6 +43,8 @@ extension PostStatusExtension on PostStatus {
         return PostStatus.DRAFT;
       case 'deployed':
         return PostStatus.DEPLOYED;
+      case 'recalled':
+        return PostStatus.RECALLED;
       case 'deleted':
         return PostStatus.DELETED;
       // 기존 expired 데이터 호환성을 위해 deleted로 변환
@@ -56,6 +63,7 @@ class PostModel {
   final String creatorName;
   final DateTime createdAt;
   final DateTime? updatedAt; // 수정일
+  final DateTime? deployedAt; // 배포일 (마커 배포 시각)
   final int reward; // 리워드 금액
 
   // 🚀 템플릿 기본 설정 (배포 시 사용할 기본값)
@@ -123,6 +131,7 @@ class PostModel {
     required this.canUse,
     this.placeId,
     this.updatedAt,
+    this.deployedAt,
     this.status = PostStatus.DRAFT,
     this.rawSnapshot,
     this.collectedAt,
@@ -145,7 +154,6 @@ class PostModel {
     final int parsedReward = switch (rawReward) {
       int v => v,
       double v => v.toInt(),
-      num v => v.toInt(),
       String v => int.tryParse(v) ?? 0,
       _ => 0,
     };
@@ -187,6 +195,9 @@ class PostModel {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      deployedAt: data['deployedAt'] != null
+          ? (data['deployedAt'] as Timestamp).toDate()
+          : null,
       status: PostStatusExtension.fromString(data['status'] ?? 'draft'),
       rawSnapshot: doc, // DocumentSnapshot 저장
       collectedAt: data['collectedAt'] != null
@@ -225,6 +236,7 @@ class PostModel {
       'canUse': canUse,
       'placeId': placeId,
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'deployedAt': deployedAt != null ? Timestamp.fromDate(deployedAt!) : null,
       'status': status.value,
       'collectedAt': collectedAt != null ? Timestamp.fromDate(collectedAt!) : null,
       'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
@@ -344,6 +356,7 @@ class PostModel {
     bool? canUse,
     String? placeId,
     DateTime? updatedAt,
+    DateTime? deployedAt,
     PostStatus? status,
     DocumentSnapshot? rawSnapshot,
     DateTime? collectedAt,
@@ -374,6 +387,7 @@ class PostModel {
       canUse: canUse ?? this.canUse,
       placeId: placeId ?? this.placeId,
       updatedAt: updatedAt ?? this.updatedAt,
+      deployedAt: deployedAt ?? this.deployedAt,
       status: status ?? this.status,
       rawSnapshot: rawSnapshot ?? this.rawSnapshot,
       collectedAt: collectedAt ?? this.collectedAt,

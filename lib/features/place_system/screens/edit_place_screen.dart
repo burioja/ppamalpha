@@ -50,6 +50,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   final List<dynamic> _selectedImages = [];
   final List<String> _imageNames = [];
   final List<String> _existingImageUrls = [];
+  final List<String> _existingThumbnailUrls = [];
 
   @override
   void initState() {
@@ -71,6 +72,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
     // 기존 이미지 URL 복사
     _existingImageUrls.addAll(widget.place.imageUrls);
+    _existingThumbnailUrls.addAll(widget.place.thumbnailUrls);
   }
 
   @override
@@ -105,23 +107,29 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     });
 
     try {
-      // 새로 선택된 이미지 업로드
+      // 새로 선택된 이미지 업로드 (원본 + 썸네일)
       final List<String> newImageUrls = [];
+      final List<String> newThumbnailUrls = [];
+
       for (final img in _selectedImages) {
-        String url;
+        Map<String, String> uploadResult;
+
         if (img is File) {
-          url = await _firebaseService.uploadImage(img, 'places');
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(img, 'places');
         } else if (img is String && img.startsWith('data:image/')) {
           final safeName = 'place_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(img, 'places', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(img, 'places', safeName);
         } else {
           continue;
         }
-        newImageUrls.add(url);
+
+        newImageUrls.add(uploadResult['original']!);
+        newThumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
       // 기존 이미지 + 새 이미지 합치기
       final allImageUrls = [..._existingImageUrls, ...newImageUrls];
+      final allThumbnailUrls = [..._existingThumbnailUrls, ...newThumbnailUrls];
 
       final updatedPlace = widget.place.copyWith(
         name: _nameController.text.trim(),
@@ -131,6 +139,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: allImageUrls,
+        thumbnailUrls: allThumbnailUrls,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
@@ -535,7 +544,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
   Future<void> _pickImageMobile() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {

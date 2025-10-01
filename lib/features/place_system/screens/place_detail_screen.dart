@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
+import '../../../widgets/network_image_fallback_with_data.dart';
 
 class PlaceDetailScreen extends StatelessWidget {
   final String placeId;
@@ -54,6 +55,11 @@ class PlaceDetailScreen extends StatelessWidget {
             );
           } else {
             final place = snapshot.data!;
+            debugPrint('📸 PlaceDetailScreen - Place ID: ${place.id}');
+            debugPrint('📸 PlaceDetailScreen - imageUrls: ${place.imageUrls}');
+            debugPrint('📸 PlaceDetailScreen - hasImages: ${place.hasImages}');
+            debugPrint('📸 PlaceDetailScreen - imageUrls.length: ${place.imageUrls.length}');
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -62,6 +68,28 @@ class PlaceDetailScreen extends StatelessWidget {
                   // 상단 이미지 그리드 (3-4개 우선 표시)
                   if (place.hasImages) ...[
                     _buildImageGridHeader(place),
+                    const SizedBox(height: 16),
+                  ] else ...[
+                    // 이미지가 없을 때 표시
+                    Container(
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.image_not_supported, size: 60, color: Colors.grey.shade400),
+                          const SizedBox(height: 8),
+                          Text(
+                            '등록된 이미지가 없습니다',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
@@ -94,39 +122,27 @@ class PlaceDetailScreen extends StatelessWidget {
       height: 200,
       width: double.infinity,
       child: images.length == 1
-          ? _buildSingleImage(images[0])
+          ? _buildSingleImage(images[0], place, 0)
           : images.length == 2
-              ? _buildDoubleImages(images)
+              ? _buildDoubleImages(images, place)
               : images.length == 3
-                  ? _buildTripleImages(images)
-                  : _buildQuadImages(images),
+                  ? _buildTripleImages(images, place)
+                  : _buildQuadImages(images, place),
     );
   }
 
-  Widget _buildSingleImage(String imageUrl) {
+  Widget _buildSingleImage(String imageUrl, PlaceModel place, int index) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: Image.network(
+      child: buildHighQualityImageWithData(
         imageUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: 200,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: double.infinity,
-            height: 200,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.image_not_supported, size: 60, color: Colors.grey.shade400),
-          );
-        },
+        place.thumbnailUrls.isNotEmpty ? place.thumbnailUrls : null,
+        index,
       ),
     );
   }
 
-  Widget _buildDoubleImages(List<String> images) {
+  Widget _buildDoubleImages(List<String> images, PlaceModel place) {
     return Row(
       children: [
         Expanded(
@@ -135,7 +151,7 @@ class PlaceDetailScreen extends StatelessWidget {
               topLeft: Radius.circular(16),
               bottomLeft: Radius.circular(16),
             ),
-            child: Image.network(images[0], fit: BoxFit.cover, height: 200),
+            child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
           ),
         ),
         const SizedBox(width: 2),
@@ -145,14 +161,14 @@ class PlaceDetailScreen extends StatelessWidget {
               topRight: Radius.circular(16),
               bottomRight: Radius.circular(16),
             ),
-            child: Image.network(images[1], fit: BoxFit.cover, height: 200),
+            child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTripleImages(List<String> images) {
+  Widget _buildTripleImages(List<String> images, PlaceModel place) {
     return Row(
       children: [
         Expanded(
@@ -162,7 +178,7 @@ class PlaceDetailScreen extends StatelessWidget {
               topLeft: Radius.circular(16),
               bottomLeft: Radius.circular(16),
             ),
-            child: Image.network(images[0], fit: BoxFit.cover, height: 200),
+            child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
           ),
         ),
         const SizedBox(width: 2),
@@ -172,14 +188,14 @@ class PlaceDetailScreen extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
-                  child: Image.network(images[1], fit: BoxFit.cover, width: double.infinity),
+                  child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
                 ),
               ),
               const SizedBox(height: 2),
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
-                  child: Image.network(images[2], fit: BoxFit.cover, width: double.infinity),
+                  child: buildHighQualityImageWithData(images[2], place.thumbnailUrls, 2),
                 ),
               ),
             ],
@@ -189,7 +205,7 @@ class PlaceDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuadImages(List<String> images) {
+  Widget _buildQuadImages(List<String> images, PlaceModel place) {
     return Column(
       children: [
         Expanded(
@@ -198,14 +214,14 @@ class PlaceDetailScreen extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(topLeft: Radius.circular(16)),
-                  child: Image.network(images[0], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                  child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
                 ),
               ),
               const SizedBox(width: 2),
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
-                  child: Image.network(images[1], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                  child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
                 ),
               ),
             ],
@@ -218,14 +234,14 @@ class PlaceDetailScreen extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16)),
-                  child: Image.network(images[2], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                  child: buildHighQualityImageWithData(images[2], place.thumbnailUrls, 2),
                 ),
               ),
               const SizedBox(width: 2),
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
-                  child: Image.network(images[3], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                  child: buildHighQualityImageWithData(images[3], place.thumbnailUrls, 3),
                 ),
               ),
             ],

@@ -292,16 +292,24 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> {
 
   Widget _buildHourlyChart() {
     final timePattern = _statistics!['timePattern'] as Map<String, dynamic>;
-    final hourlyData = timePattern['hourly'] as Map<String, dynamic>;
+    final hourlyData = timePattern['hourly'];
 
-    if (hourlyData.isEmpty) {
+    if (hourlyData == null || (hourlyData is Map && hourlyData.isEmpty)) {
       return _buildEmptyChart('시간대별 수집 패턴', '아직 수집 데이터가 없습니다');
+    }
+
+    // Convert to Map<String, int> if needed
+    Map<String, int> hourlyMap = {};
+    if (hourlyData is Map) {
+      hourlyData.forEach((key, value) {
+        hourlyMap[key.toString()] = (value as num).toInt();
+      });
     }
 
     // 0-23시 데이터 생성
     final List<BarChartGroupData> barGroups = [];
     for (int hour = 0; hour < 24; hour++) {
-      final count = hourlyData[hour.toString()] ?? 0;
+      final count = hourlyMap[hour.toString()] ?? 0;
       barGroups.add(
         BarChartGroupData(
           x: hour,
@@ -385,17 +393,25 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> {
 
   Widget _buildDailyChart() {
     final timePattern = _statistics!['timePattern'] as Map<String, dynamic>;
-    final dailyData = timePattern['daily'] as Map<String, dynamic>;
+    final dailyData = timePattern['daily'];
 
-    if (dailyData.isEmpty) {
+    if (dailyData == null || (dailyData is Map && dailyData.isEmpty)) {
       return _buildEmptyChart('요일별 수집 패턴', '아직 수집 데이터가 없습니다');
+    }
+
+    // Convert to Map<String, int> if needed
+    Map<String, int> dailyMap = {};
+    if (dailyData is Map) {
+      dailyData.forEach((key, value) {
+        dailyMap[key.toString()] = (value as num).toInt();
+      });
     }
 
     final days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     final List<FlSpot> spots = [];
 
     for (int i = 0; i < days.length; i++) {
-      final count = dailyData[days[i]] ?? 0;
+      final count = dailyMap[days[i]] ?? 0;
       spots.add(FlSpot(i.toDouble(), count.toDouble()));
     }
 

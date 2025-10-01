@@ -275,6 +275,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
 
         print('✅ 포스트 배포 완료: ${_selectedPost!.postId} (${quantity}개 마커 생성)');
 
+        // Navigator.pop에서 사용하기 위해 postId 저장
+        final deployedPostId = _selectedPost!.postId;
+
+        // 배포 성공 후 즉시 포스트 목록 새로고침 (배포된 포스트 제거)
+        await _loadUserPosts();
+
+        // 선택된 포스트 초기화 (배포 완료되었으므로)
+        setState(() {
+          _selectedPost = null;
+        });
+
         if (mounted) {
           // 성공 메시지 표시
           await _showSuccessDialog(
@@ -284,7 +295,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
 
           Navigator.pop(context, {
             'location': _selectedLocation,
-            'postId': _selectedPost!.postId,
+            'postId': deployedPostId,
             'address': null,
             'quantity': quantity,
             'price': price,

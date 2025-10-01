@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
 import 'dart:convert';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
+import '../../../core/utils/file_helper.dart';
 
 class CreatePlaceScreen extends StatefulWidget {
   const CreatePlaceScreen({super.key});
@@ -73,19 +74,34 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
     });
 
     try {
-      // 이미지 업로드
+      // 이미지 업로드 (원본 + 썸네일)
       final List<String> imageUrls = [];
+      final List<String> thumbnailUrls = [];
+
       for (final img in _selectedImages) {
-        String url;
-        if (img is File) {
-          url = await _firebaseService.uploadImage(img, 'places');
-        } else if (img is String && img.startsWith('data:image/')) {
+        Map<String, String> uploadResult;
+
+        if (img is String && img.startsWith('data:image/')) {
+          // 웹: base64 데이터
           final safeName = 'place_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(img, 'places', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(
+            img,
+            'places',
+            safeName,
+          );
+        } else if (img is String && !kIsWeb) {
+          // 모바일: 파일 경로
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(
+            FileHelper.createFile(img),
+            'places',
+          );
         } else {
+          // 지원하지 않는 타입
           continue;
         }
-        imageUrls.add(url);
+
+        imageUrls.add(uploadResult['original']!);
+        thumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
       final place = PlaceModel(
@@ -98,6 +114,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: imageUrls,
+        thumbnailUrls: thumbnailUrls,
         operatingHours: null,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
@@ -402,6 +419,7 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
   Widget _buildCrossPlatformImage(dynamic imageData) {
     if (imageData is String) {
       if (imageData.startsWith('data:image/')) {
+        // 웹: base64 데이터
         return Image.memory(
           base64Decode(imageData.split(',')[1]),
           width: 120,
@@ -409,12 +427,12 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
           fit: BoxFit.cover,
         );
       } else if (imageData.startsWith('http')) {
+        // 네트워크 URL
         return Image.network(imageData, width: 120, height: 120, fit: BoxFit.cover);
-      } else {
-        return Image.file(File(imageData), width: 120, height: 120, fit: BoxFit.cover);
+      } else if (!kIsWeb) {
+        // 모바일: 파일 경로
+        return Image.file(FileHelper.createFile(imageData), width: 120, height: 120, fit: BoxFit.cover);
       }
-    } else if (imageData is File) {
-      return Image.file(imageData, width: 120, height: 120, fit: BoxFit.cover);
     }
     return Container(width: 120, height: 120, color: Colors.grey[300], child: const Icon(Icons.image, size: 40, color: Colors.grey));
   }
@@ -435,11 +453,11 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
 
   Future<void> _pickImageMobile() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {
-          _selectedImages.add(File(image.path));
+          _selectedImages.add(image.path); // 파일 경로를 String으로 저장
           _imageNames.add(image.name);
         });
       }
@@ -453,7 +471,7 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
         allowMultiple: true,
         allowCompression: true,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
           if (file.size > 10 * 1024 * 1024) {
@@ -462,12 +480,16 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
             }
             continue;
           }
-          
-          if (mounted) {
-            setState(() {
-              _selectedImages.add(file.path ?? '');
-              _imageNames.add(file.name);
-            });
+
+          // 웹에서는 bytes를 base64로 변환해서 저장
+          if (file.bytes != null) {
+            final base64Image = 'data:image/${file.extension};base64,${base64Encode(file.bytes!)}';
+            if (mounted) {
+              setState(() {
+                _selectedImages.add(base64Image);
+                _imageNames.add(file.name);
+              });
+            }
           }
         }
       }

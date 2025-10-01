@@ -35,6 +35,7 @@ import '../features/place_system/screens/edit_place_screen.dart';
 import '../features/place_system/screens/place_detail_screen.dart';
 import '../features/place_system/screens/place_image_viewer_screen.dart';
 import '../features/place_system/screens/place_search_screen.dart';
+import '../features/place_system/screens/my_places_screen.dart';
 
 // Admin System
 import '../features/admin/admin_cleanup_screen.dart';
@@ -64,6 +65,7 @@ class AppRoutes {
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
+  static const String myPlaces = '/my-places';
 
   // Admin routes
   static const String adminCleanup = '/admin-cleanup';
@@ -161,6 +163,7 @@ class AppRoutes {
       final index = args?['index'] as int? ?? 0;
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
+    myPlaces: (context) => const MyPlacesScreen(),
     store: (context) => const StoreScreen(),
     adminCleanup: (context) => const AdminCleanupScreen(),
   };
