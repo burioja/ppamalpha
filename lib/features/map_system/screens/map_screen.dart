@@ -22,7 +22,7 @@ import '../../post_system/controllers/post_deployment_controller.dart';
 // OSM 기반 Fog of War 시스템
 import '../services/external/osm_fog_service.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
-import '../widgets/fog_overlay_widget.dart';
+import '../widgets/unified_fog_overlay_widget.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';
@@ -137,6 +137,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _isMockControllerVisible = false;
   LatLng? _mockPosition;
   LatLng? _originalGpsPosition; // 원래 GPS 위치 백업
+  LatLng? _previousMockPosition; // 이전 Mock 위치 (회색 영역 표시용)
+  LatLng? _previousGpsPosition; // 이전 GPS 위치 (회색 영역 표시용)
 
   @override
   void initState() {
@@ -318,6 +320,9 @@ class _MapScreenState extends State<MapScreen> {
       
       final newPosition = LatLng(position.latitude, position.longitude);
       
+      // 이전 GPS 위치 저장 (회색 영역 표시용)
+      final previousGpsPosition = _currentPosition;
+      
       setState(() {
         _currentPosition = newPosition;
         _errorMessage = null;
@@ -336,6 +341,9 @@ class _MapScreenState extends State<MapScreen> {
       
       // 즉시 반영 (렌더링용 메모리 캐시)
       _setLevel1TileLocally(tileId);
+      
+      // 회색 영역 업데이트 (이전 위치 포함)
+      _updateGrayAreasWithPreviousPosition(previousGpsPosition);
       
       // 유료 상태 확인 후 포스트 스트림 설정
       await _checkPremiumStatus();
@@ -512,24 +520,24 @@ class _MapScreenState extends State<MapScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 30일 이내 방문 기록 가져오기
+      // 30일 이내 방문 기록 가져오기 (올바른 컬렉션 경로 사용)
       final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
       
       final visitedTiles = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
           .collection('visited_tiles')
-          .where('userId', isEqualTo: user.uid)
-          .where('visitedAt', isGreaterThan: thirtyDaysAgo)
+          .where('lastVisitTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
           .get();
 
       final visitedPositions = <LatLng>[];
       
       for (final doc in visitedTiles.docs) {
-        final data = doc.data();
-        final lat = data['latitude'] as double?;
-        final lng = data['longitude'] as double?;
-        
-        if (lat != null && lng != null) {
-          visitedPositions.add(LatLng(lat, lng));
+        final tileId = doc.id;
+        // 타일 ID에서 좌표 추출
+        final position = _extractPositionFromTileId(tileId);
+        if (position != null) {
+          visitedPositions.add(position);
         }
       }
 
@@ -544,6 +552,31 @@ class _MapScreenState extends State<MapScreen> {
       
     } catch (e) {
       debugPrint('방문 위치 로드 실패: $e');
+    }
+  }
+
+  // 타일 ID에서 좌표 추출하는 헬퍼 메서드
+  LatLng? _extractPositionFromTileId(String tileId) {
+    try {
+      if (tileId.startsWith('tile_')) {
+        // 1km 근사 그리드 형식: tile_lat_lng
+        final parts = tileId.split('_');
+        if (parts.length == 3) {
+          final tileLat = int.tryParse(parts[1]);
+          final tileLng = int.tryParse(parts[2]);
+          if (tileLat != null && tileLng != null) {
+            const double tileSize = 0.009;
+            return LatLng(
+              tileLat * tileSize + (tileSize / 2),
+              tileLng * tileSize + (tileSize / 2),
+            );
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      print('타일 ID에서 좌표 추출 실패: $e');
+      return null;
     }
   }
 
@@ -2327,6 +2360,9 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _setMockPosition(LatLng position) async {
+    // 이전 Mock 위치 저장 (회색 영역 표시용)
+    final previousPosition = _mockPosition;
+    
     setState(() {
       _mockPosition = position;
       // Mock 모드에서는 실제 위치도 업데이트 (실제 기능처럼 동작)
@@ -2352,6 +2388,9 @@ class _MapScreenState extends State<MapScreen> {
     
     // 포그 오브 워 재구성 (실제 기능처럼 동작)
     _rebuildFogWithUserLocations(position);
+    
+    // 회색 영역 업데이트 (이전 위치 포함)
+    _updateGrayAreasWithPreviousPosition(previousPosition);
     
     // 마커 업데이트
     _updatePostsBasedOnFogLevel();
@@ -2402,6 +2441,66 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isMockControllerVisible = false;
     });
+  }
+
+  // 통합된 회색 영역 업데이트 (DB에서 최신 방문 기록 로드)
+  void _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
+    try {
+      // DB에서 최신 방문 기록 로드 (서버 강제 읽기)
+      final visitedPositions = await _loadVisitedPositionsFromDB();
+      
+      // 이전 위치도 추가 (즉시 반영용)
+      if (previousPosition != null) {
+        visitedPositions.add(previousPosition);
+        print('🎯 이전 위치를 회색 영역으로 추가: ${previousPosition.latitude}, ${previousPosition.longitude}');
+      }
+      
+      // 새로운 회색 영역 생성
+      final grayPolygons = OSMFogService.createGrayAreas(visitedPositions);
+      
+      setState(() {
+        _grayPolygons = grayPolygons;
+      });
+      
+      print('✅ 회색 영역 업데이트 완료: ${visitedPositions.length}개 위치');
+    } catch (e) {
+      print('❌ 회색 영역 업데이트 실패: $e');
+    }
+  }
+
+  // DB에서 최신 방문 기록 로드 (서버 강제 읽기)
+  Future<List<LatLng>> _loadVisitedPositionsFromDB() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
+
+      // 30일 이내 방문 기록 가져오기 (서버 강제 읽기)
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      
+      final visitedTiles = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('visited_tiles')
+          .where('lastVisitTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
+          .get(const GetOptions(source: Source.server)); // 서버 강제 읽기
+
+      final visitedPositions = <LatLng>[];
+      
+      for (final doc in visitedTiles.docs) {
+        final tileId = doc.id;
+        // 타일 ID에서 좌표 추출
+        final position = _extractPositionFromTileId(tileId);
+        if (position != null) {
+          visitedPositions.add(position);
+        }
+      }
+
+      print('🔍 DB에서 로드된 방문 위치 개수: ${visitedPositions.length}');
+      return visitedPositions;
+    } catch (e) {
+      print('❌ DB에서 방문 위치 로드 실패: $e');
+      return [];
+    }
   }
 
   @override
@@ -2486,18 +2585,33 @@ class _MapScreenState extends State<MapScreen> {
                   maxZoom: 16.0,  // 타일 서버 최대 줌
                   tileSize: 256,
                 ),
-                // Fog of War 오버레이 (겹침 문제 해결)
-                FogOverlayWidget(
+                // 통합 포그 오버레이 (검정 → 펀칭 → 회색)
+                UnifiedFogOverlayWidget(
                   mapController: _mapController!,
-                  holeCenters: [
+                  level1Centers: [
                     if (_currentPosition != null) _currentPosition!,
                     if (_homeLocation != null) _homeLocation!,
                     ..._workLocations,
                   ],
-                  userType: _userType,  // 사용자 타입 전달
-                  isSuperPost: false,   // 일반 포스트 기준
+                  level2CentersRaw: _grayPolygons.isNotEmpty 
+                    ? _grayPolygons.map((polygon) {
+                        // 폴리곤의 중심점 계산
+                        if (polygon.points.isEmpty) return const LatLng(0, 0);
+                        double sumLat = 0, sumLng = 0;
+                        for (final point in polygon.points) {
+                          sumLat += point.latitude;
+                          sumLng += point.longitude;
+                        }
+                        return LatLng(
+                          sumLat / polygon.points.length,
+                          sumLng / polygon.points.length,
+                        );
+                      }).toList()
+                    : [],
+                  radiusMeters: 1000.0,
                   fogColor: Colors.black.withOpacity(1.0),
-                    ),
+                  grayColor: Colors.grey.withOpacity(0.33),
+                ),
                 // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
                 // CircleLayer(circles: _ringCircles),
                 // 사용자 위치 마커들

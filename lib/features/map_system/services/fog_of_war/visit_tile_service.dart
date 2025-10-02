@@ -2,85 +2,59 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter/foundation.dart';
 import '../../../../core/models/map/fog_level.dart';
 
-/// 방문 타일 관리 서비스
+/// 방문 타일 관리 서비스 (안정형)
 class VisitTileService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseFirestore _fs = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// 현재 타일 방문 업데이트
+  /// 문서 참조 헬퍼
+  static DocumentReference<Map<String, dynamic>> _doc(String uid, String tileId) {
+    return _fs.collection('users').doc(uid).collection('visited_tiles').doc(tileId);
+  }
+
+  /// A. 방문 업데이트 (idempotent)
   static Future<void> updateCurrentTileVisit(String tileId) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
     try {
-      final visitDoc = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('visited_tiles')
-          .doc(tileId);
-
-      await visitDoc.set({
+      await _doc(user.uid, tileId).set({
         'tileId': tileId,
         'lastVisitTime': FieldValue.serverTimestamp(),
         'visitCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
     } catch (e) {
-      print('타일 방문 업데이트 오류: $e');
+      debugPrint('🔥 updateCurrentTileVisit error: $e');
     }
   }
 
-  /// 특정 타일의 포그 레벨 가져오기 (과거 데이터 호환 폴백 포함)
+  /// B. 특정 타일의 포그 레벨 조회
   static Future<FogLevel> getFogLevelForTile(String tileId) async {
     final user = _auth.currentUser;
     if (user == null) return FogLevel.black;
 
-    Future<FogLevel> _fetch(String docId) async {
-      final snap = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('visited_tiles')
-          .doc(docId)
-          .get(const GetOptions(source: Source.server));
-
+    try {
+      // 🚩 서버 강제 읽기: Web 캐시/지연 회피
+      final snap = await _doc(user.uid, tileId).get(const GetOptions(source: Source.server));
       if (!snap.exists) return FogLevel.black;
+
       final data = snap.data()!;
       final ts = data['lastVisitTime'] as Timestamp?;
-      final t = ts?.toDate();
+      final lastVisit = ts?.toDate();
 
-      if (t == null) {
-        final cnt = (data['visitCount'] as num?)?.toInt() ?? 0;
-        return cnt > 0 ? FogLevel.gray : FogLevel.black;
-      }
-      final d = DateTime.now().difference(t).inDays;
-      return d <= 30 ? FogLevel.gray : FogLevel.black;
-    }
-
-    try {
-      print('🔍 포그레벨 조회: $tileId');
-      
-      // 1차: 현재 스킴 ID (1km 근사 그리드)
-      final primary = await _fetch(tileId);
-      print('  - 1차 조회 결과: $primary');
-      if (primary != FogLevel.black) return primary;
-
-      // 2차: 과거 스킴 ID로 폴백 (Web Mercator XYZ)
-      final latLng = _centerFromAnyTileId(tileId);
-      final legacyId = _xyz18Id(latLng.latitude, latLng.longitude);
-      print('  - 변환된 좌표: ${latLng.latitude}, ${latLng.longitude}');
-      print('  - 과거 스킴 ID: $legacyId');
-      
-      if (legacyId != null && legacyId != tileId) {
-        final legacy = await _fetch(legacyId);
-        print('  - 2차 조회 결과: $legacy');
-        if (legacy != FogLevel.black) return legacy;
+      // 🚩 serverTimestamp 전파 중(null) → 방문 카운트 있으면 임시 gray
+      if (lastVisit == null) {
+        final vc = (data['visitCount'] as num?)?.toInt() ?? 0;
+        return vc > 0 ? FogLevel.gray : FogLevel.black;
       }
 
-      print('  - 최종 결과: $FogLevel.black');
-      return FogLevel.black;
+      final days = DateTime.now().difference(lastVisit).inDays;
+      return (days <= 30) ? FogLevel.gray : FogLevel.black;
     } catch (e) {
-      print('포그 레벨 조회 오류: $e');
+      debugPrint('🔥 getFogLevelForTile error: $e');
       return FogLevel.black;
     }
   }
@@ -152,21 +126,36 @@ class VisitTileService {
     return latitude.clamp(-85.0511, 85.0511);
   }
 
-  /// 포그 레벨 1 타일 ID 목록 가져오기 (캐시됨)
-  static Future<List<String>> getFogLevel1TileIdsCached(String userId) async {
-    try {
-      final thirtyDaysAgo = Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 30)));
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('visited_tiles')
-          .where('lastVisitTime', isGreaterThanOrEqualTo: thirtyDaysAgo) // 30일 이내 방문
-          .get(const GetOptions(source: Source.server)); // 서버 강제
+  /// C. 최근 30일 타일 id 목록 (회색 영역 소스)
+  static Future<List<String>> getFogLevel1TileIdsCached() async {
+    final user = _auth.currentUser;
+    if (user == null) return [];
 
-      print('🔍 포그레벨 1 타일 조회: ${snapshot.docs.length}개');
-      return snapshot.docs.map((doc) => doc.id).toList();
+    try {
+      final thirtyDaysAgo = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(days: 30)),
+      );
+
+      final qs = await _fs
+          .collection('users')
+          .doc(user.uid)
+          .collection('visited_tiles')
+          .where('lastVisitTime', isGreaterThanOrEqualTo: thirtyDaysAgo)
+          .get(const GetOptions(source: Source.server)); // 🚩 서버 강제
+
+      // lastVisitTime == null 인데 visitCount>0 인 문서가 있으면 임시 포함 (안정성↑)
+      final ids = <String>[];
+      for (final d in qs.docs) {
+        final data = d.data();
+        final ts = data['lastVisitTime'] as Timestamp?;
+        final vc = (data['visitCount'] as num?)?.toInt() ?? 0;
+        if (ts != null || vc > 0) {
+          ids.add(d.id);
+        }
+      }
+      return ids;
     } catch (e) {
-      print('포그 레벨 1 타일 목록 조회 오류: $e');
+      debugPrint('🔥 getFogLevel1TileIdsCached error: $e');
       return [];
     }
   }
@@ -210,7 +199,7 @@ class VisitTileService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _firestore
+      final snapshot = await _fs
           .collection('users')
           .doc(user.uid)
           .collection('visited_tiles')

@@ -417,7 +417,7 @@ class PostService {
       if (user == null) return [];
       
       // 🚀 캐시된 FogLevel 1 타일 목록 사용
-      return await VisitTileService.getFogLevel1TileIdsCached(user.uid);
+      return await VisitTileService.getFogLevel1TileIdsCached();
     } catch (e) {
       print('포그레벨 1단계 타일 계산 실패: $e');
       return [];
