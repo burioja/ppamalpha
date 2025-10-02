@@ -744,17 +744,17 @@ class _MapScreenState extends State<MapScreen> {
           // 1km 밖은 방문 기록 확인
           final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
           print('    🔍 1km+버퍼 밖 - 포그레벨: $fogLevel');
-          if (fogLevel == FogLevel.gray) { // clear 체크 제거
+          if (fogLevel == FogLevel.clear || fogLevel == FogLevel.gray) {
             fogLevel1Tiles.add(tileId);
-            print('    ✅ 방문 기록 있음 - 포그레벨 1 추가');
+            print('    ✅ 포그레벨 1+2 영역 - 마커 표시 가능');
           }
         }
       }
       
-      print('✅ 최종 포그레벨 1 타일 개수: ${fogLevel1Tiles.length}');
+      print('✅ 최종 포그레벨 1+2 타일 개수: ${fogLevel1Tiles.length}');
       return fogLevel1Tiles;
     } catch (e) {
-      print('포그레벨 1단계 타일 계산 실패: $e');
+      print('포그레벨 1+2단계 타일 계산 실패: $e');
       return {};
     }
   }
