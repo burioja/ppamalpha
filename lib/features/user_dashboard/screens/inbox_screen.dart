@@ -815,7 +815,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   '/post-detail',
                                   arguments: {
                                     'post': post,
-                                    'isEditable': false,
+                                    'isEditable': true, // 배포된 포스트는 발행자 기준으로 정보 표시 (편집은 canEdit으로 차단)
                                   },
                                 );
                                 if (result == true && mounted) {

@@ -361,7 +361,7 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
+
     if (isCollected) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -379,8 +379,8 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
-    // TODO: isActive 필드 제거됨, status로 대체
+
+    // 비활성 상태 (DELETED)
     if (post.status == PostStatus.DELETED) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -398,7 +398,13 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
+
+    // DEPLOYED 상태면 배지 숨김 (배포된 포스트 탭에서는 모든 포스트가 DEPLOYED이므로 중복 정보)
+    if (post.status == PostStatus.DEPLOYED) {
+      return const SizedBox.shrink();
+    }
+
+    // DRAFT 상태 등 기타 활성 상태
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -406,7 +412,7 @@ class PostTileCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Text(
-        '활성',
+        '작성중',
         style: TextStyle(
           fontSize: 10,
           color: Colors.white,

@@ -823,13 +823,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return;
       }
 
-      // 쿠폰이 활성화되어 있는지 체크
-      if (!place.isCouponEnabled || place.couponPassword == null || place.couponPassword!.isEmpty) {
+      // 쿠폰 암호가 설정되어 있는지 체크
+      if (place.couponPassword == null || place.couponPassword!.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('이 장소에서는 쿠폰 사용이 활성화되지 않았습니다.'),
+              content: Text('이 플레이스에 쿠폰 암호가 설정되지 않았습니다.\n플레이스 사장에게 문의하세요.'),
               backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
             ),
           );
         }
