@@ -6,18 +6,22 @@ class PostCard extends StatelessWidget {
   final PostModel post;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
+  final VoidCallback? onStatistics; // 통계 버튼 콜백 추가
   final bool showStatus;
   final bool showExpiry;
   final bool showDeleteButton;
+  final bool showStatisticsButton; // 통계 버튼 표시 여부
 
   const PostCard({
-    super.key, 
-    required this.post, 
+    super.key,
+    required this.post,
     this.onTap,
     this.onDelete,
+    this.onStatistics,
     this.showStatus = true,
     this.showExpiry = true,
     this.showDeleteButton = false,
+    this.showStatisticsButton = false,
   });
 
   @override
@@ -44,7 +48,7 @@ class PostCard extends StatelessWidget {
                     child: Text(
                       post.title.isNotEmpty ? post.title : '(제목 없음)',
                       style: const TextStyle(
-                        fontSize: 18, 
+                        fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -55,6 +59,24 @@ class PostCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   // TODO: isCollected 필드 제거됨, 쿼리 기반으로 대체
                   _buildStatusChip(isDeleted, false), // 임시: 쿼리에서 확인 필요
+                  // 통계 버튼 (배포된 포스트에만 표시)
+                  if (showStatisticsButton && post.isDeployed && onStatistics != null) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: onStatistics,
+                      icon: const Icon(Icons.bar_chart, size: 18),
+                      label: const Text('통계', style: TextStyle(fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: const Size(80, 36),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
                   // 삭제 버튼 (내 포스트인 경우에만 표시)
                   if (showDeleteButton && onDelete != null) ...[
                     const SizedBox(width: 8),

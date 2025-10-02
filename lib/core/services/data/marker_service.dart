@@ -245,18 +245,21 @@ class MarkerService {
       batch.set(markerRef, markerData);
       print('📌 마커 문서 ID: ${markerRef.id}');
 
-      // ✅ 포스트 통계 업데이트
+      // ✅ 포스트 통계 및 상태 업데이트
       final postRef = _firestore.collection('posts').doc(postId);
       // 주의: posts 문서가 없을 수 있으면 update 대신 merge set 권장
       batch.set(postRef, {
         'totalDeployments': FieldValue.increment(1),
         'totalDeployed': FieldValue.increment(quantity),
         'lastDeployedAt': FieldValue.serverTimestamp(),
+        'status': 'deployed', // 포스트 상태를 DEPLOYED로 변경 (소문자로 통일)
+        'deployedAt': FieldValue.serverTimestamp(), // 배포 시간 기록
       }, SetOptions(merge: true));
 
       await batch.commit();
 
       print('✅ 마커 생성 및 통계 업데이트 완료 | markerId=${markerRef.id} | postId=$postId | title=$title | reward=${r ?? 0}원');
+      print('📊 포스트 상태 DEPLOYED로 변경됨 | postId=$postId');
       return markerRef.id;
     } catch (e) {
       print('❌ 마커 생성 실패: $e');

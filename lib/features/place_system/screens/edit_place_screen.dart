@@ -30,6 +30,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _couponPasswordController = TextEditingController();
 
   // 선택된 카테고리들
   String? _selectedCategory;
@@ -50,6 +51,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   final List<dynamic> _selectedImages = [];
   final List<String> _imageNames = [];
   final List<String> _existingImageUrls = [];
+  final List<String> _existingThumbnailUrls = [];
 
   @override
   void initState() {
@@ -64,6 +66,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _addressController.text = widget.place.address ?? '';
     _phoneController.text = widget.place.contactInfo?['phone'] ?? '';
     _emailController.text = widget.place.contactInfo?['email'] ?? '';
+    _couponPasswordController.text = widget.place.couponPassword ?? '';
 
     _selectedCategory = widget.place.category;
     _selectedSubCategory = widget.place.subCategory;
@@ -71,6 +74,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
     // 기존 이미지 URL 복사
     _existingImageUrls.addAll(widget.place.imageUrls);
+    _existingThumbnailUrls.addAll(widget.place.thumbnailUrls);
   }
 
   @override
@@ -80,6 +84,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _addressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _couponPasswordController.dispose();
     super.dispose();
   }
 
@@ -105,23 +110,29 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     });
 
     try {
-      // 새로 선택된 이미지 업로드
+      // 새로 선택된 이미지 업로드 (원본 + 썸네일)
       final List<String> newImageUrls = [];
+      final List<String> newThumbnailUrls = [];
+
       for (final img in _selectedImages) {
-        String url;
+        Map<String, String> uploadResult;
+
         if (img is File) {
-          url = await _firebaseService.uploadImage(img, 'places');
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(img, 'places');
         } else if (img is String && img.startsWith('data:image/')) {
           final safeName = 'place_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(img, 'places', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(img, 'places', safeName);
         } else {
           continue;
         }
-        newImageUrls.add(url);
+
+        newImageUrls.add(uploadResult['original']!);
+        newThumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
       // 기존 이미지 + 새 이미지 합치기
       final allImageUrls = [..._existingImageUrls, ...newImageUrls];
+      final allThumbnailUrls = [..._existingThumbnailUrls, ...newThumbnailUrls];
 
       final updatedPlace = widget.place.copyWith(
         name: _nameController.text.trim(),
@@ -131,10 +142,13 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: allImageUrls,
+        thumbnailUrls: allThumbnailUrls,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
         },
+        couponPassword: _couponPasswordController.text.trim().isEmpty ? null : _couponPasswordController.text.trim(),
+        isCouponEnabled: _couponPasswordController.text.trim().isNotEmpty,
         updatedAt: DateTime.now(),
       );
 
@@ -149,12 +163,48 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
         );
         Navigator.pop(context, true);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ 플레이스 수정 실패: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('플레이스 수정 실패: $e'),
-            backgroundColor: Colors.red,
+        String errorMessage = '플레이스 수정 실패';
+        String suggestion = '';
+
+        final errorString = e.toString();
+        if (errorString.contains('permission-denied')) {
+          errorMessage = '권한 오류';
+          suggestion = '플레이스를 수정할 권한이 없습니다.';
+        } else if (errorString.contains('network')) {
+          errorMessage = '네트워크 오류';
+          suggestion = '인터넷 연결을 확인해주세요.';
+        } else if (errorString.contains('not-found')) {
+          errorMessage = '플레이스 없음';
+          suggestion = '플레이스가 삭제되었거나 찾을 수 없습니다.';
+        } else if (errorString.contains('storage')) {
+          errorMessage = '이미지 업로드 실패';
+          suggestion = '이미지 크기를 줄이거나 다시 시도해주세요.';
+        } else {
+          suggestion = errorString.length > 80 ? errorString.substring(0, 80) + '...' : errorString;
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 8),
+                Expanded(child: Text(errorMessage)),
+              ],
+            ),
+            content: Text(suggestion),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
         );
       }
@@ -355,7 +405,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                     label: const Text('이미지 추가'),
                   ),
                   const SizedBox(width: 8),
-                  const Text('정사각형 권장, 최대 5장'),
+                  const Text('최대 5장'),
                 ],
               ),
               if (_selectedImages.isNotEmpty) ...[
@@ -420,6 +470,83 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // 쿠폰 설정 섹션
+              const Text(
+                '쿠폰 설정',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.card_giftcard, color: Colors.orange.shade700),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '쿠폰 사용 암호 설정',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '고객이 쿠폰 사용 시 입력해야 하는 암호를 설정하세요.\n매장에서 암호를 알려주면 고객이 입력하여 포인트를 받을 수 있습니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _couponPasswordController,
+                      decoration: InputDecoration(
+                        labelText: '쿠폰 암호',
+                        border: const OutlineInputBorder(),
+                        hintText: '예: 1234',
+                        prefixIcon: const Icon(Icons.lock, color: Colors.orange),
+                        helperText: '숫자 또는 문자 4자리 이상 권장',
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && value.length < 4) {
+                          return '암호는 4자리 이상이어야 합니다.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 18, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '암호를 설정하지 않으면 쿠폰 사용이 불가능합니다.',
+                              style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 32),
@@ -499,7 +626,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
   Future<void> _pickImageMobile() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {

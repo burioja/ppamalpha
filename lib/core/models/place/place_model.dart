@@ -10,6 +10,7 @@ class PlaceModel {
   final String? subCategory;
   final String? subSubCategory;
   final List<String> imageUrls;
+  final List<String> thumbnailUrls; // 썸네일 URL 목록
   final Map<String, dynamic>? operatingHours;
   final Map<String, dynamic>? contactInfo;
   final String createdBy;
@@ -32,6 +33,7 @@ class PlaceModel {
     this.subCategory,
     this.subSubCategory,
     this.imageUrls = const [],
+    this.thumbnailUrls = const [],
     this.operatingHours,
     this.contactInfo,
     required this.createdBy,
@@ -56,6 +58,7 @@ class PlaceModel {
       subCategory: data['subCategory'],
       subSubCategory: data['subSubCategory'],
       imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      thumbnailUrls: List<String>.from(data['thumbnailUrls'] ?? []),
       operatingHours: data['operatingHours'],
       contactInfo: data['contactInfo'],
       createdBy: data['createdBy'] ?? '',
@@ -78,6 +81,7 @@ class PlaceModel {
       'subCategory': subCategory,
       'subSubCategory': subSubCategory,
       'imageUrls': imageUrls,
+      'thumbnailUrls': thumbnailUrls,
       'operatingHours': operatingHours,
       'contactInfo': contactInfo,
       'createdBy': createdBy,
@@ -100,6 +104,7 @@ class PlaceModel {
     String? subCategory,
     String? subSubCategory,
     List<String>? imageUrls,
+    List<String>? thumbnailUrls,
     Map<String, dynamic>? operatingHours,
     Map<String, dynamic>? contactInfo,
     String? createdBy,
@@ -120,6 +125,7 @@ class PlaceModel {
       subCategory: subCategory ?? this.subCategory,
       subSubCategory: subSubCategory ?? this.subSubCategory,
       imageUrls: imageUrls ?? this.imageUrls,
+      thumbnailUrls: thumbnailUrls ?? this.thumbnailUrls,
       operatingHours: operatingHours ?? this.operatingHours,
       contactInfo: contactInfo ?? this.contactInfo,
       createdBy: createdBy ?? this.createdBy,

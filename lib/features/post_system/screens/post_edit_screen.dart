@@ -8,12 +8,15 @@ import 'dart:typed_data';
 import 'dart:convert';
 
 import '../../../core/models/post/post_model.dart';
+import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/post_service.dart';
+import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
 import '../widgets/range_slider_with_input.dart';
 import '../widgets/gender_checkbox_group.dart';
 import '../widgets/period_slider_with_input.dart';
 import '../widgets/price_calculator.dart';
+import 'post_place_selection_screen.dart';
 
 class PostEditScreen extends StatefulWidget {
   final PostModel post;
@@ -58,6 +61,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
   dynamic _selectedSound;
   String _soundFileName = '';
 
+  // Place
+  String? _selectedPlaceId;
+  PlaceModel? _selectedPlace;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +83,12 @@ class _PostEditScreenState extends State<PostEditScreen> {
     _canRespond = widget.post.canRespond;
     _canForward = widget.post.canForward;
     _canRequestReward = widget.post.canRequestReward;
+
+    // Place 초기화
+    _selectedPlaceId = widget.post.placeId;
+    if (_selectedPlaceId != null && _selectedPlaceId!.isNotEmpty) {
+      _loadPlace(_selectedPlaceId!);
+    }
 
     _initTargetingFromPost();
     _initFunctionFromPost();
@@ -198,6 +211,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
         'mediaUrl': mediaUrls,
         'expiresAt': Timestamp.fromDate(newExpiresAt),
         'updatedAt': DateTime.now(),
+        'placeId': _selectedPlaceId, // 플레이스 ID 추가
       };
 
       debugPrint('🔄 포스트 수정 데이터:');
@@ -288,6 +302,9 @@ class _PostEditScreenState extends State<PostEditScreen> {
               _buildExistingMediaList(),
               const SizedBox(height: 16),
               _buildSoundUpload(),
+              const SizedBox(height: 24),
+              _buildSectionTitle('연결된 스토어'),
+              _buildPlaceSelection(),
               const SizedBox(height: 24),
               _buildSectionTitle('기능 옵션'),
               CheckboxListTile(
@@ -556,7 +573,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ElevatedButton.icon(
-          onPressed: null, // TODO: 마커 배포 여부로 대체
+          onPressed: widget.post.canEdit ? _pickImage : null,
           icon: const Icon(Icons.add_photo_alternate),
           label: const Text('이미지 추가'),
         ),
@@ -675,7 +692,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 const SizedBox(width: 8),
                 Expanded(child: Text(item['url']!, overflow: TextOverflow.ellipsis)),
                 IconButton(
-                  onPressed: null, // TODO: 마커 배포 여부로 대체
+                  onPressed: widget.post.canEdit ? () => _removeExistingMedia(idx) : null,
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -696,7 +713,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
                 const SizedBox(width: 8),
                 Expanded(child: Text(_existingAudioUrl, overflow: TextOverflow.ellipsis)),
                 IconButton(
-                  onPressed: null, // TODO: 마커 배포 여부로 대체
+                  onPressed: widget.post.canEdit ? () => _removeExistingAudio() : null,
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -825,6 +842,18 @@ class _PostEditScreenState extends State<PostEditScreen> {
     setState(() {
       _selectedImages.removeAt(index);
       _imageNames.removeAt(index);
+    });
+  }
+
+  void _removeExistingMedia(int index) {
+    setState(() {
+      _existingMedia.removeAt(index);
+    });
+  }
+
+  void _removeExistingAudio() {
+    setState(() {
+      _existingAudioUrl = '';
     });
   }
 
@@ -1022,6 +1051,104 @@ class _PostEditScreenState extends State<PostEditScreen> {
           ],
         );
       },
+    );
+  }
+
+  // 플레이스 로드
+  Future<void> _loadPlace(String placeId) async {
+    try {
+      final placeService = PlaceService();
+      final place = await placeService.getPlaceById(placeId);
+      if (mounted && place != null) {
+        setState(() {
+          _selectedPlace = place;
+        });
+      }
+    } catch (e) {
+      debugPrint('플레이스 로드 실패: $e');
+    }
+  }
+
+  // 플레이스 선택
+  Future<void> _selectPlace() async {
+    final result = await Navigator.push<PlaceModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PostPlaceSelectionScreen(),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedPlace = result;
+        _selectedPlaceId = result.id;
+      });
+    }
+  }
+
+  // 플레이스 선택 UI
+  Widget _buildPlaceSelection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_selectedPlace != null) ...[
+            Row(
+              children: [
+                Icon(Icons.store, color: Colors.blue.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedPlace!.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_selectedPlace!.address != null && _selectedPlace!.address!.isNotEmpty)
+                        Text(
+                          _selectedPlace!.address!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: widget.post.canEdit ? () {
+                    setState(() {
+                      _selectedPlace = null;
+                      _selectedPlaceId = null;
+                    });
+                  } : null,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ] else ...[
+            const Text('연결된 스토어가 없습니다.'),
+          ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.post.canEdit ? _selectPlace : null,
+              icon: const Icon(Icons.store),
+              label: Text(_selectedPlace == null ? '스토어 선택' : '스토어 변경'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -34,6 +34,8 @@ class PostService {
     required bool canUse,
     int defaultRadius = 1000, // 기본 반경 (m)
     DateTime? defaultExpiresAt, // 기본 만료일
+    String? placeId, // 플레이스 ID (선택사항)
+    bool isCoupon = false, // 쿠폰 여부 (선택사항)
   }) async {
     try {
       debugPrint('🚀 포스트 템플릿 생성 시작: title="$title", creator=$creatorId');
@@ -64,7 +66,9 @@ class PostService {
         'canForward': canForward,
         'canRequestReward': canRequestReward,
         'canUse': canUse,
+        'isCoupon': isCoupon, // 쿠폰 여부 추가
         'status': 'draft', // 기본적으로 초안 상태
+        'placeId': placeId, // 플레이스 ID 추가
       });
 
       final postId = docRef.id;
@@ -1451,6 +1455,14 @@ class PostService {
 
       final querySnapshot = await query.get();
 
+      debugPrint('📊 쿼리 결과: ${querySnapshot.docs.length}개 문서 조회됨');
+
+      // 디버그: 각 문서의 status 값 출력
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        debugPrint('  - postId: ${doc.id}, status in DB: "${data['status']}", title: ${data['title']}');
+      }
+
       final posts = querySnapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
@@ -1470,7 +1482,51 @@ class PostService {
 
   /// 배포된 포스트 조회 (DEPLOYED 상태)
   Future<List<PostModel>> getDeployedPosts(String userId) async {
-    return await getPostsByStatus(userId, PostStatus.DEPLOYED);
+    try {
+      debugPrint('🔍 getDeployedPosts 호출: userId=$userId');
+
+      // 먼저 모든 포스트를 조회해서 실제 status 값 확인
+      final allPostsQuery = _firestore
+          .collection('posts')
+          .where('creatorId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true);
+
+      final allSnapshot = await allPostsQuery.get();
+
+      debugPrint('📊 사용자의 전체 포스트: ${allSnapshot.docs.length}개');
+
+      // 모든 포스트의 status 값 출력
+      final Map<String, int> statusCounts = {};
+      for (var doc in allSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = data['status'] ?? 'null';
+        statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+        debugPrint('  📄 postId: ${doc.id}, status: "$status", title: ${data['title']}');
+      }
+
+      debugPrint('📊 Status 분포:');
+      statusCounts.forEach((status, count) {
+        debugPrint('  - "$status": $count개');
+      });
+
+      // 배포된 포스트만 필터링 (대소문자 무관)
+      final deployedPosts = allSnapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = (data['status'] ?? '').toString().toLowerCase();
+        return status == 'deployed';
+      }).toList();
+
+      debugPrint('✅ 배포된 포스트 (필터링 후): ${deployedPosts.length}개');
+
+      final posts = deployedPosts
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      return posts;
+    } catch (e) {
+      debugPrint('❌ getDeployedPosts 에러: $e');
+      throw Exception('배포된 포스트 조회 실패: $e');
+    }
   }
 
   /// 만료된 포스트 조회 (삭제됨 상태로 변경됨)

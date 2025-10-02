@@ -25,15 +25,16 @@ class PostTileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDeleted = post.status == PostStatus.DELETED;
-    // 🚀 제거된 필드들: isCollected, isUsed, isUsedByCurrentUser
-    // 이들은 이제 post_collections 컬렉션에서 쿼리해야 함
-    final isCollected = false; // TODO: 쿼리 기반으로 변경 필요
-    final isUsed = false; // TODO: 쿼리 기반으로 변경 필요
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    try {
+      final isDeleted = post.status == PostStatus.DELETED;
+      // 🚀 제거된 필드들: isCollected, isUsed, isUsedByCurrentUser
+      // 이들은 이제 post_collections 컬렉션에서 쿼리해야 함
+      final isCollected = false; // TODO: 쿼리 기반으로 변경 필요
+      final isUsed = false; // TODO: 쿼리 기반으로 변경 필요
+
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
         decoration: BoxDecoration(
           color: isUsed 
               ? Colors.grey.shade100
@@ -107,27 +108,6 @@ class PostTileCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    // 통계 버튼 (좌상단, 삭제 버튼 옆)
-                    if (showStatisticsButton && onStatistics != null)
-                      Positioned(
-                        top: 8,
-                        left: showDeleteButton && onDelete != null ? 44 : 8, // 삭제 버튼이 있으면 옆에, 없으면 처음 위치
-                        child: GestureDetector(
-                          onTap: onStatistics,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4D4DFF).withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.analytics,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
                     // 사용된 포스트 오버레이
                     if (isUsed)
                       Positioned.fill(
@@ -174,7 +154,7 @@ class PostTileCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    // 하단 정보 (리워드, 만료일)
+                    // 하단 정보 (리워드, 통계버튼/배포일)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -193,16 +173,53 @@ class PostTileCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        // 만료일
-                        Text(
-                          isDeleted
-                            ? '삭제됨'
-                            : DateFormat('MM/dd').format(post.defaultExpiresAt),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDeleted ? Colors.red.shade500 : Colors.grey.shade600,
-                            fontWeight: isDeleted ? FontWeight.w500 : FontWeight.normal,
-                          ),
+                        // 통계 버튼과 배포일
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // 통계 버튼 (배포된 포스트만)
+                            if (showStatisticsButton && post.isDeployed && onStatistics != null)
+                              GestureDetector(
+                                onTap: onStatistics,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4D4DFF).withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.analytics,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        '통계',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (showStatisticsButton && post.isDeployed && onStatistics != null)
+                              const SizedBox(height: 2),
+                            // 배포일 (배포된 포스트만 표시)
+                            if (post.isDeployed)
+                              Text(
+                                DateFormat('MM/dd').format(post.createdAt),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -213,34 +230,90 @@ class PostTileCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ PostTileCard 빌드 에러: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+      debugPrint('포스트 정보: postId=${post.postId}, title=${post.title}');
+
+      // 에러 발생 시 간단한 에러 카드 표시
+      return Container(
+        margin: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          border: Border.all(color: Colors.red.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '포스트 로드 오류',
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ID: ${post.postId}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
+            Text(
+              '제목: ${post.title}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '에러: $e',
+              style: TextStyle(fontSize: 11, color: Colors.red.shade600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildImageWidget() {
-    if (post.mediaUrl.isNotEmpty) {
-      // 이미지 타입 체크를 더 관대하게 변경
-      bool hasImageMedia = post.mediaType.isNotEmpty &&
-          (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
-           post.mediaUrl.first.toLowerCase().contains('.jpg') ||
-           post.mediaUrl.first.toLowerCase().contains('.jpeg') ||
-           post.mediaUrl.first.toLowerCase().contains('.png') ||
-           post.mediaUrl.first.toLowerCase().contains('.gif') ||
-           post.mediaUrl.first.toLowerCase().contains('firebasestorage'));
+    try {
+      if (post.mediaUrl.isNotEmpty) {
+        // 이미지 타입 체크를 더 관대하게 변경
+        bool hasImageMedia = post.mediaType.isNotEmpty &&
+            (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
+             post.mediaUrl.first.toLowerCase().contains('.jpg') ||
+             post.mediaUrl.first.toLowerCase().contains('.jpeg') ||
+             post.mediaUrl.first.toLowerCase().contains('.png') ||
+             post.mediaUrl.first.toLowerCase().contains('.gif') ||
+             post.mediaUrl.first.toLowerCase().contains('firebasestorage'));
 
-      if (hasImageMedia) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(12),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            height: double.infinity,
-            child: buildNetworkImage(post.mediaUrl.first),
-          ),
-        );
+        if (hasImageMedia && post.mediaUrl.first.isNotEmpty) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(12),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: double.infinity,
+              child: buildNetworkImage(post.mediaUrl.first),
+            ),
+          );
+        }
       }
+    } catch (e) {
+      debugPrint('❌ 이미지 위젯 빌드 에러: $e');
     }
-    
+
     // 이미지가 없거나 이미지 타입이 아닌 경우 기본 아이콘 표시
     return Center(
       child: Icon(
@@ -288,7 +361,7 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
+
     if (isCollected) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -306,8 +379,8 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
-    // TODO: isActive 필드 제거됨, status로 대체
+
+    // 비활성 상태 (DELETED)
     if (post.status == PostStatus.DELETED) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -325,7 +398,13 @@ class PostTileCard extends StatelessWidget {
         ),
       );
     }
-    
+
+    // DEPLOYED 상태면 배지 숨김 (배포된 포스트 탭에서는 모든 포스트가 DEPLOYED이므로 중복 정보)
+    if (post.status == PostStatus.DEPLOYED) {
+      return const SizedBox.shrink();
+    }
+
+    // DRAFT 상태 등 기타 활성 상태
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -333,7 +412,7 @@ class PostTileCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Text(
-        '활성',
+        '작성중',
         style: TextStyle(
           fontSize: 10,
           color: Colors.white,

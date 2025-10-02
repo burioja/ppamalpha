@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
 import 'dart:convert';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
+import '../../../core/utils/file_helper.dart';
 
 class CreatePlaceScreen extends StatefulWidget {
   const CreatePlaceScreen({super.key});
@@ -29,6 +30,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _couponPasswordController = TextEditingController();
   
   // 선택된 카테고리들
   String? _selectedCategory;
@@ -56,6 +58,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
     _addressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _couponPasswordController.dispose();
     super.dispose();
   }
 
@@ -73,19 +76,34 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
     });
 
     try {
-      // 이미지 업로드
+      // 이미지 업로드 (원본 + 썸네일)
       final List<String> imageUrls = [];
+      final List<String> thumbnailUrls = [];
+
       for (final img in _selectedImages) {
-        String url;
-        if (img is File) {
-          url = await _firebaseService.uploadImage(img, 'places');
-        } else if (img is String && img.startsWith('data:image/')) {
+        Map<String, String> uploadResult;
+
+        if (img is String && img.startsWith('data:image/')) {
+          // 웹: base64 데이터
           final safeName = 'place_${DateTime.now().millisecondsSinceEpoch}.png';
-          url = await _firebaseService.uploadImageDataUrl(img, 'places', safeName);
+          uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(
+            img,
+            'places',
+            safeName,
+          );
+        } else if (img is String && !kIsWeb) {
+          // 모바일: 파일 경로
+          uploadResult = await _firebaseService.uploadImageWithThumbnail(
+            FileHelper.createFile(img),
+            'places',
+          );
         } else {
+          // 지원하지 않는 타입
           continue;
         }
-        imageUrls.add(url);
+
+        imageUrls.add(uploadResult['original']!);
+        thumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
       final place = PlaceModel(
@@ -98,11 +116,14 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: imageUrls,
+        thumbnailUrls: thumbnailUrls,
         operatingHours: null,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
         },
+        couponPassword: _couponPasswordController.text.trim().isEmpty ? null : _couponPasswordController.text.trim(),
+        isCouponEnabled: _couponPasswordController.text.trim().isNotEmpty,
         createdBy: _currentUserId!,
         createdAt: DateTime.now(),
         isActive: true,
@@ -119,12 +140,45 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         );
         Navigator.pop(context, true);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ 플레이스 생성 실패: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('플레이스 생성 실패: $e'),
-            backgroundColor: Colors.red,
+        String errorMessage = '플레이스 생성 실패';
+        String suggestion = '';
+
+        final errorString = e.toString();
+        if (errorString.contains('permission-denied')) {
+          errorMessage = '권한 오류';
+          suggestion = '플레이스를 생성할 권한이 없습니다.';
+        } else if (errorString.contains('network')) {
+          errorMessage = '네트워크 오류';
+          suggestion = '인터넷 연결을 확인해주세요.';
+        } else if (errorString.contains('storage')) {
+          errorMessage = '이미지 업로드 실패';
+          suggestion = '이미지 크기를 줄이거나 다시 시도해주세요.';
+        } else {
+          suggestion = errorString.length > 80 ? errorString.substring(0, 80) + '...' : errorString;
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 8),
+                Expanded(child: Text(errorMessage)),
+              ],
+            ),
+            content: Text(suggestion),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
         );
       }
@@ -270,7 +324,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                     label: const Text('이미지 추가'),
                   ),
                   const SizedBox(width: 8),
-                  const Text('정사각형 권장, 최대 5장'),
+                  const Text('최대 5장'),
                 ],
               ),
               if (_selectedImages.isNotEmpty) ...[
@@ -335,9 +389,86 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                   ),
                 ],
               ),
-              
+
+              const SizedBox(height: 24),
+
+              // 쿠폰 설정 섹션
+              const Text(
+                '쿠폰 설정',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.card_giftcard, color: Colors.orange.shade700),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '쿠폰 사용 암호 설정',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '고객이 쿠폰 사용 시 입력해야 하는 암호를 설정하세요.\n매장에서 암호를 알려주면 고객이 입력하여 포인트를 받을 수 있습니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _couponPasswordController,
+                      decoration: InputDecoration(
+                        labelText: '쿠폰 암호',
+                        border: const OutlineInputBorder(),
+                        hintText: '예: 1234',
+                        prefixIcon: const Icon(Icons.lock, color: Colors.orange),
+                        helperText: '숫자 또는 문자 4자리 이상 권장',
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && value.length < 4) {
+                          return '암호는 4자리 이상이어야 합니다.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 18, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '암호를 설정하지 않으면 쿠폰 사용이 불가능합니다.',
+                              style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 32),
-              
+
               // 생성 버튼
               SizedBox(
                 width: double.infinity,
@@ -369,6 +500,7 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
   Widget _buildCrossPlatformImage(dynamic imageData) {
     if (imageData is String) {
       if (imageData.startsWith('data:image/')) {
+        // 웹: base64 데이터
         return Image.memory(
           base64Decode(imageData.split(',')[1]),
           width: 120,
@@ -376,12 +508,12 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
           fit: BoxFit.cover,
         );
       } else if (imageData.startsWith('http')) {
+        // 네트워크 URL
         return Image.network(imageData, width: 120, height: 120, fit: BoxFit.cover);
-      } else {
-        return Image.file(File(imageData), width: 120, height: 120, fit: BoxFit.cover);
+      } else if (!kIsWeb) {
+        // 모바일: 파일 경로
+        return Image.file(FileHelper.createFile(imageData), width: 120, height: 120, fit: BoxFit.cover);
       }
-    } else if (imageData is File) {
-      return Image.file(imageData, width: 120, height: 120, fit: BoxFit.cover);
     }
     return Container(width: 120, height: 120, color: Colors.grey[300], child: const Icon(Icons.image, size: 40, color: Colors.grey));
   }
@@ -402,11 +534,11 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
 
   Future<void> _pickImageMobile() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {
-          _selectedImages.add(File(image.path));
+          _selectedImages.add(image.path); // 파일 경로를 String으로 저장
           _imageNames.add(image.name);
         });
       }
@@ -420,7 +552,7 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
         allowMultiple: true,
         allowCompression: true,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
           if (file.size > 10 * 1024 * 1024) {
@@ -429,12 +561,16 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
             }
             continue;
           }
-          
-          if (mounted) {
-            setState(() {
-              _selectedImages.add(file.path ?? '');
-              _imageNames.add(file.name);
-            });
+
+          // 웹에서는 bytes를 base64로 변환해서 저장
+          if (file.bytes != null) {
+            final base64Image = 'data:image/${file.extension};base64,${base64Encode(file.bytes!)}';
+            if (mounted) {
+              setState(() {
+                _selectedImages.add(base64Image);
+                _imageNames.add(file.name);
+              });
+            }
           }
         }
       }
