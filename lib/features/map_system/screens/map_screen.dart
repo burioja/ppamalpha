@@ -131,6 +131,12 @@ class _MapScreenState extends State<MapScreen> {
   
   // 위치 이동 관련
   int _currentWorkplaceIndex = 0; // 현재 일터 인덱스
+  
+  // Mock 위치 관련 상태
+  bool _isMockModeEnabled = false;
+  bool _isMockControllerVisible = false;
+  LatLng? _mockPosition;
+  LatLng? _originalGpsPosition; // 원래 GPS 위치 백업
 
   @override
   void initState() {
@@ -292,6 +298,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    // Mock 모드가 활성화되어 있으면 GPS 위치 요청하지 않음
+    if (_isMockModeEnabled && _mockPosition != null) {
+      print('🎭 Mock 모드 활성화 - GPS 위치 요청 스킵');
+      return;
+    }
+    
     try {
       print('📍 현재 위치 요청 중...');
       Position position = await Geolocator.getCurrentPosition(
@@ -781,15 +793,25 @@ class _MapScreenState extends State<MapScreen> {
 
   // 🚀 서버 API를 통한 마커 조회
   Future<void> _updatePostsBasedOnFogLevel() async {
+    // Mock 모드에서는 Mock 위치 사용, 아니면 실제 GPS 위치 사용
+    LatLng? effectivePosition;
+    if (_isMockModeEnabled && _mockPosition != null) {
+      effectivePosition = _mockPosition;
+      print('🎭 Mock 모드 - Mock 위치 사용: ${_mockPosition!.latitude}, ${_mockPosition!.longitude}');
+    } else {
+      effectivePosition = _currentPosition;
+      print('📍 GPS 모드 - 실제 위치 사용: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}');
+    }
+    
     // 위치가 없으면 GPS 활성화 요청
-    if (_currentPosition == null) {
+    if (effectivePosition == null) {
       _showLocationPermissionDialog();
       return;
     }
     
     final centers = <LatLng>[];
-    centers.add(_currentPosition!);
-    print('📍 현재 위치: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    centers.add(effectivePosition);
+    print('📍 기준 위치: ${effectivePosition.latitude}, ${effectivePosition.longitude}');
     
     // 집주소 추가
     if (_homeLocation != null) {
@@ -956,10 +978,18 @@ class _MapScreenState extends State<MapScreen> {
   bool _canLongPressAtLocation(LatLng point) {
     final maxRadius = MarkerService.getMarkerDisplayRadius(_userType, false);
     
-    // 현재 위치 주변 확인
-    if (_currentPosition != null) {
+    // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
+    LatLng? referencePosition;
+    if (_isMockModeEnabled && _mockPosition != null) {
+      referencePosition = _mockPosition;
+    } else {
+      referencePosition = _currentPosition;
+    }
+    
+    // 기준 위치 주변 확인
+    if (referencePosition != null) {
       final distanceToCurrent = MarkerService.calculateDistance(
-        LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+        LatLng(referencePosition.latitude, referencePosition.longitude),
         point,
       );
       if (distanceToCurrent <= maxRadius) {
@@ -1894,8 +1924,16 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _navigateToPostPlace() async {
     if (_longPressedLatLng == null) return;
 
-    // 현재 위치 확인
-    if (_currentPosition == null) {
+    // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
+    LatLng? referencePosition;
+    if (_isMockModeEnabled && _mockPosition != null) {
+      referencePosition = _mockPosition;
+    } else {
+      referencePosition = _currentPosition;
+    }
+
+    // 기준 위치 확인
+    if (referencePosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
       );
@@ -1905,7 +1943,7 @@ class _MapScreenState extends State<MapScreen> {
     // 마커 배포 가능 거리 확인 (1단계 영역에서만 가능)
     final canDeploy = MarkerService.canDeployMarker(
       _userType,
-      _currentPosition!,
+      referencePosition,
       _longPressedLatLng!,
     );
 
@@ -1951,8 +1989,16 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _navigateToPostAddress() async {
     if (_longPressedLatLng == null) return;
 
-    // 현재 위치 확인
-    if (_currentPosition == null) {
+    // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
+    LatLng? referencePosition;
+    if (_isMockModeEnabled && _mockPosition != null) {
+      referencePosition = _mockPosition;
+    } else {
+      referencePosition = _currentPosition;
+    }
+
+    // 기준 위치 확인
+    if (referencePosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
       );
@@ -1962,7 +2008,7 @@ class _MapScreenState extends State<MapScreen> {
     // 마커 배포 가능 거리 확인 (1단계 영역에서만 가능)
     final canDeploy = MarkerService.canDeployMarker(
       _userType,
-      _currentPosition!,
+      referencePosition,
       _longPressedLatLng!,
     );
 
@@ -2254,6 +2300,110 @@ class _MapScreenState extends State<MapScreen> {
     return degrees * (pi / 180);
   }
 
+  // Mock 위치 관련 메서드들
+  void _toggleMockMode() {
+    setState(() {
+      _isMockModeEnabled = !_isMockModeEnabled;
+      if (_isMockModeEnabled) {
+        _isMockControllerVisible = true;
+        // 원래 GPS 위치 백업
+        _originalGpsPosition = _currentPosition;
+        // Mock 위치가 없으면 현재 GPS 위치를 기본값으로 설정
+        if (_mockPosition == null && _currentPosition != null) {
+          _mockPosition = _currentPosition;
+        }
+      } else {
+        _isMockControllerVisible = false;
+        // Mock 모드 비활성화 시 원래 GPS 위치로 복원
+        if (_originalGpsPosition != null) {
+          _currentPosition = _originalGpsPosition;
+          _mapController?.move(_originalGpsPosition!, _currentZoom);
+          _createCurrentLocationMarker(_originalGpsPosition!);
+          _updateCurrentAddress();
+          _updatePostsBasedOnFogLevel();
+        }
+      }
+    });
+  }
+
+  Future<void> _setMockPosition(LatLng position) async {
+    setState(() {
+      _mockPosition = position;
+      // Mock 모드에서는 실제 위치도 업데이트 (실제 기능처럼 동작)
+      if (_isMockModeEnabled) {
+        _currentPosition = position;
+      }
+    });
+    
+    // Mock 위치로 지도 중심 이동
+    _mapController?.move(position, _currentZoom);
+    
+    // Mock 위치 마커 생성
+    _createCurrentLocationMarker(position);
+    
+    // 주소 업데이트 (Mock 위치 기준)
+    _updateMockAddress(position);
+    
+    // 타일 방문 기록 업데이트 (실제 기능처럼 동작)
+    final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
+    print('🎭 Mock 위치 타일 방문 기록 업데이트: $tileId');
+    await VisitTileService.updateCurrentTileVisit(tileId);
+    _setLevel1TileLocally(tileId);
+    
+    // 포그 오브 워 재구성 (실제 기능처럼 동작)
+    _rebuildFogWithUserLocations(position);
+    
+    // 마커 업데이트
+    _updatePostsBasedOnFogLevel();
+  }
+
+  Future<void> _updateMockAddress(LatLng position) async {
+    try {
+      final address = await NominatimService.reverseGeocode(position);
+      setState(() {
+        _currentAddress = address;
+      });
+      widget.onAddressChanged?.call(address);
+    } catch (e) {
+      setState(() {
+        _currentAddress = '주소 변환 실패';
+      });
+    }
+  }
+
+  // 화살표 방향에 따른 Mock 위치 이동
+  void _moveMockPosition(String direction) async {
+    if (_mockPosition == null) return;
+    
+    const double moveDistance = 0.001; // 약 100m 정도 이동
+    LatLng newPosition;
+    
+    switch (direction) {
+      case 'up':
+        newPosition = LatLng(_mockPosition!.latitude + moveDistance, _mockPosition!.longitude);
+        break;
+      case 'down':
+        newPosition = LatLng(_mockPosition!.latitude - moveDistance, _mockPosition!.longitude);
+        break;
+      case 'left':
+        newPosition = LatLng(_mockPosition!.latitude, _mockPosition!.longitude - moveDistance);
+        break;
+      case 'right':
+        newPosition = LatLng(_mockPosition!.latitude, _mockPosition!.longitude + moveDistance);
+        break;
+      default:
+        return;
+    }
+    
+    await _setMockPosition(newPosition);
+  }
+
+  void _hideMockController() {
+    setState(() {
+      _isMockControllerVisible = false;
+    });
+  }
+
   @override
   void dispose() {
     _mapMoveTimer?.cancel(); // 타이머 정리
@@ -2295,8 +2445,16 @@ class _MapScreenState extends State<MapScreen> {
                   });
                 },
                 onLongPress: (tapPosition, point) async {
-                  // 현재 위치 확인
-                  if (_currentPosition == null) {
+                  // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
+                  LatLng? referencePosition;
+                  if (_isMockModeEnabled && _mockPosition != null) {
+                    referencePosition = _mockPosition;
+                  } else {
+                    referencePosition = _currentPosition;
+                  }
+
+                  // 기준 위치 확인
+                  if (referencePosition == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
                     );
@@ -2514,6 +2672,32 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
+          // Mock 위치 토글 버튼 (우상단)
+          Positioned(
+            top: 10,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _isMockModeEnabled ? Colors.purple : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: _toggleMockMode,
+                icon: Icon(
+                  Icons.location_searching,
+                  color: _isMockModeEnabled ? Colors.white : Colors.purple,
+                ),
+                iconSize: 20,
+              ),
+            ),
+          ),
           // 위치 이동 버튼들 (우하단)
           Positioned(
             bottom: 80,
@@ -2594,6 +2778,168 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
+          // Mock 위치 화살표 컨트롤러 (왼쪽하단)
+          if (_isMockControllerVisible)
+            Positioned(
+              bottom: 80,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 제목과 닫기 버튼
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: const BoxDecoration(
+                        color: Colors.purple,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.location_searching, color: Colors.white, size: 16),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Mock 위치',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _hideMockController,
+                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 화살표 컨트롤러
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        children: [
+                          // 위쪽 화살표
+                          GestureDetector(
+                            onTap: () => _moveMockPosition('up'),
+                            child: Container(
+                              width: 40,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Icon(Icons.keyboard_arrow_up, color: Colors.grey),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // 좌우 화살표
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: () => _moveMockPosition('left'),
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: const Icon(Icons.keyboard_arrow_left, color: Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              // 중앙 위치 표시
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                                ),
+                                child: const Icon(Icons.my_location, color: Colors.purple, size: 16),
+                              ),
+                              const SizedBox(width: 2),
+                              GestureDetector(
+                                onTap: () => _moveMockPosition('right'),
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: const Icon(Icons.keyboard_arrow_right, color: Colors.grey),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          // 아래쪽 화살표
+                          GestureDetector(
+                            onTap: () => _moveMockPosition('down'),
+                            child: Container(
+                              width: 40,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 현재 위치 정보
+                    if (_mockPosition != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              '위도: ${_mockPosition!.latitude.toStringAsFixed(4)}',
+                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            ),
+                            Text(
+                              '경도: ${_mockPosition!.longitude.toStringAsFixed(4)}',
+                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
