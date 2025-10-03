@@ -8,13 +8,24 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 // --- 타일 유틸리티 (서버용) ---
-// getKmTileId 함수는 현재 사용되지 않으므로 주석 처리
-// function getKmTileId(lat: number, lng: number): string {
-//   const tileSize = 0.009; // 1km 근사
-//   const tileLat = Math.floor(lat / tileSize);
-//   const tileLng = Math.floor(lng / tileSize);
-//   return `tile_${tileLat}_${tileLng}`;
-// }
+function getKmTileId(lat: number, lng: number): string {
+  const tileSize = 0.009; // 1km 근사
+  const tileLat = Math.floor(lat / tileSize);
+  const tileLng = Math.floor(lng / tileSize);
+  return `tile_${tileLat}_${tileLng}`;
+}
+
+// 거리 계산 함수 (미터 단위)
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // 지구 반지름 (미터)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 function getSurroundingTilesForCircle(
   lat: number, 
@@ -336,3 +347,103 @@ export const querySuperPosts = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "슈퍼포스트 조회 중 오류가 발생했습니다.");
   }
 });
+
+// 수령 가능한 포스트 조회
+export const queryReceivablePosts = functions.https.onCall(async (data, context) => {
+  try {
+    const { lat, lng, radius = 100, uid } = data;
+    
+    console.log(`수령 가능 포스트 조회 요청: lat=${lat}, lng=${lng}, radius=${radius}, uid=${uid}`);
+    
+    if (!uid) {
+      console.log('사용자 인증 실패: uid가 없음');
+      throw new functions.https.HttpsError("unauthenticated", "사용자 인증이 필요합니다.");
+    }
+
+    // 1. 반경 내 포스트 조회 (기존 타일 시스템 활용)
+    const radiusKm = radius / 1000; // 미터를 킬로미터로 변환
+    const tiles = getSurroundingTilesForCircle(lat, lng, radiusKm);
+    
+    console.log(`계산된 타일 개수: ${tiles.length}`);
+    
+    if (tiles.length === 0) {
+      console.log('타일이 없음 - 빈 배열 반환');
+      return [];
+    }
+
+    // 2. 타일별로 포스트 조회 (배치 처리)
+    const posts = [];
+    const chunkSize = 10; // Firestore whereIn 제한
+    
+    for (let i = 0; i < tiles.length; i += chunkSize) {
+      const tileBatch = tiles.slice(i, i + chunkSize);
+      const snap = await db.collection('posts')
+        .where('isActive', '==', true)
+        .where('isCollected', '==', false)
+        .where('tileId', 'in', tileBatch)
+        .limit(100)
+        .get();
+
+      for (const doc of snap.docs) {
+        const post = doc.data();
+        const loc = post.location;
+        
+        if (loc && loc.latitude && loc.longitude) {
+          // 거리 계산 (미터 단위)
+          const distance = calculateDistance(lat, lng, loc.latitude, loc.longitude);
+          
+          if (distance <= radius) {
+            posts.push({
+              ...post,
+              id: doc.id,
+              location: {
+                latitude: loc.latitude,
+                longitude: loc.longitude
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // 3. 필터링: 본인 포스트 제외
+    const eligiblePosts = posts.filter(post => post.ownerId !== uid);
+    console.log(`본인 포스트 제외 후: ${eligiblePosts.length}개`);
+
+    // 4. 이미 받은 포스트 제외
+    const receivedPostIds = await getReceivedPostIds(uid);
+    console.log(`이미 받은 포스트 ID 개수: ${receivedPostIds.length}`);
+    
+    const finalPosts = eligiblePosts.filter(post => 
+      !receivedPostIds.includes(post.id)
+    );
+
+    console.log(`최종 수령 가능 포스트 개수: ${finalPosts.length}`);
+    return finalPosts;
+
+  } catch (error) {
+    console.error("queryReceivablePosts 오류:", error);
+    console.error("오류 상세:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    throw new functions.https.HttpsError("internal", "수령 가능 포스트 조회 중 오류가 발생했습니다.");
+  }
+});
+
+// 사용자가 이미 받은 포스트 ID 목록 조회
+async function getReceivedPostIds(uid: string): Promise<string[]> {
+  try {
+    const snap = await db.collection('receipts')
+      .doc(uid)
+      .collection('items')
+      .select('postId')
+      .get();
+    
+    return snap.docs.map(doc => doc.id);
+  } catch (error) {
+    console.error("getReceivedPostIds 오류:", error);
+    return [];
+  }
+}

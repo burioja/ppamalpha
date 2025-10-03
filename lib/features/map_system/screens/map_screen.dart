@@ -27,6 +27,10 @@ import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../../../core/models/map/fog_level.dart';
+import '../models/receipt_item.dart';
+import '../widgets/receive_carousel.dart';
+import 'package:vibration/vibration.dart';
+import 'package:audioplayers/audioplayers.dart' as audio;
 
 /// 마커 아이템 클래스
 class MarkerItem {
@@ -115,6 +119,10 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _lastMapCenter;
   Set<String> _lastFogLevel1Tiles = {};
   bool _isUpdatingPosts = false;
+
+  // 포스트 수령 관련
+  int _receivablePostCount = 0;
+  bool _isReceiving = false;
   String? _lastCacheKey; // 캐시 키 기반 스킵용
   
   // 로컬 포그레벨 1 타일 캐시 (즉시 반영용)
@@ -150,6 +158,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadUserLocations();
     _setupUserDataListener();
     _setupMarkerListener();
+    _updateReceivablePosts(); // 수령 가능 포스트 개수 초기화
     // _checkPremiumStatus()와 _setupPostStreamListener()는 _getCurrentLocation()에서 호출됨
     
   }
@@ -656,6 +665,9 @@ class _MapScreenState extends State<MapScreen> {
       _mapMoveTimer = Timer(const Duration(milliseconds: 500), () {
         _handleMapMoveComplete();
       });
+      
+      // 실시간으로 수령 가능 포스트 개수 업데이트
+      _updateReceivablePosts();
     }
   }
 
@@ -688,6 +700,9 @@ class _MapScreenState extends State<MapScreen> {
         
       // 🚀 서버 API를 통한 마커 조회
         await _updatePostsBasedOnFogLevel();
+        
+        // 수령 가능 포스트 개수 업데이트
+        _updateReceivablePosts();
         
         // 마지막 상태 저장
         _lastMapCenter = currentCenter;
@@ -3055,7 +3070,216 @@ class _MapScreenState extends State<MapScreen> {
             ),
         ],
       ),
+      // 포스트 수령 FAB
+      floatingActionButton: _buildReceiveFab(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
+  }
+
+  // 수령 가능한 포스트 개수 업데이트
+  Future<void> _updateReceivablePosts() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final candidates = await MapMarkerService.getReceivablePosts(
+        lat: _mapCenter.latitude,
+        lng: _mapCenter.longitude,
+        uid: user.uid,
+        radius: 100, // 100m 반경
+      );
+
+      if (mounted) {
+        setState(() {
+          _receivablePostCount = candidates.length;
+        });
+      }
+    } catch (e) {
+      print('수령 가능 포스트 조회 실패: $e');
+      // 에러 발생 시에도 UI 업데이트
+      if (mounted) {
+        setState(() {
+          _receivablePostCount = 0;
+        });
+      }
+      
+      // 사용자에게 에러 알림 (선택적)
+      if (e.toString().contains('network') || e.toString().contains('timeout')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('네트워크 연결을 확인해주세요'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // 수령 FAB 위젯
+  Widget _buildReceiveFab() {
+    final enabled = _receivablePostCount > 0 && !_isReceiving;
+    
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: FloatingActionButton.extended(
+          onPressed: enabled ? _receiveNearbyPosts : null,
+          backgroundColor: enabled ? Colors.blue : Colors.grey,
+          label: _isReceiving 
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text('수령 중...', style: TextStyle(color: Colors.white)),
+                  ],
+                )
+              : Text(
+                  enabled ? '포스트 받기 ($_receivablePostCount)' : '포스트 받기',
+                  style: TextStyle(color: Colors.white),
+                ),
+          icon: _isReceiving ? null : Icon(Icons.download, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  // 주변 포스트 수령 처리
+  Future<void> _receiveNearbyPosts() async {
+    setState(() => _isReceiving = true);
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      
+      // 1. 수령 가능한 포스트 조회
+      final candidates = await MapMarkerService.getReceivablePosts(
+        lat: _mapCenter.latitude,
+        lng: _mapCenter.longitude,
+        uid: user.uid,
+        radius: 100,
+      );
+
+      if (candidates.isEmpty) return;
+
+      // 2. 수령 처리 (Firestore 트랜잭션)
+      final batch = FirebaseFirestore.instance.batch();
+      final actuallyReceived = <ReceiptItem>[];
+
+      for (final post in candidates) {
+        final ref = FirebaseFirestore.instance
+            .collection('receipts')
+            .doc(user.uid)
+            .collection('items')
+            .doc(post['id']);
+
+        final snap = await ref.get();
+        if (!snap.exists) {
+          batch.set(ref, {
+            'postId': post['id'],
+            'imageUrl': post['imageUrl'] ?? '',
+            'title': post['title'] ?? '',
+            'receivedAt': FieldValue.serverTimestamp(),
+            'confirmed': false,
+            'statusBadge': '미션 중',
+          });
+          
+          actuallyReceived.add(ReceiptItem(
+            postId: post['id'],
+            imageUrl: post['imageUrl'] ?? '',
+            title: post['title'] ?? '',
+            receivedAt: DateTime.now(),
+            confirmed: false,
+            statusBadge: '미션 중',
+          ));
+        }
+      }
+
+      if (actuallyReceived.isNotEmpty) {
+        await batch.commit();
+
+        // 3. 효과음/진동
+        await _playReceiveEffects(actuallyReceived.length);
+
+        // 4. 캐러셀 팝업 표시
+        await _showReceiveCarousel(actuallyReceived);
+      }
+    } catch (e) {
+      print('포스트 수령 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('포스트 수령에 실패했습니다: $e')),
+      );
+    } finally {
+      setState(() => _isReceiving = false);
+      _updateReceivablePosts(); // 개수 업데이트
+    }
+  }
+
+  // 수령 효과음/진동
+  Future<void> _playReceiveEffects(int count) async {
+    try {
+      // 진동
+      if (await Vibration.hasVibrator() ?? false) {
+        Vibration.vibrate(duration: 100);
+      }
+
+      // 사운드 (count만큼 반복)
+      final player = audio.AudioPlayer();
+      await player.setSource(audio.AssetSource('sounds/receive.mp3'));
+      
+      for (int i = 0; i < count; i++) {
+        await player.resume();
+        await Future.delayed(const Duration(milliseconds: 250));
+        await player.stop();
+        if (i < count - 1) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      }
+      
+      await player.dispose();
+    } catch (e) {
+      print('효과음 재생 실패: $e');
+    }
+  }
+
+  // 수령 캐러셀 팝업 표시
+  Future<void> _showReceiveCarousel(List<ReceiptItem> items) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ReceiveCarousel(
+        items: items,
+        onConfirmTap: _confirmPost,
+      ),
+    );
+  }
+
+  // 포스트 확인 처리
+  Future<void> _confirmPost(String postId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      final ref = FirebaseFirestore.instance
+          .collection('receipts')
+          .doc(user.uid)
+          .collection('items')
+          .doc(postId);
+      
+      await ref.update({
+        'confirmed': true,
+        'confirmedAt': FieldValue.serverTimestamp(),
+        'statusBadge': '미션달성',
+      });
+    } catch (e) {
+      print('포스트 확인 실패: $e');
+      rethrow;
+    }
   }
 }
  
