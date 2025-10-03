@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 
@@ -12,10 +14,14 @@ class PlaceSearchScreen extends StatefulWidget {
 class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
   final _searchController = TextEditingController();
   final _placeService = PlaceService();
-  
+
   List<PlaceModel> _searchResults = [];
   bool _isLoading = false;
   bool _hasSearched = false;
+
+  // 기본 지도 중심 (서울시청)
+  LatLng _mapCenter = LatLng(37.5665, 126.9780);
+  double _mapZoom = 12.0;
 
   @override
   void dispose() {
@@ -42,6 +48,15 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
       setState(() {
         _searchResults = results;
         _isLoading = false;
+
+        // 검색 결과가 있으면 첫 번째 결과로 지도 중심 이동
+        if (results.isNotEmpty && results.first.location != null) {
+          _mapCenter = LatLng(
+            results.first.location!.latitude,
+            results.first.location!.longitude,
+          );
+          _mapZoom = 14.0;
+        }
       });
     } catch (e) {
       setState(() {
@@ -114,7 +129,64 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
             ),
           ),
 
-          // 검색 결과
+          // 지도 (고정 높이)
+          Container(
+            height: 390, // 지도 높이 1.3배 증가 (300 * 1.3)
+            color: Colors.grey[200],
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: _mapCenter,
+                initialZoom: _mapZoom,
+                minZoom: 5.0,
+                maxZoom: 18.0,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.app',
+                ),
+                MarkerLayer(
+                  markers: _searchResults
+                      .where((place) => place.location != null)
+                      .map((place) => Marker(
+                            point: LatLng(
+                              place.location!.latitude,
+                              place.location!.longitude,
+                            ),
+                            width: 40,
+                            height: 40,
+                            child: GestureDetector(
+                              onTap: () => _navigateToPlaceDetail(place),
+                              child: Icon(
+                                _getCategoryIcon(place.category),
+                                size: 35,
+                                color: Colors.red,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 4,
+                                    color: Colors.black.withOpacity(0.5),
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+
+          // 구분선
+          Container(
+            height: 2,
+            color: Colors.grey[300],
+          ),
+
+          // 검색 결과 (스크롤 가능)
           Expanded(
             child: _buildSearchResults(),
           ),
@@ -172,7 +244,7 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         final place = _searchResults[index];
@@ -301,16 +373,38 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
 
   IconData _getCategoryIcon(String? category) {
     switch (category) {
+      case '음식점':
       case '요식업':
         return Icons.restaurant;
-      case '배움':
-        return Icons.school;
-      case '생활':
-        return Icons.home;
+      case '카페/디저트':
+        return Icons.local_cafe;
+      case '소매/쇼핑':
       case '쇼핑':
         return Icons.shopping_bag;
+      case '숙박':
+        return Icons.hotel;
+      case '문화/여가':
       case '엔터테인먼트':
         return Icons.movie;
+      case '병원/의료':
+        return Icons.local_hospital;
+      case '교육':
+      case '배움':
+        return Icons.school;
+      case '미용/뷰티':
+        return Icons.spa;
+      case '운동/스포츠':
+        return Icons.fitness_center;
+      case '생활서비스':
+      case '생활':
+        return Icons.home_repair_service;
+      case '금융/보험':
+        return Icons.account_balance;
+      case '부동산':
+        return Icons.apartment;
+      case '자동차':
+        return Icons.directions_car;
+      case '공공기관':
       case '정치':
         return Icons.account_balance;
       default:

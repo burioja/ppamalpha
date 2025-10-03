@@ -155,9 +155,15 @@ class _SignupScreenState extends State<SignupScreen> {
     // 주소 검색 화면으로 이동 (실제로는 주소 검색 API 사용)
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
-      setState(() {
-        _addressController.text = result.toString();
-      });
+      if (result is Map<String, dynamic>) {
+        setState(() {
+          _addressController.text = result['display_name']?.toString() ?? '';
+        });
+      } else {
+        setState(() {
+          _addressController.text = result.toString();
+        });
+      }
     }
   }
 
@@ -165,9 +171,15 @@ class _SignupScreenState extends State<SignupScreen> {
     // 근무지 주소 검색 화면으로 이동
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
-      setState(() {
-        _workplaceAddressController.text = result.toString();
-      });
+      if (result is Map<String, dynamic>) {
+        setState(() {
+          _workplaceAddressController.text = result['display_name']?.toString() ?? '';
+        });
+      } else {
+        setState(() {
+          _workplaceAddressController.text = result.toString();
+        });
+      }
     }
   }
 

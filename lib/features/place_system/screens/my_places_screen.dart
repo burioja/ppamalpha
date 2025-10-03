@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
@@ -75,6 +77,25 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
     ).then((_) => _loadMyPlaces()); // Refresh on return
   }
 
+  IconData _getCategoryIcon(String? category) {
+    switch (category) {
+      case '요식업':
+        return Icons.restaurant;
+      case '배움':
+        return Icons.school;
+      case '생활':
+        return Icons.home;
+      case '쇼핑':
+        return Icons.shopping_bag;
+      case '엔터테인먼트':
+        return Icons.movie;
+      case '정치':
+        return Icons.account_balance;
+      default:
+        return Icons.place;
+    }
+  }
+
   Widget _buildPlaceCard(PlaceModel place) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -115,31 +136,31 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      place.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    if (place.category != null && place.category!.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          place.category!,
-                          style: TextStyle(
-                            fontSize: 12,
+                    Row(
+                      children: [
+                        // Category Icon
+                        if (place.category != null && place.category!.isNotEmpty) ...[
+                          Icon(
+                            _getCategoryIcon(place.category),
+                            size: 18,
                             color: Colors.blue[700],
                           ),
+                          const SizedBox(width: 6),
+                        ],
+                        // Place Name
+                        Expanded(
+                          child: Text(
+                            place.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -184,6 +205,74 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMapWidget() {
+    // Get places with valid locations
+    final placesWithLocations = _myPlaces
+        .where((place) => place.location != null)
+        .toList();
+
+    if (placesWithLocations.isEmpty) {
+      return Container(
+        height: 100,
+        color: Colors.grey[200],
+        child: Center(
+          child: Text(
+            '위치 정보가 있는 플레이스가 없습니다',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    // Calculate center point
+    double avgLat = placesWithLocations.fold(
+          0.0,
+          (sum, place) => sum + place.location!.latitude,
+        ) /
+        placesWithLocations.length;
+    double avgLng = placesWithLocations.fold(
+          0.0,
+          (sum, place) => sum + place.location!.longitude,
+        ) /
+        placesWithLocations.length;
+
+    return Container(
+      height: 200, // 지도 높이 증가
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: LatLng(avgLat, avgLng),
+          initialZoom: 13.0,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+          ),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.ppam.alpha',
+          ),
+          MarkerLayer(
+            markers: placesWithLocations.map((place) {
+              return Marker(
+                point: LatLng(
+                  place.location!.latitude,
+                  place.location!.longitude,
+                ),
+                width: 40,
+                height: 40,
+                child: Icon(
+                  _getCategoryIcon(place.category),
+                  color: Colors.blue[700],
+                  size: 30,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -256,6 +345,9 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                       onRefresh: _loadMyPlaces,
                       child: ListView(
                         children: [
+                          // Top Map Widget
+                          _buildMapWidget(),
+                          const SizedBox(height: 8),
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(

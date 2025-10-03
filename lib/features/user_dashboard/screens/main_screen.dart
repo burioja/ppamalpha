@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../map_system/screens/map_screen.dart';
@@ -8,7 +9,6 @@ import 'wallet_screen.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../core/services/data/points_service.dart';
 import '../../../core/models/user/user_points_model.dart';
-import 'budget_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import '../../../providers/search_provider.dart';
@@ -26,6 +26,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String _currentLocation = '위치 불러오는 중...';
   UserPointsModel? _userPoints;
   final PointsService _pointsService = PointsService();
+  DateTime? _lastPointsLoadTime;
+  static const Duration _pointsLoadCooldown = Duration(minutes: 5);
 
   late final List<Widget> _widgetOptions;
 
@@ -51,7 +53,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // 앱이 포그라운드로 돌아올 때 포인트 새로고침
+      // 앱이 포그라운드로 돌아올 때 포인트 새로고침 (쿨다운 적용)
       _loadUserPoints();
     }
   }
@@ -94,23 +96,49 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadUserPoints() async {
+    // 쿨다운 체크: 최근 로드 이후 일정 시간이 지나지 않았으면 스킵
+    if (_lastPointsLoadTime != null) {
+      final timeSinceLastLoad = DateTime.now().difference(_lastPointsLoadTime!);
+      if (timeSinceLastLoad < _pointsLoadCooldown) {
+        if (kDebugMode) {
+          print('⏸️ 포인트 로드 스킵 (${timeSinceLastLoad.inSeconds}초 경과, ${_pointsLoadCooldown.inMinutes}분 쿨다운)');
+        }
+        return;
+      }
+    }
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        debugPrint('🔄 메인 스크린 포인트 로드 중... 사용자: ${user.uid}');
+        if (kDebugMode) {
+          print('🔄 메인 스크린 포인트 로드 중... 사용자: ${user.uid}');
+        }
         final points = await _pointsService.getUserPoints(user.uid);
         if (mounted) {
           setState(() {
             _userPoints = points;
+            _lastPointsLoadTime = DateTime.now();
           });
-          debugPrint('✅ 메인 스크린 포인트 로드 완료: ${points?.totalPoints ?? 0}P');
+          if (kDebugMode) {
+            print('✅ 메인 스크린 포인트 로드 완료: ${points?.totalPoints ?? 0}P');
+          }
         }
       } else {
-        debugPrint('⚠️ 현재 로그인된 사용자가 없음');
+        if (kDebugMode) {
+          print('⚠️ 현재 로그인된 사용자가 없음');
+        }
       }
     } catch (e) {
-      debugPrint('❌ 포인트 로드 오류: $e');
+      if (kDebugMode) {
+        print('❌ 포인트 로드 오류: $e');
+      }
     }
+  }
+
+  // 강제로 포인트를 리로드하는 메서드 (쿨다운 무시)
+  Future<void> _forceLoadUserPoints() async {
+    _lastPointsLoadTime = null; // 쿨다운 리셋
+    await _loadUserPoints();
   }
 
   void _onItemTapped(int index) {
@@ -187,17 +215,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 12),
 
-          // 오른쪽 M 아이콘(예산 화면 이동)
+          // 내 플레이스 아이콘
           GestureDetector(
             onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen()));
+              Navigator.pushNamed(context, '/my-places');
             },
-            child: Image.asset(
-              'assets/images/icon_budget.png',
-              width: 22,
-              height: 22,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.home, size: 22, color: Colors.white),
           ),
           const SizedBox(width: 12),
 

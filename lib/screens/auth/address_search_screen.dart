@@ -101,7 +101,7 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                             onTap: () {
-                              Navigator.pop(context, result['display_name']);
+                              Navigator.pop(context, result);
                             },
                           );
                         },

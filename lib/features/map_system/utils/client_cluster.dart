@@ -30,10 +30,11 @@ class ClusterOrMarker {
 
 // 줌→클러스터 임계 픽셀("닿으면 합쳐짐"의 거리)
 double clusterThresholdPx(double zoom) {
-  if (zoom < 10) return 84;
-  if (zoom < 13) return 64;
-  if (zoom < 16) return 44;
-  return 30;
+  if (zoom < 10) return 84;  // 매우 넓은 범위 (줌 아웃)
+  if (zoom < 13) return 64;  // 넓은 범위
+  if (zoom < 16) return 44;  // 중간 범위
+  if (zoom < 17) return 30;  // 좁은 범위
+  return 0;                  // 줌 17 이상: 클러스터링 완전히 풀림
 }
 
 /// 근접(화면 픽셀 거리) 기반 클러스터링
@@ -42,6 +43,11 @@ List<ClusterOrMarker> buildProximityClusters({
   required ToScreenFn toScreen,
   required double thresholdPx,
 }) {
+  // thresholdPx가 0이면 클러스터링 하지 않고 모든 마커를 개별로 반환
+  if (thresholdPx <= 0) {
+    return source.map((m) => ClusterOrMarker.single(m)).toList();
+  }
+
   final cell = thresholdPx; // 그리드 셀 크기 = 임계거리
   final grid = <String, List<int>>{}; // "gx:gy" -> cluster indices
   final items = <_MutCluster>[];

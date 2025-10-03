@@ -2370,9 +2370,10 @@ class _MapScreenState extends State<MapScreen> {
         _currentPosition = position;
       }
     });
-    
-    // Mock 위치로 지도 중심 이동
-    _mapController?.move(position, _currentZoom);
+
+    // Mock 위치로 지도 중심 이동 (현재 줌 레벨 유지)
+    final currentZoom = _mapController?.camera.zoom ?? _currentZoom;
+    _mapController?.move(position, currentZoom);
     
     // Mock 위치 마커 생성
     _createCurrentLocationMarker(position);
@@ -2413,8 +2414,8 @@ class _MapScreenState extends State<MapScreen> {
   // 화살표 방향에 따른 Mock 위치 이동
   void _moveMockPosition(String direction) async {
     if (_mockPosition == null) return;
-    
-    const double moveDistance = 0.001; // 약 100m 정도 이동
+
+    const double moveDistance = 0.000225; // 약 25m 이동
     LatLng newPosition;
     
     switch (direction) {
@@ -2535,7 +2536,7 @@ class _MapScreenState extends State<MapScreen> {
                 initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
                 initialZoom: _currentZoom,
                 minZoom: 14.0,  // 최소 줌 레벨 (줌 아웃 한계)
-                maxZoom: 16.0,  // 최대 줌 레벨 (줌 인 한계)
+                maxZoom: 17.0,  // 최대 줌 레벨 (줌 인 한계)
           onMapReady: _onMapReady,
                 onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
                 onTap: (tapPosition, point) {
@@ -2582,7 +2583,7 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                   minZoom: 14.0,  // 타일 서버 최소 줌
-                  maxZoom: 16.0,  // 타일 서버 최대 줌
+                  maxZoom: 17.0,  // 타일 서버 최대 줌
                   tileSize: 256,
                 ),
                 // 통합 포그 오버레이 (검정 → 펀칭 → 회색)
@@ -2732,7 +2733,7 @@ class _MapScreenState extends State<MapScreen> {
                         _showMyPostsOnly = selected;
                         if (selected) _showCouponsOnly = false;
                       });
-                      _updateMarkers();
+                      _updatePostsBasedOnFogLevel();
                     },
                     selectedColor: Colors.blue.withOpacity(0.2),
                     checkmarkColor: Colors.blue,
@@ -2753,7 +2754,7 @@ class _MapScreenState extends State<MapScreen> {
                         _showCouponsOnly = selected;
                         if (selected) _showMyPostsOnly = false;
                       });
-                      _updateMarkers();
+                      _updatePostsBasedOnFogLevel();
                     },
                     selectedColor: Colors.green.withOpacity(0.2),
                     checkmarkColor: Colors.green,

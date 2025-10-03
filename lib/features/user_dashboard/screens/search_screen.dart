@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/search_provider.dart';
+import '../../../routes/app_routes.dart';
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key});
@@ -29,6 +30,16 @@ class SearchScreen extends StatelessWidget {
         title: const Text('검색'),
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
+        actions: [
+          // 내 플레이스로 이동하는 홈 아이콘
+          IconButton(
+            icon: const Icon(Icons.home),
+            tooltip: '내 플레이스',
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.myPlaces);
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -44,8 +55,10 @@ class SearchScreen extends StatelessWidget {
               onChanged: (value) => searchProvider.setQuery(value),
             ),
             const SizedBox(height: 20),
-            Text('검색어: "$query"', style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
+            if (query.isNotEmpty) ...[
+              Text('검색어: "$query"', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+            ],
             Expanded(child: buildSearchResults()),
           ],
         ),

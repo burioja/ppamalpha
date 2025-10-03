@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
@@ -102,6 +104,12 @@ class PlaceDetailScreen extends StatelessWidget {
                   _buildCompactInfo(place),
 
                   const SizedBox(height: 24),
+
+                  // 지도
+                  if (place.location != null) ...[
+                    _buildPlaceMap(place),
+                    const SizedBox(height: 24),
+                  ],
 
                   // 액션 버튼들
                   _buildActionButtons(context, place),
@@ -647,9 +655,87 @@ class PlaceDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildPlaceMap(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '위치',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          height: 250, // 지도 높이
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.shade300,
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: LatLng(
+                  place.location!.latitude,
+                  place.location!.longitude,
+                ),
+                initialZoom: 15.0,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.ppam.alpha',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(
+                        place.location!.latitude,
+                        place.location!.longitude,
+                      ),
+                      width: 40,
+                      height: 40,
+                      child: const Icon(
+                        Icons.place,
+                        size: 40,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActionButtons(BuildContext context, PlaceModel place) {
     return Column(
       children: [
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: () => _viewPlaceStatistics(context, place),
+            icon: const Icon(Icons.analytics),
+            label: const Text('플레이스 통계'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           height: 50,
@@ -746,6 +832,14 @@ class PlaceDetailScreen extends StatelessWidget {
     // TODO: 플레이스 공유 기능
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('공유 기능은 준비 중입니다.')),
+    );
+  }
+
+  void _viewPlaceStatistics(BuildContext context, PlaceModel place) {
+    Navigator.pushNamed(
+      context,
+      '/place-statistics',
+      arguments: place,
     );
   }
 }

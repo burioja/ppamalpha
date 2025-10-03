@@ -28,6 +28,8 @@ import '../features/post_system/screens/post_detail_screen.dart';
 import '../features/post_system/screens/post_edit_screen.dart';
 import '../features/post_system/screens/post_deploy_screen.dart';
 import '../features/post_system/screens/post_statistics_screen.dart';
+import '../features/post_system/screens/deployment_statistics_dashboard_screen.dart';
+import '../features/post_system/screens/my_posts_statistics_dashboard_screen.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
@@ -36,6 +38,7 @@ import '../features/place_system/screens/place_detail_screen.dart';
 import '../features/place_system/screens/place_image_viewer_screen.dart';
 import '../features/place_system/screens/place_search_screen.dart';
 import '../features/place_system/screens/my_places_screen.dart';
+import '../features/place_system/screens/place_statistics_screen.dart';
 
 // Admin System
 import '../features/admin/admin_cleanup_screen.dart';
@@ -57,6 +60,8 @@ class AppRoutes {
   static const String postDetail = '/post-detail';
   static const String postEdit = '/post-edit';
   static const String postStatistics = '/post-statistics';
+  static const String deploymentStatistics = '/deployment-statistics';
+  static const String myPostsStatistics = '/my-posts-statistics';
 
   static const String locationPicker = '/location-picker';
   static const String postDeploy = '/post-deploy';
@@ -66,6 +71,7 @@ class AppRoutes {
   static const String placeSearch = '/place-search';
   static const String placeImageViewer = '/place-image-viewer';
   static const String myPlaces = '/my-places';
+  static const String placeStatistics = '/place-statistics';
 
   // Admin routes
   static const String adminCleanup = '/admin-cleanup';
@@ -137,6 +143,8 @@ class AppRoutes {
       }
       return PostStatisticsScreen(post: post);
     },
+    deploymentStatistics: (context) => const DeploymentStatisticsDashboardScreen(),
+    myPostsStatistics: (context) => const MyPostsStatisticsDashboardScreen(),
     createPlace: (context) => const CreatePlaceScreen(),
     editPlace: (context) {
       final place = ModalRoute.of(context)?.settings.arguments as PlaceModel?;
@@ -164,6 +172,15 @@ class AppRoutes {
       return PlaceImageViewerScreen(images: images, initialIndex: index);
     },
     myPlaces: (context) => const MyPlacesScreen(),
+    placeStatistics: (context) {
+      final place = ModalRoute.of(context)?.settings.arguments as PlaceModel?;
+      if (place == null) {
+        return const Scaffold(
+          body: Center(child: Text('플레이스 정보를 찾을 수 없습니다.')),
+        );
+      }
+      return PlaceStatisticsScreen(place: place);
+    },
     store: (context) => const StoreScreen(),
     adminCleanup: (context) => const AdminCleanupScreen(),
   };

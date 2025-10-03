@@ -318,6 +318,15 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          // 배포 통계 대시보드 버튼
+          if (_tabController.index == 0) // 내 포스트 탭일 때만 표시
+            IconButton(
+              icon: const Icon(Icons.bar_chart),
+              onPressed: () {
+                Navigator.pushNamed(context, '/deployment-statistics');
+              },
+              tooltip: '배포 통계',
+            ),
           // 새로고침 버튼
           if (_tabController.index == 0) // 내 포스트 탭일 때만 표시
             IconButton(
@@ -1249,50 +1258,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     }
   }
 
-  // 배포 포스트 통계 표시 (PRD 요구사항)
+  // 배포 포스트 통계 표시 (PRD 요구사항) - 전체 페이지로 이동
   void _showDistributedPostsStats(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('배포 포스트 통계'),
-          content: FutureBuilder<List<PostModel>>(
-            future: _postService.getDistributedPosts(_currentUserId!),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                return Text('통계 로드 오류: ${snapshot.error}');
-              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text('아직 배포한 포스트가 없습니다.');
-              } else {
-                final distributedPosts = snapshot.data!;
-                final activePosts = distributedPosts.where((post) => post.status == PostStatus.DEPLOYED).length;
-                final deletedPosts = distributedPosts.where((post) => post.status == PostStatus.DELETED).length;
-                final totalReward = distributedPosts.fold<int>(0, (total, post) => total + post.reward);
-                
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('총 배포 포스트: ${distributedPosts.length}개'),
-                    Text('활성 포스트: $activePosts개'),
-                    Text('삭제된 포스트: $deletedPosts개'),
-                    Text('총 리워드: $totalReward포인트'),
-                  ],
-                );
-              }
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-          ],
-        );
-      },
-    );
+    Navigator.pushNamed(context, '/my-posts-statistics');
   }
 
   // 포스트 통계 화면으로 이동
