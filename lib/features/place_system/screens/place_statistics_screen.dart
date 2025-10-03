@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/place/place_model.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/place_statistics_service.dart';
