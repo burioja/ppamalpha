@@ -332,7 +332,7 @@ class _MapScreenState extends State<MapScreen> {
       // 이전 GPS 위치 저장 (회색 영역 표시용)
       final previousGpsPosition = _currentPosition;
       
-      setState(() {
+        setState(() {
         _currentPosition = newPosition;
         _errorMessage = null;
       });
@@ -860,16 +860,16 @@ class _MapScreenState extends State<MapScreen> {
     final centers = <LatLng>[];
     centers.add(effectivePosition);
     print('📍 기준 위치: ${effectivePosition.latitude}, ${effectivePosition.longitude}');
-    
-    // 집주소 추가
-    if (_homeLocation != null) {
+      
+      // 집주소 추가
+      if (_homeLocation != null) {
       centers.add(_homeLocation!);
       print('🏠 집주소: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
-    }
-    
-    // 등록한 일터들 추가
+      }
+      
+      // 등록한 일터들 추가
     centers.addAll(_workLocations);
-    for (int i = 0; i < _workLocations.length; i++) {
+      for (int i = 0; i < _workLocations.length; i++) {
       print('🏢 일터${i + 1}: ${_workLocations[i].latitude}, ${_workLocations[i].longitude}');
     }
     
@@ -992,7 +992,7 @@ class _MapScreenState extends State<MapScreen> {
         print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커, ${_posts.length}개의 포스트 업데이트됨');
         _updateMarkers(); // 마커 업데이트 후 지도 마커도 업데이트
       });
-      
+
     } catch (e, stackTrace) {
       print('❌ _updatePostsBasedOnFogLevel 오류: $e');
       print('📚 스택 트레이스: $stackTrace');
@@ -1357,10 +1357,10 @@ class _MapScreenState extends State<MapScreen> {
         }
       } else {
         print('[COLLECT_DEBUG] 기존 postId 사용: ${marker.postId}');
-        await PostService().collectPost(
-          postId: marker.postId,
-          userId: user.uid,
-        );
+      await PostService().collectPost(
+        postId: marker.postId,
+        userId: user.uid,
+      );
       }
 
       // 포인트 보상 정보와 함께 성공 메시지 표시
@@ -1447,12 +1447,12 @@ class _MapScreenState extends State<MapScreen> {
         final imagePath = isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png';
         final imageSize = isSuper ? 36.0 : 31.0;
         
-        markers.add(
-          Marker(
+      markers.add(
+        Marker(
             key: ValueKey('single_${marker.markerId}'),
-            point: marker.position,
-            width: 35,
-            height: 35,
+          point: marker.position,
+          width: 35,
+          height: 35,
             child: SingleMarkerWidget(
               imagePath: imagePath,
               size: imageSize,
@@ -1473,9 +1473,9 @@ class _MapScreenState extends State<MapScreen> {
             child: GestureDetector(
               onTap: () => _zoomIntoCluster(bucket),
               child: SimpleClusterDot(count: bucket.items!.length),
-            ),
           ),
-        );
+        ),
+      );
       }
     }
 
@@ -1638,7 +1638,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _collectPost(PostModel post) async {
     try {
       await PostService().collectPost(
-        postId: post.postId,
+        postId: post.postId, 
         userId: FirebaseAuth.instance.currentUser!.uid
       );
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
@@ -1650,13 +1650,13 @@ class _MapScreenState extends State<MapScreen> {
           ? '포스트를 수집했습니다! 🎉\n${reward}포인트가 지급되었습니다!'
           : '포스트를 수집했습니다!';
 
-      ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 3),
         ),
-      );
+          );
     } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 수집 중 오류가 발생했습니다: $e')),
@@ -2584,10 +2584,10 @@ class _MapScreenState extends State<MapScreen> {
                   }
 
                   // 롱프레스 위치 저장
-                    _longPressedLatLng = point;
+                  _longPressedLatLng = point;
                   
                   // 바로 배포 메뉴 표시 (포그레벨 확인 생략)
-                    _showLongPressMenu();
+                  _showLongPressMenu();
                 },
               ),
         children: [
@@ -2920,9 +2920,9 @@ class _MapScreenState extends State<MapScreen> {
                       color: Colors.black.withOpacity(0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+          ),
+        ],
+      ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -3173,28 +3173,28 @@ class _MapScreenState extends State<MapScreen> {
       final batch = FirebaseFirestore.instance.batch();
       final actuallyReceived = <ReceiptItem>[];
 
-      for (final post in candidates) {
+      for (final marker in candidates) {
         final ref = FirebaseFirestore.instance
             .collection('receipts')
             .doc(user.uid)
             .collection('items')
-            .doc(post['id']);
+            .doc(marker['id']);
 
         final snap = await ref.get();
         if (!snap.exists) {
           batch.set(ref, {
-            'postId': post['id'],
-            'imageUrl': post['imageUrl'] ?? '',
-            'title': post['title'] ?? '',
+            'markerId': marker['id'],
+            'imageUrl': marker['imageUrl'] ?? '',
+            'title': marker['title'] ?? '',
             'receivedAt': FieldValue.serverTimestamp(),
             'confirmed': false,
             'statusBadge': '미션 중',
           });
           
           actuallyReceived.add(ReceiptItem(
-            postId: post['id'],
-            imageUrl: post['imageUrl'] ?? '',
-            title: post['title'] ?? '',
+            markerId: marker['id'],
+            imageUrl: marker['imageUrl'] ?? '',
+            title: marker['title'] ?? '',
             receivedAt: DateTime.now(),
             confirmed: false,
             statusBadge: '미션 중',
@@ -3262,14 +3262,14 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 포스트 확인 처리
-  Future<void> _confirmPost(String postId) async {
+  Future<void> _confirmPost(String markerId) async {
     try {
       final user = FirebaseAuth.instance.currentUser!;
       final ref = FirebaseFirestore.instance
           .collection('receipts')
           .doc(user.uid)
           .collection('items')
-          .doc(postId);
+          .doc(markerId);
       
       await ref.update({
         'confirmed': true,
@@ -3277,7 +3277,7 @@ class _MapScreenState extends State<MapScreen> {
         'statusBadge': '미션달성',
       });
     } catch (e) {
-      print('포스트 확인 실패: $e');
+      print('마커 확인 실패: $e');
       rethrow;
     }
   }

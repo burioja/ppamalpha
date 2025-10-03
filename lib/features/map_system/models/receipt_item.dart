@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ReceiptItem {
-  final String postId;
+  final String markerId; // postId에서 markerId로 변경
   final String imageUrl;
   final String title;
   final DateTime receivedAt;
@@ -10,7 +10,7 @@ class ReceiptItem {
   final String statusBadge;
 
   ReceiptItem({
-    required this.postId,
+    required this.markerId,
     required this.imageUrl,
     required this.title,
     required this.receivedAt,
@@ -22,7 +22,7 @@ class ReceiptItem {
   factory ReceiptItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return ReceiptItem(
-      postId: doc.id,
+      markerId: doc.id,
       imageUrl: data['imageUrl'] ?? '',
       title: data['title'] ?? '',
       receivedAt: (data['receivedAt'] as Timestamp).toDate(),
@@ -36,7 +36,7 @@ class ReceiptItem {
 
   Map<String, dynamic> toMap() {
     return {
-      'postId': postId,
+      'markerId': markerId,
       'imageUrl': imageUrl,
       'title': title,
       'receivedAt': Timestamp.fromDate(receivedAt),
@@ -47,7 +47,7 @@ class ReceiptItem {
   }
 
   ReceiptItem copyWith({
-    String? postId,
+    String? markerId,
     String? imageUrl,
     String? title,
     DateTime? receivedAt,
@@ -56,7 +56,7 @@ class ReceiptItem {
     String? statusBadge,
   }) {
     return ReceiptItem(
-      postId: postId ?? this.postId,
+      markerId: markerId ?? this.markerId,
       imageUrl: imageUrl ?? this.imageUrl,
       title: title ?? this.title,
       receivedAt: receivedAt ?? this.receivedAt,

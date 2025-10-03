@@ -7,17 +7,17 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
-// 포스트 확인 시 리워드 지급 트리거
+// 마커 확인 시 리워드 지급 트리거
 export const onReceiptConfirmed = functions.firestore
-  .document('receipts/{uid}/items/{postId}')
+  .document('receipts/{uid}/items/{markerId}')
   .onUpdate(async (change, context) => {
     const after = change.after.data();
     const before = change.before.data();
     
     // 확인 상태가 변경되었을 때만 처리
     if (!before.confirmed && after.confirmed) {
-      const { uid, postId } = context.params;
-      const confirmId = `${postId}_${uid}`;
+      const { uid, markerId } = context.params;
+      const confirmId = `${markerId}_${uid}`;
       
       try {
         // 멱등성 보장
@@ -30,24 +30,24 @@ export const onReceiptConfirmed = functions.firestore
 
         // 트랜잭션으로 정산 처리
         await db.runTransaction(async (tx) => {
-          // 포스트 정보 조회
-          const postRef = db.collection('posts').doc(postId);
-          const postSnap = await tx.get(postRef);
-          if (!postSnap.exists) {
-            throw new Error('Post not found');
+          // 마커 정보 조회
+          const markerRef = db.collection('markers').doc(markerId);
+          const markerSnap = await tx.get(markerRef);
+          if (!markerSnap.exists) {
+            throw new Error('Marker not found');
           }
 
-          const postData = postSnap.data();
-          const perReceiverReward = postData?.perReceiverReward || 0;
+          const markerData = markerSnap.data();
+          const reward = markerData?.reward || 0;
           
-          if (perReceiverReward <= 0) {
-            console.log(`포스트 ${postId}에 리워드가 없음`);
+          if (reward <= 0) {
+            console.log(`마커 ${markerId}에 리워드가 없음`);
             return; // 리워드가 없으면 스킵
           }
 
           // 80/20 분배
-          const toUser = Math.floor(perReceiverReward * 0.8);
-          const toOperator = perReceiverReward - toUser;
+          const toUser = Math.floor(reward * 0.8);
+          const toOperator = reward - toUser;
 
           // 원장 기록
           const ledgerRef = db.collection('ledger').doc();
@@ -56,7 +56,7 @@ export const onReceiptConfirmed = functions.firestore
             to: uid,
             from: 'escrow',
             amount: toUser,
-            memo: `post:${postId} confirmed reward`,
+            memo: `marker:${markerId} confirmed reward`,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
@@ -66,7 +66,7 @@ export const onReceiptConfirmed = functions.firestore
             to: 'operator',
             from: 'escrow',
             amount: toOperator,
-            memo: `post:${postId} operator fee`,
+            memo: `marker:${markerId} operator fee`,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
@@ -74,10 +74,10 @@ export const onReceiptConfirmed = functions.firestore
           const escrowRef = db.collection('rewards').doc('escrow')
             .collection('items').doc(confirmId);
           tx.set(escrowRef, {
-            postId,
+            markerId,
             receiverId: uid,
             status: 'released',
-            amount: perReceiverReward,
+            amount: reward,
             releasedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
@@ -87,10 +87,10 @@ export const onReceiptConfirmed = functions.firestore
             at: admin.firestore.FieldValue.serverTimestamp(),
           });
 
-          console.log(`리워드 정산 완료: ${postId} -> ${uid} (${toUser}원)`);
+          console.log(`리워드 정산 완료: ${markerId} -> ${uid} (${toUser}원)`);
         });
       } catch (error) {
-        console.error(`리워드 정산 실패: ${postId}`, error);
+        console.error(`리워드 정산 실패: ${markerId}`, error);
         // 에러가 발생해도 트리거는 성공으로 처리 (재시도 가능)
       }
     }

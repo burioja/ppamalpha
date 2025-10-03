@@ -5,7 +5,7 @@ import '../models/receipt_item.dart';
 
 class ReceiveCarousel extends StatefulWidget {
   final List<ReceiptItem> items;
-  final Function(String postId) onConfirmTap;
+  final Function(String markerId) onConfirmTap;
 
   const ReceiveCarousel({
     Key? key,
@@ -19,12 +19,18 @@ class ReceiveCarousel extends StatefulWidget {
 
 class _ReceiveCarouselState extends State<ReceiveCarousel> {
   late PageController _pageController;
-  final Set<String> _confirmedPostIds = {};
+  final Set<String> _confirmedMarkerIds = {};
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    // 이미 확인된 마커가 있을 경우 초기화
+    for (var item in widget.items) {
+      if (item.confirmed) {
+        _confirmedMarkerIds.add(item.markerId);
+      }
+    }
   }
 
   @override
@@ -66,7 +72,7 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
                 itemCount: widget.items.length,
                 itemBuilder: (context, index) {
                   final item = widget.items[index];
-                  final isConfirmed = _confirmedPostIds.contains(item.postId);
+                  final isConfirmed = _confirmedMarkerIds.contains(item.markerId);
                   
                   return _buildCarouselPage(item, isConfirmed);
                 },
@@ -115,7 +121,7 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
                   SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _confirmedPostIds.length == widget.items.length
+                      onPressed: _confirmedMarkerIds.length == widget.items.length
                           ? () => Navigator.of(context).pop()
                           : null,
                       style: ElevatedButton.styleFrom(
@@ -136,7 +142,7 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
 
   Widget _buildCarouselPage(ReceiptItem item, bool isConfirmed) {
     return GestureDetector(
-      onTap: () => _confirmPost(item.postId),
+      onTap: () => _confirmPost(item.markerId),
       child: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -220,18 +226,18 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
     );
   }
 
-  Future<void> _confirmPost(String postId) async {
-    if (_confirmedPostIds.contains(postId)) return;
+  Future<void> _confirmPost(String markerId) async {
+    if (_confirmedMarkerIds.contains(markerId)) return;
 
     try {
-      await widget.onConfirmTap(postId);
+      await widget.onConfirmTap(markerId);
       setState(() {
-        _confirmedPostIds.add(postId);
+        _confirmedMarkerIds.add(markerId);
       });
     } catch (e) {
-      print('포스트 확인 실패: $e');
+      print('마커 확인 실패: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('포스트 확인에 실패했습니다: $e')),
+        SnackBar(content: Text('마커 확인에 실패했습니다: $e')),
       );
     }
   }

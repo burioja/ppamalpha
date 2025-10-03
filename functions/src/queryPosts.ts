@@ -348,7 +348,7 @@ export const querySuperPosts = functions.https.onCall(async (data, context) => {
   }
 });
 
-// 수령 가능한 포스트 조회
+// 수령 가능한 포스트 조회 (마커 기반)
 export const queryReceivablePosts = functions.https.onCall(async (data, context) => {
   try {
     const { lat, lng, radius = 100, uid } = data;
@@ -360,66 +360,56 @@ export const queryReceivablePosts = functions.https.onCall(async (data, context)
       throw new functions.https.HttpsError("unauthenticated", "사용자 인증이 필요합니다.");
     }
 
-    // 1. 반경 내 포스트 조회 (기존 타일 시스템 활용)
-    const radiusKm = radius / 1000; // 미터를 킬로미터로 변환
-    const tiles = getSurroundingTilesForCircle(lat, lng, radiusKm);
-    
-    console.log(`계산된 타일 개수: ${tiles.length}`);
-    
-    if (tiles.length === 0) {
-      console.log('타일이 없음 - 빈 배열 반환');
-      return [];
-    }
+    // 1. 반경 내 마커 조회
+    const now = admin.firestore.Timestamp.now();
+    const markersSnap = await db.collection('markers')
+      .where('isActive', '==', true)
+      .where('expiresAt', '>', now)
+      .get();
 
-    // 2. 타일별로 포스트 조회 (배치 처리)
-    const posts = [];
-    const chunkSize = 10; // Firestore whereIn 제한
-    
-    for (let i = 0; i < tiles.length; i += chunkSize) {
-      const tileBatch = tiles.slice(i, i + chunkSize);
-      const snap = await db.collection('posts')
-        .where('isActive', '==', true)
-        .where('isCollected', '==', false)
-        .where('tileId', 'in', tileBatch)
-        .limit(100)
-        .get();
+    console.log(`전체 활성 마커 개수: ${markersSnap.docs.length}`);
 
-      for (const doc of snap.docs) {
-        const post = doc.data();
-        const loc = post.location;
-        
-        if (loc && loc.latitude && loc.longitude) {
-          // 거리 계산 (미터 단위)
-          const distance = calculateDistance(lat, lng, loc.latitude, loc.longitude);
-          
-          if (distance <= radius) {
-            posts.push({
-              ...post,
-              id: doc.id,
-              location: {
-                latitude: loc.latitude,
-                longitude: loc.longitude
-              }
-            });
-          }
+    // 2. 거리 필터링 및 본인 마커 제외
+    const eligibleMarkers = [];
+    
+    for (const doc of markersSnap.docs) {
+      const marker = doc.data();
+      const location = marker.location;
+      
+      if (!location || !location.latitude || !location.longitude) {
+        continue;
+      }
+
+      // 거리 계산 (미터 단위)
+      const distance = calculateDistance(lat, lng, location.latitude, location.longitude);
+      
+      if (distance <= radius) {
+        // 본인 마커 제외
+        if (marker.creatorId !== uid) {
+          eligibleMarkers.push({
+            ...marker,
+            id: doc.id,
+            location: {
+              latitude: location.latitude,
+              longitude: location.longitude
+            }
+          });
         }
       }
     }
 
-    // 3. 필터링: 본인 포스트 제외
-    const eligiblePosts = posts.filter(post => post.ownerId !== uid);
-    console.log(`본인 포스트 제외 후: ${eligiblePosts.length}개`);
+    console.log(`거리 필터링 및 본인 제외 후: ${eligibleMarkers.length}개`);
 
-    // 4. 이미 받은 포스트 제외
-    const receivedPostIds = await getReceivedPostIds(uid);
-    console.log(`이미 받은 포스트 ID 개수: ${receivedPostIds.length}`);
+    // 3. 이미 받은 마커 제외
+    const receivedMarkerIds = await getReceivedMarkerIds(uid);
+    console.log(`이미 받은 마커 ID 개수: ${receivedMarkerIds.length}`);
     
-    const finalPosts = eligiblePosts.filter(post => 
-      !receivedPostIds.includes(post.id)
+    const finalMarkers = eligibleMarkers.filter(marker => 
+      !receivedMarkerIds.includes(marker.id)
     );
 
-    console.log(`최종 수령 가능 포스트 개수: ${finalPosts.length}`);
-    return finalPosts;
+    console.log(`최종 수령 가능 마커 개수: ${finalMarkers.length}`);
+    return finalMarkers;
 
   } catch (error) {
     console.error("queryReceivablePosts 오류:", error);
@@ -432,18 +422,18 @@ export const queryReceivablePosts = functions.https.onCall(async (data, context)
   }
 });
 
-// 사용자가 이미 받은 포스트 ID 목록 조회
-async function getReceivedPostIds(uid: string): Promise<string[]> {
+// 사용자가 이미 받은 마커 ID 목록 조회
+async function getReceivedMarkerIds(uid: string): Promise<string[]> {
   try {
     const snap = await db.collection('receipts')
       .doc(uid)
       .collection('items')
-      .select('postId')
+      .select('markerId')
       .get();
     
     return snap.docs.map(doc => doc.id);
   } catch (error) {
-    console.error("getReceivedPostIds 오류:", error);
+    console.error("getReceivedMarkerIds 오류:", error);
     return [];
   }
 }
