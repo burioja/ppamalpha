@@ -94,8 +94,36 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _emailController.text = widget.place.contactInfo?['email'] ?? '';
     _couponPasswordController.text = widget.place.couponPassword ?? '';
 
-    _selectedCategory = widget.place.category;
-    _selectedSubCategory = widget.place.subCategory;
+    // 카테고리 마이그레이션 (이전 카테고리 → 새 카테고리)
+    final categoryMapping = {
+      '요식업': '음식점',
+      '배움': '교육',
+      '생활': '생활서비스',
+      '쇼핑': '소매/쇼핑',
+      '엔터테인먼트': '문화/여가',
+      '정치': '공공기관',
+    };
+
+    // 기존 카테고리를 새 카테고리로 매핑하거나 그대로 사용
+    String? category = widget.place.category;
+    if (category != null) {
+      category = categoryMapping[category] ?? category;
+      // 새 카테고리 목록에 없으면 null로 설정
+      if (!_categoryOptions.containsKey(category)) {
+        category = null;
+      }
+    }
+
+    _selectedCategory = category;
+
+    // 서브 카테고리 검증
+    if (_selectedCategory != null && widget.place.subCategory != null) {
+      final subCategories = _categoryOptions[_selectedCategory] ?? [];
+      if (subCategories.contains(widget.place.subCategory)) {
+        _selectedSubCategory = widget.place.subCategory;
+      }
+    }
+
     _selectedSubSubCategory = widget.place.subSubCategory;
 
     // 쿠폰 활성화 상태 초기화
