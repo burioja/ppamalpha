@@ -2535,7 +2535,7 @@ class _MapScreenState extends State<MapScreen> {
                 initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
                 initialZoom: _currentZoom,
                 minZoom: 14.0,  // 최소 줌 레벨 (줌 아웃 한계)
-                maxZoom: 16.0,  // 최대 줌 레벨 (줌 인 한계)
+                maxZoom: 17.0,  // 최대 줌 레벨 (줌 인 한계)
           onMapReady: _onMapReady,
                 onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
                 onTap: (tapPosition, point) {
@@ -2582,8 +2582,7 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppamalpha.app',
                   minZoom: 14.0,  // 타일 서버 최소 줌
-                  maxZoom: 16.0,  // 타일 서버 최대 줌
-                  tileSize: 256,
+                  maxZoom: 17.0,  // 타일 서버 최대 줌
                 ),
                 // 통합 포그 오버레이 (검정 → 펀칭 → 회색)
                 UnifiedFogOverlayWidget(
