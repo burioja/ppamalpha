@@ -479,7 +479,7 @@ class MapMarkerService {
   static double _degreesToRadians(double degrees) {
     return degrees * (pi / 180);
   }
-
+  
   /// MarkerData를 MarkerModel로 변환
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
     // ✅ 옵셔널 안전 파싱 함수
@@ -513,7 +513,7 @@ class MapMarkerService {
       collectedBy: markerData.collectedBy != null ? [markerData.collectedBy!] : [],
     );
   }
-
+  
   /// 마커 생성
   static Future<String> createMarker({
     required String postId,
@@ -583,6 +583,46 @@ class MapMarkerService {
     } catch (e) {
       print('❌ 마커 삭제 실패: $e');
       rethrow;
+    }
+  }
+
+  // 수령 가능한 포스트 조회
+  static Future<List<Map<String, dynamic>>> getReceivablePosts({
+    required double lat,
+    required double lng,
+    required String uid,
+    int radius = 100, // 미터 단위
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('queryReceivablePosts');
+      final result = await callable.call({
+        'lat': lat,
+        'lng': lng,
+        'radius': radius,
+        'uid': uid,
+      });
+
+      final data = result.data;
+      if (data == null) {
+        print('수령 가능 포스트 조회 결과가 null입니다');
+        return [];
+      }
+
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      print('수령 가능 포스트 조회 실패: $e');
+      print('위치: lat=$lat, lng=$lng, radius=$radius, uid=$uid');
+      
+      // 에러 타입별 상세 로그
+      if (e.toString().contains('unauthenticated')) {
+        print('사용자 인증 오류');
+      } else if (e.toString().contains('unavailable')) {
+        print('Firebase Functions 서비스 불가');
+      } else if (e.toString().contains('timeout')) {
+        print('요청 시간 초과');
+      }
+      
+      return [];
     }
   }
 }

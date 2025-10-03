@@ -74,6 +74,10 @@ dependencies:
   # 차트 라이브러리
   fl_chart: ^0.69.0
 
+  # 포스트 수령 시스템용 패키지
+  vibration: ^2.0.0
+  audioplayers: ^6.1.0
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
