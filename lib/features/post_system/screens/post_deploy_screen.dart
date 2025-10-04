@@ -358,8 +358,13 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                   child: _buildPostList(),
                 ),
 
-                // 하단 고정 뿌리기 영역
-                _buildBottomDeploySection(),
+                // 하단 고정 뿌리기 영역 (최대 높이 제한)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.4, // 최대 40% 높이
+                  ),
+                  child: _buildBottomDeploySection(),
+                ),
               ],
             ),
     );
@@ -1013,177 +1018,179 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         ],
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 선택된 포스트 요약
-              if (_selectedPost != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.blue[600],
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '선택된 포스트: ${_selectedPost!.title}',
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 선택된 포스트 요약
+                if (_selectedPost != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.blue[600],
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '선택된 포스트: ${_selectedPost!.title}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.blue[800],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${_selectedPost!.reward}원',
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.bold,
                             color: Colors.blue[800],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Text(
-                        '${_selectedPost!.reward}원',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[800],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+
+                // 배포 설정 (간소화)
+                Row(
+                  children: [
+                    // 수량 설정
+                    Expanded(
+                      child: TextFormField(
+                        controller: _quantityController,
+                        decoration: const InputDecoration(
+                          labelText: '수량',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => _calculateTotal(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // 기간 설정
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedDuration,
+                        decoration: const InputDecoration(
+                          labelText: '기간',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        items: _durationOptions.map((duration) {
+                          return DropdownMenuItem(
+                            value: duration,
+                            child: Text('${duration}일'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDuration = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
                 ),
 
-              // 배포 설정 (간소화)
-              Row(
-                children: [
-                  // 수량 설정
-                  Expanded(
-                    child: TextFormField(
-                      controller: _quantityController,
-                      decoration: const InputDecoration(
-                        labelText: '수량',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                const SizedBox(height: 16),
+
+                // 총 비용 및 뿌리기 버튼
+                Row(
+                  children: [
+                    // 총 비용 표시
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                      ),
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) => _calculateTotal(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // 기간 설정
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      value: _selectedDuration,
-                      decoration: const InputDecoration(
-                        labelText: '기간',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                      items: _durationOptions.map((duration) {
-                        return DropdownMenuItem(
-                          value: duration,
-                          child: Text('${duration}일'),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedDuration = value!;
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // 총 비용 및 뿌리기 버튼
-              Row(
-                children: [
-                  // 총 비용 표시
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '총 비용',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          Text(
-                            '${_totalPrice.toStringAsFixed(0)}원',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // 뿌리기 버튼
-                  SizedBox(
-                    width: 120,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _selectedPost != null && !_isDeploying
-                          ? _deployPostToLocation
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                         ),
-                      ),
-                      child: _isDeploying
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              '뿌리기',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '총 비용',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Text(
+                              '${_totalPrice.toStringAsFixed(0)}원',
+                              style: const TextStyle(
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 16),
+
+                    // 뿌리기 버튼
+                    SizedBox(
+                      width: 120,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _selectedPost != null && !_isDeploying
+                            ? _deployPostToLocation
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _isDeploying
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                '뿌리기',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

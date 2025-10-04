@@ -8,20 +8,21 @@ import '../../models/post/post_instance_model_simple.dart';
 class PostStatisticsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 특정 포스트의 전체 통계 조회
+  /// 특정 포스트의 전체 통계 조회 (삭제된 포스트 포함 - Phase 5)
   Future<Map<String, dynamic>> getPostStatistics(String postId) async {
     try {
       debugPrint('📊 PostStatisticsService.getPostStatistics 시작: postId=$postId');
 
-      // 1. 템플릿 기본 정보
+      // 1. 템플릿 기본 정보 (삭제된 포스트도 포함)
       final postDoc = await _firestore.collection('posts').doc(postId).get();
       if (!postDoc.exists) {
         throw Exception('포스트를 찾을 수 없습니다.');
       }
 
       final post = PostModel.fromFirestore(postDoc);
+      final isDeleted = post.status == PostStatus.DELETED;
 
-      // 2. 이 템플릿으로 생성한 모든 마커
+      // 2. 이 템플릿으로 생성한 모든 마커 (삭제된 포스트의 마커도 포함)
       final markersQuery = await _firestore
           .collection('markers')
           .where('postId', isEqualTo: postId)
@@ -82,6 +83,7 @@ class PostStatisticsService {
           'reward': post.reward,
           'creatorId': post.creatorId,
           'creatorName': post.creatorName,
+          'isDeleted': isDeleted,  // Phase 5: 삭제 상태 표시
         },
         'deployments': deployments,
         'collections': collections,
@@ -559,6 +561,66 @@ class PostStatisticsService {
       };
     } catch (e) {
       debugPrint('❌ getPerformanceAnalytics 오류: $e');
+      return {};
+    }
+  }
+
+  /// 스토어별 분포 분석 (Phase 5)
+  Future<Map<String, dynamic>> getStoreDistribution(String postId) async {
+    try {
+      debugPrint('🏪 PostStatisticsService.getStoreDistribution 시작: postId=$postId');
+
+      // post_collections에서 storeId별로 집계
+      final collectionsQuery = await _firestore
+          .collection('post_collections')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      final storeDistribution = <String, int>{};
+      final storeNames = <String, String>{};
+
+      for (final doc in collectionsQuery.docs) {
+        final data = doc.data();
+        final storeId = data['placeId'] as String?;
+
+        if (storeId != null && storeId.isNotEmpty) {
+          storeDistribution[storeId] = (storeDistribution[storeId] ?? 0) + 1;
+
+          // 스토어 이름 가져오기 (캐시)
+          if (!storeNames.containsKey(storeId)) {
+            try {
+              final placeDoc = await _firestore.collection('places').doc(storeId).get();
+              if (placeDoc.exists) {
+                storeNames[storeId] = placeDoc.data()?['name'] ?? '알 수 없는 스토어';
+              } else {
+                storeNames[storeId] = '알 수 없는 스토어';
+              }
+            } catch (e) {
+              storeNames[storeId] = '알 수 없는 스토어';
+            }
+          }
+        }
+      }
+
+      // 스토어명과 함께 분포 데이터 반환
+      final result = <String, Map<String, dynamic>>{};
+      storeDistribution.forEach((storeId, count) {
+        result[storeId] = {
+          'name': storeNames[storeId] ?? '알 수 없는 스토어',
+          'count': count,
+          'percentage': collectionsQuery.size > 0 ? (count / collectionsQuery.size * 100) : 0.0,
+        };
+      });
+
+      debugPrint('📊 스토어별 분포 조회 완료: ${result.length}개 스토어');
+      return {
+        'distribution': result,
+        'totalStores': result.length,
+        'totalCollections': collectionsQuery.size,
+      };
+
+    } catch (e) {
+      debugPrint('❌ getStoreDistribution 오류: $e');
       return {};
     }
   }

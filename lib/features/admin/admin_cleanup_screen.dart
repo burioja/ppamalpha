@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/services/admin/cleanup_service.dart';
 import '../../debug_firebase_check.dart';
+import 'widgets/user_point_grant_dialog.dart';
 
 /// 관리자용 데이터 정리 화면
 class AdminCleanupScreen extends StatefulWidget {
@@ -111,6 +112,45 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 사용자 포인트 지급
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '💰 사용자 포인트 지급',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '특정 사용자에게 포인트를 지급합니다.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _showPointGrantDialog,
+                        icon: const Icon(Icons.account_balance_wallet),
+                        label: const Text('포인트 지급하기'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -547,6 +587,40 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _showPointGrantDialog() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const UserPointGrantDialog(),
+    );
+
+    if (result != null && result['success'] == true) {
+      if (!mounted) return;
+
+      final email = result['email'];
+      final userName = result['userName'];
+      final points = result['points'];
+      final reason = result['reason'];
+
+      setState(() => _lastResult = {
+        'status': 'success',
+        'message': '포인트 지급 완료',
+        'details': {
+          '이메일': email,
+          '사용자': userName,
+          '지급 포인트': '$points P',
+          '지급 사유': reason,
+        },
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $userName($email)님에게 $points 포인트를 지급했습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   }
 

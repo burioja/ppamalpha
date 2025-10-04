@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
@@ -31,6 +33,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _detailAddressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _couponPasswordController = TextEditingController();
@@ -48,6 +51,9 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
   // 주소 검색을 통해 입력되었는지 여부
   bool _isAddressSearchBased = false;
+
+  // 대문 이미지 인덱스
+  int _coverImageIndex = 0;
 
   // 카테고리 옵션들
   final Map<String, List<String>> _categoryOptions = {
@@ -90,6 +96,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _nameController.text = widget.place.name;
     _descriptionController.text = widget.place.description;
     _addressController.text = widget.place.address ?? '';
+    _detailAddressController.text = widget.place.detailAddress ?? '';
     _phoneController.text = widget.place.contactInfo?['phone'] ?? '';
     _emailController.text = widget.place.contactInfo?['email'] ?? '';
     _couponPasswordController.text = widget.place.couponPassword ?? '';
@@ -138,6 +145,9 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     // 기존 이미지 URL 복사
     _existingImageUrls.addAll(widget.place.imageUrls);
     _existingThumbnailUrls.addAll(widget.place.thumbnailUrls);
+
+    // 대문 이미지 인덱스 초기화
+    _coverImageIndex = widget.place.coverImageIndex;
   }
 
   @override
@@ -145,6 +155,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _addressController.dispose();
+    _detailAddressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _couponPasswordController.dispose();
@@ -197,16 +208,21 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
       final allImageUrls = [..._existingImageUrls, ...newImageUrls];
       final allThumbnailUrls = [..._existingThumbnailUrls, ...newThumbnailUrls];
 
+      // coverImageIndex 검증 (이미지 개수 범위 내로 제한)
+      final validCoverIndex = _coverImageIndex.clamp(0, allImageUrls.length - 1);
+
       final updatedPlace = widget.place.copyWith(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+        detailAddress: _detailAddressController.text.trim().isEmpty ? null : _detailAddressController.text.trim(),
         location: _selectedLocation,
         category: _selectedCategory,
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: allImageUrls,
         thumbnailUrls: allThumbnailUrls,
+        coverImageIndex: validCoverIndex,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
@@ -465,41 +481,84 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                   ),
                 ),
 
+              const SizedBox(height: 8),
+
+              // 상세주소 입력 필드
+              TextFormField(
+                controller: _detailAddressController,
+                decoration: const InputDecoration(
+                  hintText: '상세주소 (동/호수 등)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
               const SizedBox(height: 16),
 
               // 기존 이미지 표시
               if (_existingImageUrls.isNotEmpty) ...[
-                const Text(
-                  '기존 이미지',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                Row(
+                  children: [
+                    const Text(
+                      '기존 이미지',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    if (_existingImageUrls.length >= 2) ...[
+                      const SizedBox(width: 8),
+                      const Text(
+                        '(⭐ 대문 이미지)',
+                        style: TextStyle(fontSize: 12, color: Colors.orange),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: 120,
+                  height: _existingImageUrls.length >= 2 ? 160 : 120,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _existingImageUrls.length,
                     itemBuilder: (context, index) {
+                      final isCover = index == _coverImageIndex;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: Stack(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                _existingImageUrls[index],
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
+                            Column(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: isCover ? Border.all(color: Colors.orange, width: 3) : null,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: _buildImageWidget(_existingImageUrls[index]),
+                                  ),
+                                ),
+                                if (_existingImageUrls.length >= 2) ...[
+                                  const SizedBox(height: 4),
+                                  SizedBox(
                                     width: 120,
-                                    height: 120,
-                                    color: Colors.grey[300],
-                                    child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-                                  );
-                                },
-                              ),
+                                    height: 32,
+                                    child: ElevatedButton(
+                                      onPressed: isCover ? null : () {
+                                        setState(() {
+                                          _coverImageIndex = index;
+                                        });
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        backgroundColor: isCover ? Colors.orange : Colors.grey[200],
+                                        foregroundColor: isCover ? Colors.white : Colors.black87,
+                                      ),
+                                      child: Text(
+                                        isCover ? '⭐ 대문' : '대문으로',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             Positioned(
                               top: 4,
@@ -513,6 +572,22 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                                 ),
                               ),
                             ),
+                            if (isCover)
+                              Positioned(
+                                top: 4,
+                                left: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '⭐',
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -553,7 +628,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: _buildCrossPlatformImage(_selectedImages[index]),
+                              child: _buildImageWidget(_selectedImages[index]),
                             ),
                             Positioned(
                               top: 4,
@@ -598,6 +673,15 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                         border: OutlineInputBorder(),
                         hintText: 'example@email.com',
                       ),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return null; // 선택사항
+                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                        if (!emailRegex.hasMatch(value)) {
+                          return '올바른 이메일 형식이 아닙니다';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -720,6 +804,18 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   void _removeExistingImage(int index) {
     setState(() {
       _existingImageUrls.removeAt(index);
+      if (index < _existingThumbnailUrls.length) {
+        _existingThumbnailUrls.removeAt(index);
+      }
+
+      // 대문 이미지 인덱스 조정
+      if (_coverImageIndex == index) {
+        // 삭제된 이미지가 대문이었다면 첫 번째 이미지를 대문으로
+        _coverImageIndex = 0;
+      } else if (_coverImageIndex > index) {
+        // 대문 이미지보다 앞의 이미지가 삭제되면 인덱스 조정
+        _coverImageIndex--;
+      }
     });
   }
 
@@ -773,23 +869,34 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
           },
         );
       } else {
-        return Image.file(
-          File(imageData),
-          width: 120,
-          height: 120,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 120,
-              height: 120,
-              color: Colors.grey[300],
-              child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-            );
-          },
-        );
+        // 로컬 파일 경로 (웹에서는 사용 불가)
+        if (kIsWeb) {
+          return Container(
+            width: 120,
+            height: 120,
+            color: Colors.grey[300],
+            child: const Icon(Icons.image, size: 40, color: Colors.grey),
+          );
+        } else {
+          return Image.file(
+            File(imageData),
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 120,
+                height: 120,
+                color: Colors.grey[300],
+                child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+              );
+            },
+          );
+        }
       }
-    } else if (imageData is File) {
-      return Image.file(
+    } else if (imageData is Uint8List) {
+      // 웹에서 선택된 바이트 데이터
+      return Image.memory(
         imageData,
         width: 120,
         height: 120,
@@ -803,6 +910,31 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
           );
         },
       );
+    } else if (imageData is File) {
+      // 모바일에서 선택된 File 객체
+      if (kIsWeb) {
+        return Container(
+          width: 120,
+          height: 120,
+          color: Colors.grey[300],
+          child: const Icon(Icons.image, size: 40, color: Colors.grey),
+        );
+      } else {
+        return Image.file(
+          imageData,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 120,
+              height: 120,
+              color: Colors.grey[300],
+              child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+            );
+          },
+        );
+      }
     }
     return Container(
       width: 120,
@@ -856,11 +988,15 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
             continue;
           }
 
-          if (mounted) {
-            setState(() {
-              _selectedImages.add(file.path ?? '');
-              _imageNames.add(file.name);
-            });
+          // 웹에서는 bytes를 base64로 변환해서 저장
+          if (file.bytes != null) {
+            final base64Image = 'data:image/${file.extension};base64,${base64Encode(file.bytes!)}';
+            if (mounted) {
+              setState(() {
+                _selectedImages.add(base64Image);
+                _imageNames.add(file.name);
+              });
+            }
           }
         }
       }
@@ -879,17 +1015,69 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     );
 
     if (result != null && result is Map<String, dynamic>) {
-      final displayName = result['display_name'] as String?;
+      final address = result['address'] as String?;
+      final detailAddress = result['detailAddress'] as String?;
       final lat = double.tryParse(result['lat']?.toString() ?? '');
       final lon = double.tryParse(result['lon']?.toString() ?? '');
 
-      if (displayName != null && lat != null && lon != null) {
+      if (address != null && lat != null && lon != null) {
         setState(() {
-          _addressController.text = displayName;
+          _addressController.text = address;
+          _detailAddressController.text = detailAddress ?? '';
           _selectedLocation = GeoPoint(lat, lon);
           _isAddressSearchBased = true; // 검색을 통해 입력됨
         });
       }
     }
+  }
+
+  Widget _buildImageWidget(dynamic image) {
+    if (kIsWeb) {
+      // 웹 플랫폼
+      if (image is String && image.startsWith('http')) {
+        return Image.network(
+          image,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
+        );
+      } else if (image is Uint8List) {
+        return Image.memory(
+          image,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      }
+    } else {
+      // 모바일 플랫폼
+      if (image is File) {
+        return Image.file(
+          image,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      } else if (image is String && image.startsWith('http')) {
+        return Image.network(
+          image,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        );
+      }
+    }
+
+    return _buildErrorPlaceholder();
+  }
+
+  Widget _buildErrorPlaceholder() {
+    return Container(
+      width: 120,
+      height: 120,
+      color: Colors.grey[300],
+      child: Icon(Icons.image, size: 40, color: Colors.grey[600]),
+    );
   }
 }

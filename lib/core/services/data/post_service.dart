@@ -278,20 +278,20 @@ class PostService {
     }
   }
 
-  // 포스트 삭제
-  Future<void> deletePost(String postId) async {
+  // 포스트 삭제 (하드 삭제 - 기존 메서드)
+  Future<void> deletePostHard(String postId) async {
     try {
-      debugPrint('🗑️ PostService.deletePost 호출: $postId');
+      debugPrint('🗑️ PostService.deletePostHard 호출: $postId');
       
       await _firestore.collection('posts').doc(postId).delete();
       
-      debugPrint('✅ 포스트 삭제 완료: $postId');
+      debugPrint('✅ 포스트 하드 삭제 완료: $postId');
       
       // Meilisearch에서도 삭제 (실제 구현 시)
       // await _deleteFromMeilisearch(postId);
     } catch (e) {
-      debugPrint('❌ 포스트 삭제 실패: $e');
-      throw Exception('포스트 삭제 실패: $e');
+      debugPrint('❌ 포스트 하드 삭제 실패: $e');
+      throw Exception('포스트 하드 삭제 실패: $e');
     }
   }
 
@@ -1709,6 +1709,36 @@ class PostService {
     } catch (e) {
       debugPrint('❌ canDeployPost 에러: $e');
       return false;
+    }
+  }
+
+  /// 포스트 삭제 (소프트 삭제)
+  Future<void> deletePost(String postId) async {
+    try {
+      // 포스트 상태를 DELETED로 변경
+      await _firestore.collection('posts').doc(postId).update({
+        'status': 'DELETED',
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 관련된 마커들 숨김 처리
+      final markers = await _firestore
+          .collection('markers')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      // 배치 작업으로 모든 마커 업데이트
+      final batch = _firestore.batch();
+      for (var marker in markers.docs) {
+        batch.update(marker.reference, {'visible': false});
+      }
+      await batch.commit();
+
+      debugPrint('✅ 포스트 삭제 완료: $postId');
+      debugPrint('📍 ${markers.docs.length}개 마커 숨김 처리');
+    } catch (e) {
+      debugPrint('❌ 포스트 삭제 실패: $e');
+      throw Exception('포스트 삭제 중 오류가 발생했습니다');
     }
   }
 }

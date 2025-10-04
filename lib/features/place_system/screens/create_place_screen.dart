@@ -31,6 +31,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _detailAddressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _couponPasswordController = TextEditingController();
@@ -73,12 +74,14 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
   bool _isLoading = false;
   final List<dynamic> _selectedImages = [];
   final List<String> _imageNames = [];
+  int _coverImageIndex = 0; // 대문 이미지 인덱스 (기본값: 첫 번째 이미지)
 
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
     _addressController.dispose();
+    _detailAddressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _couponPasswordController.dispose();
@@ -129,17 +132,22 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         thumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
+      // coverImageIndex 검증 (이미지 개수 범위 내로 제한)
+      final validCoverIndex = imageUrls.isNotEmpty ? _coverImageIndex.clamp(0, imageUrls.length - 1) : 0;
+
       final place = PlaceModel(
         id: '',
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+        detailAddress: _detailAddressController.text.trim().isEmpty ? null : _detailAddressController.text.trim(),
         location: _selectedLocation,
         category: _selectedCategory,
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
         imageUrls: imageUrls,
         thumbnailUrls: thumbnailUrls,
+        coverImageIndex: validCoverIndex,
         operatingHours: null,
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
@@ -349,12 +357,34 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                 ],
               ),
 
+              const SizedBox(height: 8),
+
+              // 상세주소 입력 필드
+              TextFormField(
+                controller: _detailAddressController,
+                decoration: const InputDecoration(
+                  hintText: '상세주소 (동/호수 등)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
               const SizedBox(height: 16),
 
               // 플레이스 이미지 업로드
-              const Text(
-                '플레이스 이미지',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              Row(
+                children: [
+                  const Text(
+                    '플레이스 이미지',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  if (_selectedImages.length >= 2) ...[
+                    const SizedBox(width: 8),
+                    const Text(
+                      '(⭐ 대문 이미지)',
+                      style: TextStyle(fontSize: 12, color: Colors.orange),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 8),
               Row(
@@ -371,18 +401,52 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
               if (_selectedImages.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: 120,
+                  height: _selectedImages.length >= 2 ? 160 : 120,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _selectedImages.length,
                     itemBuilder: (context, index) {
+                      final isCover = index == _coverImageIndex;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: Stack(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: _buildCrossPlatformImage(_selectedImages[index]),
+                            Column(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: isCover ? Border.all(color: Colors.orange, width: 3) : null,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: _buildCrossPlatformImage(_selectedImages[index]),
+                                  ),
+                                ),
+                                if (_selectedImages.length >= 2) ...[
+                                  const SizedBox(height: 4),
+                                  SizedBox(
+                                    width: 120,
+                                    height: 32,
+                                    child: ElevatedButton(
+                                      onPressed: isCover ? null : () {
+                                        setState(() {
+                                          _coverImageIndex = index;
+                                        });
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        backgroundColor: isCover ? Colors.orange : Colors.grey[200],
+                                        foregroundColor: isCover ? Colors.white : Colors.black87,
+                                      ),
+                                      child: Text(
+                                        isCover ? '⭐ 대문' : '대문으로',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             Positioned(
                               top: 4,
@@ -396,6 +460,22 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                                 ),
                               ),
                             ),
+                            if (isCover)
+                              Positioned(
+                                top: 4,
+                                left: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '⭐',
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -426,6 +506,15 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
                         border: OutlineInputBorder(),
                         hintText: 'example@email.com',
                       ),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return null; // 선택사항
+                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                        if (!emailRegex.hasMatch(value)) {
+                          return '올바른 이메일 형식이 아닙니다';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -684,6 +773,15 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
     setState(() {
       _selectedImages.removeAt(index);
       _imageNames.removeAt(index);
+
+      // 대문 이미지 인덱스 조정
+      if (_coverImageIndex == index) {
+        // 삭제된 이미지가 대문이었다면 첫 번째 이미지를 대문으로
+        _coverImageIndex = 0;
+      } else if (_coverImageIndex > index) {
+        // 대문 이미지보다 앞의 이미지가 삭제되면 인덱스 조정
+        _coverImageIndex--;
+      }
     });
   }
 
@@ -695,13 +793,15 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
     );
 
     if (result != null && result is Map<String, dynamic>) {
-      final displayName = result['display_name'] as String?;
+      final address = result['address'] as String?;
+      final detailAddress = result['detailAddress'] as String?;
       final lat = double.tryParse(result['lat']?.toString() ?? '');
       final lon = double.tryParse(result['lon']?.toString() ?? '');
 
-      if (displayName != null && lat != null && lon != null) {
+      if (address != null && lat != null && lon != null) {
         setState(() {
-          _addressController.text = displayName;
+          _addressController.text = address;
+          _detailAddressController.text = detailAddress ?? '';
           _selectedLocation = GeoPoint(lat, lon);
         });
       }

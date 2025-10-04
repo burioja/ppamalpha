@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,11 +8,41 @@ import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 import '../../../widgets/network_image_fallback_with_data.dart';
 
-class PlaceDetailScreen extends StatelessWidget {
+class PlaceDetailScreen extends StatefulWidget {
   final String placeId;
-  final PlaceService _placeService = PlaceService();
 
-  PlaceDetailScreen({super.key, required this.placeId});
+  const PlaceDetailScreen({super.key, required this.placeId});
+
+  @override
+  State<PlaceDetailScreen> createState() => _PlaceDetailScreenState();
+}
+
+class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
+  final PlaceService _placeService = PlaceService();
+  int? _selectedImageIndex; // null이면 대문 이미지 사용
+  PlaceModel? _place; // 캐시된 PlaceModel
+  Future<PlaceModel?>? _placeFuture; // Future 캐싱
+
+  @override
+  void initState() {
+    super.initState();
+    // initState에서 Future를 한 번만 생성
+    _placeFuture = _loadPlace();
+  }
+
+  Future<PlaceModel?> _loadPlace() async {
+    final place = await _placeService.getPlaceById(widget.placeId);
+    if (place != null) {
+      _place = place; // 캐싱
+      debugPrint('📍 Place loaded: ${place.name}');
+      debugPrint('🖼️ Image URLs: ${place.imageUrls}');
+      debugPrint('🔢 Image count: ${place.imageUrls.length}');
+      for (int i = 0; i < place.imageUrls.length; i++) {
+        debugPrint('  Image[$i]: ${place.imageUrls[i]}');
+      }
+    }
+    return place;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +59,7 @@ class PlaceDetailScreen extends StatelessWidget {
         ],
       ),
       body: FutureBuilder<PlaceModel?>(
-        future: _placeService.getPlaceById(placeId),
+        future: _placeFuture, // 캐싱된 Future 사용
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -62,14 +94,20 @@ class PlaceDetailScreen extends StatelessWidget {
             debugPrint('📸 PlaceDetailScreen - hasImages: ${place.hasImages}');
             debugPrint('📸 PlaceDetailScreen - imageUrls.length: ${place.imageUrls.length}');
 
-            return SingleChildScrollView(
+              return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 상단 이미지 그리드 (3-4개 우선 표시)
+                  // 지도 (최상단 배치)
+                  if (place.location != null) ...[
+                    _buildPlaceMap(place),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 상단 이미지 갤러리 (대문 이미지 + 나머지 이미지)
                   if (place.hasImages) ...[
-                    _buildImageGridHeader(place),
+                    _buildImageGallery(place),
                     const SizedBox(height: 16),
                   ] else ...[
                     // 이미지가 없을 때 표시
@@ -105,12 +143,6 @@ class PlaceDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // 지도
-                  if (place.location != null) ...[
-                    _buildPlaceMap(place),
-                    const SizedBox(height: 24),
-                  ],
-
                   // 액션 버튼들
                   _buildActionButtons(context, place),
                 ],
@@ -122,20 +154,155 @@ class PlaceDetailScreen extends StatelessWidget {
     );
   }
 
-  // 상단 이미지 그리드 (3-4개 이미지)
-  Widget _buildImageGridHeader(PlaceModel place) {
-    final images = place.imageUrls.take(4).toList(); // 최대 4개만 표시
+  // 상단 이미지 갤러리 (대문 이미지 + 나머지 이미지)
+  Widget _buildImageGallery(PlaceModel place) {
+    if (place.imageUrls.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      height: 200,
-      width: double.infinity,
-      child: images.length == 1
-          ? _buildSingleImage(images[0], place, 0)
-          : images.length == 2
-              ? _buildDoubleImages(images, place)
-              : images.length == 3
-                  ? _buildTripleImages(images, place)
-                  : _buildQuadImages(images, place),
+    // 현재 선택된 이미지 인덱스 (null이면 대문 이미지 사용)
+    final selectedIndex = (_selectedImageIndex ?? place.coverImageIndex).clamp(0, place.imageUrls.length - 1);
+    final selectedImageUrl = place.imageUrls[selectedIndex];
+    final selectedThumbnailUrl = place.thumbnailUrls.isNotEmpty && selectedIndex < place.thumbnailUrls.length
+        ? place.thumbnailUrls[selectedIndex]
+        : null;
+
+    debugPrint('🎨 Gallery - Selected index: $selectedIndex');
+    debugPrint('🎨 Gallery - Selected image URL: $selectedImageUrl');
+    debugPrint('🎨 Gallery - Is base64: ${selectedImageUrl.startsWith('data:')}');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 선택된 이미지 (원본 크게 표시)
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: double.infinity,
+            height: 250,
+            child: _buildImageWidget(selectedImageUrl, fit: BoxFit.cover),
+          ),
+        ),
+
+        // 모든 이미지 썸네일 (가로 스크롤 리스트)
+        if (place.imageUrls.length > 1) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 88,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: place.imageUrls.length,
+              itemBuilder: (context, index) {
+                final imageUrl = place.imageUrls[index];
+                // 썸네일 URL 사용하지 않고 원본만 사용 (statusCode: 0 에러 해결)
+                final isSelected = index == selectedIndex;
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedImageIndex = index;
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected ? Colors.blue : Colors.transparent,
+                          width: 3,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 80,
+                          height: 80,
+                          child: _buildImageWidget(imageUrl, fit: BoxFit.cover, isThumb: true),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 이미지 위젯 빌더 (base64 및 일반 URL 모두 처리)
+  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover, bool isThumb = false}) {
+    debugPrint('🖼️ Building image widget: ${imageUrl.substring(0, imageUrl.length > 100 ? 100 : imageUrl.length)}...');
+    debugPrint('🖼️ Is base64: ${imageUrl.startsWith('data:')}');
+
+    // base64 이미지 처리
+    if (imageUrl.startsWith('data:')) {
+      try {
+        // data:image/png;base64, 부분을 제거하고 base64 데이터만 추출
+        final base64String = imageUrl.split(',')[1];
+        final Uint8List bytes = base64Decode(base64String);
+
+        return Image.memory(
+          bytes,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('❌ Base64 image error: $error');
+            return Container(
+              color: Colors.grey[300],
+              child: Center(
+                child: Icon(
+                  Icons.image_not_supported,
+                  size: isThumb ? 30 : 50,
+                  color: Colors.grey
+                ),
+              ),
+            );
+          },
+        );
+      } catch (e) {
+        debugPrint('❌ Base64 decode error: $e');
+        return Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Icon(
+              Icons.image_not_supported,
+              size: isThumb ? 30 : 50,
+              color: Colors.grey
+            ),
+          ),
+        );
+      }
+    }
+
+    // 일반 URL 이미지 처리
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                    loadingProgress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('❌ Network image error: $error');
+        debugPrint('❌ Failed URL: $imageUrl');
+        return Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Icon(
+              Icons.image_not_supported,
+              size: isThumb ? 30 : 50,
+              color: Colors.grey
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -598,63 +765,6 @@ class PlaceDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildImageGallery(PlaceModel place) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '이미지',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 120,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: place.imageUrls.length,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/place-image-viewer',
-                    arguments: {
-                      'images': place.imageUrls,
-                      'index': index,
-                    },
-                  );
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      place.imageUrls[index],
-                      width: 120,
-                      height: 120,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 120,
-                          height: 120,
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPlaceMap(PlaceModel place) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -794,7 +904,7 @@ class PlaceDetailScreen extends StatelessWidget {
   void _editPlace(BuildContext context) async {
     // 현재 플레이스 정보를 가져온 후 수정 화면으로 이동
     try {
-      final place = await _placeService.getPlaceById(placeId);
+      final place = await _placeService.getPlaceById(widget.placeId);
       if (place != null && context.mounted) {
         final result = await Navigator.pushNamed(
           context,
@@ -808,7 +918,7 @@ class PlaceDetailScreen extends StatelessWidget {
           Navigator.pushReplacementNamed(
             context,
             '/place-detail',
-            arguments: placeId,
+            arguments: widget.placeId,
           );
         }
       }
@@ -842,5 +952,6 @@ class PlaceDetailScreen extends StatelessWidget {
       arguments: place,
     );
   }
+
 }
 

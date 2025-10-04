@@ -44,11 +44,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (widget.isEditable && currentPost.canEdit)
+          if (widget.isEditable && currentPost.canEdit) ...[
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => _editPost(context),
             ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: () => _deletePost(context),
+            ),
+          ],
         ],
       ),
       body: SingleChildScrollView(
@@ -771,13 +776,39 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
 
     // 이미 사용된 쿠폰인지 체크
-    // TODO: 쿼리 기반으로 사용 여부 확인
-    final isUsedByCurrentUser = false; // 임시: 쿼리에서 확인 필요
-    if (isUsedByCurrentUser) {
+    try {
+      final currentUser = FirebaseService().currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('로그인이 필요합니다.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final usageQuery = await FirebaseFirestore.instance
+        .collection('coupon_usage')
+        .where('postId', isEqualTo: currentPost.postId)
+        .where('userId', isEqualTo: currentUser.uid)
+        .limit(1)
+        .get();
+
+      if (usageQuery.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('이미 사용된 쿠폰입니다.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('이미 사용된 쿠폰입니다.'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: Text('쿠폰 사용 이력 확인 중 오류: $e'),
+          backgroundColor: Colors.red,
         ),
       );
       return;
@@ -917,14 +948,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // 배치 커밋
       await batch.commit();
 
-      // 4. 포인트 시스템을 통해 포인트 적립
-      final pointsService = PointsService();
-      await pointsService.addCouponPoints(
-        currentUser.uid,
-        currentPost.reward,
-        currentPost.title,
-        place.id,
-      );
+      // 쿠폰 사용 시 포인트는 지급하지 않음 (할인만 적용)
 
       // 로컬 상태 업데이트
       setState(() {
@@ -2159,5 +2183,85 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _deletePost(BuildContext context) async {
+    // 삭제 확인 다이얼로그
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('포스트 삭제'),
+          content: const Text(
+            '이 포스트를 삭제하시겠습니까?\n\n'
+            '삭제된 포스트는 더 이상 표시되지 않지만, '
+            '포인트는 유지됩니다.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        // 로딩 표시
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        // PostService를 사용하여 포스트 삭제
+        final postService = PostService();
+        await postService.deletePost(currentPost.postId);
+
+        // 로딩 다이얼로그 닫기
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        // 성공 메시지 표시
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('포스트가 삭제되었습니다. 포인트는 유지됩니다.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // 이전 화면으로 돌아가기
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        // 로딩 다이얼로그 닫기
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        // 에러 메시지 표시
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('포스트 삭제 실패: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

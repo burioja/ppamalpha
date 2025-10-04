@@ -23,6 +23,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
   Map<String, dynamic>? _locationAnalytics;
   Map<String, dynamic>? _performanceAnalytics;
   Map<String, dynamic>? _predictiveAnalytics;
+  Map<String, dynamic>? _storeDistribution;  // Phase 5: 스토어별 분포
   bool _isLoading = true;
   String? _error;
   late TabController _tabController;
@@ -55,6 +56,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _statisticsService.getLocationAnalytics(widget.post.postId),
         _statisticsService.getPerformanceAnalytics(widget.post.postId),
         _statisticsService.getPredictiveAnalytics(widget.post.postId),
+        _statisticsService.getStoreDistribution(widget.post.postId),  // Phase 5: 스토어별 분포
       ]);
 
       setState(() {
@@ -64,6 +66,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _locationAnalytics = results[3];
         _performanceAnalytics = results[4];
         _predictiveAnalytics = results[5];
+        _storeDistribution = results[6];  // Phase 5: 스토어별 분포
         _isLoading = false;
       });
     } catch (e) {
@@ -180,6 +183,13 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
             _buildEnhancedStatistics(),
             const SizedBox(height: 24),
 
+            // Phase 5: 스토어별 분포 파이차트
+            if (_storeDistribution != null && _storeDistribution!['distribution'] != null && (_storeDistribution!['distribution'] as Map).isNotEmpty)
+              ...[
+                _buildStoreDistributionChart(),
+                const SizedBox(height: 24),
+              ],
+
             // 예측 분석 (Phase 2-E)
             if (_predictiveAnalytics != null && _predictiveAnalytics!.isNotEmpty)
               ...[
@@ -219,6 +229,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
 
   Widget _buildPostHeader() {
     final template = _statistics!['template'] as Map<String, dynamic>;
+    final isDeleted = template['isDeleted'] ?? false;  // Phase 5: 삭제 상태 확인
 
     return Card(
       elevation: 2,
@@ -235,12 +246,36 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        template['title'] ?? '(제목 없음)',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              template['title'] ?? '(제목 없음)',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          if (isDeleted) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red[100],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '삭제됨',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -2196,6 +2231,93 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _buildStoreDistributionChart() {
+    if (_storeDistribution == null || _storeDistribution!['distribution'] == null) {
+      return const SizedBox.shrink();
+    }
+
+    final distribution = _storeDistribution!['distribution'] as Map<String, dynamic>;
+    if (distribution.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+    ];
+
+    final total = distribution.values.fold(0, (sum, count) => sum + (count as int));
+    final sections = <PieChartSectionData>[];
+    int colorIndex = 0;
+
+    distribution.forEach((storeName, count) {
+      final percentage = (count as int) / total * 100;
+      sections.add(
+        PieChartSectionData(
+          value: count.toDouble(),
+          color: colors[colorIndex % colors.length],
+          title: '${percentage.toStringAsFixed(1)}%',
+          radius: 100,
+          titleStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      );
+      colorIndex++;
+    });
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '스토어별 분포',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: sections,
+                  centerSpaceRadius: 40,
+                  sectionsSpace: 2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 범례
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: distribution.entries.map((entry) {
+                final color = colors[distribution.keys.toList().indexOf(entry.key) % colors.length];
+                final percentage = (entry.value as int) / total * 100;
+                return _buildLegend(
+                  color,
+                  '${entry.key}: ${entry.value}건 (${percentage.toStringAsFixed(1)}%)',
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
