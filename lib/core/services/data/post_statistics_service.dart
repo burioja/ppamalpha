@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../models/post/post_model.dart';
-import '../../models/post/post_instance_model_simple.dart';
 
 /// 포스트 통계 집계 및 조회 서비스
 class PostStatisticsService {

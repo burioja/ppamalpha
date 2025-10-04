@@ -15,10 +15,11 @@ class FogTileService extends TileProvider {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // 캐시 관리
+  // 캐시 관리 - 개선된 전략
   final Map<String, FogLevel> _tileCache = {};
   final Map<String, DateTime> _cacheTimestamp = {};
-  final Duration _cacheExpiry = const Duration(minutes: 10);
+  final Duration _cacheExpiry = const Duration(minutes: 15); // 캐시 시간 더 연장
+  final int _maxCacheSize = 1000; // 최대 캐시 크기
 
   // 방문 기록 캐시
   final Map<String, DateTime> _visitedTiles = {};

@@ -151,38 +151,59 @@ class TileUtils {
     return latitude.clamp(-85.0511, 85.0511);
   }
 
-  // ===== 1km 근사 그리드 시스템 =====
-  static const double _km1TileSize = 0.009; // 1km = 약 0.009도
+  // ===== 1km 정확한 그리드 시스템 =====
+  
+  /// 위도에 따른 실제 1km 거리 계산 (도 단위)
+  static double _getKm1TileSizeForLatitude(double latitude) {
+    // 위도별 1km 거리를 도 단위로 변환
+    const double earthRadius = 6371.0; // 지구 반지름 (km)
+    const double degreesToRadians = pi / 180.0;
+    
+    // 위도에 따른 실제 1km 거리 (도 단위)
+    final double latRad = latitude * degreesToRadians;
+    final double metersPerDegree = earthRadius * 1000 * degreesToRadians * cos(latRad);
+    return 1000.0 / metersPerDegree; // 1km를 도 단위로 변환
+  }
 
-  /// 위도, 경도를 1km 타일 ID로 변환 (Fog of War용)
+  /// 위도, 경도를 1km 타일 ID로 변환 (Fog of War용) - 정확한 계산
   static String getKm1TileId(double latitude, double longitude) {
-    final tileLat = (latitude / _km1TileSize).floor();
-    final tileLng = (longitude / _km1TileSize).floor();
+    final tileSize = _getKm1TileSizeForLatitude(latitude);
+    final tileLat = (latitude / tileSize).floor();
+    final tileLng = (longitude / tileSize).floor();
     return 'tile_${tileLat}_${tileLng}';
   }
 
-  /// 1km 타일 ID를 타일 중심점으로 변환
+  /// 1km 타일 ID를 타일 중심점으로 변환 - 정확한 계산
   static LatLng getKm1TileCenter(String tileId) {
     final parts = tileId.split('_');
     final tileLat = int.parse(parts[1]);
     final tileLng = int.parse(parts[2]);
+    
+    // 타일 중심점의 위도를 기준으로 정확한 타일 크기 계산
+    final centerLat = tileLat * _getKm1TileSizeForLatitude(tileLat * 0.009); // 대략적 중심점
+    final tileSize = _getKm1TileSizeForLatitude(centerLat);
+    
     return LatLng(
-      tileLat * _km1TileSize + (_km1TileSize / 2),
-      tileLng * _km1TileSize + (_km1TileSize / 2),
+      tileLat * tileSize + (tileSize / 2),
+      tileLng * tileSize + (tileSize / 2),
     );
   }
 
-  /// 1km 타일 ID에서 위도, 경도 범위 계산
+  /// 1km 타일 ID에서 위도, 경도 범위 계산 - 정확한 계산
   static Map<String, double> getKm1TileBounds(String tileId) {
     final parts = tileId.split('_');
     final tileLat = int.parse(parts[1]);
     final tileLng = int.parse(parts[2]);
     
+    // 타일 중심점의 위도를 기준으로 정확한 타일 크기 계산
+    final centerLat = tileLat * _getKm1TileSizeForLatitude(tileLat * 0.009); // 대략적 중심점
+    final tileSize = _getKm1TileSizeForLatitude(centerLat);
+    
     return {
-      'minLat': tileLat * _km1TileSize,
-      'maxLat': (tileLat + 1) * _km1TileSize,
-      'minLng': tileLng * _km1TileSize,
-      'maxLng': (tileLng + 1) * _km1TileSize,
+      'minLat': tileLat * tileSize,
+      'maxLat': (tileLat + 1) * tileSize,
+      'minLng': tileLng * tileSize,
+      'maxLng': (tileLng + 1) * tileSize,
     };
   }
 

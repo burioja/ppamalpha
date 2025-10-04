@@ -1,12 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:rxdart/rxdart.dart';
 import '../../models/post/post_model.dart';
 import '../../../features/map_system/services/fog_of_war/visit_tile_service.dart';
-import '../../../utils/tile_utils.dart';
 import 'post_search_service.dart';
 import 'points_service.dart';
 

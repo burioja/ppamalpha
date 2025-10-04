@@ -249,6 +249,16 @@ class MapMarkerService {
             print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
             continue;
           }
+
+          // 현재 사용자가 이미 수령한 마커는 제외 (단, 내가 배포한 마커는 예외)
+          final creatorId = data['creatorId'] as String?;
+          if (creatorId != user.uid) {
+            final collectedBy = List<String>.from(data['collectedBy'] ?? []);
+            if (collectedBy.contains(user.uid)) {
+              print('🚫 이미 수령한 마커 제외: ${doc.id}');
+              continue;
+            }
+          }
           
           final position = LatLng(
             locationData.latitude,
@@ -384,6 +394,16 @@ class MapMarkerService {
           final locationData = data['location'] as GeoPoint?;
           
           if (locationData == null) continue;
+
+          // 현재 사용자가 이미 수령한 마커는 제외 (단, 내가 배포한 마커는 예외)
+          final creatorId = data['creatorId'] as String?;
+          if (creatorId != user.uid) {
+            final collectedBy = List<String>.from(data['collectedBy'] ?? []);
+            if (collectedBy.contains(user.uid)) {
+              print('🚫 이미 수령한 슈퍼마커 제외: ${doc.id}');
+              continue;
+            }
+          }
           
           final position = LatLng(
             locationData.latitude,

@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import '../../models/post/post_instance_model_simple.dart';
 import '../../models/post/post_model.dart';
 import 'points_service.dart';
 

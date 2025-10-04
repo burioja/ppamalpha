@@ -199,14 +199,6 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    if (price % 100 != 0) {
-      _showErrorDialog(
-        title: '가격 형식 오류',
-        message: '단가는 100원 단위여야 합니다.\n현재 입력: $price원\n권장: ${((price / 100).ceil() * 100)}원',
-        action: '확인',
-      );
-      return;
-    }
 
     // 5. 위치 정보 검증
     if (_selectedLocation == null) {
