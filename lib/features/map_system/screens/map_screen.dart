@@ -464,9 +464,11 @@ class _MapScreenState extends State<MapScreen> {
           final homeCoords = await NominatimService.geocode(address);
           if (homeCoords != null) {
             print('집주소 좌표 변환 성공: ${homeCoords.latitude}, ${homeCoords.longitude}');
-        setState(() {
-              _homeLocation = homeCoords;
-            });
+            if (mounted) {
+              setState(() {
+                _homeLocation = homeCoords;
+              });
+            }
           } else {
             print('집주소 좌표 변환 실패');
           }
@@ -499,10 +501,12 @@ class _MapScreenState extends State<MapScreen> {
         } else {
           print('워크플레이스 정보가 없음');
         }
-        
-        setState(() {
-          _workLocations = workLocations;
-        });
+
+        if (mounted) {
+          setState(() {
+            _workLocations = workLocations;
+          });
+        }
 
         print('최종 워크플레이스 좌표 개수: ${workLocations.length}');
         for (int i = 0; i < workLocations.length; i++) {
@@ -554,11 +558,13 @@ class _MapScreenState extends State<MapScreen> {
       
       // 회색 영역 생성
       final grayPolygons = OSMFogService.createGrayAreas(visitedPositions);
-      
-      setState(() {
-        _grayPolygons = grayPolygons;
-      });
-      
+
+      if (mounted) {
+        setState(() {
+          _grayPolygons = grayPolygons;
+        });
+      }
+
     } catch (e) {
       debugPrint('방문 위치 로드 실패: $e');
     }
@@ -594,16 +600,20 @@ class _MapScreenState extends State<MapScreen> {
     
     try {
       final address = await NominatimService.reverseGeocode(_currentPosition!);
+      if (mounted) {
         setState(() {
-        _currentAddress = address;
-      });
+          _currentAddress = address;
+        });
+      }
 
       // 상위 위젯에 주소 전달
       widget.onAddressChanged?.call(address);
     } catch (e) {
-    setState(() {
-        _currentAddress = '주소 변환 실패';
-      });
+      if (mounted) {
+        setState(() {
+          _currentAddress = '주소 변환 실패';
+        });
+      }
     }
   }
 

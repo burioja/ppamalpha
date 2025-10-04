@@ -86,6 +86,13 @@ class _SignupScreenState extends State<SignupScreen> {
       _showToast('이메일을 입력해주세요');
       return;
     }
+
+    // 이메일 형식 검증
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(_emailController.text.trim())) {
+      _showToast('올바른 이메일 형식이 아닙니다');
+      return;
+    }
     
     setState(() {
       _isEmailVerifying = true;
@@ -406,6 +413,17 @@ class _SignupScreenState extends State<SignupScreen> {
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '이메일을 입력하세요';
+                    }
+                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                    if (!emailRegex.hasMatch(value)) {
+                      return '올바른 이메일 형식이 아닙니다';
+                    }
+                    return null;
+                  },
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                 ),
               ),
               const SizedBox(width: 8),

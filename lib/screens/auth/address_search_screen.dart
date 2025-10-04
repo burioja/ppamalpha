@@ -42,6 +42,38 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
     }
   }
 
+  Future<String?> _showDetailAddressDialog(BuildContext context) async {
+    final TextEditingController detailController = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('상세주소 입력'),
+          content: TextField(
+            controller: detailController,
+            decoration: const InputDecoration(
+              hintText: '동/호수 등 상세주소를 입력하세요',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 2,
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, detailController.text.trim()),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,8 +132,19 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
                               '${result['lat']}, ${result['lon']}',
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
-                            onTap: () {
-                              Navigator.pop(context, result);
+                            onTap: () async {
+                              // 상세주소 입력 다이얼로그 표시
+                              final detailAddress = await _showDetailAddressDialog(context);
+                              if (context.mounted) {
+                                // 주소와 상세주소를 함께 반환
+                                Navigator.pop(context, {
+                                  'address': result['display_name'] ?? '',
+                                  'detailAddress': detailAddress ?? '',
+                                  'lat': result['lat'],
+                                  'lon': result['lon'],
+                                  'raw': result,
+                                });
+                              }
                             },
                           );
                         },

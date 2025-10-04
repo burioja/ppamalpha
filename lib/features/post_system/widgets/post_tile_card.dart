@@ -287,17 +287,22 @@ class PostTileCard extends StatelessWidget {
 
   Widget _buildImageWidget() {
     try {
-      if (post.mediaUrl.isNotEmpty) {
+      // 썸네일 우선 사용
+      final imageUrl = post.thumbnailUrl.isNotEmpty
+          ? post.thumbnailUrl.first
+          : (post.mediaUrl.isNotEmpty ? post.mediaUrl.first : '');
+
+      if (imageUrl.isNotEmpty) {
         // 이미지 타입 체크를 더 관대하게 변경
         bool hasImageMedia = post.mediaType.isNotEmpty &&
             (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
-             post.mediaUrl.first.toLowerCase().contains('.jpg') ||
-             post.mediaUrl.first.toLowerCase().contains('.jpeg') ||
-             post.mediaUrl.first.toLowerCase().contains('.png') ||
-             post.mediaUrl.first.toLowerCase().contains('.gif') ||
-             post.mediaUrl.first.toLowerCase().contains('firebasestorage'));
+             imageUrl.toLowerCase().contains('.jpg') ||
+             imageUrl.toLowerCase().contains('.jpeg') ||
+             imageUrl.toLowerCase().contains('.png') ||
+             imageUrl.toLowerCase().contains('.gif') ||
+             imageUrl.toLowerCase().contains('firebasestorage'));
 
-        if (hasImageMedia && post.mediaUrl.first.isNotEmpty) {
+        if (hasImageMedia) {
           return ClipRRect(
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(12),
@@ -305,7 +310,7 @@ class PostTileCard extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               height: double.infinity,
-              child: buildNetworkImage(post.mediaUrl.first),
+              child: buildNetworkImage(imageUrl),
             ),
           );
         }

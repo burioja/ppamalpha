@@ -36,6 +36,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _allowSexualContent = false;
   bool _allowViolentContent = false;
   bool _allowHateContent = false;
+  
+  // 프로필 이미지 강제 업데이트를 위한 카운터
+  int _profileUpdateCounter = 0;
 
   // 섹션 확장/축소 상태
   bool _personalInfoExpanded = true;
@@ -89,6 +92,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (userDoc.exists) {
         final userData = userDoc.data()!;
 
+        debugPrint('📄 사용자 데이터 로드: ${userData.keys.toList()}');
+        debugPrint('🖼️ profileImageUrl in Firestore: ${userData['profileImageUrl']}');
+
         setState(() {
           _nicknameController.text = userData['nickname'] ?? '';
           _phoneController.text = userData['phone'] ?? '';
@@ -99,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final genderValue = userData['gender'] as String?;
           _selectedGender = (genderValue == 'male' || genderValue == 'female') ? genderValue : null;
           _profileImageUrl = userData['profileImageUrl'];
+          debugPrint('💾 _profileImageUrl 설정됨: $_profileImageUrl');
           _allowSexualContent = userData['allowSexualContent'] ?? false;
           _allowViolentContent = userData['allowViolentContent'] ?? false;
           _allowHateContent = userData['allowHateContent'] ?? false;
@@ -269,10 +276,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _onProfileUpdated() {
-    setState(() {
-      _loadUserData();
-    });
+  void _onProfileUpdated() async {
+    debugPrint('📥 _onProfileUpdated 호출됨');
+    
+    // 이전 URL 저장
+    final previousUrl = _profileImageUrl;
+    debugPrint('📥 이전 profileImageUrl: $previousUrl');
+    
+    await _loadUserData();  // 데이터 다시 로드 (await 추가)
+    debugPrint('📊 _loadUserData 완료 - 새 profileImageUrl: $_profileImageUrl');
+    
+    // URL 변경 확인
+    if (previousUrl != _profileImageUrl) {
+      debugPrint('✅ profileImageUrl이 변경됨: $previousUrl → $_profileImageUrl');
+    } else {
+      debugPrint('⚠️ profileImageUrl이 변경되지 않음');
+    }
+    
+    if (mounted) {
+      setState(() {
+        _profileUpdateCounter++;  // 카운터 증가로 ProfileHeaderCard 강제 재빌드
+      });
+      debugPrint('🔄 setState 호출 완료 - _profileUpdateCounter: $_profileUpdateCounter');
+    } else {
+      debugPrint('⚠️ mounted가 false - setState 건너뜀');
+    }
   }
 
   @override
@@ -294,6 +322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     // 프로필 헤더
                     ProfileHeaderCard(
+                      key: ValueKey('profile_header_$_profileUpdateCounter'),
                       profileImageUrl: _profileImageUrl,
                       nickname: _nicknameController.text,
                       email: _userEmail,
@@ -808,46 +837,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 포인트 지급 버튼 (관리자용)
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('guest11@gmail.com에게 포인트 지급 중...')),
-                                  );
-
-                                  await AdminPointGrant.grantPointsToGuest11();
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('✅ guest11@gmail.com에게 100,000 포인트 지급 완료!'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('❌ 포인트 지급 실패: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.account_balance_wallet),
-                              label: const Text('guest11 포인트 지급'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             ),

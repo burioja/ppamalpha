@@ -58,13 +58,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 화면이 다시 포커스를 받을 때 포스트 목록 새로고침
-    // 포스트 생성/수정 후 돌아왔을 때 최신 데이터 표시
-    if (_currentUserId != null && _allPosts.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadInitialData();
-      });
-    }
+    // Remove automatic reload to prevent double loading
+    // Data will be loaded once in initState
   }
 
   @override

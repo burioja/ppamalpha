@@ -5,25 +5,23 @@ class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // ?�재 ?�용??ID 가?�오�?
+  // ?�재 ?�용??ID 가?�오�?
   String? get currentUserId => _auth.currentUser?.uid;
 
-  // ?�용???�로??컬렉??참조
+  // ?�용???�로??컬렉??참조
   DocumentReference<Map<String, dynamic>> get _userProfileDoc {
     return _firestore
         .collection('users')
-        .doc(currentUserId)
-        .collection('profile')
-        .doc('info');
+        .doc(currentUserId);
   }
 
-  // ?�용???�로??가?�오�?
+  // ?�용???�로??가?�오�?
   Stream<DocumentSnapshot<Map<String, dynamic>>> getUserProfile() {
     return _userProfileDoc.snapshots();
   }
 
-  // ?�용???�로???�성/?�데?�트
-  Future<void> updateUserProfile({
+  // ?�용???�로???�성/?�데?�트
+  Future<String?> updateUserProfile({
     String? nickname,
     String? address,
     String? secondAddress,
@@ -34,7 +32,7 @@ class UserService {
     String? gender,
     String? birth,
   }) async {
-    if (currentUserId == null) throw Exception('?�용?��? 로그?�되지 ?�았?�니??');
+    if (currentUserId == null) throw Exception('?�용?��? 로그?�되지 ?�았?�니??');
 
     final updates = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -45,21 +43,35 @@ class UserService {
     if (secondAddress != null) updates['secondAddress'] = secondAddress;
     if (phoneNumber != null) updates['phoneNumber'] = phoneNumber;
     if (email != null) updates['email'] = email;
-    if (profileImageUrl != null) updates['profileImageUrl'] = profileImageUrl;
+    if (profileImageUrl != null) {
+      updates['profileImageUrl'] = profileImageUrl;
+      print('🔥 UserService: Updating profileImageUrl to: $profileImageUrl');
+      print('🔥 UserService: Document path: users/$currentUserId');
+    }
     if (account != null) updates['account'] = account;
     if (gender != null) updates['gender'] = gender;
     if (birth != null) updates['birth'] = birth;
 
-    // createdAt???�으�?추�?
+    // createdAt???�으�?추�?
     final doc = await _userProfileDoc.get();
     if (!doc.exists) {
       updates['createdAt'] = FieldValue.serverTimestamp();
+      print('🔥 UserService: Creating new document');
     }
 
     await _userProfileDoc.set(updates, SetOptions(merge: true));
+
+    // 업데이트 후 바로 확인
+    if (profileImageUrl != null) {
+      final verifyDoc = await _userProfileDoc.get();
+      final savedUrl = verifyDoc.data()?['profileImageUrl'];
+      print('🔥 UserService: Verified saved URL: $savedUrl');
+      return savedUrl;
+    }
+    return null;
   }
 
-  // ?�용???�네??가?�오�?
+  // ?�용???�네??가?�오�?
   Future<String?> getNickname() async {
     try {
       final doc = await _userProfileDoc.get();
@@ -72,7 +84,7 @@ class UserService {
     }
   }
 
-  // ?�용??권한 가?�오�?(workplaces 컬렉?�에??
+  // ?�용??권한 가?�오�?(workplaces 컬렉?�에??
   Future<String?> getUserAuthority() async {
     try {
       final workplacesSnapshot = await _firestore
@@ -82,19 +94,19 @@ class UserService {
           .get();
       
       if (workplacesSnapshot.docs.isNotEmpty) {
-        // �?번째 workplace??role??반환
+        // �?번째 workplace??role??반환
         return workplacesSnapshot.docs.first.data()['role'];
       }
-      return 'User'; // 기본�?
+      return 'User'; // 기본�?
     } catch (e) {
       return 'User';
     }
   }
 
-  // ?�용???�계 가?�오�?
+  // ?�용???�계 가?�오�?
   Future<Map<String, dynamic>> getUserStats() async {
     try {
-      // ?��?�??�계
+      // ?��?�??�계
       final schedulesSnapshot = await _firestore
           .collection('users')
           .doc(currentUserId)
@@ -106,7 +118,7 @@ class UserService {
           .where((doc) => doc.data()['isCompleted'] == true)
           .length;
       
-      // ?�로????
+      // ?�로????
       final followingSnapshot = await _firestore
           .collection('user_tracks')
           .doc(currentUserId)

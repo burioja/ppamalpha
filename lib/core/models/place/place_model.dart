@@ -5,12 +5,14 @@ class PlaceModel {
   final String name;
   final String description;
   final String? address;
+  final String? detailAddress; // 상세주소 필드 추가
   final GeoPoint? location;
   final String? category;
   final String? subCategory;
   final String? subSubCategory;
   final List<String> imageUrls;
   final List<String> thumbnailUrls; // 썸네일 URL 목록
+  final int coverImageIndex; // 대문 이미지 인덱스 (기본값 0)
   final Map<String, dynamic>? operatingHours;
   final Map<String, dynamic>? contactInfo;
   final String createdBy;
@@ -28,12 +30,14 @@ class PlaceModel {
     required this.name,
     required this.description,
     this.address,
+    this.detailAddress,
     this.location,
     this.category,
     this.subCategory,
     this.subSubCategory,
     this.imageUrls = const [],
     this.thumbnailUrls = const [],
+    this.coverImageIndex = 0,
     this.operatingHours,
     this.contactInfo,
     required this.createdBy,
@@ -53,12 +57,14 @@ class PlaceModel {
       name: data['name'] ?? '',
       description: data['description'] ?? '',
       address: data['address'],
+      detailAddress: data['detailAddress'],
       location: data['location'],
       category: data['category'],
       subCategory: data['subCategory'],
       subSubCategory: data['subSubCategory'],
       imageUrls: List<String>.from(data['imageUrls'] ?? []),
       thumbnailUrls: List<String>.from(data['thumbnailUrls'] ?? []),
+      coverImageIndex: data['coverImageIndex'] ?? 0,
       operatingHours: data['operatingHours'],
       contactInfo: data['contactInfo'],
       createdBy: data['createdBy'] ?? '',
@@ -76,12 +82,14 @@ class PlaceModel {
       'name': name,
       'description': description,
       'address': address,
+      'detailAddress': detailAddress,
       'location': location,
       'category': category,
       'subCategory': subCategory,
       'subSubCategory': subSubCategory,
       'imageUrls': imageUrls,
       'thumbnailUrls': thumbnailUrls,
+      'coverImageIndex': coverImageIndex,
       'operatingHours': operatingHours,
       'contactInfo': contactInfo,
       'createdBy': createdBy,
@@ -99,12 +107,14 @@ class PlaceModel {
     String? name,
     String? description,
     String? address,
+    String? detailAddress,
     GeoPoint? location,
     String? category,
     String? subCategory,
     String? subSubCategory,
     List<String>? imageUrls,
     List<String>? thumbnailUrls,
+    int? coverImageIndex,
     Map<String, dynamic>? operatingHours,
     Map<String, dynamic>? contactInfo,
     String? createdBy,
@@ -120,12 +130,14 @@ class PlaceModel {
       name: name ?? this.name,
       description: description ?? this.description,
       address: address ?? this.address,
+      detailAddress: detailAddress ?? this.detailAddress,
       location: location ?? this.location,
       category: category ?? this.category,
       subCategory: subCategory ?? this.subCategory,
       subSubCategory: subSubCategory ?? this.subSubCategory,
       imageUrls: imageUrls ?? this.imageUrls,
       thumbnailUrls: thumbnailUrls ?? this.thumbnailUrls,
+      coverImageIndex: coverImageIndex ?? this.coverImageIndex,
       operatingHours: operatingHours ?? this.operatingHours,
       contactInfo: contactInfo ?? this.contactInfo,
       createdBy: createdBy ?? this.createdBy,
@@ -160,7 +172,13 @@ class PlaceModel {
   bool get hasContactInfo => contactInfo != null && contactInfo!.isNotEmpty;
 
   // 추가 getter들
-  String? get formattedAddress => address;
+  String? get formattedAddress {
+    if (address == null) return null;
+    if (detailAddress != null && detailAddress!.isNotEmpty) {
+      return '$address $detailAddress';
+    }
+    return address;
+  }
   String? get phoneNumber => contactInfo?['phone'];
   String? get website => contactInfo?['website'];
 }
