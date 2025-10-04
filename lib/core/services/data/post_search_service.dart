@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post/post_model.dart';
 import '../../../utils/s2_tile_utils.dart';
 
@@ -146,46 +145,6 @@ class PostSearchService {
     }
   }
   
-  /// 배치별 포스트 쿼리
-  static Future<List<PostModel>> _queryPostsBatch({
-    required List<String> s2Cells,
-    required int? fogLevel,
-    required String rewardType,
-    required int limit,
-  }) async {
-    try {
-      // 기본 필터
-      Query query = _firestore
-          .collection('posts')
-          .where('isActive', isEqualTo: true)
-          .where('isCollected', isEqualTo: false)
-          .where('expiresAt', isGreaterThan: Timestamp.now());
-      
-      // S2 타일 필터
-      query = query.where('s2_12', whereIn: s2Cells);
-      
-      // 포그레벨 필터
-      if (fogLevel != null) {
-        query = query.where('fogLevel', isEqualTo: fogLevel);
-      }
-      
-      // 리워드 타입 필터
-      if (rewardType != 'all') {
-        query = query.where('rewardType', isEqualTo: rewardType);
-      }
-      
-      // 쿼리 실행
-      final snapshot = await query.limit(limit).get();
-      
-      return snapshot.docs
-          .map((doc) => PostModel.fromFirestore(doc))
-          .toList();
-          
-    } catch (e) {
-      print('❌ 배치 쿼리 실패: $e');
-      return [];
-    }
-  }
   
   /// 포스트 생성 시 S2 타일 ID 자동 설정
   static Future<void> updatePostS2Tiles(String postId) async {
@@ -223,50 +182,6 @@ class PostSearchService {
     }
   }
   
-  /// 폴백 쿼리 (인덱스 없이 작동)
-  static Future<List<PostModel>> _queryPostsFallback({
-    required int? fogLevel,
-    required String rewardType,
-    required int limit,
-  }) async {
-    try {
-      print('  - 폴백 쿼리 실행 중...');
-      
-      // 1. 먼저 모든 포스트 조회 (디버깅용)
-      final allPostsSnapshot = await _firestore.collection('posts').limit(10).get();
-      print('  - 전체 포스트 개수: ${allPostsSnapshot.docs.length}개');
-      
-      if (allPostsSnapshot.docs.isNotEmpty) {
-        final samplePost = allPostsSnapshot.docs.first;
-        print('  - 샘플 포스트: ${samplePost.data()}');
-      }
-      
-      // 2. 기본 필터만 사용
-      Query query = _firestore
-          .collection('posts')
-          .where('isActive', isEqualTo: true)
-          .where('isCollected', isEqualTo: false)
-          .where('expiresAt', isGreaterThan: Timestamp.now());
-      
-      // 리워드 타입 필터
-      if (rewardType != 'all') {
-        query = query.where('rewardType', isEqualTo: rewardType);
-      }
-      
-      // 쿼리 실행
-      final snapshot = await query.limit(limit).get();
-      
-      print('  - 폴백 쿼리 결과: ${snapshot.docs.length}개 문서');
-      
-      return snapshot.docs
-          .map((doc) => PostModel.fromFirestore(doc))
-          .toList();
-          
-    } catch (e) {
-      print('❌ 폴백 쿼리 실패: $e');
-      return [];
-    }
-  }
   
   /// 포그레벨 계산 (간단한 구현)
   static int _calculateFogLevel(GeoPoint location) {

@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
@@ -59,19 +59,25 @@ class VisitTileService {
     }
   }
 
-  /// tileId를 중심좌표로 환산 (현재 스킴이 km1deg라 가정)
+  /// tileId를 중심좌표로 환산 - 정확한 계산
   static LatLng _centerFromAnyTileId(String tileId) {
     if (tileId.startsWith('tile_')) {
-      // 1km 근사 그리드 형식: tile_lat_lng
+      // 1km 정확한 그리드 형식: tile_lat_lng
       final parts = tileId.split('_');
       if (parts.length == 3) {
         final tileLat = int.tryParse(parts[1]);
         final tileLng = int.tryParse(parts[2]);
         if (tileLat != null && tileLng != null) {
-          const double tileSize = 0.009;
+          // 정확한 타일 크기 계산을 위해 대략적 중심점 사용
+          const double approxTileSize = 0.009;
+          final centerLat = tileLat * approxTileSize + (approxTileSize / 2);
+          
+          // 위도별 정확한 타일 크기 계산
+          final actualTileSize = _getKm1TileSizeForLatitude(centerLat);
+          
           return LatLng(
-            tileLat * tileSize + (tileSize / 2),
-            tileLng * tileSize + (tileSize / 2),
+            tileLat * actualTileSize + (actualTileSize / 2),
+            tileLng * actualTileSize + (actualTileSize / 2),
           );
         }
       }
@@ -93,6 +99,17 @@ class VisitTileService {
     return LatLng(0, 0); // 안전장치
   }
 
+  /// 위도에 따른 실제 1km 거리 계산 (도 단위) - TileUtils와 동일한 로직
+  static double _getKm1TileSizeForLatitude(double latitude) {
+    const double earthRadius = 6371.0; // 지구 반지름 (km)
+    const double degreesToRadians = 3.14159265359 / 180.0;
+    
+    // 위도에 따른 실제 1km 거리 (도 단위)
+    final double latRad = latitude * degreesToRadians;
+    final double metersPerDegree = earthRadius * 1000 * degreesToRadians * math.cos(latRad);
+    return 1000.0 / metersPerDegree; // 1km를 도 단위로 변환
+  }
+
   /// Web Mercator XYZ 18레벨 타일 ID 생성
   static String? _xyz18Id(double lat, double lng) {
     try {
@@ -106,23 +123,23 @@ class VisitTileService {
 
   /// Web Mercator 변환 함수들
   static int _longitudeToTileX(double longitude, int zoomLevel) {
-    return ((longitude + 180.0) / 360.0 * pow(2.0, zoomLevel)).floor();
+    return ((longitude + 180.0) / 360.0 * math.pow(2.0, zoomLevel)).floor();
   }
 
   static int _latitudeToTileY(double latitude, int zoomLevel) {
     final clampedLat = latitude.clamp(-85.0511, 85.0511);
-    final latRad = clampedLat * pi / 180.0;
-    final y = (1.0 - log(tan(latRad) + 1.0 / cos(latRad)) / pi) / 2.0;
-    return (y * pow(2.0, zoomLevel)).floor();
+    final latRad = clampedLat * math.pi / 180.0;
+    final y = (1.0 - math.log(math.tan(latRad) + 1.0 / math.cos(latRad)) / math.pi) / 2.0;
+    return (y * math.pow(2.0, zoomLevel)).floor();
   }
 
   static double _tileXToLongitude(int tileX, int zoomLevel) {
-    return tileX / pow(2.0, zoomLevel) * 360.0 - 180.0;
+    return tileX / math.pow(2.0, zoomLevel) * 360.0 - 180.0;
   }
 
   static double _tileYToLatitude(int tileY, int zoomLevel) {
-    final n = pi - 2.0 * pi * tileY / pow(2.0, zoomLevel);
-    final latitude = 180.0 / pi * atan(0.5 * (exp(n) - exp(-n)));
+    final n = math.pi - 2.0 * math.pi * tileY / math.pow(2.0, zoomLevel);
+    final latitude = 180.0 / math.pi * math.atan(0.5 * (math.exp(n) - math.exp(-n)));
     return latitude.clamp(-85.0511, 85.0511);
   }
 
@@ -271,16 +288,16 @@ class VisitTileService {
     final double dLat = _degreesToRadians(lat2 - lat1);
     final double dLng = _degreesToRadians(lng2 - lng1);
 
-    final double a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
-        sin(dLng / 2) * sin(dLng / 2);
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) *
+        math.sin(dLng / 2) * math.sin(dLng / 2);
 
-    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 
     return earthRadius * c;
   }
 
   static double _degreesToRadians(double degrees) {
-    return degrees * (pi / 180);
+    return degrees * (math.pi / 180);
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/marker/marker_model.dart';
@@ -6,11 +5,9 @@ import '../../models/post/post_model.dart';
 import '../../models/user/user_model.dart';  // UserModel과 UserType 추가
 import '../../../utils/tile_utils.dart';
 import '../../constants/app_constants.dart';
-import 'points_service.dart';
 
 class MarkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final PointsService _pointsService = PointsService();
 
   /// 사용자 타입에 따른 마커 표시 거리 계산
   static int getMarkerDisplayRadius(UserType userType, bool isSuperPost) {
@@ -444,6 +441,7 @@ class MarkerService {
     required double radiusKm,
     int? fogLevel,
     bool? superOnly,
+    String? currentUserId, // 현재 사용자 ID 추가
   }) async {
     try {
       Query query = _firestore
@@ -476,6 +474,19 @@ class MarkerService {
 
           // 반경 내에 있고 수량이 0보다 큰 마커만 포함
           if (distance <= radiusKm && marker.remainingQuantity > 0) {
+            // 현재 사용자가 이미 수령한 마커는 제외 (단, 내가 배포한 마커는 예외)
+            if (currentUserId != null) {
+              final data = doc.data() as Map<String, dynamic>?;
+              final creatorId = data?['creatorId'] as String?;
+              if (creatorId != currentUserId) {
+                final collectedBy = List<String>.from(data?['collectedBy'] ?? []);
+                if (collectedBy.contains(currentUserId)) {
+                  print('🚫 이미 수령한 마커 제외: ${marker.markerId}');
+                  continue;
+                }
+              }
+            }
+            
             markers.add(marker);
           }
         } catch (e) {
@@ -510,6 +521,7 @@ class MarkerService {
     required double radiusKm,
     int? fogLevel,
     bool? superOnly,
+    String? currentUserId, // 현재 사용자 ID 추가
   }) {
     return Stream.periodic(const Duration(seconds: 5)).asyncMap((_) async {
       return await getMarkersInArea(
@@ -517,6 +529,7 @@ class MarkerService {
         radiusKm: radiusKm,
         fogLevel: fogLevel,
         superOnly: superOnly,
+        currentUserId: currentUserId,
       );
     });
   }

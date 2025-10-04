@@ -664,7 +664,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 🚀 실시간 업데이트: 지도 이동 감지 및 포스트 새로고침
+  // 🚀 실시간 업데이트: 지도 이동 감지 및 마커 새로고침
   void _onMapMoved(MapEvent event) {
     // 맵 상태 업데이트
     _updateMapState();
@@ -676,7 +676,7 @@ class _MapScreenState extends State<MapScreen> {
         _handleMapMoveComplete();
       });
       
-      // 실시간으로 수령 가능 포스트 개수 업데이트
+      // 실시간으로 수령 가능 마커 개수 업데이트
       _updateReceivablePosts();
     }
   }
@@ -725,23 +725,22 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
   
-  // 위치 기반 캐시 키 생성 (1km 그리드 스냅)
+  // 위치 기반 캐시 키 생성 - 타일 ID 기반으로 통일
   String _generateCacheKeyForLocation(LatLng location) {
-    final lat = (location.latitude * 1000).round() / 1000; // 1km 그리드 스냅
-    final lng = (location.longitude * 1000).round() / 1000;
-    return '${lat.toStringAsFixed(3)}_${lng.toStringAsFixed(3)}';
+    // 타일 ID를 캐시 키로 사용하여 일관성 보장
+    final tileId = TileUtils.getKm1TileId(location.latitude, location.longitude);
+    return 'fog_${tileId}';
   }
 
-  // 현재 위치의 포그레벨 1단계 타일들 계산
+  // 현재 위치의 포그레벨 1단계 타일들 계산 - 개선된 로직
   Future<Set<String>> _getCurrentFogLevel1Tiles(LatLng center) async {
     try {
       final surroundingTiles = TileUtils.getKm1SurroundingTiles(center.latitude, center.longitude);
       final fogLevel1Tiles = <String>{};
       
-      print('🔍 포그레벨 1단계 타일 계산 시작:');
+      print('🔍 포그레벨 1+2단계 타일 계산 시작 (개선된 로직):');
       print('  - 중심 위치: ${center.latitude}, ${center.longitude}');
       print('  - 주변 타일 개수: ${surroundingTiles.length}');
-      print('  - 주변 타일 목록: $surroundingTiles');
       print('  - 로컬 캐시 타일 개수: ${_currentFogLevel1TileIds.length}');
       
       for (final tileId in surroundingTiles) {
@@ -755,20 +754,21 @@ class _MapScreenState extends State<MapScreen> {
         final tileCenter = TileUtils.getKm1TileCenter(tileId);
         final distToCenterKm = _calculateDistance(center, tileCenter);
         
-        // 타일 반대각선 절반(대략적) + 1km 원 교차 근사
+        // 타일의 실제 크기 계산 (정확한 반지름)
         final tileBounds = TileUtils.getKm1TileBounds(tileId);
-        final halfDiagKm = _approxTileHalfDiagonalKm(tileBounds);
+        final tileRadiusKm = _calculateTileRadiusKm(tileBounds);
         
-        print('  - 타일 $tileId: 중심거리 ${distToCenterKm.toStringAsFixed(2)}km, 반대각선 ${halfDiagKm.toStringAsFixed(2)}km');
+        print('  - 타일 $tileId: 중심거리 ${distToCenterKm.toStringAsFixed(2)}km, 타일반지름 ${tileRadiusKm.toStringAsFixed(2)}km');
         
-        if (distToCenterKm <= (1.0 + halfDiagKm)) {
-          // 원과 타일이 겹친다고 간주
+        // 개선된 거리 계산: 타일 중심에서 타일 가장자리까지의 거리 + 1km 반지름
+        if (distToCenterKm <= (1.0 + tileRadiusKm)) {
+          // 1km 반지름과 타일이 겹침
           fogLevel1Tiles.add(tileId);
-          print('    ✅ 1km+버퍼 이내 - 포그레벨 1 추가');
+          print('    ✅ 1km+타일반지름 이내 - 포그레벨 1 추가');
         } else {
-          // 1km 밖은 방문 기록 확인
+          // 1km 밖은 방문 기록 확인 (포그레벨 2)
           final fogLevel = await VisitTileService.getFogLevelForTile(tileId);
-          print('    🔍 1km+버퍼 밖 - 포그레벨: $fogLevel');
+          print('    🔍 1km+타일반지름 밖 - 포그레벨: $fogLevel');
           if (fogLevel == FogLevel.clear || fogLevel == FogLevel.gray) {
             fogLevel1Tiles.add(tileId);
             print('    ✅ 포그레벨 1+2 영역 - 마커 표시 가능');
@@ -784,7 +784,34 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// 타일 반대각선 절반 길이 계산 (km)
+  /// 타일 반지름 계산 (km) - 정확한 계산
+  double _calculateTileRadiusKm(Map<String, double> bounds) {
+    // 타일의 중심점
+    final center = LatLng(
+      (bounds['minLat']! + bounds['maxLat']!) / 2, 
+      (bounds['minLng']! + bounds['maxLng']!) / 2,
+    );
+    
+    // 타일의 네 모서리 중 가장 먼 거리 계산
+    final corners = [
+      LatLng(bounds['minLat']!, bounds['minLng']!), // 남서쪽
+      LatLng(bounds['minLat']!, bounds['maxLng']!), // 남동쪽
+      LatLng(bounds['maxLat']!, bounds['minLng']!), // 북서쪽
+      LatLng(bounds['maxLat']!, bounds['maxLng']!), // 북동쪽
+    ];
+    
+    double maxDistance = 0;
+    for (final corner in corners) {
+      final distance = _calculateDistance(center, corner);
+      if (distance > maxDistance) {
+        maxDistance = distance;
+      }
+    }
+    
+    return maxDistance;
+  }
+
+  /// 타일 반대각선 절반 길이 계산 (km) - 기존 호환성 유지
   double _approxTileHalfDiagonalKm(Map<String, double> bounds) {
     final center = LatLng(
       (bounds['minLat']! + bounds['maxLat']!) / 2, 
@@ -1247,7 +1274,7 @@ class _MapScreenState extends State<MapScreen> {
               if (!isWithinRange) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '수령 불가: 100m 이내에서만 수령 가능합니다',
+                  '수령 불가: 50m 이내에서만 수령 가능합니다',
                   style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -1387,7 +1414,10 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       Navigator.of(context).pop(); // 다이얼로그 닫기
-      _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+      
+      // 수령 완료 후 잠시 대기 후 마커 목록 새로고침 (DB 업데이트 반영 시간)
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
 
       // 메인 스크린의 포인트 새로고침 (GlobalKey 사용)
       try {
@@ -1417,6 +1447,9 @@ class _MapScreenState extends State<MapScreen> {
 
     // 새로운 클러스터링 시스템 적용
     _rebuildClusters();
+    
+    // 마커 업데이트 시 수령 가능 개수도 업데이트
+    _updateReceivablePosts();
   }
 
   // LatLng -> 화면 좌표 변환 함수
@@ -3087,24 +3120,35 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // 수령 가능한 포스트 개수 업데이트
+  // 수령 가능한 포스트 개수 업데이트 (마커 기준)
   Future<void> _updateReceivablePosts() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     try {
-      final candidates = await MapMarkerService.getReceivablePosts(
-        lat: _mapCenter.latitude,
-        lng: _mapCenter.longitude,
-        uid: user.uid,
-        radius: 100, // 100m 반경
-      );
+      // 현재 화면에 표시된 마커들 중에서 50m 이내인 것들을 계산
+      int receivableCount = 0;
+      
+      for (final marker in _markers) {
+        // 현재 위치가 null이면 건너뛰기
+        if (_currentPosition == null) continue;
+        
+        // 마커와 현재 위치 간의 거리 계산
+        final distance = _calculateDistance(_currentPosition!, marker.position);
+        
+        // 50m 이내이고, 본인이 배포한 마커가 아닌 경우
+        if (distance <= 50 && marker.creatorId != user.uid) {
+          receivableCount++;
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _receivablePostCount = candidates.length;
+          _receivablePostCount = receivableCount;
         });
       }
+      
+      print('📍 수령 가능 마커 개수: $receivableCount개 (50m 이내)');
     } catch (e) {
       print('수령 가능 포스트 조회 실패: $e');
       // 에러 발생 시에도 UI 업데이트
@@ -3112,16 +3156,6 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _receivablePostCount = 0;
         });
-      }
-      
-      // 사용자에게 에러 알림 (선택적)
-      if (e.toString().contains('network') || e.toString().contains('timeout')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('네트워크 연결을 확인해주세요'),
-            duration: Duration(seconds: 2),
-          ),
-        );
       }
     }
   }
@@ -3154,8 +3188,8 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 )
               : Text(
-                  enabled ? '포스트 받기 ($_receivablePostCount)' : '포스트 받기',
-                  style: TextStyle(color: Colors.white),
+                  enabled ? '모두 수령 ($_receivablePostCount개)' : '포스트 받기',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
           icon: _isReceiving ? null : Icon(Icons.download, color: Colors.white),
         ),
@@ -3163,53 +3197,91 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // 주변 포스트 수령 처리
+  // 주변 마커에서 포스트 수령 처리 (마커 기준)
   Future<void> _receiveNearbyPosts() async {
     setState(() => _isReceiving = true);
     
     try {
       final user = FirebaseAuth.instance.currentUser!;
       
-      // 1. 수령 가능한 포스트 조회
-      final candidates = await MapMarkerService.getReceivablePosts(
-        lat: _mapCenter.latitude,
-        lng: _mapCenter.longitude,
-        uid: user.uid,
-        radius: 100,
-      );
+      // 1. 현재 위치에서 50m 이내의 마커들 찾기
+      final nearbyMarkers = <MarkerModel>[];
+      
+      for (final marker in _markers) {
+        if (_currentPosition == null) continue;
+        
+        // 마커와 현재 위치 간의 거리 계산
+        final distance = _calculateDistance(_currentPosition!, marker.position);
+        
+        // 50m 이내이고, 본인이 배포한 마커가 아닌 경우
+        if (distance <= 50 && marker.creatorId != user.uid) {
+          nearbyMarkers.add(marker);
+        }
+      }
 
-      if (candidates.isEmpty) return;
+      if (nearbyMarkers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('50m 이내에 수령 가능한 마커가 없습니다'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
 
-      // 2. 수령 처리 (Firestore 트랜잭션)
+      // 2. 수령 처리 (개별 결과 추적)
       final batch = FirebaseFirestore.instance.batch();
       final actuallyReceived = <ReceiptItem>[];
+      final failedToReceive = <String>[];
 
-      for (final marker in candidates) {
-        final ref = FirebaseFirestore.instance
-            .collection('receipts')
-            .doc(user.uid)
-            .collection('items')
-            .doc(marker['id']);
+      for (final marker in nearbyMarkers) {
+        try {
+          final ref = FirebaseFirestore.instance
+              .collection('receipts')
+              .doc(user.uid)
+              .collection('items')
+              .doc(marker.markerId);
 
-        final snap = await ref.get();
-        if (!snap.exists) {
-          batch.set(ref, {
-            'markerId': marker['id'],
-            'imageUrl': marker['imageUrl'] ?? '',
-            'title': marker['title'] ?? '',
-            'receivedAt': FieldValue.serverTimestamp(),
-            'confirmed': false,
-            'statusBadge': '미션 중',
-          });
-          
-          actuallyReceived.add(ReceiptItem(
-            markerId: marker['id'],
-            imageUrl: marker['imageUrl'] ?? '',
-            title: marker['title'] ?? '',
-            receivedAt: DateTime.now(),
-            confirmed: false,
-            statusBadge: '미션 중',
-          ));
+          final snap = await ref.get();
+          if (!snap.exists) {
+            // 포스트 이미지 가져오기
+            String postImageUrl = '';
+            try {
+              final postDoc = await FirebaseFirestore.instance
+                  .collection('posts')
+                  .doc(marker.postId)
+                  .get();
+              if (postDoc.exists) {
+                postImageUrl = postDoc.data()?['imageUrl'] ?? '';
+              }
+            } catch (e) {
+              print('포스트 이미지 조회 실패: $e');
+            }
+
+            batch.set(ref, {
+              'markerId': marker.markerId,
+              'imageUrl': postImageUrl,
+              'title': marker.title,
+              'receivedAt': FieldValue.serverTimestamp(),
+              'confirmed': false,
+              'statusBadge': '미션 중',
+            });
+            
+            actuallyReceived.add(ReceiptItem(
+              markerId: marker.markerId,
+              imageUrl: postImageUrl,
+              title: marker.title,
+              receivedAt: DateTime.now(),
+              confirmed: false,
+              statusBadge: '미션 중',
+            ));
+          } else {
+            // 이미 수령한 포스트
+            failedToReceive.add('${marker.title} (이미 수령함)');
+          }
+        } catch (e) {
+          // 개별 수령 실패
+          failedToReceive.add('${marker.title} (수령 실패: ${e.toString()})');
         }
       }
 
@@ -3219,16 +3291,28 @@ class _MapScreenState extends State<MapScreen> {
         // 3. 효과음/진동
         await _playReceiveEffects(actuallyReceived.length);
 
-        // 4. 캐러셀 팝업 표시
-        await _showReceiveCarousel(actuallyReceived);
+        // 4. 결과 표시
+        await _showMultiReceiveResults(actuallyReceived, failedToReceive);
+      } else if (failedToReceive.isNotEmpty) {
+        // 수령할 수 있는 포스트가 없는 경우
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('수령할 수 있는 마커가 없습니다 (${failedToReceive.length}개 실패)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } catch (e) {
-      print('포스트 수령 실패: $e');
+      print('마커 수령 실패: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('포스트 수령에 실패했습니다: $e')),
+        SnackBar(content: Text('마커 수령에 실패했습니다: $e')),
       );
     } finally {
       setState(() => _isReceiving = false);
+      
+      // 수령 완료 후 잠시 대기 후 마커 목록 새로고침 (DB 업데이트 반영 시간)
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
       _updateReceivablePosts(); // 개수 업데이트
     }
   }
@@ -3260,7 +3344,265 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // 수령 캐러셀 팝업 표시
+  // 다중 수령 결과 표시
+  Future<void> _showMultiReceiveResults(List<ReceiptItem> received, List<String> failed) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 8),
+            Text('수령 완료'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 성공한 수령
+              if (received.isNotEmpty) ...[
+                Text(
+                  '✅ 성공적으로 수령한 포스트 (${received.length}개)',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                ),
+                SizedBox(height: 8),
+                ...received.map((item) => Padding(
+                  padding: EdgeInsets.only(left: 16, bottom: 4),
+                  child: Text('• ${item.title}', style: TextStyle(fontSize: 14)),
+                )).toList(),
+                SizedBox(height: 16),
+                
+                // 이미지 보기 버튼
+                if (received.any((item) => item.imageUrl.isNotEmpty))
+                  Center(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop(); // 현재 다이얼로그 닫기
+                        _showReceivedImagesPopup(received); // 이미지 팝업 열기
+                      },
+                      icon: Icon(Icons.image, color: Colors.white),
+                      label: Text('받은 포스트 이미지 보기', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                    ),
+                  ),
+                SizedBox(height: 16),
+              ],
+              
+              // 실패한 수령
+              if (failed.isNotEmpty) ...[
+                Text(
+                  '❌ 수령 실패한 포스트 (${failed.length}개)',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                ),
+                SizedBox(height: 8),
+                ...failed.map((failure) => Padding(
+                  padding: EdgeInsets.only(left: 16, bottom: 4),
+                  child: Text('• $failure', style: TextStyle(fontSize: 14, color: Colors.red[700])),
+                )).toList(),
+              ],
+              
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '50m 이내의 모든 포스트를 수령했습니다',
+                        style: TextStyle(fontSize: 12, color: Colors.blue[800]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+            },
+            child: Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 받은 포스트 이미지 팝업 (캐러셀)
+  void _showReceivedImagesPopup(List<ReceiptItem> received) {
+    final itemsWithImages = received.where((item) => item.imageUrl.isNotEmpty).toList();
+    
+    if (itemsWithImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('받은 포스트에 이미지가 없습니다')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: Column(
+            children: [
+              // 헤더
+              Container(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '받은 포스트 이미지 (${itemsWithImages.length}개)',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 이미지 캐러셀
+              Expanded(
+                child: PageView.builder(
+                  itemCount: itemsWithImages.length,
+                  itemBuilder: (context, index) {
+                    final item = itemsWithImages[index];
+                    return Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // 이미지
+                          Expanded(
+                            child: Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  item.imageUrl,
+                                  fit: BoxFit.contain,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / 
+                                              loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[800],
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.error, color: Colors.white, size: 48),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            '이미지를 불러올 수 없습니다',
+                                            style: TextStyle(color: Colors.white),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          
+                          SizedBox(height: 16),
+                          
+                          // 포스트 정보
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  '${index + 1} / ${itemsWithImages.length}',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              
+              // 하단 인디케이터
+              if (itemsWithImages.length > 1)
+                Container(
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      itemsWithImages.length,
+                      (index) => Container(
+                        margin: EdgeInsets.symmetric(horizontal: 4),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 수령 캐러셀 팝업 표시 (기존 함수 유지)
   Future<void> _showReceiveCarousel(List<ReceiptItem> items) async {
     return showDialog(
       context: context,
