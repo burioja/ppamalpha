@@ -118,11 +118,18 @@ class MapMarkerService {
           final data = doc.data();
           final locationData = data['location'] as GeoPoint?;
           
+          // 🔥 수량이 0인 마커는 건너뛰기 (이미 isActive가 false로 설정됨)
+          final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
+          if (remainingQuantity <= 0) {
+            print('⚠️ 수량이 0인 마커 건너뛰기: ${doc.id}');
+            continue;
+          }
+          
           // location이 null인 마커는 건너뛰기
           if (locationData == null) {
             print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
-          continue;
-        }
+            continue;
+          }
         
           final position = LatLng(
             locationData.latitude,
@@ -230,6 +237,14 @@ class MapMarkerService {
         print('🔍 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
       }
 
+      if (filters['showUrgentOnly'] == true) {
+        // 하루 남은 포스트만 필터링 (24시간 이내 만료)
+        final tomorrow = DateTime.now().add(const Duration(days: 1));
+        final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
+        query = query.where('expiresAt', isLessThan: tomorrowTimestamp);
+        print('🔍 서버사이드 필터: 마감임박 (24시간 이내 만료)');
+      }
+
       final snapshot = await query
           .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
           .limit(pageSize)                             // 제한 증가
@@ -241,6 +256,13 @@ class MapMarkerService {
         try {
           final data = doc.data() as Map<String, dynamic>?;
           if (data == null) continue;
+          
+          // 🔥 수량이 0인 마커는 건너뛰기 (이미 isActive가 false로 설정됨)
+          final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
+          if (remainingQuantity <= 0) {
+            print('⚠️ 수량이 0인 마커 건너뛰기: ${doc.id}');
+            continue;
+          }
           
           final locationData = data['location'] as GeoPoint?;
           
@@ -379,6 +401,14 @@ class MapMarkerService {
         print('🔍 슈퍼마커 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
       }
 
+      if (filters['showUrgentOnly'] == true) {
+        // 하루 남은 포스트만 필터링 (24시간 이내 만료)
+        final tomorrow = DateTime.now().add(const Duration(days: 1));
+        final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
+        query = query.where('expiresAt', isLessThan: tomorrowTimestamp);
+        print('🔍 슈퍼마커 서버사이드 필터: 마감임박 (24시간 이내 만료)');
+      }
+
       final snapshot = await query
           .orderBy('expiresAt')
           .limit(pageSize)
@@ -390,6 +420,13 @@ class MapMarkerService {
         try {
           final data = doc.data() as Map<String, dynamic>?;
           if (data == null) continue;
+          
+          // 🔥 수량이 0인 슈퍼마커는 건너뛰기 (이미 isActive가 false로 설정됨)
+          final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
+          if (remainingQuantity <= 0) {
+            print('⚠️ 수량이 0인 슈퍼마커 건너뛰기: ${doc.id}');
+            continue;
+          }
           
           final locationData = data['location'] as GeoPoint?;
           

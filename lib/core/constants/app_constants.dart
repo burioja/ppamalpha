@@ -12,5 +12,5 @@ class AppConsts {
   
   // 마커 배포/수집 거리
   static const int markerDeployRadius = 1000;  // 마커 배포 가능 거리 (1단계 영역에서만)
-  static const int markerCollectRadius = 50;   // 마커 수집 가능 거리 (현위치 50m)
+  static const int markerCollectRadius = 200;   // 마커 수집 가능 거리 (현위치 200m)
 }

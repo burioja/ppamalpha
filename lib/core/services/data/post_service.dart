@@ -932,82 +932,69 @@ class PostService {
 
       debugPrint('✅ markers 컬렉션 수령 조건 확인 완료, 수령 처리 시작');
 
-      // 트랜잭션으로 마커 수량 차감 및 수령자 추가
-      await _firestore.runTransaction((transaction) async {
-        final newRemainingQuantity = remainingQuantity - 1;
-        final newCollectedQuantity = (markerData['collectedQuantity'] as num?)?.toInt() ?? 0;
-        final totalQuantity = (markerData['totalQuantity'] as num?)?.toInt() ?? quantity;
-        final newCollectionRate = totalQuantity > 0 ? (newCollectedQuantity + 1) / totalQuantity : 0.0;
+      // 트랜잭션으로 마커 수량 차감 및 수령자 추가 (멱등 처리)
+      await _firestore.runTransaction((tx) async {
+        final markerRef = _firestore.collection('markers').doc(markerId);
+        final snap = await tx.get(markerRef);
+        if (!snap.exists) throw Exception('Marker not found');
+        final data = snap.data() as Map<String, dynamic>;
 
-        collectedBy.add(userId);
-
-        final markerUpdate = {
-          'remainingQuantity': newRemainingQuantity,
-          'collectedQuantity': newCollectedQuantity + 1,
-          'collectionRate': newCollectionRate,
-          'collectedBy': collectedBy,
-          'quantity': newRemainingQuantity, // 호환성 유지
-        };
-
-        if (newRemainingQuantity <= 0) {
-          markerUpdate['isActive'] = false;
+        final isActive = data['isActive'] == true;
+        final creatorId = (data['creatorId'] ?? '') as String;
+        final remaining = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
+        if (!isActive || creatorId.isEmpty || remaining <= 0) {
+          throw Exception('수령할 수 없는 마커입니다.');
         }
 
-        transaction.update(_firestore.collection('markers').doc(markerId), markerUpdate);
+        // 멱등 체크: markers/{id}/collected/{userId}
+        final collectedRef = markerRef.collection('collected').doc(userId);
+        final collectedSnap = await tx.get(collectedRef);
+        if (collectedSnap.exists) throw Exception('이미 수령한 마커입니다.');
+
+        // 수량 차감
+        final newRemaining = remaining - 1;
+        final collectedQuantity = (data['collectedQuantity'] as num?)?.toInt() ?? 0;
+        final totalQuantity = (data['totalQuantity'] as num?)?.toInt() ??
+                              ((data['quantity'] as num?)?.toInt() ?? 0);
+        final newRate = totalQuantity > 0 ? (collectedQuantity + 1) / totalQuantity : 0.0;
+
+        tx.update(markerRef, {
+          'remainingQuantity': newRemaining,
+          'collectedQuantity': collectedQuantity + 1,
+          'collectionRate': newRate,
+          if (newRemaining <= 0) 'isActive': false,
+        });
+
+        // 멱등 마킹
+        tx.set(collectedRef, {
+          'uid': userId,
+          'at': FieldValue.serverTimestamp(),
+        });
       });
 
-      // 수령 기록을 별도 컬렉션에 저장
-      await _firestore.collection('post_collections').add({
+      // 수령 기록을 별도 컬렉션에 저장 (미확인 상태로, 멱등 ID)
+      final collectionId = '${originalPostId}_$userId';
+      final colRef = _firestore.collection('post_collections').doc(collectionId);
+      await colRef.set({
         'postId': originalPostId,
         'userId': userId,
-        'collectedAt': Timestamp.now(),
+        'collectedAt': FieldValue.serverTimestamp(),
         'postTitle': title,
         'postCreatorId': creatorId,
-        'markerId': markerId, // 마커에서 수령했음을 표시
-        'source': 'marker', // 수령 소스 표시
-      });
+        'markerId': markerId,
+        'source': 'marker',
+        'confirmed': false,
+        'confirmedAt': null,
+        'reward': (markerData['reward'] as num?)?.toInt() ?? 0,
+        'statusBadge': '미션 중',
+      }, SetOptions(merge: true)); // 멱등
 
-      // 포인트 처리 (수집자에게 지급 + 생성자에서 차감)
-      try {
-        final reward = (markerData['reward'] as num?)?.toInt() ?? 0;
-        debugPrint('🔍 포인트 처리 시도:');
-        debugPrint('  - 마커 데이터에서 reward 값: ${markerData['reward']}');
-        debugPrint('  - 파싱된 reward 값: $reward');
-        debugPrint('  - 수집자 ID: $userId');
-        debugPrint('  - 포스트 ID: $originalPostId');
-        debugPrint('  - 생성자 ID: $creatorId');
-
-        if (reward > 0) {
-          // 1. 수집자에게 포인트 지급
-          debugPrint('💰 수집자 포인트 지급 중...');
-          await _pointsService.rewardPostCollection(
-            userId,
-            reward,
-            originalPostId,
-            creatorId,
-          );
-          debugPrint('✅ 수집자 포인트 지급 완료: $reward 포인트');
-
-          // 2. 생성자에서 포인트 차감
-          debugPrint('💳 생성자 포인트 차감 중...');
-          final deductionResult = await _pointsService.deductPoints(
-            creatorId,
-            reward,
-            '포스트 수집으로 인한 차감 (PostID: $originalPostId, 수집자: $userId)',
-          );
-
-          if (deductionResult != null) {
-            debugPrint('✅ 생성자 포인트 차감 완료: $reward 포인트');
-          } else {
-            debugPrint('⚠️ 생성자 포인트 차감 실패 (수집은 완료됨)');
-          }
-        } else {
-          debugPrint('⚠️ 포인트 보상이 0이거나 없음: $reward');
-        }
-      } catch (pointsError) {
-        debugPrint('❌ 포인트 처리 실패 (수집은 완료됨): $pointsError');
-        debugPrint('스택 트레이스: $pointsError');
-      }
+      // 포인트 처리는 확인 시점으로 이동 (confirmPost 함수에서 처리)
+      debugPrint('💡 포인트 이동은 사용자가 포스트를 확인할 때 발생합니다.');
+      debugPrint('  - 수집자 ID: $userId');
+      debugPrint('  - 포스트 ID: $originalPostId');
+      debugPrint('  - 생성자 ID: $creatorId');
+      debugPrint('  - 보상 포인트: ${(markerData['reward'] as num?)?.toInt() ?? 0}');
 
       debugPrint('✅ markers 컬렉션 포스트 수령 완료: markerId=$markerId, 수령자: $userId, 남은 수량: ${remainingQuantity - 1}');
     } catch (e) {
@@ -1115,6 +1102,143 @@ class PostService {
       return usageStatus;
     } catch (e) {
       throw Exception('수령한 포스트 사용 상태 조회 실패: $e');
+    }
+  }
+
+  /// 포스트 확인 처리 (캐러셀에서 확인 시 호출)
+  /// 확인 시점에 포인트 이동 발생 (단일 트랜잭션으로 원자성 보장)
+  Future<void> confirmPost({
+    required String collectionId, // post_collections 문서 ID
+    required String userId,
+    required String postId,
+    required String creatorId,
+    required int reward,
+  }) async {
+    try {
+      debugPrint('✅ 포스트 확인 처리 시작:');
+      debugPrint('  - 수집 기록 ID: $collectionId');
+      debugPrint('  - 사용자 ID: $userId');
+      debugPrint('  - 포스트 ID: $postId');
+      debugPrint('  - 생성자 ID: $creatorId');
+      debugPrint('  - 보상 포인트: $reward');
+
+      // 단일 트랜잭션으로 모든 처리 (원자성 보장)
+      await _firestore.runTransaction((tx) async {
+        final colRef = _firestore.collection('post_collections').doc(collectionId);
+        final colSnap = await tx.get(colRef);
+        if (!colSnap.exists) throw Exception('수령 기록 없음');
+        final data = colSnap.data()!;
+        if (data['confirmed'] == true) return; // 멱등
+
+        final reward = (data['reward'] as num?)?.toInt() ?? 0;
+        final creatorId = (data['postCreatorId'] ?? '') as String;
+
+        // 포인트 문서
+        final recvRef = _firestore.collection('user_points').doc(userId);
+        final sendRef = _firestore.collection('user_points').doc(creatorId);
+        final sendSnap = await tx.get(sendRef);
+
+        if (!sendSnap.exists) throw Exception('생성자 포인트 문서 없음');
+        final sendPts = (sendSnap.data()?['totalPoints'] as num?)?.toInt() ?? 0;
+        if (sendPts < reward) {
+          throw Exception('생성자 포인트 부족');
+        }
+
+        // 포인트 이동
+        tx.update(recvRef, {
+          'totalPoints': FieldValue.increment(reward),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+        tx.update(sendRef, {
+          'totalPoints': FieldValue.increment(-reward),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+
+        // 히스토리
+        final now = FieldValue.serverTimestamp();
+        tx.set(recvRef.collection('history').doc(), {
+          'points': reward, 'type': 'earned',
+          'reason': '포스트 확인 보상 (PostID: $postId, 생성자: $creatorId)',
+          'timestamp': now,
+        });
+        tx.set(sendRef.collection('history').doc(), {
+          'points': reward, 'type': 'spent',
+          'reason': '포스트 확인 차감 (PostID: $postId, 수집자: $userId)',
+          'timestamp': now,
+        });
+
+        // 수령 기록 확정
+        tx.update(colRef, {
+          'confirmed': true,
+          'confirmedAt': now,
+          'statusBadge': '미션달성',
+        });
+      });
+
+      debugPrint('✅ 포스트 확인 처리 완료');
+    } catch (e) {
+      debugPrint('❌ 포스트 확인 처리 실패: $e');
+      throw Exception('포스트 확인 처리 실패: $e');
+    }
+  }
+
+  /// 미확인 포스트 개수 조회
+  Future<int> getUnconfirmedPostCount(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('post_collections')
+          .where('userId', isEqualTo: userId)
+          .where('confirmed', isEqualTo: false)
+          .get();
+
+      return snapshot.docs.length;
+    } catch (e) {
+      debugPrint('❌ 미확인 포스트 개수 조회 실패: $e');
+      return 0;
+    }
+  }
+
+  /// 미확인 포스트 개수 실시간 스트림
+  Stream<int> getUnconfirmedPostCountStream(String userId) {
+    return _firestore
+        .collection('post_collections')
+        .where('userId', isEqualTo: userId)
+        .where('confirmed', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  /// 미확인 포스트 목록 조회
+  Future<List<Map<String, dynamic>>> getUnconfirmedPosts(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('post_collections')
+          .where('userId', isEqualTo: userId)
+          .where('confirmed', isEqualTo: false)
+          .get();
+
+      final posts = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'collectionId': doc.id, // 확인 처리 시 필요
+          ...data,
+        };
+      }).toList();
+
+      // 클라이언트에서 정렬 (collectedAt 기준 내림차순)
+      posts.sort((a, b) {
+        final aTime = a['collectedAt'] as Timestamp?;
+        final bTime = b['collectedAt'] as Timestamp?;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+
+      return posts;
+    } catch (e) {
+      debugPrint('❌ 미확인 포스트 목록 조회 실패: $e');
+      return [];
     }
   }
 

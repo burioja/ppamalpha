@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/services/data/user_service.dart';
 
 class SimpleClusterDot extends StatelessWidget {
   const SimpleClusterDot({super.key, required this.count});
@@ -27,6 +28,7 @@ class SingleMarkerWidget extends StatelessWidget {
   final String imagePath;
   final double size;
   final bool isSuper;
+  final String? userId;
   final VoidCallback? onTap;
 
   const SingleMarkerWidget({
@@ -34,26 +36,47 @@ class SingleMarkerWidget extends StatelessWidget {
     required this.imagePath,
     this.size = 31.0,
     this.isSuper = false,
+    this.userId,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 현재 사용자 ID 가져오기
+    final currentUserId = UserService().currentUserId;
+    final isMyMarker = currentUserId != null && userId != null && userId == currentUserId;
+    
+    // 테두리 색상 결정: 내 마커(빨간색) > 슈퍼마커(amber) > 일반(white)
+    Color borderColor;
+    int borderWidth;
+    if (isMyMarker) {
+      borderColor = Colors.red;
+      borderWidth = 3;
+    } else if (isSuper) {
+      borderColor = Colors.amber;
+      borderWidth = 3;
+    } else {
+      borderColor = Colors.white;
+      borderWidth = 2;
+    }
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSuper ? Colors.amber : Colors.white, 
-            width: isSuper ? 3 : 2
+            color: borderColor, 
+            width: borderWidth.toDouble()
           ),
           boxShadow: [
             BoxShadow(
-              color: isSuper 
-                  ? Colors.amber.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.3),
-              blurRadius: isSuper ? 6 : 4,
+              color: isMyMarker 
+                  ? Colors.red.withOpacity(0.4)
+                  : isSuper 
+                      ? Colors.amber.withOpacity(0.4)
+                      : Colors.black.withOpacity(0.3),
+              blurRadius: isMyMarker ? 6 : isSuper ? 6 : 4,
               offset: const Offset(0, 2),
             ),
           ],

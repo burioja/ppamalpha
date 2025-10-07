@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/user_service.dart';
 
 /// 마커 데이터 클래스
 class MarkerData {
@@ -78,6 +79,10 @@ class MarkerLayerWidget extends StatelessWidget {
 
   /// 포스트 마커 생성
   Marker _buildPostMarker(MarkerData markerData) {
+    // 현재 사용자 ID 가져오기
+    final currentUserId = UserService().currentUserId;
+    final isMyMarker = currentUserId != null && markerData.userId == currentUserId;
+    
     return Marker(
       point: markerData.position,
       width: 120,
@@ -89,7 +94,10 @@ class MarkerLayerWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue, width: 2),
+            border: Border.all(
+              color: isMyMarker ? Colors.red : Colors.blue, 
+              width: 2
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.2),

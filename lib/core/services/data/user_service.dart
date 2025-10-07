@@ -151,4 +151,24 @@ class UserService {
       };
     }
   }
+
+  // 특정 사용자 정보 가져오기 (이메일 포함)
+  Future<Map<String, dynamic>?> getUserById(String userId) async {
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (userDoc.exists) {
+        return userDoc.data();
+      } else {
+        print('사용자를 찾을 수 없습니다: $userId');
+        return null;
+      }
+    } catch (e) {
+      print('사용자 정보 조회 실패: $e');
+      return null;
+    }
+  }
 } 

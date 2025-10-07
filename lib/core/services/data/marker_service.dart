@@ -40,7 +40,7 @@ class MarkerService {
     return distance <= radius;
   }
 
-  /// 마커 수집 가능 여부 확인 (현위치 50m 이내)
+  /// 마커 수집 가능 여부 확인 (현위치 200m 이내)
   static bool canCollectMarker(LatLng userLocation, LatLng markerLocation) {
     final distance = calculateDistance(userLocation, markerLocation);
     return distance <= AppConsts.markerCollectRadius;

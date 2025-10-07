@@ -7,6 +7,7 @@ import '../../../core/services/data/post_service.dart';
 import '../../../core/services/data/marker_service.dart';
 import '../../map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
+import '../widgets/building_unit_selector.dart';
 
 
 class PostDeployScreen extends StatefulWidget {
@@ -37,6 +38,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   int _selectedDuration = 7; // 기본 7일
   final List<int> _durationOptions = [1, 3, 7, 14, 30]; // 1일, 3일, 7일, 14일, 30일
 
+  // 주소 모드 관련 필드
+  String? _buildingName;
+  String? _selectedUnit;
+
   @override
   void initState() {
     super.initState();
@@ -59,9 +64,11 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     final args = widget.arguments;
     _selectedLocation = args['location'] as LatLng?;
     _deployType = args['type'] as String? ?? 'location'; // 기본값 설정
+    _buildingName = args['buildingName'] as String?;
     
     debugPrint('위치: $_selectedLocation');
     debugPrint('타입: $_deployType');
+    debugPrint('건물명: $_buildingName');
     
     if (_selectedLocation != null) {
       _loadUserPosts();
@@ -279,12 +286,6 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         });
 
         if (mounted) {
-          // 성공 메시지 표시
-          await _showSuccessDialog(
-            title: '배포 완료',
-            message: '포스트가 성공적으로 배포되었습니다!\n\n수량: $quantity개\n기간: $_selectedDuration일\n총 비용: ${totalCost.toStringAsFixed(0)}원',
-          );
-
           Navigator.pop(context, {
             'location': _selectedLocation,
             'postId': deployedPostId,
@@ -337,27 +338,23 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         title: Text(_getScreenTitle()),
         backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false, // 뒤로가기 버튼 제거
       ),
       body: _selectedLocation == null
           ? const Center(child: Text('위치 정보가 없습니다.'))
-          : Column(
-              children: [
-                // 상단 위치 정보 영역
-                _buildLocationInfo(),
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  // 상단 위치 정보 영역
+                  _buildLocationInfo(),
 
-                // 포스트 선택 리스트 (확장 가능)
-                Expanded(
-                  child: _buildPostList(),
-                ),
+                  // 포스트 선택 리스트
+                  _buildPostList(),
 
-                // 하단 고정 뿌리기 영역 (최대 높이 제한)
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.4, // 최대 40% 높이
-                  ),
-                  child: _buildBottomDeploySection(),
-                ),
-              ],
+                  // 하단 뿌리기 영역
+                  _buildBottomDeploySection(),
+                ],
+              ),
             ),
     );
   }
@@ -744,24 +741,47 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
           bottom: BorderSide(color: Colors.blue[200]!),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(
-            Icons.location_on,
-            color: Colors.blue[600],
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '위도: ${_selectedLocation!.latitude.toStringAsFixed(6)}, 경도: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.blue[800],
-                fontWeight: FontWeight.w500,
+          Row(
+            children: [
+              Icon(
+                _deployType == 'address' ? Icons.business : Icons.location_on,
+                color: Colors.blue[600],
+                size: 20,
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _deployType == 'address' && _buildingName != null
+                      ? _buildingName!
+                      : '위도: ${_selectedLocation!.latitude.toStringAsFixed(6)}, 경도: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue[800],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
+          // 주소 모드일 때 건물 단위 선택
+          if (_deployType == 'address' && _buildingName != null) ...[
+            const SizedBox(height: 8),
+            BuildingUnitSelector(
+              buildingName: _buildingName!,
+              onUnitSelected: (unit) {
+                // setState를 다음 프레임에서 실행
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      _selectedUnit = unit;
+                    });
+                  }
+                });
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -789,26 +809,26 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
               ),
             ),
           ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _userPosts.isEmpty
-                    ? _buildEmptyState()
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                          childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
-                        ),
-                        itemCount: _userPosts.length,
-                        itemBuilder: (context, index) {
-                          final post = _userPosts[index];
-                          return _buildPostGridCard(post);
-                        },
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _userPosts.isEmpty
+                  ? _buildEmptyState()
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 0.68, // 하단 오버플로우 방지를 위해 높이 증가
                       ),
-          ),
+                      itemCount: _userPosts.length,
+                      itemBuilder: (context, index) {
+                        final post = _userPosts[index];
+                        return _buildPostGridCard(post);
+                      },
+                    ),
         ],
       ),
     );
@@ -1268,35 +1288,6 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     );
   }
 
-  Future<void> _showSuccessDialog({
-    required String title,
-    required String message,
-  }) {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 28),
-            const SizedBox(width: 8),
-            Expanded(child: Text(title)),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _showDetailedErrorDialog(Object error, int quantity, int price) {
     String title = '배포 실패';
