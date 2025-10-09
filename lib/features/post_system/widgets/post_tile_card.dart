@@ -74,11 +74,17 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     try {
+      // 디버그: 포스트 상태 로깅
+      debugPrint('🔍 PostTileCard - postId: ${widget.post.postId}, title: ${widget.post.title}');
+      debugPrint('   status: ${widget.post.status.name} (${widget.post.status})');
+
       final isDeleted = widget.post.status == PostStatus.DELETED;
       // 🚀 제거된 필드들: isCollected, isUsed, isUsedByCurrentUser
       // 이들은 이제 post_collections 컬렉션에서 쿼리해야 함
       final isCollected = false; // TODO: 쿼리 기반으로 변경 필요
       final isUsed = false; // TODO: 쿼리 기반으로 변경 필요
+
+      debugPrint('   isDeleted: $isDeleted, isCollected: $isCollected, isUsed: $isUsed');
 
       return GestureDetector(
         onTap: _handleTap,
@@ -191,7 +197,6 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // 제목 (선택 시 스크롤 애니메이션)
                     widget.isSelected
@@ -207,16 +212,18 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                               ),
                             ),
                           )
-                        : Text(
-                            widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isUsed ? Colors.grey.shade600 : Colors.black87,
-                              decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                        : Flexible(
+                            child: Text(
+                              widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isUsed ? Colors.grey.shade600 : Colors.black87,
+                                decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
                     const SizedBox(height: 4),
                     // 하단 정보 (리워드, 통계버튼/배포일)
@@ -397,8 +404,17 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
   }
 
   Widget _buildStatusBadge(bool isDeleted, bool isCollected, bool isUsed) {
+    debugPrint('📛 _buildStatusBadge 호출');
+    debugPrint('   postId: ${widget.post.postId}');
+    debugPrint('   status: ${widget.post.status.name}');
+    debugPrint('   isDeleted: $isDeleted');
+    debugPrint('   isCollected: $isCollected');
+    debugPrint('   isUsed: $isUsed');
+
     // 사용 상태가 최우선
     if (isUsed) {
+      debugPrint('   ✅ 배지: 사용됨');
+
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -415,8 +431,30 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
         ),
       );
     }
+
+    // RECALLED 상태 - 회수된 포스트 (DELETED보다 먼저 체크!)
+    if (widget.post.status == PostStatus.RECALLED) {
+      debugPrint('   ✅ 배지: 회수됨');
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text(
+          '회수됨',
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
     // 삭제된 상태
     if (isDeleted) {
+      debugPrint('   ✅ 배지: 삭제');
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -435,6 +473,7 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
     }
 
     if (isCollected) {
+      debugPrint('   ✅ 배지: 수집됨');
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -452,55 +491,20 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
       );
     }
 
-    // 비활성 상태 (DELETED)
-    if (widget.post.status == PostStatus.DELETED) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.grey,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Text(
-          '비활성',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    // RECALLED 상태 - 회수된 포스트
-    if (widget.post.status == PostStatus.RECALLED) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.orange,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Text(
-          '회수됨',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
     // DEPLOYED 상태면 배지 숨김 (배포된 포스트 탭에서는 모든 포스트가 DEPLOYED이므로 중복 정보)
     if (widget.post.status == PostStatus.DEPLOYED) {
+      debugPrint('   ⚪ 배지 숨김: DEPLOYED');
       return const SizedBox.shrink();
     }
 
     // DRAFT 상태 - "작성중" 배지 숨김 처리
     if (widget.post.status == PostStatus.DRAFT) {
+      debugPrint('   ⚪ 배지 숨김: DRAFT');
       return const SizedBox.shrink();
     }
 
     // 기타 상태는 배지 표시 안 함
+    debugPrint('   ⚪ 배지 숨김: 기타 상태');
     return const SizedBox.shrink();
   }
 }

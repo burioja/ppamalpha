@@ -40,21 +40,15 @@ class _PostEditScreenState extends State<PostEditScreen> {
   bool _canRespond = false;
   bool _canForward = false;
   bool _canRequestReward = true;
-
   bool _isSaving = false;
 
-  // Targeting - 새로운 형태
   List<String> _selectedGenders = ['male', 'female'];
   RangeValues _selectedAgeRange = const RangeValues(20, 30);
-  
-  // Period - 새로운 형태
   int _selectedPeriod = 7;
 
-  // Function
   final List<String> _functions = ['Using', 'Selling', 'Buying', 'Sharing'];
   String _selectedFunction = 'Using';
 
-  // Media
   final List<dynamic> _selectedImages = [];
   final List<String> _imageNames = [];
   final List<Map<String, String>> _existingMedia = [];
@@ -62,7 +56,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
   dynamic _selectedSound;
   String _soundFileName = '';
 
-  // Place
   String? _selectedPlaceId;
   PlaceModel? _selectedPlace;
 
@@ -70,7 +63,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
   void initState() {
     super.initState();
 
-    // 수정 권한 확인 - 배포되거나 만료된 포스트는 수정 불가
     if (!widget.post.canEdit) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showCannotEditDialog();
@@ -86,7 +78,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
     _canForward = widget.post.canForward;
     _canRequestReward = widget.post.canRequestReward;
 
-    // Place 초기화
     _selectedPlaceId = widget.post.placeId;
     if (_selectedPlaceId != null && _selectedPlaceId!.isNotEmpty) {
       _loadPlace(_selectedPlaceId!);
@@ -108,8 +99,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
   }
 
   Future<void> _save() async {
-    // TODO: 마커 배포 여부 쿼리로 대체
-    final isDistributed = false; // 임시: 공백 포스트는 모두 수정 가능
+    final isDistributed = false;
     if (isDistributed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,23 +115,19 @@ class _PostEditScreenState extends State<PostEditScreen> {
     try {
       final int reward = int.tryParse(_rewardController.text.trim()) ?? widget.post.reward;
 
-      // Build media arrays
       final List<String> mediaTypes = [];
       final List<String> mediaUrls = [];
 
-      // Keep existing non-text media (except audio if replacing)
       for (final item in _existingMedia) {
         mediaTypes.add(item['type']!);
         mediaUrls.add(item['url']!);
       }
 
-      // Existing audio retained
       if (_existingAudioUrl.isNotEmpty && _selectedSound == null) {
         mediaTypes.add('audio');
         mediaUrls.add(_existingAudioUrl);
       }
 
-      // Upload new images with thumbnails
       for (final dynamic imagePath in _selectedImages) {
         Map<String, String> uploadResult;
         if (imagePath is File) {
@@ -150,7 +136,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
           uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(imagePath, 'posts', safeName);
         } else if (imagePath is Uint8List) {
-          // Web에서 선택된 이미지 (bytes)를 업로드
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
           uploadResult = await _firebaseService.uploadImageBytesWithThumbnail(imagePath, 'posts', safeName);
         } else {
@@ -158,14 +143,11 @@ class _PostEditScreenState extends State<PostEditScreen> {
         }
         mediaTypes.add('image');
         mediaUrls.add(uploadResult['original']!);
-        // Note: thumbnailUrl handling would need additional logic for post editing
       }
 
-      // Upload new audio if selected
       if (_selectedSound != null) {
         String audioUrl;
         if (kIsWeb && _selectedSound is Uint8List) {
-          // Web에서 선택된 오디오 (bytes)를 업로드
           final safeName = _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3';
           audioUrl = await _firebaseService.uploadAudioBytes(
             _selectedSound as Uint8List,
@@ -178,7 +160,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
             'audios',
           );
         } else {
-          // Legacy blob handling
           audioUrl = await _firebaseService.uploadImageFromBlob(
             _selectedSound,
             'audios',
@@ -189,20 +170,18 @@ class _PostEditScreenState extends State<PostEditScreen> {
         mediaUrls.add(audioUrl);
       }
 
-      // Text content
       final content = _contentController.text.trim();
       if (content.isNotEmpty) {
         mediaTypes.add('text');
         mediaUrls.add(content);
       }
 
-      // Compute expiresAt
       final Duration delta = Duration(days: _selectedPeriod);
       final DateTime newExpiresAt = DateTime.now().add(delta);
 
       final updates = <String, dynamic>{
         'title': _titleController.text.trim(),
-        'description': '', // 설명 필드 제거
+        'description': '',
         'reward': reward,
         'canRespond': _canRespond,
         'canForward': _canForward,
@@ -219,13 +198,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
             ? _youtubeUrlController.text.trim()
             : null,
       };
-
-      debugPrint('🔄 포스트 수정 데이터:');
-      debugPrint('  - postId: ${widget.post.postId}');
-      debugPrint('  - targetAge: ${updates['targetAge']}');
-      debugPrint('  - targetGender: ${updates['targetGender']}');
-      debugPrint('  - _selectedAgeRange: ${_selectedAgeRange.start.toInt()}-${_selectedAgeRange.end.toInt()}');
-      debugPrint('  - _selectedGenders: $_selectedGenders');
 
       await _postService.updatePost(widget.post.postId, updates);
 
@@ -249,14 +221,26 @@ class _PostEditScreenState extends State<PostEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('포스트 수정'),
+        backgroundColor: const Color(0xFF4D4DFF),
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          TextButton(
-            onPressed: _isSaving || !widget.post.canEdit ? null : _save,
-            child: _isSaving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('저장'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextButton.icon(
+              onPressed: _isSaving || !widget.post.canEdit ? null : _save,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check, color: Colors.white),
+              label: const Text('완료', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           ),
         ],
       ),
@@ -270,158 +254,177 @@ class _PostEditScreenState extends State<PostEditScreen> {
               if (!widget.post.canEdit)
                 Container(
                   width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.red.shade200, width: 2),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.block, color: Colors.red.shade600),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('${widget.post.status.name} 상태의 포스트는 수정할 수 없습니다.', style: TextStyle(color: Colors.red.shade800))),
+                      Icon(Icons.block, color: Colors.red.shade600, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '${widget.post.status.name} 상태의 포스트는 수정할 수 없습니다.',
+                          style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              _buildSectionTitle('포스트 기본 정보'),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: '제목', border: OutlineInputBorder()),
-                validator: (v) => (v == null || v.trim().isEmpty) ? '제목을 입력해주세요.' : null,
-                enabled: true, // TODO: 마커 배포 여부로 대체
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _contentController,
-                decoration: const InputDecoration(labelText: '내용 (선택사항)', border: OutlineInputBorder()),
-                maxLines: 5,
-                enabled: true, // TODO: 마커 배포 여부로 대체
-              ),
-              const SizedBox(height: 16),
-              _buildFunctionDropdown(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('미디어 업로드'),
-              _buildImageUpload(),
-              const SizedBox(height: 12),
-              _buildExistingMediaList(),
-              const SizedBox(height: 16),
-              _buildSoundUpload(),
-              const SizedBox(height: 16),
-              _buildYoutubeUrlInput(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('연결된 스토어'),
-              _buildPlaceSelection(),
-              const SizedBox(height: 24),
-              // 기능 옵션 임시 숨김 (요구사항: 3.3)
-              // _buildSectionTitle('기능 옵션'),
-              // CheckboxListTile(
-              //   contentPadding: EdgeInsets.zero,
-              //   title: const Text('응답 허용'),
-              //   value: _canRespond,
-              //   onChanged: (v) { setState(() { _canRespond = v ?? false; }); },
-              // ),
-              // CheckboxListTile(
-              //   contentPadding: EdgeInsets.zero,
-              //   title: const Text('전달 허용'),
-              //   value: _canForward,
-              //   onChanged: (v) { setState(() { _canForward = v ?? false; }); },
-              // ),
-              // CheckboxListTile(
-              //   contentPadding: EdgeInsets.zero,
-              //   title: const Text('리워드 수령 허용'),
-              //   value: _canRequestReward,
-              //   onChanged: (v) { setState(() { _canRequestReward = v ?? true; }); },
-              // ),
-              const SizedBox(height: 24),
-              _buildSectionTitle('타겟팅 옵션'),
-              GenderCheckboxGroup(
-                selectedGenders: _selectedGenders,
-                onChanged: (genders) {
-                  // TODO: 마커 배포 여부로 대체
-                  if (!false) {
-                    setState(() {
-                      _selectedGenders = genders;
-                    });
-                  }
-                },
-                validator: (genders) {
-                  if (genders.isEmpty) {
-                    return '최소 하나의 성별을 선택해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              RangeSliderWithInput(
-                label: '나이 범위',
-                initialValues: _selectedAgeRange,
-                min: 10,
-                max: 90,
-                divisions: 80,
-                onChanged: (range) {
-                  setState(() {
-                    _selectedAgeRange = range;
-                  });
-                }, // TODO: 마커 배포 여부로 대체
-                labelBuilder: (value) => '${value.toInt()}세',
-                validator: (range) {
-                  if (range.start < 10 || range.end > 90) {
-                    return '10~90 사이의 값을 입력해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              _buildSectionTitle('단가'),
-              PriceCalculator(
-                images: _selectedImages,
-                sound: _selectedSound,
-                priceController: _rewardController,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '단가를 입력해주세요.';
-                  }
-                  final price = int.tryParse(value.trim());
-                  if (price == null || price <= 0) {
-                    return '올바른 단가를 입력해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              // 배포된 포스트인지 여부에 따라 다른 안내 메시지 표시
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50, // TODO: 마커 배포 여부로 대체
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.blue.shade200, // TODO: 마커 배포 여부로 대체
+
+              // 플레이스 정보 카드
+              if (_selectedPlace != null) _buildPlaceInfoCard(),
+              if (_selectedPlace != null) const SizedBox(height: 20),
+
+              // 포스트 기본 정보
+              _buildSectionCard(
+                title: '기본 정보',
+                icon: Icons.edit_note,
+                children: [
+                  _buildStyledTextField(
+                    controller: _titleController,
+                    label: '제목',
+                    icon: Icons.title,
+                    validator: (v) => (v == null || v.trim().isEmpty) ? '제목을 입력해주세요.' : null,
+                    enabled: widget.post.canEdit,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline, // TODO: 마커 배포 여부로 대체
-                      color: Colors.blue.shade600, // TODO: 마커 배포 여부로 대체
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다', // TODO: 마커 배포 여부로 대체
-                        style: TextStyle(
-                          color: Colors.blue.shade700, // TODO: 마커 배포 여부로 대체
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  const SizedBox(height: 16),
+                  _buildStyledTextField(
+                    controller: _contentController,
+                    label: '내용 (선택사항)',
+                    icon: Icons.description,
+                    maxLines: 4,
+                    enabled: widget.post.canEdit,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStyledDropdown(
+                    label: '기능',
+                    value: _selectedFunction,
+                    items: _functions,
+                    icon: Icons.settings,
+                    onChanged: widget.post.canEdit ? (value) {
+                      setState(() {
+                        _selectedFunction = value!;
+                      });
+                    } : null,
+                    displayName: _getFunctionDisplayName,
+                  ),
+                ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
+
+              // 미디어 섹션
+              _buildSectionCard(
+                title: '미디어',
+                icon: Icons.perm_media,
+                children: [
+                  _buildMediaUpload(),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // 연결된 스토어
+              _buildSectionCard(
+                title: '연결된 스토어',
+                icon: Icons.store,
+                children: [
+                  _buildPlaceSelection(),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // 타겟팅 옵션
+              _buildSectionCard(
+                title: '타겟팅 설정',
+                icon: Icons.people,
+                children: [
+                  GenderCheckboxGroup(
+                    selectedGenders: _selectedGenders,
+                    onChanged: (genders) {
+                      if (widget.post.canEdit) {
+                        setState(() {
+                          _selectedGenders = genders;
+                        });
+                      }
+                    },
+                    validator: (genders) {
+                      if (genders.isEmpty) {
+                        return '최소 하나의 성별을 선택해주세요.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  RangeSliderWithInput(
+                    label: '나이 범위',
+                    initialValues: _selectedAgeRange,
+                    min: 10,
+                    max: 90,
+                    divisions: 80,
+                    onChanged: (range) {
+                      if (widget.post.canEdit) {
+                        setState(() {
+                          _selectedAgeRange = range;
+                        });
+                      }
+                    },
+                    labelBuilder: (value) => '${value.toInt()}세',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // 단가 섹션
+              _buildSectionCard(
+                title: '단가',
+                icon: Icons.monetization_on,
+                children: [
+                  PriceCalculator(
+                    images: _selectedImages,
+                    sound: _selectedSound,
+                    priceController: _rewardController,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '단가를 입력해주세요.';
+                      }
+                      final price = int.tryParse(value.trim());
+                      if (price == null || price <= 0) {
+                        return '올바른 단가를 입력해주세요.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
               // 하단 완료 버튼
               SizedBox(
                 width: double.infinity,
@@ -430,27 +433,30 @@ class _PostEditScreenState extends State<PostEditScreen> {
                   onPressed: _isSaving || !widget.post.canEdit ? null : _save,
                   icon: _isSaving
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: 22,
+                          height: 22,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 2.5,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Icon(Icons.check_circle, color: Colors.white),
+                      : const Icon(Icons.save, color: Colors.white, size: 24),
                   label: Text(
-                    _isSaving ? '수정 중...' : '포스트 수정 완료',
+                    _isSaving ? '수정 중...' : '수정 완료',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      letterSpacing: 0.5,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4D4DFF),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    elevation: 4,
+                    shadowColor: const Color(0xFF4D4DFF).withOpacity(0.4),
                   ),
                 ),
               ),
@@ -462,138 +468,257 @@ class _PostEditScreenState extends State<PostEditScreen> {
     );
   }
 
-  // Initialization helpers
-  void _initTargetingFromPost() {
-    // 나이 범위 초기화
-    final ageMin = widget.post.targetAge.isNotEmpty ? widget.post.targetAge[0].toDouble() : 20.0;
-    final ageMax = widget.post.targetAge.length > 1 ? widget.post.targetAge[1].toDouble() : ageMin;
-    _selectedAgeRange = RangeValues(ageMin, ageMax);
-    
-    // 성별 초기화
-    switch (widget.post.targetGender) {
-      case 'male':
-        _selectedGenders = ['male'];
-        break;
-      case 'female':
-        _selectedGenders = ['female'];
-        break;
-      default:
-        _selectedGenders = ['male', 'female'];
-    }
-  }
+  Widget _buildPlaceInfoCard() {
+    if (_selectedPlace == null) return const SizedBox.shrink();
 
-  void _initFunctionFromPost() {
-    _selectedFunction = widget.post.canUse ? 'Using' : 'Selling';
-  }
-
-  void _initPeriodFromPost() {
-    final now = DateTime.now();
-    if (widget.post.defaultExpiresAt.isAfter(now)) {
-      final diff = widget.post.defaultExpiresAt.difference(now);
-      _selectedPeriod = diff.inDays.clamp(1, 30);
-    } else {
-      _selectedPeriod = 7; // 기본값
-    }
-  }
-
-  void _initExistingMedia() {
-    String textCaptured = '';
-    for (int i = 0; i < widget.post.mediaType.length && i < widget.post.mediaUrl.length; i++) {
-      final type = widget.post.mediaType[i];
-      final url = widget.post.mediaUrl[i];
-      if (type == 'text') {
-        if (textCaptured.isEmpty) textCaptured = url;
-        continue;
-      }
-      if (type == 'audio') {
-        if (_existingAudioUrl.isEmpty) _existingAudioUrl = url;
-        continue;
-      }
-      _existingMedia.add({'type': type, 'url': url});
-    }
-  }
-
-  String _extractExistingTextContent() {
-    for (int i = 0; i < widget.post.mediaType.length && i < widget.post.mediaUrl.length; i++) {
-      if (widget.post.mediaType[i] == 'text') {
-        return widget.post.mediaUrl[i];
-      }
-    }
-    return '';
-  }
-
-  // UI helpers borrowed from create screen
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue[700]!, Colors.blue[500]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.store, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '연결된 플레이스',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _selectedPlace!.name,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          if (_selectedPlace!.address != null && _selectedPlace!.address!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 16, color: Colors.white70),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _selectedPlace!.address!,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
 
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4D4DFF).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF4D4DFF), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildStyledTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    int maxLines = 1,
+    String? hint,
+    String? Function(String?)? validator,
+    bool enabled = true,
+  }) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: const Color(0xFF4D4DFF)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
+      ),
+      maxLines: maxLines,
+      validator: validator,
+      enabled: enabled,
+    );
+  }
 
-  Widget _buildFunctionDropdown() {
+  Widget _buildStyledDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?>? onChanged,
+    String Function(String)? displayName,
+  }) {
     return DropdownButtonFormField<String>(
-      value: _selectedFunction,
-      decoration: const InputDecoration(
-        labelText: '기능',
-        border: OutlineInputBorder(),
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF4D4DFF)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
       ),
-      items: _functions.map((f) => DropdownMenuItem<String>(value: f, child: Text(_getFunctionDisplayName(f)))).toList(),
-      onChanged: null, // TODO: 마커 배포 여부로 대체
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Text(displayName != null ? displayName(item) : item),
+        );
+      }).toList(),
+      onChanged: onChanged,
     );
   }
 
-  String _getFunctionDisplayName(String function) {
-    switch (function) {
-      case 'Using':
-        return '사용하기';
-      case 'Selling':
-        return '팔기';
-      case 'Buying':
-        return '사기';
-      case 'Sharing':
-        return '나누기';
-      default:
-        return function;
-    }
-  }
-
-
-
-
-
-
-
-  Widget _buildImageUpload() {
+  Widget _buildMediaUpload() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ElevatedButton.icon(
-          onPressed: widget.post.canEdit ? _pickImage : null,
-          icon: const Icon(Icons.add_photo_alternate),
-          label: const Text('이미지 추가'),
+        // 이미지 업로드
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: widget.post.canEdit ? _pickImage : null,
+                icon: const Icon(Icons.add_photo_alternate),
+                label: const Text('이미지 추가'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         if (_selectedImages.isNotEmpty) ...[
           const SizedBox(height: 16),
           SizedBox(
-            height: 120,
+            height: 100,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _selectedImages.length,
               itemBuilder: (context, index) {
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
+                  padding: const EdgeInsets.only(right: 12),
                   child: Stack(
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         child: _buildCrossPlatformImage(_selectedImages[index]),
                       ),
                       Positioned(
@@ -602,8 +727,17 @@ class _PostEditScreenState extends State<PostEditScreen> {
                         child: GestureDetector(
                           onTap: () => _removeNewImage(index),
                           child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
                             child: const Icon(Icons.close, color: Colors.white, size: 16),
                           ),
                         ),
@@ -615,113 +749,167 @@ class _PostEditScreenState extends State<PostEditScreen> {
             ),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildSoundUpload() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ElevatedButton.icon(
-          onPressed: null, // TODO: 마커 배포 여부로 대체
-          icon: const Icon(Icons.audiotrack),
-          label: const Text('사운드 선택'),
-        ),
-        if (_soundFileName.isNotEmpty) ...[
+        if (_existingMedia.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text('기존 미디어', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.music_note, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _soundFileName,
-                    overflow: TextOverflow.ellipsis,
+          ..._existingMedia.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final item = entry.value;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(item['type'] == 'image' ? Icons.image : Icons.insert_drive_file, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(item['url']!, overflow: TextOverflow.ellipsis)),
+                  IconButton(
+                    onPressed: widget.post.canEdit ? () => _removeExistingMedia(idx) : null,
+                    icon: const Icon(Icons.delete_outline),
                   ),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  // TODO: 마커 배포 여부로 대체
-                  onPressed: false
-                      ? null
-                      : () {
-                          setState(() {
-                            _selectedSound = null;
-                            _soundFileName = '';
-                          });
-                        },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('제거'),
-                ),
-              ],
+                ],
+              ),
+            );
+          }),
+        ],
+        const SizedBox(height: 16),
+
+        // 사운드 업로드
+        OutlinedButton.icon(
+          onPressed: widget.post.canEdit ? _pickSound : null,
+          icon: const Icon(Icons.audiotrack),
+          label: Text(_soundFileName.isEmpty && _existingAudioUrl.isEmpty
+              ? '사운드 추가'
+              : _soundFileName.isNotEmpty
+                  ? _soundFileName
+                  : '기존 사운드 있음'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            side: BorderSide(
+                color: _soundFileName.isEmpty && _existingAudioUrl.isEmpty
+                    ? Colors.grey[300]!
+                    : Colors.green),
+            backgroundColor: _soundFileName.isEmpty && _existingAudioUrl.isEmpty ? null : Colors.green[50],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
+          ),
+        ),
+        if (_soundFileName.isNotEmpty || _existingAudioUrl.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: widget.post.canEdit
+                ? () {
+                    setState(() {
+                      _selectedSound = null;
+                      _soundFileName = '';
+                      _existingAudioUrl = '';
+                    });
+                  }
+                : null,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('사운드 제거', style: TextStyle(color: Colors.red)),
           ),
         ],
+        const SizedBox(height: 16),
+
+        // 유튜브 URL
+        _buildStyledTextField(
+          controller: _youtubeUrlController,
+          label: '유튜브 링크 (선택)',
+          icon: Icons.video_library,
+          hint: 'https://www.youtube.com/watch?v=...',
+          enabled: widget.post.canEdit,
+        ),
       ],
     );
   }
 
-  Widget _buildExistingMediaList() {
-    if (_existingMedia.isEmpty && _existingAudioUrl.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildPlaceSelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('기존 미디어', style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        ..._existingMedia.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final item = entry.value;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(item['type'] == 'image' ? Icons.image : Icons.insert_drive_file, size: 20),
-                const SizedBox(width: 8),
-                Expanded(child: Text(item['url']!, overflow: TextOverflow.ellipsis)),
-                IconButton(
-                  onPressed: widget.post.canEdit ? () => _removeExistingMedia(idx) : null,
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
-          );
-        }),
-        if (_existingAudioUrl.isNotEmpty)
+        if (_selectedPlace != null) ...[
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.blue.shade50,
+              border: Border.all(color: Colors.blue.shade200),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                const Icon(Icons.audiotrack),
-                const SizedBox(width: 8),
-                Expanded(child: Text(_existingAudioUrl, overflow: TextOverflow.ellipsis)),
-                IconButton(
-                  onPressed: widget.post.canEdit ? () => _removeExistingAudio() : null,
-                  icon: const Icon(Icons.delete_outline),
+                Icon(Icons.store, color: Colors.blue.shade600),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedPlace!.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_selectedPlace!.address != null && _selectedPlace!.address!.isNotEmpty)
+                        Text(
+                          _selectedPlace!.address!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
+                if (widget.post.canEdit)
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedPlace = null;
+                        _selectedPlaceId = null;
+                      });
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
               ],
             ),
           ),
+          const SizedBox(height: 12),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text('연결된 스토어가 없습니다.'),
+          ),
+          const SizedBox(height: 12),
+        ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.post.canEdit ? _selectPlace : null,
+            icon: const Icon(Icons.store),
+            label: Text(_selectedPlace == null ? '스토어 선택' : '스토어 변경'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: Colors.grey[300]!),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -773,6 +961,90 @@ class _PostEditScreenState extends State<PostEditScreen> {
     );
   }
 
+  // Helper methods
+  void _initTargetingFromPost() {
+    final ageMin = widget.post.targetAge.isNotEmpty ? widget.post.targetAge[0].toDouble() : 20.0;
+    final ageMax = widget.post.targetAge.length > 1 ? widget.post.targetAge[1].toDouble() : ageMin;
+    _selectedAgeRange = RangeValues(ageMin, ageMax);
+
+    switch (widget.post.targetGender) {
+      case 'male':
+        _selectedGenders = ['male'];
+        break;
+      case 'female':
+        _selectedGenders = ['female'];
+        break;
+      default:
+        _selectedGenders = ['male', 'female'];
+    }
+  }
+
+  void _initFunctionFromPost() {
+    _selectedFunction = widget.post.canUse ? 'Using' : 'Selling';
+  }
+
+  void _initPeriodFromPost() {
+    final now = DateTime.now();
+    if (widget.post.defaultExpiresAt.isAfter(now)) {
+      final diff = widget.post.defaultExpiresAt.difference(now);
+      _selectedPeriod = diff.inDays.clamp(1, 30);
+    } else {
+      _selectedPeriod = 7;
+    }
+  }
+
+  void _initExistingMedia() {
+    String textCaptured = '';
+    for (int i = 0; i < widget.post.mediaType.length && i < widget.post.mediaUrl.length; i++) {
+      final type = widget.post.mediaType[i];
+      final url = widget.post.mediaUrl[i];
+      if (type == 'text') {
+        if (textCaptured.isEmpty) textCaptured = url;
+        continue;
+      }
+      if (type == 'audio') {
+        if (_existingAudioUrl.isEmpty) _existingAudioUrl = url;
+        continue;
+      }
+      _existingMedia.add({'type': type, 'url': url});
+    }
+  }
+
+  String _extractExistingTextContent() {
+    for (int i = 0; i < widget.post.mediaType.length && i < widget.post.mediaUrl.length; i++) {
+      if (widget.post.mediaType[i] == 'text') {
+        return widget.post.mediaUrl[i];
+      }
+    }
+    return '';
+  }
+
+  String _getFunctionDisplayName(String function) {
+    switch (function) {
+      case 'Using':
+        return '사용하기';
+      case 'Selling':
+        return '팔기';
+      case 'Buying':
+        return '사기';
+      case 'Sharing':
+        return '나누기';
+      default:
+        return function;
+    }
+  }
+
+  String _getGenderFromTarget(List<String> genders) {
+    if (genders.contains('male') && genders.contains('female')) {
+      return 'all';
+    } else if (genders.contains('male')) {
+      return 'male';
+    } else if (genders.contains('female')) {
+      return 'female';
+    }
+    return 'all';
+  }
+
   Future<void> _pickImage() async {
     try {
       if (kIsWeb) {
@@ -793,9 +1065,9 @@ class _PostEditScreenState extends State<PostEditScreen> {
         type: FileType.image,
         allowMultiple: true,
         allowCompression: true,
-        withData: true, // Enable bytes data for web
+        withData: true,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
           if (file.size > 10 * 1024 * 1024) {
@@ -804,11 +1076,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
             }
             continue;
           }
-          
-          // Web에서는 bytes 사용, path는 null
+
           if (file.bytes != null && mounted) {
             setState(() {
-              _selectedImages.add(file.bytes!); // Uint8List 사용
+              _selectedImages.add(file.bytes!);
               _imageNames.add(file.name);
             });
           }
@@ -823,17 +1094,15 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   Future<void> _pickImageMobile() async {
     if (kIsWeb) {
-      // 웹에서는 FilePicker를 사용
       await _pickImageWeb();
       return;
     }
-    
+
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
     if (image != null) {
       if (mounted) {
         setState(() {
-          // 모바일에서만 File 사용
           _selectedImages.add(File(image.path));
           _imageNames.add(image.name);
         });
@@ -851,12 +1120,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
   void _removeExistingMedia(int index) {
     setState(() {
       _existingMedia.removeAt(index);
-    });
-  }
-
-  void _removeExistingAudio() {
-    setState(() {
-      _existingAudioUrl = '';
     });
   }
 
@@ -879,9 +1142,9 @@ class _PostEditScreenState extends State<PostEditScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: false,
-        withData: true, // Enable bytes data for web
+        withData: true,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
         if (file.size > 50 * 1024 * 1024) {
@@ -890,11 +1153,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
           }
           return;
         }
-        
-        // Web에서는 bytes 사용, path는 null
+
         if (file.bytes != null && mounted) {
           setState(() {
-            _selectedSound = file.bytes!; // Uint8List 사용
+            _selectedSound = file.bytes!;
             _soundFileName = file.name;
             _existingAudioUrl = '';
           });
@@ -909,11 +1171,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   Future<void> _pickSoundMobile() async {
     if (kIsWeb) {
-      // 웹에서는 _pickSoundWeb을 호출
       await _pickSoundWeb();
       return;
     }
-    
+
     final result = await FilePicker.platform.pickFiles(type: FileType.audio);
     if (result != null && result.files.isNotEmpty) {
       final PlatformFile file = result.files.first;
@@ -929,60 +1190,36 @@ class _PostEditScreenState extends State<PostEditScreen> {
     }
   }
 
-  String _getGenderFromTarget(List<String> genders) {
-    if (genders.contains('male') && genders.contains('female')) {
-      return 'all';
-    } else if (genders.contains('male')) {
-      return 'male';
-    } else if (genders.contains('female')) {
-      return 'female';
+  Future<void> _loadPlace(String placeId) async {
+    try {
+      final placeService = PlaceService();
+      final place = await placeService.getPlaceById(placeId);
+      if (mounted && place != null) {
+        setState(() {
+          _selectedPlace = place;
+        });
+      }
+    } catch (e) {
+      debugPrint('플레이스 로드 실패: $e');
     }
-    return 'all';
   }
 
-  Widget _buildYoutubeUrlInput() {
-    return TextField(
-      controller: _youtubeUrlController,
-      decoration: InputDecoration(
-        labelText: '유튜브 링크 (홍보용, 선택사항)',
-        hintText: 'https://www.youtube.com/watch?v=...',
-        border: const OutlineInputBorder(),
-        prefixIcon: const Icon(Icons.video_library),
-        helperText: '포스트에 연결할 유튜브 영상 링크를 입력하세요',
+  Future<void> _selectPlace() async {
+    final result = await Navigator.push<PlaceModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PostPlaceSelectionScreen(),
       ),
-      keyboardType: TextInputType.url,
     );
-  }
-  Widget _buildReadonlyInfo(String label, dynamic value) {
-    String text;
-    if (value is DateTime) {
-      text = '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
-    } else if (value is GeoPoint) {
-      text = '${value.latitude.toStringAsFixed(6)}, ${value.longitude.toStringAsFixed(6)}';
-    } else {
-      text = value.toString();
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedPlace = result;
+        _selectedPlaceId = result.id;
+      });
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Text(text),
-        ),
-        const SizedBox(height: 12),
-      ],
-    );
   }
 
-  // 수정 불가 다이얼로그 표시
   void _showCannotEditDialog() {
     String message;
     String statusText;
@@ -1060,8 +1297,8 @@ class _PostEditScreenState extends State<PostEditScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // 다이얼로그 닫기
-                Navigator.of(context).pop(); // 편집 화면 닫기
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
               },
               child: const Text('확인'),
             ),
@@ -1070,104 +1307,4 @@ class _PostEditScreenState extends State<PostEditScreen> {
       },
     );
   }
-
-  // 플레이스 로드
-  Future<void> _loadPlace(String placeId) async {
-    try {
-      final placeService = PlaceService();
-      final place = await placeService.getPlaceById(placeId);
-      if (mounted && place != null) {
-        setState(() {
-          _selectedPlace = place;
-        });
-      }
-    } catch (e) {
-      debugPrint('플레이스 로드 실패: $e');
-    }
-  }
-
-  // 플레이스 선택
-  Future<void> _selectPlace() async {
-    final result = await Navigator.push<PlaceModel>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const PostPlaceSelectionScreen(),
-      ),
-    );
-
-    if (result != null && mounted) {
-      setState(() {
-        _selectedPlace = result;
-        _selectedPlaceId = result.id;
-      });
-    }
-  }
-
-  // 플레이스 선택 UI
-  Widget _buildPlaceSelection() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_selectedPlace != null) ...[
-            Row(
-              children: [
-                Icon(Icons.store, color: Colors.blue.shade600),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _selectedPlace!.name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (_selectedPlace!.address != null && _selectedPlace!.address!.isNotEmpty)
-                        Text(
-                          _selectedPlace!.address!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: widget.post.canEdit ? () {
-                    setState(() {
-                      _selectedPlace = null;
-                      _selectedPlaceId = null;
-                    });
-                  } : null,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ] else ...[
-            const Text('연결된 스토어가 없습니다.'),
-          ],
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: widget.post.canEdit ? _selectPlace : null,
-              icon: const Icon(Icons.store),
-              label: Text(_selectedPlace == null ? '스토어 선택' : '스토어 변경'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-

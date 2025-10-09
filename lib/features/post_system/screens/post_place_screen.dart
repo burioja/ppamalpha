@@ -19,7 +19,7 @@ import '../widgets/price_calculator.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   final PlaceModel place;
-  
+
   const PostPlaceScreen({
     super.key,
     required this.place,
@@ -34,49 +34,47 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final _priceCalculatorKey = GlobalKey<PriceCalculatorState>();
   final _postService = PostService();
   final _firebaseService = FirebaseService();
-  static const GeoPoint _kRefLocation = GeoPoint(37.5665, 126.9780); // 기본 참조 위치 (서울시청 인근)
-  
+  static const GeoPoint _kRefLocation = GeoPoint(37.5665, 126.9780);
+
   // 폼 컨트롤러들
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _priceController = TextEditingController();
   final _soundController = TextEditingController();
-  final _youtubeUrlController = TextEditingController(); // 유튜브 URL
-  
+  final _youtubeUrlController = TextEditingController();
+
   // 선택된 값들
   String _selectedFunction = 'Using';
-  int _selectedPeriod = 7; // 기본 7일
-  List<String> _selectedGenders = ['male', 'female']; // 기본 남성/여성 모두
+  int _selectedPeriod = 7;
+  List<String> _selectedGenders = ['male', 'female'];
   RangeValues _selectedAgeRange = const RangeValues(20, 30);
-  
-  // PRD2.md 요구사항 추가
+
   String _selectedPostType = '일반';
   bool _hasExpiration = false;
   bool _canTransfer = false;
   bool _canForward = false;
   bool _canRespond = false;
   String _selectedTargeting = '기본';
-  
+
   // 사운드 파일
   dynamic _selectedSound;
   String _soundFileName = '';
-  
+
   // 크로스 플랫폼 이미지 저장
-  final List<dynamic> _selectedImages = []; // File 또는 Uint8List
-  final List<String> _imageNames = []; // 이미지 이름 저장
-  
+  final List<dynamic> _selectedImages = [];
+  final List<String> _imageNames = [];
+
   // 로딩 상태
   bool _isLoading = false;
   bool _isLocationLoading = false;
   bool _usedRefLocation = false;
-  
+
   // 위치 정보
   GeoPoint? _currentLocation;
-  
+
   // 함수 옵션들
   final List<String> _functions = ['Using', 'Selling', 'Buying', 'Sharing'];
-  
-  // PRD2.md 요구사항 옵션들
+
   final List<String> _postTypes = ['일반', '쿠폰'];
   final List<String> _targetingOptions = ['기본', '고급', '맞춤형'];
 
@@ -91,10 +89,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   void _initializeForm() {
-    // 플레이스 정보로 기본값 설정
     _titleController.text = '${widget.place.name} 관련 포스트';
-    
-    // 플레이스 위치를 기본 위치로 설정
+
     if (widget.place.hasLocation) {
       _currentLocation = widget.place.location;
     }
@@ -113,7 +109,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         });
       }
     } catch (e) {
-      // 위치를 가져올 수 없는 경우 플레이스 위치 사용
       if (widget.place.hasLocation) {
         setState(() {
           _currentLocation = widget.place.location;
@@ -139,10 +134,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   Future<void> _pickImage() async {
     try {
       if (kIsWeb) {
-        // 웹에서는 file_picker 사용
         await _pickImageWeb();
       } else {
-        // 모바일에서는 image_picker 사용
         await _pickImageMobile();
       }
     } catch (e) {
@@ -156,16 +149,15 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   Future<void> _pickImageWeb() async {
     try {
-      // 웹에서는 file_picker 사용
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: true,
         allowCompression: true,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
-          if (file.size > 10 * 1024 * 1024) { // 10MB 제한
+          if (file.size > 10 * 1024 * 1024) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')),
@@ -173,17 +165,14 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             }
             continue;
           }
-          
+
           if (mounted) {
             setState(() {
-              // 웹에서는 항상 bytes를 사용
               if (file.bytes != null) {
                 _selectedImages.add(file.bytes!);
               }
               _imageNames.add(file.name);
             });
-            // 가격 계산기 강제 재계산
-            print('[PostPlaceScreen] 이미지 추가됨 - 가격 재계산 요청');
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _priceCalculatorKey.currentState?.forceRecalculate();
             });
@@ -207,14 +196,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       maxHeight: 1080,
       imageQuality: 85,
     );
-    
+
     if (image != null) {
       if (mounted) {
         setState(() {
           _selectedImages.add(File(image.path));
           _imageNames.add(image.name);
         });
-        // 가격 계산기 강제 재계산
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _priceCalculatorKey.currentState?.forceRecalculate();
         });
@@ -244,10 +232,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         type: FileType.audio,
         allowMultiple: false,
       );
-      
+
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
-        if (file.size > 50 * 1024 * 1024) { // 50MB 제한
+        if (file.size > 50 * 1024 * 1024) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('사운드 파일 크기는 50MB 이하여야 합니다.')),
@@ -255,16 +243,12 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           }
           return;
         }
-        
-        if (mounted) {
+
+        if (file.bytes != null && mounted) {
           setState(() {
-            // 웹에서는 항상 bytes를 사용
-            if (file.bytes != null) {
-              _selectedSound = file.bytes!;
-            }
+            _selectedSound = file.bytes!;
             _soundFileName = file.name;
           });
-          // 가격 계산기 강제 재계산
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _priceCalculatorKey.currentState?.forceRecalculate();
           });
@@ -289,7 +273,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             _selectedSound = File(file.path!);
             _soundFileName = file.name;
           });
-          // 가격 계산기 강제 재계산
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _priceCalculatorKey.currentState?.forceRecalculate();
           });
@@ -303,7 +286,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       _selectedSound = null;
       _soundFileName = '';
     });
-    // 가격 계산기 강제 재계산
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _priceCalculatorKey.currentState?.forceRecalculate();
     });
@@ -314,7 +296,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       _selectedImages.removeAt(index);
       _imageNames.removeAt(index);
     });
-    // 가격 계산기 강제 재계산
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _priceCalculatorKey.currentState?.forceRecalculate();
     });
@@ -322,9 +303,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   Widget _buildCrossPlatformImage(dynamic imageData) {
     if (imageData is String) {
-      // 웹에서 파일 경로인 경우
       if (imageData.startsWith('data:image/')) {
-        // Base64 이미지
         return Image.memory(
           base64Decode(imageData.split(',')[1]),
           width: 120,
@@ -332,7 +311,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           fit: BoxFit.cover,
         );
       } else if (imageData.startsWith('http')) {
-        // 네트워크 이미지
         return Image.network(
           imageData,
           width: 120,
@@ -340,7 +318,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           fit: BoxFit.cover,
         );
       } else {
-        // 로컬 파일 경로 (모바일)
         return Image.file(
           File(imageData),
           width: 120,
@@ -349,7 +326,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         );
       }
     } else if (imageData is Uint8List) {
-      // 웹에서 바이트 데이터
       return Image.memory(
         imageData,
         width: 120,
@@ -357,7 +333,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         fit: BoxFit.cover,
       );
     } else if (imageData is File) {
-      // 모바일에서 File 객체
       return Image.file(
         imageData,
         width: 120,
@@ -373,8 +348,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         },
       );
     }
-    
-    // 기본 이미지
+
     return Container(
       width: 120,
       height: 120,
@@ -407,11 +381,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     });
 
     try {
-      // 매체 데이터 초기화
-      List<String> mediaUrls = []; // 전체 미디어 URL (이미지 원본 + 텍스트 + 오디오)
-      List<String> thumbnailUrls = []; // 이미지 썸네일만
-      List<String> mediaTypes = []; // 매체 타입
-      
+      List<String> mediaUrls = [];
+      List<String> thumbnailUrls = [];
+      List<String> mediaTypes = [];
+
       for (dynamic imagePath in _selectedImages) {
         Map<String, String> uploadResult;
         if (imagePath is File) {
@@ -420,62 +393,50 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
           uploadResult = await _firebaseService.uploadImageDataUrlWithThumbnail(imagePath, 'posts', safeName);
         } else if (imagePath is Uint8List) {
-          // 웹에서 선택된 바이트 데이터 - 원본과 썸네일 분리 업로드
           final safeName = 'img_${DateTime.now().millisecondsSinceEpoch}.png';
           debugPrint('Uint8List 이미지 업로드 시작: $safeName');
           uploadResult = await _firebaseService.uploadImageBytesWithThumbnail(imagePath, 'posts', safeName);
         } else {
-          // 지원하지 않는 타입은 건너뜀
           continue;
         }
         final originalUrl = uploadResult['original']!;
         final thumbnailUrl = uploadResult['thumbnail']!;
-        
-        // 디버그 로깅
+
         debugPrint('=== 이미지 업로드 결과 ===');
         debugPrint('원본 URL: $originalUrl');
         debugPrint('썸네일 URL: $thumbnailUrl');
-        debugPrint('원본에 /original/ 포함: ${originalUrl.contains('/original/')}');
-        debugPrint('썸네일에 /thumbnails/ 포함: ${thumbnailUrl.contains('/thumbnails/')}');
-        
-        mediaUrls.add(originalUrl); // 원본 이미지 URL
-        thumbnailUrls.add(thumbnailUrl); // 썸네일 URL
+
+        mediaUrls.add(originalUrl);
+        thumbnailUrls.add(thumbnailUrl);
         mediaTypes.add('image');
       }
 
-      // 텍스트 콘텐츠가 있는 경우 추가
       if (_contentController.text.trim().isNotEmpty) {
         mediaTypes.add('text');
-        mediaUrls.add(_contentController.text.trim()); // 텍스트는 mediaUrls에만 추가
-        // thumbnailUrls에는 추가하지 않음 (인덱스 맞춤을 위해)
+        mediaUrls.add(_contentController.text.trim());
       }
 
-      // 사운드 업로드
       if (_selectedSound != null) {
         try {
           String? audioUrl;
           if (_selectedSound is Uint8List) {
-            // 웹에서 선택된 바이트 데이터 처리
             audioUrl = await _firebaseService.uploadImageFromBlob(
               _selectedSound,
               'audios',
               _soundFileName.isNotEmpty ? _soundFileName : 'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
             );
           } else if (_selectedSound is File) {
-            // 모바일에서 선택된 파일 처리
             audioUrl = await _firebaseService.uploadImage(
               _selectedSound,
               'audios',
             );
           }
-          
-          // audioUrl이 성공적으로 생성된 경우에만 추가
+
           if (audioUrl != null) {
             mediaTypes.add('audio');
-            mediaUrls.add(audioUrl); // 오디오 URL
+            mediaUrls.add(audioUrl);
           }
         } catch (e) {
-          // 사운드 업로드 실패는 치명적이지 않으므로 경고만 표시
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('사운드 업로드 실패: $e')),
@@ -484,7 +445,6 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         }
       }
 
-      // 만료기간 계산
       DateTime calculatedExpiresAt;
       if (_hasExpiration) {
         calculatedExpiresAt = DateTime.now().add(Duration(days: _selectedPeriod));
@@ -492,63 +452,48 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         calculatedExpiresAt = DateTime.now().add(const Duration(days: 7));
       }
 
-      // 저장 전 데이터 검증 로깅
       debugPrint('=== 포스트 저장 데이터 ===');
       debugPrint('mediaTypes: $mediaTypes');
       debugPrint('mediaUrls (원본): $mediaUrls');
       debugPrint('thumbnailUrls: $thumbnailUrls');
-      debugPrint('mediaTypes.length: ${mediaTypes.length}');
-      debugPrint('mediaUrls.length: ${mediaUrls.length}');
-      debugPrint('thumbnailUrls.length: ${thumbnailUrls.length}');
-      
-      for (int i = 0; i < mediaTypes.length && i < mediaUrls.length; i++) {
-        debugPrint('[$i] type=${mediaTypes[i]}, url=${mediaUrls[i]}');
-        if (mediaTypes[i] == 'image' && i < thumbnailUrls.length) {
-          debugPrint('[$i] thumbnail=${thumbnailUrls[i]}');
-        }
-      }
-      
-      // 포스트 저장 (createPost 메서드 사용)
+
       final postId = await _postService.createPost(
         creatorId: _firebaseService.currentUser?.uid ?? '',
         creatorName: _firebaseService.currentUser?.displayName ?? '익명',
-        defaultRadius: 1000, // 기본 반경 1km
+        defaultRadius: 1000,
         reward: int.tryParse(_priceController.text) ?? 0,
         targetAge: [_selectedAgeRange.start.toInt(), _selectedAgeRange.end.toInt()],
         targetGender: _getGenderFromTarget(_selectedGenders),
-        targetInterest: [], // TODO: 사용자 관심사 연동
-        targetPurchaseHistory: [], // TODO: 사용자 구매 이력 연동
+        targetInterest: [],
+        targetPurchaseHistory: [],
         mediaType: mediaTypes,
-        mediaUrl: mediaUrls, // 원본 이미지 + 텍스트 + 오디오
+        mediaUrl: mediaUrls,
         thumbnailUrl: thumbnailUrls,
         title: _titleController.text.trim(),
-        description: '', // 설명 필드 제거
+        description: '',
         canRespond: _canRespond,
         canForward: _canForward,
         canRequestReward: _canTransfer,
         canUse: _selectedFunction == 'Using',
         defaultExpiresAt: calculatedExpiresAt,
-        placeId: widget.place.id, // 스토어 ID 추가
-        isCoupon: _selectedPostType == '쿠폰', // 쿠폰 여부 추가
+        placeId: widget.place.id,
+        isCoupon: _selectedPostType == '쿠폰',
         youtubeUrl: _youtubeUrlController.text.trim().isNotEmpty
             ? _youtubeUrlController.text.trim()
-            : null, // 유튜브 URL 추가
+            : null,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다.')),
         );
-        
-        // PostDeployScreen에서 온 경우와 일반적인 경우를 구분
+
         final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
         final fromPostDeploy = args?['fromPostDeploy'] ?? false;
-        
+
         if (fromPostDeploy) {
-          // PostDeployScreen에서 온 경우: PostDeployScreen으로 돌아가기
           Navigator.pop(context, true);
         } else {
-          // 일반적인 경우: 이전 화면으로 돌아가기
           Navigator.pop(context, true);
         }
       }
@@ -570,24 +515,32 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   String _getGenderFromTarget(List<String> genders) {
     if (genders.isEmpty) return 'all';
     if (genders.length == 1) return genders.first;
-    return 'both'; // 남성/여성 모두
+    return 'both';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text('${widget.place.name}에서 포스트 작성'),
+        title: Text('포스트 작성'),
+        backgroundColor: const Color(0xFF4D4DFF),
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _createPost,
-            child: _isLoading 
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('작성'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextButton.icon(
+              onPressed: _isLoading ? null : _createPost,
+              icon: _isLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.check, color: Colors.white),
+              label: const Text('완료', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           ),
         ],
       ),
@@ -598,184 +551,160 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 플레이스 정보 표시
-              _buildPlaceInfo(),
-              const SizedBox(height: 24),
-              
+              // 플레이스 정보 카드
+              _buildPlaceInfoCard(),
+              const SizedBox(height: 20),
+
               // 포스트 기본 정보
-              _buildSectionTitle('포스트 기본 정보'),
-              _buildTextField(
-                controller: _titleController,
-                label: '제목',
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '제목을 입력해주세요.';
-                  }
-                  return null;
-                },
+              _buildSectionCard(
+                title: '기본 정보',
+                icon: Icons.edit_note,
+                children: [
+                  _buildStyledTextField(
+                    controller: _titleController,
+                    label: '제목',
+                    icon: Icons.title,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return '제목을 입력해주세요.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStyledTextField(
+                    controller: _contentController,
+                    label: '내용 (선택사항)',
+                    icon: Icons.description,
+                    maxLines: 4,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStyledDropdown(
+                    label: '포스트 타입',
+                    value: _selectedPostType,
+                    items: _postTypes,
+                    icon: Icons.category,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPostType = value!;
+                      });
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _contentController,
-                label: '내용 (선택사항)',
-                maxLines: 5,
-              ),
-              const SizedBox(height: 16),
-              
-              // 포스트 타입 선택
-              _buildDropdown(
-                label: '포스트 타입',
-                value: _selectedPostType,
-                items: _postTypes,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedPostType = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // 미디어 업로드 섹션
-              _buildSectionTitle('미디어 업로드'),
-              _buildImageUpload(),
-              const SizedBox(height: 16),
-              _buildSoundUpload(),
-              const SizedBox(height: 16),
-
-              // 유튜브 URL 입력
-              _buildTextField(
-                controller: _youtubeUrlController,
-                label: '유튜브 URL (선택사항)',
-                hint: 'https://www.youtube.com/watch?v=...',
+              // 미디어 업로드
+              _buildSectionCard(
+                title: '미디어',
+                icon: Icons.perm_media,
+                children: [
+                  _buildMediaUpload(),
+                ],
               ),
-              const SizedBox(height: 24),
-
-              // 기능 옵션 섹션 (임시 숨김)
-              // _buildSectionTitle('기능 옵션'),
-              // _buildCheckboxOption(
-              //   title: '소멸시효',
-              //   value: _hasExpiration,
-              //   onChanged: (value) {
-              //     setState(() {
-              //       _hasExpiration = value!;
-              //     });
-              //   },
-              // ),
-              // _buildCheckboxOption(
-              //   title: '송금 기능',
-              //   value: _canTransfer,
-              //   onChanged: (value) {
-              //     setState(() {
-              //       _canTransfer = value!;
-              //     });
-              //   },
-              // ),
-              // _buildCheckboxOption(
-              //   title: '전달 기능',
-              //   value: _canForward,
-              //   onChanged: (value) {
-              //     setState(() {
-              //       _canForward = value!;
-              //     });
-              //   },
-              // ),
-              // _buildCheckboxOption(
-              //   title: '응답 기능',
-              //   value: _canRespond,
-              //   onChanged: (value) {
-              //     setState(() {
-              //       _canRespond = value!;
-              //     });
-              //   },
-              // ),
-              // const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // 타겟팅 옵션
-              _buildSectionTitle('타겟팅 옵션'),
-              _buildDropdown(
-                label: '타겟팅 레벨',
-                value: _selectedTargeting,
-                items: _targetingOptions,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedTargeting = value!;
-                  });
-                },
+              _buildSectionCard(
+                title: '타겟팅 설정',
+                icon: Icons.people,
+                children: [
+                  _buildStyledDropdown(
+                    label: '타겟팅 레벨',
+                    value: _selectedTargeting,
+                    items: _targetingOptions,
+                    icon: Icons.adjust,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedTargeting = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStyledDropdown(
+                    label: '기능',
+                    value: _selectedFunction,
+                    items: _functions,
+                    icon: Icons.settings,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedFunction = value!;
+                      });
+                    },
+                    displayName: _getFunctionDisplayName,
+                  ),
+                  const SizedBox(height: 16),
+                  GenderCheckboxGroup(
+                    selectedGenders: _selectedGenders,
+                    onChanged: (genders) {
+                      setState(() {
+                        _selectedGenders = genders;
+                      });
+                    },
+                    validator: (genders) {
+                      if (genders.isEmpty) {
+                        return '최소 하나의 성별을 선택해야 합니다';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  RangeSliderWithInput(
+                    label: '나이 범위',
+                    initialValues: _selectedAgeRange,
+                    min: 10,
+                    max: 90,
+                    divisions: 80,
+                    onChanged: (range) {
+                      setState(() {
+                        _selectedAgeRange = range;
+                      });
+                    },
+                    labelBuilder: (value) => '${value.toInt()}세',
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildFunctionDropdown(),
-              const SizedBox(height: 16),
-              GenderCheckboxGroup(
-                selectedGenders: _selectedGenders,
-                onChanged: (genders) {
-                  setState(() {
-                    _selectedGenders = genders;
-                  });
-                },
-                validator: (genders) {
-                  if (genders.isEmpty) {
-                    return '최소 하나의 성별을 선택해야 합니다';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              RangeSliderWithInput(
-                label: '나이 범위',
-                initialValues: _selectedAgeRange,
-                min: 10,
-                max: 90,
-                divisions: 80,
-                onChanged: (range) {
-                  setState(() {
-                    _selectedAgeRange = range;
-                  });
-                },
-                labelBuilder: (value) => '${value.toInt()}세',
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // 단가 섹션 (기간은 마커 뿌릴 때 설정)
-              _buildSectionTitle('단가'),
-              PriceCalculator(
-                key: _priceCalculatorKey,
-                images: _selectedImages,
-                sound: _selectedSound,
-                priceController: _priceController,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
-                        style: TextStyle(
-                          color: Colors.blue.shade700,
-                          fontSize: 12,
-                        ),
-                      ),
+              // 단가 섹션
+              _buildSectionCard(
+                title: '단가',
+                icon: Icons.monetization_on,
+                children: [
+                  PriceCalculator(
+                    key: _priceCalculatorKey,
+                    images: _selectedImages,
+                    sound: _selectedSound,
+                    priceController: _priceController,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade200),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
-              // 이미지 섹션 제거됨 (상단 '미디어 업로드'에 통합)
-
-              // 위치 정보 섹션 (임시 제거 - 플레이스 위치 자동 사용)
-              // _buildSectionTitle('위치 정보'),
-              // _buildLocationInfo(),
-              const SizedBox(height: 32),
-              
               // 하단 완료 버튼
               SizedBox(
                 width: double.infinity,
@@ -784,27 +713,30 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                   onPressed: _isLoading ? null : _createPost,
                   icon: _isLoading
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: 22,
+                          height: 22,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 2.5,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Icon(Icons.check_circle, color: Colors.white),
+                      : const Icon(Icons.rocket_launch, color: Colors.white, size: 24),
                   label: Text(
-                    _isLoading ? '포스트 작성 중...' : '포스트 작성 완료',
+                    _isLoading ? '포스트 생성 중...' : '포스트 생성하기',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      letterSpacing: 0.5,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4D4DFF),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    elevation: 4,
+                    shadowColor: const Color(0xFF4D4DFF).withOpacity(0.4),
                   ),
                 ),
               ),
@@ -816,59 +748,69 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     );
   }
 
-  Widget _buildPlaceInfo() {
+  Widget _buildPlaceInfoCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue[200]!),
+        gradient: LinearGradient(
+          colors: [Colors.blue[700]!, Colors.blue[500]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.place, color: Colors.blue[600]),
-              const SizedBox(width: 8),
-              Text(
-                '플레이스 정보',
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.store, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '연결된 플레이스',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             widget.place.name,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-          if (widget.place.description.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              widget.place.description,
-              style: TextStyle(
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
           if (widget.place.address != null && widget.place.address!.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
+                const Icon(Icons.location_on, size: 16, color: Colors.white70),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     widget.place.address!,
-                    style: TextStyle(
-                      color: Colors.grey[600],
+                    style: const TextStyle(
+                      color: Colors.white70,
                       fontSize: 14,
                     ),
                   ),
@@ -881,59 +823,242 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4D4DFF).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF4D4DFF), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTextField({
+  Widget _buildStyledTextField({
     required TextEditingController controller,
     required String label,
+    required IconData icon,
     int maxLines = 1,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
     String? hint,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon, color: const Color(0xFF4D4DFF)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
       ),
       maxLines: maxLines,
-      keyboardType: keyboardType,
       validator: validator,
     );
   }
 
-  Widget _buildFunctionDropdown() {
+  Widget _buildStyledDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?> onChanged,
+    String Function(String)? displayName,
+  }) {
     return DropdownButtonFormField<String>(
-      value: _selectedFunction,
-      decoration: const InputDecoration(
-        labelText: '기능',
-        border: OutlineInputBorder(),
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF4D4DFF)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
       ),
-      items: _functions.map((String function) {
+      items: items.map((item) {
         return DropdownMenuItem<String>(
-          value: function,
-          child: Text(_getFunctionDisplayName(function)),
+          value: item,
+          child: Text(displayName != null ? displayName(item) : item),
         );
       }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedFunction = newValue!;
-        });
-      },
-      hint: const Text('기능을 선택하세요'),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildMediaUpload() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 이미지 업로드
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickImage,
+                icon: const Icon(Icons.add_photo_alternate),
+                label: const Text('이미지 추가'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_selectedImages.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedImages.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _buildCrossPlatformImage(_selectedImages[index]),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+
+        // 사운드 업로드
+        OutlinedButton.icon(
+          onPressed: _pickSound,
+          icon: const Icon(Icons.audiotrack),
+          label: Text(_soundFileName.isEmpty ? '사운드 추가' : _soundFileName),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            side: BorderSide(color: _soundFileName.isEmpty ? Colors.grey[300]! : Colors.green),
+            backgroundColor: _soundFileName.isEmpty ? null : Colors.green[50],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (_soundFileName.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _removeSound,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('사운드 제거', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+        const SizedBox(height: 16),
+
+        // 유튜브 URL
+        _buildStyledTextField(
+          controller: _youtubeUrlController,
+          label: '유튜브 링크 (선택)',
+          icon: Icons.video_library,
+          hint: 'https://www.youtube.com/watch?v=...',
+        ),
+      ],
     );
   }
 
@@ -951,232 +1076,4 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         return function;
     }
   }
-
-
-
-
-
-
-
-  Widget _buildImagePicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ElevatedButton.icon(
-          onPressed: _pickImage,
-          icon: const Icon(Icons.add_photo_alternate),
-          label: const Text('이미지 추가'),
-        ),
-        if (_selectedImages.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 120,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _selectedImages.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: _buildCrossPlatformImage(_selectedImages[index]),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => _removeImage(index),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildLocationInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_isLocationLoading) ...[
-          const Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 8),
-              Text('위치 정보를 가져오는 중...'),
-            ],
-          ),
-        ] else if (_currentLocation != null) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green[600]),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '위치 정보 확인됨',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '${_currentLocation!.latitude.toStringAsFixed(6)}, ${_currentLocation!.longitude.toStringAsFixed(6)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.error, color: Colors.red[600]),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('위치 정보를 가져올 수 없습니다.'),
-                ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        Text(
-          '플레이스 위치를 기준으로 포스트가 생성됩니다.',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 공통 드롭다운 위젯 (String 전용)
-  Widget _buildDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      items: items
-          .map((e) => DropdownMenuItem<String>(value: e, child: Text(e)))
-          .toList(),
-      onChanged: onChanged,
-      hint: Text('$label을 선택하세요'),
-    );
-  }
-
-  // 미디어 업로드 - 이미지 (기존 이미지 피커를 래핑)
-  Widget _buildImageUpload() {
-    return _buildImagePicker();
-  }
-
-  // 미디어 업로드 - 사운드
-  Widget _buildSoundUpload() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ElevatedButton.icon(
-          onPressed: _pickSound,
-          icon: const Icon(Icons.audiotrack),
-          label: const Text('사운드 선택'),
-        ),
-        if (_soundFileName.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.music_note, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _soundFileName,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: _removeSound,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('제거'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-
-
-  // 공통 체크박스 옵션 위젯
-  Widget _buildCheckboxOption({
-    required String title,
-    required bool value,
-    required ValueChanged<bool?> onChanged,
-  }) {
-    return CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(title),
-      value: value,
-      onChanged: onChanged,
-      controlAffinity: ListTileControlAffinity.leading,
-    );
-  }
-} 
+}

@@ -230,12 +230,14 @@ class _MapScreenState extends State<MapScreen> {
       if (userDoc.exists) {
         final userData = userDoc.data();
         final isPremium = userData?['isPremium'] ?? false;
-        
-        setState(() {
-          _isPremiumUser = isPremium;
-          _maxDistance = isPremium ? 3000.0 : 1000.0; // 유료: 3km, 무료: 1km
-        });
-        
+
+        if (mounted) {
+          setState(() {
+            _isPremiumUser = isPremium;
+            _maxDistance = isPremium ? 3000.0 : 1000.0; // 유료: 3km, 무료: 1km
+          });
+        }
+
         print('💰 유료 사용자 상태: $_isPremiumUser, 검색 반경: ${_maxDistance}m');
       }
     } catch (e) {
@@ -292,25 +294,31 @@ class _MapScreenState extends State<MapScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-        setState(() {
-            _errorMessage = '위치 권한이 거부되었습니다.';
-        });
+          if (mounted) {
+            setState(() {
+              _errorMessage = '위치 권한이 거부되었습니다.';
+            });
+          }
           return;
-    }
-  }
+        }
+      }
 
       if (permission == LocationPermission.deniedForever) {
-      setState(() {
-          _errorMessage = '위치 권한이 영구적으로 거부되었습니다. 설정에서 권한을 허용해주세요.';
-      });
+        if (mounted) {
+          setState(() {
+            _errorMessage = '위치 권한이 영구적으로 거부되었습니다. 설정에서 권한을 허용해주세요.';
+          });
+        }
         return;
-  }
+      }
 
       await _getCurrentLocation();
     } catch (e) {
-      setState(() {
-        _errorMessage = '위치를 가져오는 중 오류가 발생했습니다: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = '위치를 가져오는 중 오류가 발생했습니다: $e';
+        });
+      }
     }
   }
 
@@ -334,14 +342,16 @@ class _MapScreenState extends State<MapScreen> {
       print('   - 속도: ${position.speed}m/s');
       
       final newPosition = LatLng(position.latitude, position.longitude);
-      
+
       // 이전 GPS 위치 저장 (회색 영역 표시용)
       final previousGpsPosition = _currentPosition;
-      
+
+      if (mounted) {
         setState(() {
-        _currentPosition = newPosition;
-        _errorMessage = null;
-      });
+          _currentPosition = newPosition;
+          _errorMessage = null;
+        });
+      }
 
       // OSM Fog of War 재구성
       _rebuildFogWithUserLocations(newPosition);
@@ -368,9 +378,11 @@ class _MapScreenState extends State<MapScreen> {
       
       // 추가로 마커 조회 강제 실행 (위치 기반으로 더 정확하게)
       print('🚀 위치 설정 완료 후 마커 조회 강제 실행');
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
       _updatePostsBasedOnFogLevel();
       
       // 현재 위치 마커 생성
@@ -378,11 +390,13 @@ class _MapScreenState extends State<MapScreen> {
       
       // 지도 중심 이동
       _mapController?.move(newPosition, _currentZoom);
-      
+
     } catch (e) {
+      if (mounted) {
         setState(() {
-        _errorMessage = '현재 위치를 가져올 수 없습니다: $e';
-      });
+          _errorMessage = '현재 위치를 가져올 수 없습니다: $e';
+        });
+      }
     }
   }
 
@@ -404,10 +418,12 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
         );
-        
-        setState(() {
-      _currentMarkers = [marker];
-    });
+
+        if (mounted) {
+          setState(() {
+            _currentMarkers = [marker];
+          });
+        }
   }
 
 
@@ -442,9 +458,11 @@ class _MapScreenState extends State<MapScreen> {
 
     print('총 밝은 영역 개수: ${allPositions.length}');
 
-    setState(() {
-      _ringCircles = ringCircles;
-    });
+    if (mounted) {
+      setState(() {
+        _ringCircles = ringCircles;
+      });
+    }
 
     print('포그 오브 워 재구성 완료');
   }
@@ -1710,13 +1728,25 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
 
-      if (confirmed != true) return;
+      if (confirmed != true) {
+        debugPrint('🟡 [map_screen] 회수 취소됨');
+        return;
+      }
 
-      // 마커와 포스트 모두 삭제
-      await PostService().deletePost(marker.postId);
-      
-      // 마커도 삭제 (markers 컬렉션에서)
-      await MapMarkerService.deleteMarker(marker.markerId);
+      debugPrint('');
+      debugPrint('🟢🟢🟢 [map_screen] 회수 버튼 클릭 - 마커 정보 🟢🟢🟢');
+      debugPrint('🟢 marker.markerId: ${marker.markerId}');
+      debugPrint('🟢 marker.postId: ${marker.postId}');
+      debugPrint('🟢 PostService().recallPost() 호출 시작...');
+      debugPrint('');
+
+      // 포스트 회수 (마커는 recallPost 내부에서 숨김 처리됨)
+      await PostService().recallPost(marker.postId);
+
+      debugPrint('');
+      debugPrint('🟢 [map_screen] PostService().recallPost() 완료');
+      debugPrint('🟢🟢🟢 ========================================== 🟢🟢🟢');
+      debugPrint('');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포스트를 회수했습니다')),
@@ -1826,7 +1856,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _removePost(PostModel post) async {
     try {
-      await PostService().deletePost(post.postId);
+      // 포스트 회수 (마커도 함께 회수 처리됨)
+      await PostService().recallPost(post.postId);
       // 🚀 실시간 스트림이 자동으로 업데이트되므로 별도 새로고침 불필요
       // _loadPosts(forceRefresh: true); // 포스트 목록 새로고침
           ScaffoldMessenger.of(context).showSnackBar(

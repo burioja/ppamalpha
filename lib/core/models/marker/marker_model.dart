@@ -28,6 +28,7 @@ class MarkerModel {
   final DateTime createdAt;
   final DateTime expiresAt;
   final bool isActive;
+  final String? status; // 마커 상태: ACTIVE, COLLECTED, RECALLED
   final List<String> collectedBy; // 수령한 사용자 ID 목록
 
   MarkerModel({
@@ -51,6 +52,7 @@ class MarkerModel {
     required this.createdAt,
     required this.expiresAt,
     required this.isActive,
+    this.status,
     this.collectedBy = const [],
   }) :
     // quantity는 remainingQuantity와 동일하게 유지 (호환성)
@@ -60,10 +62,17 @@ class MarkerModel {
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // 🔍 디버깅: 실제 Firestore 데이터 확인
-    print('[MARKER_MODEL_DEBUG] fromFirestore 호출: ${doc.id}');
-    print('  - postId 필드: "${data['postId']}"');
-    print('  - title 필드: "${data['title']}"');
+    // 🔍 디버깅: 특정 마커만 상세 로그 출력
+    final isTargetMarker = doc.id == 'TQTIS4RPfirWBK6qHoqu';
+
+    if (isTargetMarker) {
+      print('');
+      print('🔴🔴🔴 [MARKER_MODEL] 타겟 마커 파싱 시작 🔴🔴🔴');
+      print('🔴 markerId (doc.id): ${doc.id}');
+      print('🔴 Firebase data[\'postId\']: "${data['postId']}"');
+      print('🔴 data[\'postId\'] 타입: ${data['postId'].runtimeType}');
+      print('🔴 title 필드: "${data['title']}"');
+    }
 
     final location = data['location'] as GeoPoint;
 
@@ -97,9 +106,12 @@ class MarkerModel {
 
     final postIdValue = (data['postId'] as String?) ?? '';
 
-    // 🔍 디버깅: postId 값 처리 과정 확인
-    print('  - 처리된 postId 값: "$postIdValue"');
-    print('  - markerId와 동일한가: ${postIdValue == doc.id}');
+    if (isTargetMarker) {
+      print('🔴 캐스팅 후 postIdValue: "$postIdValue"');
+      print('🔴 postIdValue 타입: ${postIdValue.runtimeType}');
+      print('🔴 postIdValue가 비어있는가: ${postIdValue.isEmpty}');
+      print('🔴 markerId와 동일한가: ${postIdValue == doc.id}');
+    }
 
     final result = MarkerModel(
       markerId: doc.id,
@@ -122,12 +134,17 @@ class MarkerModel {
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       expiresAt: (data['expiresAt'] as Timestamp).toDate(),
       isActive: data['isActive'] ?? true,
+      status: data['status'] as String?,
       collectedBy: List<String>.from(data['collectedBy'] ?? []),
     );
 
-    // 🔍 디버깅: 생성된 MarkerModel 최종 확인
-    print('  - 최종 MarkerModel.markerId: "${result.markerId}"');
-    print('  - 최종 MarkerModel.postId: "${result.postId}"');
+    if (isTargetMarker) {
+      print('🔴 생성된 MarkerModel.markerId: "${result.markerId}"');
+      print('🔴 생성된 MarkerModel.postId: "${result.postId}"');
+      print('🔴 두 값이 같은가: ${result.markerId == result.postId}');
+      print('🔴🔴🔴 [MARKER_MODEL] 타겟 마커 파싱 완료 🔴🔴🔴');
+      print('');
+    }
     return result;
   }
 
@@ -177,6 +194,11 @@ class MarkerModel {
       data['fogLevel'] = fog;
     }
 
+    final st = status;
+    if (st != null) {
+      data['status'] = st;
+    }
+
     return data;
   }
 
@@ -202,6 +224,7 @@ class MarkerModel {
     DateTime? createdAt,
     DateTime? expiresAt,
     bool? isActive,
+    String? status,
     List<String>? collectedBy,
   }) {
     // quantity가 지정되면 remainingQuantity도 동일하게 설정 (호환성)
@@ -229,6 +252,7 @@ class MarkerModel {
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
       isActive: isActive ?? this.isActive,
+      status: status ?? this.status,
       collectedBy: collectedBy ?? this.collectedBy,
     );
   }

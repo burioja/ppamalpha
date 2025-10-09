@@ -842,7 +842,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   '/post-detail',
                                   arguments: {
                                     'post': post,
-                                    'isEditable': true,
+                                    'isEditable': _currentUserId == post.creatorId,
                                   },
                                 );
                                 if (result == true && mounted) {
@@ -1021,7 +1021,10 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                       final result = await Navigator.pushNamed(
                                         context,
                                         '/post-detail',
-                                        arguments: post,
+                                        arguments: {
+                                          'post': post,
+                                          'isEditable': _currentUserId == post.creatorId,
+                                        },
                                       );
                                       if (result == true && mounted) {
                                         setState(() {

@@ -207,7 +207,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
       setState(() {
-        _addressController.text = result.toString();
+        // result가 Map인 경우 address 필드만 추출
+        if (result is Map<String, dynamic>) {
+          _addressController.text = result['address'] ?? '';
+        } else {
+          _addressController.text = result.toString();
+        }
       });
     }
   }
@@ -216,7 +221,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
       setState(() {
-        _workplaceAddressController.text = result.toString();
+        // result가 Map인 경우 address 필드만 추출
+        if (result is Map<String, dynamic>) {
+          _workplaceAddressController.text = result['address'] ?? '';
+        } else {
+          _workplaceAddressController.text = result.toString();
+        }
       });
     }
   }
@@ -254,13 +264,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _removeWorkplace(int index) async {
     _workplaces.removeAt(index);
-    
+
     // UI 업데이트
     setState(() {});
-    
+
     // 근무지 삭제 후 즉시 저장 (폼 검증 없이)
     await _saveWorkplacesOnly();
     _showToast('근무지가 삭제되었습니다');
+  }
+
+  String _getDisplayAddress(String address) {
+    // 이미 저장된 근무지 주소가 JSON 형식일 수 있으므로 처리
+    // 주소가 단순 문자열이면 그대로 반환
+    if (!address.startsWith('{') && !address.startsWith('[')) {
+      return address;
+    }
+
+    // JSON 형식이면 파싱 시도 (이전에 잘못 저장된 경우)
+    try {
+      // Map 형식으로 파싱 시도는 하지 않고,
+      // 단순히 JSON 문자열이 보이는 경우 안내 메시지 표시
+      return '주소 정보 오류 (다시 설정해주세요)';
+    } catch (e) {
+      return address;
+    }
   }
 
   Future<void> _logout() async {
@@ -666,7 +693,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           ),
                                         ),
                                         Text(
-                                          workplace['address']!,
+                                          _getDisplayAddress(workplace['address']!),
                                           style: TextStyle(
                                             color: Colors.grey[600],
                                             fontSize: 12,

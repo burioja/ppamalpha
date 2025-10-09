@@ -212,7 +212,21 @@ class MapMarkerService {
   }) async {
     try {
       final user = _auth.currentUser;
-      if (user == null) return [];
+      if (user == null) {
+        print('🔴 [MARKER_DEBUG] 사용자 미로그인');
+        return [];
+      }
+
+      print('');
+      print('🔵🔵🔵 ========== getMarkers() 시작 ========== 🔵🔵🔵');
+      print('🔵 사용자 UID: ${user.uid}');
+      print('🔵 중심 위치: ${location.latitude}, ${location.longitude}');
+      print('🔵 검색 반경: ${radiusInKm}km');
+      print('🔵 적용된 필터: $filters');
+      print('🔵 myPostsOnly: ${filters['myPostsOnly']}');
+      print('🔵 showCouponsOnly: ${filters['showCouponsOnly']}');
+      print('🔵 minReward: ${filters['minReward']}');
+      print('🔵 showUrgentOnly: ${filters['showUrgentOnly']}');
 
       // markers 컬렉션에서 직접 조회 (서버 필터 추가)
       final now = Timestamp.now();
@@ -250,25 +264,44 @@ class MapMarkerService {
           .limit(pageSize)                             // 제한 증가
           .get();
 
+      print('🔵 Firebase 쿼리 결과: ${snapshot.docs.length}개 마커');
+
+      // 필터링 통계 변수
+      int totalCount = snapshot.docs.length;
+      int recalledCount = 0;
+      int noQuantityCount = 0;
+      int noLocationCount = 0;
+      int alreadyCollectedCount = 0;
+      int outOfRangeCount = 0;
+      int fogLevelFilteredCount = 0;
+      int finalCount = 0;
+
       final markers = <MapMarkerData>[];
-      
+
       for (final doc in snapshot.docs) {
         try {
           final data = doc.data() as Map<String, dynamic>?;
           if (data == null) continue;
-          
+
+          // 🔥 회수된 마커는 건너뛰기
+          final status = data['status'] as String?;
+          if (status == 'RECALLED') {
+            recalledCount++;
+            continue;
+          }
+
           // 🔥 수량이 0인 마커는 건너뛰기 (이미 isActive가 false로 설정됨)
           final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
           if (remainingQuantity <= 0) {
-            print('⚠️ 수량이 0인 마커 건너뛰기: ${doc.id}');
+            noQuantityCount++;
             continue;
           }
-          
+
           final locationData = data['location'] as GeoPoint?;
-          
+
           // location이 null인 마커는 건너뛰기
           if (locationData == null) {
-            print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
+            noLocationCount++;
             continue;
           }
 
@@ -277,16 +310,16 @@ class MapMarkerService {
           if (creatorId != user.uid) {
             final collectedBy = List<String>.from(data['collectedBy'] ?? []);
             if (collectedBy.contains(user.uid)) {
-              print('🚫 이미 수령한 마커 제외: ${doc.id}');
+              alreadyCollectedCount++;
               continue;
             }
           }
-          
+
           final position = LatLng(
             locationData.latitude,
             locationData.longitude,
           );
-          
+
           // 거리 필터링
           bool withinRadius = false;
           for (final center in [location, ...additionalCenters]) {
@@ -300,12 +333,15 @@ class MapMarkerService {
               break;
             }
           }
-          
-          if (!withinRadius) continue;
-          
+
+          if (!withinRadius) {
+            outOfRangeCount++;
+            continue;
+          }
+
           // 포그레벨 필터링 (1km 이내는 무조건 표시)
           final tileId = data['tileId'] as String? ?? TileUtils.getKm1TileId(position.latitude, position.longitude);
-          
+
           // 1km 이내 마커는 포그레벨 체크 없이 무조건 표시
           bool shouldShow = false;
           for (final center in [location, ...additionalCenters]) {
@@ -322,17 +358,21 @@ class MapMarkerService {
           if (!shouldShow) {
             // 1km 밖의 마커는 포그레벨 체크
             final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
-            if (!fogLevel1Tiles.contains(tileId)) continue;
+            if (!fogLevel1Tiles.contains(tileId)) {
+              fogLevelFilteredCount++;
+              continue;
+            }
           }
-          
+
           // 수량 확인 - 수량이 0이면 마커 제외
           final quantity = (data['quantity'] as num?)?.toInt() ?? 0;
           if (quantity <= 0) {
-            print('수량 소진으로 마커 제외: ${data['title']} (수량: $quantity)');
+            noQuantityCount++;
             continue;
           }
-          
+
           // 마커 데이터 생성
+          finalCount++;
           final marker = MapMarkerData(
             id: doc.id,
             title: data['title'] ?? '',
@@ -341,10 +381,11 @@ class MapMarkerService {
             position: position,
             createdAt: (data['createdAt'] as Timestamp).toDate(),
             expiryDate: (data['expiresAt'] as Timestamp).toDate(),
-            data: Map<String, dynamic>.from(data['data'] ?? {})
+            data: Map<String, dynamic>.from(data)  // ✅ data 자체를 전달 (중첩 data 필드 아님!)
               ..['quantity'] = quantity
-              ..['reward'] = data['reward']  // ✅ reward 추가
-              ..['isSuperMarker'] = data['isSuperMarker'],  // ✅ isSuperMarker 추가
+              ..['reward'] = data['reward']
+              ..['isSuperMarker'] = data['isSuperMarker']
+              ..['postId'] = data['postId'],  // ✅ postId 명시적으로 추가
             isCollected: false, // markers는 수령되지 않음
             collectedBy: null,
             collectedAt: null,
@@ -357,10 +398,25 @@ class MapMarkerService {
           continue;
         }
       }
-      
+
+      // 필터링 결과 요약
+      print('');
+      print('📊 ========== 필터링 결과 요약 ========== 📊');
+      print('📊 총 쿼리된 마커: $totalCount개');
+      print('📊 제외된 마커:');
+      print('   - 회수됨 (RECALLED): $recalledCount개');
+      print('   - 수량 소진: $noQuantityCount개');
+      print('   - 위치 정보 없음: $noLocationCount개');
+      print('   - 이미 수령함: $alreadyCollectedCount개');
+      print('   - 거리 범위 밖: $outOfRangeCount개');
+      print('   - 포그 레벨 필터링: $fogLevelFilteredCount개');
+      print('📊 최종 반환 마커: $finalCount개');
+      print('🔵🔵🔵 ========== getMarkers() 종료 ========== 🔵🔵🔵');
+      print('');
+
       return markers;
     } catch (e) {
-      print('마커 조회 오류: $e');
+      print('❌ 마커 조회 오류: $e');
       return [];
     }
   }
@@ -420,7 +476,14 @@ class MapMarkerService {
         try {
           final data = doc.data() as Map<String, dynamic>?;
           if (data == null) continue;
-          
+
+          // 🔥 회수된 슈퍼마커는 건너뛰기
+          final status = data['status'] as String?;
+          if (status == 'RECALLED') {
+            print('🔴 회수된 슈퍼마커 건너뛰기: ${doc.id}');
+            continue;
+          }
+
           // 🔥 수량이 0인 슈퍼마커는 건너뛰기 (이미 isActive가 false로 설정됨)
           final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
           if (remainingQuantity <= 0) {
@@ -476,10 +539,11 @@ class MapMarkerService {
             position: position,
             createdAt: (data['createdAt'] as Timestamp).toDate(),
             expiryDate: (data['expiresAt'] as Timestamp).toDate(),
-            data: Map<String, dynamic>.from(data['data'] ?? {})
+            data: Map<String, dynamic>.from(data)  // ✅ data 자체를 전달
               ..['quantity'] = quantity
-              ..['reward'] = data['reward']  // ✅ reward 추가
-              ..['isSuperMarker'] = data['isSuperMarker'],  // ✅ isSuperMarker 추가
+              ..['reward'] = data['reward']
+              ..['isSuperMarker'] = data['isSuperMarker']
+              ..['postId'] = data['postId'],  // ✅ postId 명시적으로 추가
             isCollected: false,
             type: MarkerType.superPost, // ✅ 슈퍼포스트 타입
           );
@@ -539,6 +603,18 @@ class MapMarkerService {
   
   /// MarkerData를 MarkerModel로 변환
   static MarkerModel convertToMarkerModel(MapMarkerData markerData) {
+    // 🔍 타겟 마커 디버깅
+    final isTargetMarker = markerData.id == 'TQTIS4RPfirWBK6qHoqu';
+
+    if (isTargetMarker) {
+      print('');
+      print('🟠🟠🟠 [convertToMarkerModel] 타겟 마커 변환 시작 🟠🟠🟠');
+      print('🟠 markerData.id: ${markerData.id}');
+      print('🟠 markerData.data[\'postId\']: "${markerData.data['postId']}"');
+      print('🟠 markerData.data[\'postId\'] == null: ${markerData.data['postId'] == null}');
+      print('🟠 markerData.data 전체: ${markerData.data}');
+    }
+
     // ✅ 옵셔널 안전 파싱 함수
     int? parseNullableInt(dynamic v) {
       if (v is int) return v;
@@ -546,10 +622,20 @@ class MapMarkerService {
       if (v is String) return int.tryParse(v);
       return null;
     }
-    
-    return MarkerModel(
+
+    // ⚠️ postId 추출 로직 수정
+    final postIdFromData = markerData.data['postId'] as String?;
+    final finalPostId = postIdFromData ?? markerData.id;
+
+    if (isTargetMarker) {
+      print('🟠 postIdFromData: "$postIdFromData"');
+      print('🟠 finalPostId (사용될 값): "$finalPostId"');
+      print('🟠 폴백 사용됨: ${postIdFromData == null}');
+    }
+
+    final result = MarkerModel(
       markerId: markerData.id,
-      postId: markerData.data['postId'] ?? markerData.id, // ✅ data에서 postId 가져오기
+      postId: finalPostId,
       title: markerData.title,
       position: markerData.position,
       quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
@@ -569,6 +655,14 @@ class MapMarkerService {
       isActive: !markerData.isCollected,
       collectedBy: markerData.collectedBy != null ? [markerData.collectedBy!] : [],
     );
+
+    if (isTargetMarker) {
+      print('🟠 생성된 MarkerModel.postId: "${result.postId}"');
+      print('🟠🟠🟠 [convertToMarkerModel] 타겟 마커 변환 완료 🟠🟠🟠');
+      print('');
+    }
+
+    return result;
   }
   
   /// 마커 생성

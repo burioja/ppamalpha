@@ -1632,14 +1632,14 @@ class PostService {
         debugPrint('  - "$status": $count개');
       });
 
-      // 배포된 포스트만 필터링 (대소문자 무관)
+      // 배포된 포스트 + 회수된 포스트 필터링 (대소문자 무관)
       final deployedPosts = allSnapshot.docs.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
         final status = (data['status'] ?? '').toString().toLowerCase();
-        return status == 'deployed';
+        return status == 'deployed' || status == 'recalled';
       }).toList();
 
-      debugPrint('✅ 배포된 포스트 (필터링 후): ${deployedPosts.length}개');
+      debugPrint('✅ 배포된 포스트 (DEPLOYED + RECALLED, 필터링 후): ${deployedPosts.length}개');
 
       final posts = deployedPosts
           .map((doc) => PostModel.fromFirestore(doc))
@@ -1835,14 +1835,22 @@ class PostService {
     }
   }
 
-  /// 포스트 삭제 (소프트 삭제)
+  /// 포스트 삭제 (소프트 삭제 - DRAFT 상태만 가능)
   Future<void> deletePost(String postId) async {
     try {
       // 포스트 상태를 DELETED로 변경
-      await _firestore.collection('posts').doc(postId).update({
-        'status': 'DELETED',
-        'deletedAt': FieldValue.serverTimestamp(),
-      });
+      try {
+        await _firestore.collection('posts').doc(postId).update({
+          'status': 'DELETED',
+          'deletedAt': FieldValue.serverTimestamp(),
+        });
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') {
+          debugPrint('⚠️ 포스트가 이미 삭제됨: $postId');
+          return; // 이미 삭제된 것으로 간주
+        }
+        rethrow;
+      }
 
       // 관련된 마커들 숨김 처리
       final markers = await _firestore
@@ -1862,6 +1870,88 @@ class PostService {
     } catch (e) {
       debugPrint('❌ 포스트 삭제 실패: $e');
       throw Exception('포스트 삭제 중 오류가 발생했습니다');
+    }
+  }
+
+  /// 포스트 회수 (배포된 포스트를 회수)
+  Future<void> recallPost(String postId) async {
+    debugPrint('');
+    debugPrint('🔵🔵🔵 ========== recallPost() 시작 ========== 🔵🔵🔵');
+    debugPrint('🔵 postId: $postId');
+
+    try {
+      // 포스트 상태를 RECALLED로 변경
+      debugPrint('🔵 1단계: 포스트 상태를 RECALLED로 변경 시작...');
+      try {
+        await _firestore.collection('posts').doc(postId).update({
+          'status': 'RECALLED',
+          'recalledAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('🔵 ✅ 포스트 상태 변경 완료');
+      } on FirebaseException catch (e) {
+        debugPrint('🔴 FirebaseException 발생: ${e.code} - ${e.message}');
+        if (e.code == 'not-found') {
+          debugPrint('⚠️ 포스트가 이미 삭제됨: $postId');
+          debugPrint('🔵🔵🔵 ========== recallPost() 종료 (not-found) ========== 🔵🔵🔵');
+          debugPrint('');
+          return; // 이미 삭제된 것으로 간주
+        }
+        rethrow;
+      }
+
+      // 관련된 마커들 회수 처리
+      debugPrint('🔵 2단계: 관련 마커 조회 시작...');
+      final markers = await _firestore
+          .collection('markers')
+          .where('postId', isEqualTo: postId)
+          .get();
+      debugPrint('🔵 ✅ 총 ${markers.docs.length}개 마커 발견');
+
+      // 배치 작업으로 모든 마커 업데이트
+      debugPrint('🔵 3단계: 마커 배치 업데이트 시작...');
+      final batch = _firestore.batch();
+      int recalledCount = 0;
+      int collectedCount = 0;
+
+      for (var marker in markers.docs) {
+        final data = marker.data();
+        final status = data['status'] as String?;
+        debugPrint('🔵   마커 ${marker.id}: status=$status');
+
+        // 이미 수령된 마커는 그대로 유지 (COLLECTED 상태)
+        if (status == 'COLLECTED') {
+          debugPrint('🔵     → 이미 수령됨, 건너뜀');
+          collectedCount++;
+          continue;
+        }
+
+        // 수령되지 않은 마커만 회수 처리
+        debugPrint('🔵     → RECALLED로 변경');
+        batch.update(marker.reference, {
+          'status': 'RECALLED',
+          'visible': false,
+        });
+        recalledCount++;
+      }
+
+      debugPrint('🔵 배치 커밋 시작...');
+      await batch.commit();
+      debugPrint('🔵 ✅ 배치 커밋 완료');
+
+      debugPrint('');
+      debugPrint('✅ 포스트 회수 완료: $postId');
+      debugPrint('📍 총 ${markers.docs.length}개 마커 중:');
+      debugPrint('   - 회수됨: $recalledCount개');
+      debugPrint('   - 이미 수령됨: $collectedCount개 (유지)');
+      debugPrint('🔵🔵🔵 ========== recallPost() 종료 (성공) ========== 🔵🔵🔵');
+      debugPrint('');
+    } catch (e) {
+      debugPrint('');
+      debugPrint('🔴🔴🔴 ========== recallPost() 에러 ========== 🔴🔴🔴');
+      debugPrint('❌ 포스트 회수 실패: $e');
+      debugPrint('🔴🔴🔴 ========================================== 🔴🔴🔴');
+      debugPrint('');
+      throw Exception('포스트 회수 중 오류가 발생했습니다');
     }
   }
 }
