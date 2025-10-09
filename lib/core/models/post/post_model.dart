@@ -110,6 +110,10 @@ class PostModel {
   // 유튜브 링크 (홍보용)
   final String? youtubeUrl; // 유튜브 영상 URL
 
+  // 회수 시스템 (Phase 4)
+  final String? recallReason; // 회수 사유 (재고소진/프로모션종료/오류수정/기타)
+  final DateTime? recalledAt; // 회수 시점
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -142,6 +146,8 @@ class PostModel {
     this.isCoupon = false,
     this.couponData,
     this.youtubeUrl,
+    this.recallReason,
+    this.recalledAt,
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -213,6 +219,10 @@ class PostModel {
       isCoupon: data['isCoupon'] ?? false,
       couponData: data['couponData'],
       youtubeUrl: data['youtubeUrl'],
+      recallReason: data['recallReason'],
+      recalledAt: data['recalledAt'] != null
+          ? (data['recalledAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -248,6 +258,8 @@ class PostModel {
       'isCoupon': isCoupon,
       'couponData': couponData,
       'youtubeUrl': youtubeUrl,
+      'recallReason': recallReason,
+      'recalledAt': recalledAt != null ? Timestamp.fromDate(recalledAt!) : null,
     };
   }
 
@@ -275,7 +287,8 @@ class PostModel {
 
   // 새로운 상태 관리 메서드들
   bool get isDraft => status == PostStatus.DRAFT;
-  bool get isDeployed => status == PostStatus.DEPLOYED;
+  // 배포되었거나 회수된 포스트 모두 통계 분석 가능 (회수된 것도 과거 배포 이력이 있음)
+  bool get isDeployed => status == PostStatus.DEPLOYED || status == PostStatus.RECALLED;
   bool get canEdit => status == PostStatus.DRAFT; // 배포 대기 상태에서만 수정 가능
   bool get canDeploy => status == PostStatus.DRAFT; // DRAFT 상태에서만 배포 가능
   bool get canDelete => status == PostStatus.DRAFT || status == PostStatus.DEPLOYED;
@@ -370,6 +383,8 @@ class PostModel {
     bool? isCoupon,
     Map<String, dynamic>? couponData,
     String? youtubeUrl,
+    String? recallReason,
+    DateTime? recalledAt,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -402,6 +417,8 @@ class PostModel {
       isCoupon: isCoupon ?? this.isCoupon,
       couponData: couponData ?? this.couponData,
       youtubeUrl: youtubeUrl ?? this.youtubeUrl,
+      recallReason: recallReason ?? this.recallReason,
+      recalledAt: recalledAt ?? this.recalledAt,
     );
   }
 } 

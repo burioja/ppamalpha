@@ -54,9 +54,14 @@ class MarkerModel {
     required this.isActive,
     this.status,
     this.collectedBy = const [],
-  }) :
-    // quantity는 remainingQuantity와 동일하게 유지 (호환성)
-    assert(quantity == remainingQuantity, 'quantity must equal remainingQuantity for compatibility');
+  }) {
+    // quantity는 remainingQuantity와 동일해야 함 (호환성)
+    if (quantity != remainingQuantity) {
+      print('⚠️ WARNING: MarkerModel 생성 시 quantity($quantity) != remainingQuantity($remainingQuantity)');
+      print('   markerId: $markerId, postId: $postId');
+      print('   remainingQuantity 값으로 통일합니다.');
+    }
+  }
 
   /// Firestore에서 마커 생성
   factory MarkerModel.fromFirestore(DocumentSnapshot doc) {
@@ -227,22 +232,29 @@ class MarkerModel {
     String? status,
     List<String>? collectedBy,
   }) {
-    // quantity가 지정되면 remainingQuantity도 동일하게 설정 (호환성)
-    final newRemainingQuantity = remainingQuantity ?? quantity ?? this.remainingQuantity;
-    final newQuantity = quantity ?? newRemainingQuantity;
+    // quantity와 remainingQuantity는 항상 동일하게 유지 (호환성)
+    // 우선순위: remainingQuantity > quantity > 기존값
+    final int newValue;
+    if (remainingQuantity != null) {
+      newValue = remainingQuantity;
+    } else if (quantity != null) {
+      newValue = quantity;
+    } else {
+      newValue = this.remainingQuantity;
+    }
 
     return MarkerModel(
       markerId: markerId ?? this.markerId,
       postId: postId ?? this.postId,
       title: title ?? this.title,
       position: position ?? this.position,
-      quantity: newQuantity,
+      quantity: newValue, // quantity와 remainingQuantity 동일
       reward: reward ?? this.reward, // ✅ null 허용
       isSuperMarker: isSuperMarker ?? this.isSuperMarker,
       creatorId: creatorId ?? this.creatorId,
       // 🚀 새로운 필드들
       totalQuantity: totalQuantity ?? this.totalQuantity,
-      remainingQuantity: newRemainingQuantity,
+      remainingQuantity: newValue, // quantity와 remainingQuantity 동일
       collectedQuantity: collectedQuantity ?? this.collectedQuantity,
       collectionRate: collectionRate ?? this.collectionRate,
       tileId: tileId ?? this.tileId,

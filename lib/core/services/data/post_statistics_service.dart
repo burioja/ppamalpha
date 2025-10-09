@@ -812,7 +812,6 @@ class PostStatisticsService {
       debugPrint('🖼️ PostStatisticsService.getImageViewAnalytics 시작: postId=$postId');
 
       // post_collections에서 이미지 확대 정보 조회
-      // 현재는 post_collections에 imageViewed 필드가 없으므로 기본 통계만 제공
       final collectionsQuery = await _firestore
           .collection('post_collections')
           .where('postId', isEqualTo: postId)
@@ -820,18 +819,116 @@ class PostStatisticsService {
 
       final totalCollections = collectionsQuery.size;
 
-      // TODO: 향후 post_collections에 imageViewed 필드 추가 필요
-      // 현재는 수집 건수만 반환
-      debugPrint('📊 이미지 뷰 통계: 총 수집=$totalCollections');
+      // imageViewed 필드 카운트
+      int imageViewedCount = 0;
+      for (final doc in collectionsQuery.docs) {
+        final data = doc.data();
+        if (data['imageViewed'] == true) {
+          imageViewedCount++;
+        }
+      }
+
+      final viewRate = totalCollections > 0
+          ? (imageViewedCount / totalCollections) * 100
+          : 0.0;
+
+      debugPrint('📊 이미지 뷰 통계: 총 수집=$totalCollections, 확대 조회=$imageViewedCount, 비율=${viewRate.toStringAsFixed(1)}%');
 
       return {
         'totalCollections': totalCollections,
-        'imageViewsAvailable': false,
-        'message': '이미지 확대 조회 데이터는 향후 추가 예정입니다',
-        'estimatedViewRate': 0.0, // 기본값
+        'imageViewedCount': imageViewedCount,
+        'imageViewRate': viewRate,
+        'imageViewsAvailable': true,
       };
     } catch (e) {
       debugPrint('❌ getImageViewAnalytics 오류: $e');
+      return {};
+    }
+  }
+
+  /// Phase 4: 회수 포스트 분석
+  Future<Map<String, dynamic>> getRecallAnalytics(String postId) async {
+    try {
+      debugPrint('🔄 PostStatisticsService.getRecallAnalytics 시작: postId=$postId');
+
+      // 1. 포스트 정보 조회
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) return {};
+
+      final post = PostModel.fromFirestore(postDoc);
+      final isRecalled = post.status == PostStatus.RECALLED;
+
+      // 2. 모든 마커 조회
+      final markersQuery = await _firestore
+          .collection('markers')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      final totalMarkers = markersQuery.size;
+
+      // 3. 회수된 마커 집계 (마커별로 회수 정보가 있을 수 있음)
+      int recalledMarkers = 0;
+      final recallReasons = <String, int>{};
+      final recallTimings = <int, int>{}; // 생성 후 경과 일수별
+
+      for (final doc in markersQuery.docs) {
+        final data = doc.data();
+        final markerRecalled = data['recalled'] == true;
+
+        if (markerRecalled) {
+          recalledMarkers++;
+
+          // 회수 사유 집계
+          final reason = data['recallReason'] as String? ?? '기타';
+          recallReasons[reason] = (recallReasons[reason] ?? 0) + 1;
+
+          // 회수 시점 분석
+          if (data['recalledAt'] != null && data['createdAt'] != null) {
+            final createdAt = (data['createdAt'] as Timestamp).toDate();
+            final recalledAt = (data['recalledAt'] as Timestamp).toDate();
+            final daysPassed = recalledAt.difference(createdAt).inDays;
+
+            // 일주일 단위로 그룹화
+            final weekGroup = (daysPassed / 7).floor();
+            recallTimings[weekGroup] = (recallTimings[weekGroup] ?? 0) + 1;
+          }
+        }
+      }
+
+      // 4. 포스트 전체 회수 정보
+      String? postRecallReason;
+      DateTime? postRecalledAt;
+      int? postRecallDays;
+
+      if (isRecalled && post.recalledAt != null) {
+        postRecallReason = post.recallReason ?? '기타';
+        postRecalledAt = post.recalledAt;
+        postRecallDays = post.recalledAt!.difference(post.createdAt).inDays;
+      }
+
+      // 5. 회수율 계산
+      final recallRate = totalMarkers > 0
+          ? (recalledMarkers / totalMarkers) * 100
+          : 0.0;
+
+      debugPrint('📊 회수 분석 완료: 총 마커=$totalMarkers, 회수=$recalledMarkers, 회수율=${recallRate.toStringAsFixed(1)}%');
+
+      return {
+        'isRecalled': isRecalled,
+        'postRecallReason': postRecallReason,
+        'postRecalledAt': postRecalledAt?.toIso8601String(),
+        'postRecallDays': postRecallDays,
+        'totalMarkers': totalMarkers,
+        'recalledMarkers': recalledMarkers,
+        'recallRate': recallRate,
+        'recallReasons': recallReasons,
+        'recallTimings': recallTimings,
+        'averageRecallDays': recallTimings.isNotEmpty
+            ? recallTimings.entries.map((e) => e.key * 7 * e.value).reduce((a, b) => a + b) / recalledMarkers
+            : 0.0,
+      };
+    } catch (e) {
+      debugPrint('❌ getRecallAnalytics 오류: $e');
       return {};
     }
   }

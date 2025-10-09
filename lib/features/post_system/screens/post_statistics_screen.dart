@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_statistics_service.dart';
 
@@ -26,6 +27,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
   Map<String, dynamic>? _storeDistribution;  // Phase 5: 스토어별 분포
   Map<String, dynamic>? _couponAnalytics;  // Phase 2-F: 쿠폰 통계
   Map<String, dynamic>? _imageViewAnalytics;  // Phase 2-G: 이미지 뷰 통계
+  Map<String, dynamic>? _recallAnalytics;  // Phase 4: 회수 통계
   bool _isLoading = true;
   String? _error;
   late TabController _tabController;
@@ -33,7 +35,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this); // 기본/수집자/시간/위치/성과/쿠폰
+    _tabController = TabController(length: 7, vsync: this); // 기본/수집자/시간/위치/성과/쿠폰/회수
     _loadStatistics();
   }
 
@@ -61,6 +63,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _statisticsService.getStoreDistribution(widget.post.postId),  // Phase 5: 스토어별 분포
         _statisticsService.getCouponAnalytics(widget.post.postId),  // Phase 2-F: 쿠폰 통계
         _statisticsService.getImageViewAnalytics(widget.post.postId),  // Phase 2-G: 이미지 뷰 통계
+        _statisticsService.getRecallAnalytics(widget.post.postId),  // Phase 4: 회수 통계
       ]);
 
       setState(() {
@@ -73,7 +76,25 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _storeDistribution = results[6];  // Phase 5: 스토어별 분포
         _couponAnalytics = results[7];  // Phase 2-F: 쿠폰 통계
         _imageViewAnalytics = results[8];  // Phase 2-G: 이미지 뷰 통계
+        _recallAnalytics = results[9];  // Phase 4: 회수 통계
         _isLoading = false;
+
+        // 배포 정보 디버깅
+        print('\n📊 [통계 로드 완료] 포스트 ID: ${widget.post.postId}');
+        if (_statistics != null && _statistics!['deployments'] != null) {
+          final deployments = _statistics!['deployments'] as List;
+          print('✅ deployments 필드 존재: ${deployments.length}개');
+          if (deployments.isNotEmpty) {
+            print('📦 첫 번째 배포 데이터 샘플:');
+            print('   ${deployments.first}');
+          }
+        } else {
+          print('⚠️ deployments 필드가 없거나 null입니다');
+          if (_statistics != null) {
+            print('   _statistics 키 목록: ${_statistics!.keys.toList()}');
+          }
+        }
+        print('');
       });
     } catch (e) {
       setState(() {
@@ -115,6 +136,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
             Tab(text: '위치', icon: Icon(Icons.map, size: 20)),
             Tab(text: '성과', icon: Icon(Icons.analytics, size: 20)),
             Tab(text: '쿠폰', icon: Icon(Icons.card_giftcard, size: 20)),
+            Tab(text: '회수', icon: Icon(Icons.restore, size: 20)),
           ],
         ),
       ),
@@ -133,6 +155,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
                         _buildLocationAnalysisTab(),
                         _buildPerformanceAnalysisTab(),
                         _buildCouponAnalysisTab(),
+                        _buildRecallAnalysisTab(),
                       ],
                     ),
     );
@@ -309,19 +332,41 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
     final deployments = _statistics!['deployments'] as List;
     final markers = <Marker>[];
 
+    print('\n🗺️ [배포 위치 지도] 시작');
+    print('📊 총 배포 데이터 수: ${deployments.length}');
+
     // 위도/경도 범위 계산 (자동 줌)
     double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
 
     for (int i = 0; i < deployments.length; i++) {
       final deployment = deployments[i] as Map<String, dynamic>;
-      final position = deployment['position'];
+      // Firestore에는 'location' 필드로 저장됨 (GeoPoint)
+      final location = deployment['location'];
 
-      if (position == null) continue;
+      if (location == null) {
+        print('⚠️ 배포 #$i: location이 null');
+        print('   deployment 키 목록: ${deployment.keys.toList()}');
+        continue;
+      }
 
-      final lat = (position['latitude'] ?? position['_latitude']) as double?;
-      final lng = (position['longitude'] ?? position['_longitude']) as double?;
+      // GeoPoint 타입인 경우와 Map 타입인 경우 모두 처리
+      double? lat;
+      double? lng;
 
-      if (lat == null || lng == null) continue;
+      if (location is GeoPoint) {
+        lat = location.latitude;
+        lng = location.longitude;
+      } else if (location is Map) {
+        lat = (location['latitude'] ?? location['_latitude']) as double?;
+        lng = (location['longitude'] ?? location['_longitude']) as double?;
+      }
+
+      if (lat == null || lng == null) {
+        print('⚠️ 배포 #$i: 좌표 데이터 없음 (lat: $lat, lng: $lng)');
+        continue;
+      }
+
+      print('✅ 배포 #$i: 위치 (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})');
 
       // 범위 업데이트
       if (lat < minLat) minLat = lat;
@@ -386,9 +431,106 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
       );
     }
 
-    // 중심점 및 줌 레벨 계산
+    // 마커가 없는 경우 안내 메시지 표시
+    if (markers.isEmpty) {
+      print('⚠️ 마커가 없어서 지도를 표시하지 않습니다');
+      print('🗺️ [배포 위치 지도] 완료\n');
+
+      return Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '배포 위치 지도',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.location_off, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text(
+                        '배포 위치 정보가 없습니다',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 중심점 계산 (마커가 있는 경우에만)
     final centerLat = (minLat + maxLat) / 2;
     final centerLng = (minLng + maxLng) / 2;
+
+    // 유효성 검증
+    if (!centerLat.isFinite || !centerLng.isFinite ||
+        centerLat < -90 || centerLat > 90 ||
+        centerLng < -180 || centerLng > 180) {
+      print('❌ 잘못된 중심점 좌표: ($centerLat, $centerLng)');
+      return Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '배포 위치 지도',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade300),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '지도 좌표 오류',
+                        style: TextStyle(fontSize: 16, color: Colors.red),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '좌표: ($centerLat, $centerLng)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    print('📍 지도 중심점: (${centerLat.toStringAsFixed(4)}, ${centerLng.toStringAsFixed(4)})');
+    print('📌 마커 개수: ${markers.length}');
+    print('🗺️ [배포 위치 지도] 완료\n');
 
     return Card(
       elevation: 2,
@@ -417,14 +559,16 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
               child: FlutterMap(
                 options: MapOptions(
                   initialCenter: LatLng(centerLat, centerLng),
-                  initialZoom: 13.0,
+                  initialZoom: 16.0, // 배포 위치를 더 자세히 볼 수 있도록 줌 레벨 증가
                   minZoom: 5.0,
                   maxZoom: 18.0,
                 ),
                 children: [
+                  // 플레이스 리스트와 동일한 CartoDB Voyager 스타일 (라벨 없음)
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.app',
+                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    userAgentPackageName: 'com.ppamalpha.app',
                   ),
                   MarkerLayer(markers: markers),
                 ],
@@ -2456,8 +2600,9 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
             ),
             const SizedBox(height: 24),
 
-            // 이미지 확대 조회율 (향후 구현)
+            // 이미지 확대 조회율
             if (_imageViewAnalytics != null && _imageViewAnalytics!.isNotEmpty) ...[
+              const SizedBox(height: 24),
               const Text(
                 '사진 확대 조회',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -2465,23 +2610,394 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
               const SizedBox(height: 12),
               Card(
                 elevation: 2,
-                color: Colors.grey[100],
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      Icon(Icons.image_search, size: 48, color: Colors.grey[400]),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              icon: Icons.image_search,
+                              label: '확대 조회',
+                              value: '${_imageViewAnalytics!['imageViewedCount'] ?? 0}건',
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildStatCard(
+                              icon: Icons.trending_up,
+                              label: '확대 조회율',
+                              value: '${(_imageViewAnalytics!['imageViewRate'] ?? 0.0).toStringAsFixed(1)}%',
+                              color: Colors.deepPurple,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
-                      Text(
-                        _imageViewAnalytics!['message'] ?? '이미지 확대 조회 데이터는 향후 추가 예정입니다',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '포스트를 수집한 사용자 중 이미지를 확대하여 본 비율입니다.',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tab 7: 회수 분석
+  Widget _buildRecallAnalysisTab() {
+    if (_recallAnalytics == null || _recallAnalytics!.isEmpty) {
+      return const Center(child: Text('회수 통계를 불러오는 중...'));
+    }
+
+    final isRecalled = _recallAnalytics!['isRecalled'] ?? false;
+    final recallRate = _recallAnalytics!['recallRate'] ?? 0.0;
+    final totalMarkers = _recallAnalytics!['totalMarkers'] ?? 0;
+    final recalledMarkers = _recallAnalytics!['recalledMarkers'] ?? 0;
+    final recallReasons = _recallAnalytics!['recallReasons'] as Map<String, dynamic>? ?? {};
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 회수 상태 배너
+            if (isRecalled) ...[
+              Card(
+                elevation: 2,
+                color: Colors.orange[50],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange[700], size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '이 포스트는 회수되었습니다',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange[900],
+                              ),
+                            ),
+                            if (_recallAnalytics!['postRecallReason'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '사유: ${_recallAnalytics!['postRecallReason']}',
+                                style: TextStyle(fontSize: 14, color: Colors.orange[800]),
+                              ),
+                            ],
+                            if (_recallAnalytics!['postRecallDays'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '생성 후 ${_recallAnalytics!['postRecallDays']}일 경과 시점에 회수됨',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ] else ...[
+              Card(
+                elevation: 2,
+                color: Colors.green[50],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green[700], size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '이 포스트는 정상 운영 중입니다',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green[900],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // 회수율 KPI
+            const Text(
+              '회수 통계',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.location_on,
+                    label: '총 마커',
+                    value: '$totalMarkers개',
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.restore,
+                    label: '회수된 마커',
+                    value: '$recalledMarkers개',
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildStatCard(
+              icon: Icons.percent,
+              label: '회수율',
+              value: '${recallRate.toStringAsFixed(1)}%',
+              color: recallRate > 50 ? Colors.red : recallRate > 20 ? Colors.orange : Colors.green,
+            ),
+            const SizedBox(height: 24),
+
+            // 회수 사유별 분석
+            if (recallReasons.isNotEmpty) ...[
+              const Text(
+                '회수 사유 분석',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildRecallReasonsPieChart(recallReasons),
+              const SizedBox(height: 24),
+            ],
+
+            // 회수 시점 분포
+            if (_recallAnalytics!['recallTimings'] != null) ...[
+              const Text(
+                '회수 시점 분포',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildRecallTimingsChart(_recallAnalytics!['recallTimings'] as Map<dynamic, dynamic>),
+              const SizedBox(height: 24),
+            ],
+
+            // 평균 회수 기간
+            if (_recallAnalytics!['averageRecallDays'] != null) ...[
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.timer, color: Colors.indigo, size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '평균 회수 기간',
+                              style: TextStyle(fontSize: 14, color: Colors.grey),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(_recallAnalytics!['averageRecallDays'] as double).toStringAsFixed(1)}일',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecallReasonsPieChart(Map<String, dynamic> reasons) {
+    final colors = [Colors.red, Colors.orange, Colors.amber, Colors.blue, Colors.purple];
+    final sections = <PieChartSectionData>[];
+    final total = reasons.values.fold<int>(0, (sum, count) => sum + (count as int));
+
+    int colorIndex = 0;
+    reasons.forEach((reason, count) {
+      final percentage = (count as int) / total * 100;
+      sections.add(
+        PieChartSectionData(
+          value: count.toDouble(),
+          title: '${percentage.toStringAsFixed(0)}%',
+          color: colors[colorIndex % colors.length],
+          radius: 100,
+          titleStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      );
+      colorIndex++;
+    });
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 250,
+              child: PieChart(
+                PieChartData(
+                  sections: sections,
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 40,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: reasons.entries.map((entry) {
+                final color = colors[reasons.keys.toList().indexOf(entry.key) % colors.length];
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('${entry.key}: ${entry.value}건', style: const TextStyle(fontSize: 12)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecallTimingsChart(Map<dynamic, dynamic> timings) {
+    final barGroups = <BarChartGroupData>[];
+    final sortedKeys = timings.keys.toList()..sort();
+
+    for (int i = 0; i < sortedKeys.length; i++) {
+      final key = sortedKeys[i];
+      final count = timings[key] as int;
+      barGroups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: count.toDouble(),
+              color: Colors.deepOrange,
+              width: 20,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '생성 후 경과 기간별 회수 건수',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 200,
+              child: BarChart(
+                BarChartData(
+                  barGroups: barGroups,
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toInt().toString(),
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index >= 0 && index < sortedKeys.length) {
+                            final weekNum = sortedKeys[index] as int;
+                            return Text(
+                              '${weekNum}주',
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                ),
+              ),
+            ),
           ],
         ),
       ),

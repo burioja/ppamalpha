@@ -4,7 +4,10 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../../core/services/data/post_statistics_service.dart';
 
+/// 내 모든 포스트의 통합 통계 대시보드
+/// 개별 포스트 통계와 동일한 7개 탭 구조 (기본/수집자/시간/위치/성과/쿠폰/회수)
 class MyPostsStatisticsDashboardScreen extends StatefulWidget {
   const MyPostsStatisticsDashboardScreen({super.key});
 
@@ -14,25 +17,30 @@ class MyPostsStatisticsDashboardScreen extends StatefulWidget {
 }
 
 class _MyPostsStatisticsDashboardScreenState
-    extends State<MyPostsStatisticsDashboardScreen> {
+    extends State<MyPostsStatisticsDashboardScreen> with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final PostStatisticsService _statisticsService = PostStatisticsService();
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
   bool _isLoading = true;
   String? _error;
+  late TabController _tabController;
 
-  // 통계 데이터
+  // 집계된 통계 데이터
+  Map<String, dynamic>? _aggregatedStats;
   List<PostModel> _allPosts = [];
-  List<PostModel> _draftPosts = [];
-  List<PostModel> _deployedPosts = [];
-  List<PostModel> _deletedPosts = [];
-  Map<String, int> _monthlyPostCreation = {};
-  Map<String, dynamic> _performanceSummary = {};
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 7, vsync: this);
     _loadStatistics();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadStatistics() async {
@@ -55,33 +63,23 @@ class _MyPostsStatisticsDashboardScreenState
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
 
-      // 2. 상태별 분류
-      final draftPosts = allPosts
-          .where((post) => post.status == PostStatus.DRAFT)
-          .toList();
-      final deployedPosts =
-          allPosts.where((post) => post.status == PostStatus.DEPLOYED).toList();
-      final deletedPosts =
-          allPosts.where((post) => post.status == PostStatus.DELETED).toList();
+      // 2. 각 포스트의 통계를 병렬로 조회
+      final postIds = allPosts.map((p) => p.postId).toList();
+      final List<Map<String, dynamic>> allPostStats = [];
 
-      // 3. 월별 생성 추이
-      final monthlyCreation = <String, int>{};
-      for (final post in allPosts) {
-        final monthKey = DateFormat('yyyy-MM').format(post.createdAt);
-        monthlyCreation[monthKey] = (monthlyCreation[monthKey] ?? 0) + 1;
+      if (postIds.isNotEmpty) {
+        final statsResults = await Future.wait(
+          postIds.map((postId) => _statisticsService.getPostStatistics(postId)),
+        );
+        allPostStats.addAll(statsResults);
       }
 
-      // 4. 배포된 포스트의 성과 분석
-      final performanceSummary = await _calculatePerformanceSummary(
-          deployedPosts.map((p) => p.postId).toList());
+      // 3. 통계 집계
+      final aggregated = _aggregateStatistics(allPosts, allPostStats);
 
       setState(() {
         _allPosts = allPosts;
-        _draftPosts = draftPosts;
-        _deployedPosts = deployedPosts;
-        _deletedPosts = deletedPosts;
-        _monthlyPostCreation = monthlyCreation;
-        _performanceSummary = performanceSummary;
+        _aggregatedStats = aggregated;
         _isLoading = false;
       });
     } catch (e) {
@@ -92,93 +90,104 @@ class _MyPostsStatisticsDashboardScreenState
     }
   }
 
-  Future<Map<String, dynamic>> _calculatePerformanceSummary(
-      List<String> postIds) async {
-    if (postIds.isEmpty) {
-      return {
-        'totalCollections': 0,
-        'averageCollectionRate': 0.0,
-        'topPosts': <Map<String, dynamic>>[],
-      };
-    }
+  Map<String, dynamic> _aggregateStatistics(
+    List<PostModel> posts,
+    List<Map<String, dynamic>> postStats,
+  ) {
+    // 기본 집계
+    int totalPosts = posts.length;
+    int draftPosts = posts.where((p) => p.status == PostStatus.DRAFT).length;
+    int deployedPosts = posts.where((p) => p.status == PostStatus.DEPLOYED).length;
+    int deletedPosts = posts.where((p) => p.status == PostStatus.DELETED).length;
+    int recalledPosts = posts.where((p) => p.status == PostStatus.RECALLED).length;
 
-    int totalCollections = 0;
-    final postPerformance = <String, Map<String, dynamic>>{};
+    // 배포 관련 집계
+    int totalDeployments = 0;
+    int totalQuantity = 0;
+    int totalCollected = 0;
+    int totalUsed = 0;
 
-    for (final postId in postIds) {
-      // 마커 정보
-      final markersQuery = await _firestore
-          .collection('markers')
-          .where('postId', isEqualTo: postId)
-          .get();
+    // 수집자 집계
+    Set<String> uniqueCollectors = {};
+    Map<String, int> collectorCounts = {};
 
-      final totalQuantity = markersQuery.docs.fold<int>(
-        0,
-        (sum, doc) {
-          final data = doc.data();
-          return sum +
-              ((data['totalQuantity'] ?? data['quantity']) as int? ?? 0);
-        },
-      );
+    // 시간 패턴 집계
+    Map<int, int> hourlyCollections = {};
+    Map<String, int> dailyCollections = {};
+    Map<String, int> monthlyCollections = {};
 
-      // 수집 정보
-      final collectionsQuery = await _firestore
-          .collection('post_collections')
-          .where('postId', isEqualTo: postId)
-          .get();
+    // 쿠폰 집계
+    int totalCouponCollections = 0;
+    int totalCouponUsed = 0;
 
-      final collected = collectionsQuery.size;
-      totalCollections += collected;
+    // 회수 집계
+    Map<String, int> recallReasons = {};
 
-      final collectionRate =
-          totalQuantity > 0 ? (collected / totalQuantity) * 100 : 0.0;
+    // 리워드 집계
+    int totalRewardBudget = posts.fold<int>(0, (sum, p) => sum + p.reward);
 
-      postPerformance[postId] = {
-        'postId': postId,
-        'totalQuantity': totalQuantity,
-        'collected': collected,
-        'collectionRate': collectionRate,
-      };
-    }
+    for (final stat in postStats) {
+      totalDeployments += stat['totalDeployments'] as int? ?? 0;
+      totalQuantity += stat['totalQuantityDeployed'] as int? ?? 0;
+      totalCollected += stat['totalCollected'] as int? ?? 0;
+      totalUsed += stat['totalUsed'] as int? ?? 0;
 
-    // Top 5 성공적인 포스트
-    final sortedPosts = postPerformance.values.toList()
-      ..sort((a, b) =>
-          (b['collectionRate'] as double).compareTo(a['collectionRate']));
-
-    final topPosts = sortedPosts.take(5).map((data) {
-      try {
-        final post = _deployedPosts.firstWhere(
-          (p) => p.postId == data['postId'],
-        );
-        return {
-          'title': post.title,
-          'collectionRate': data['collectionRate'],
-          'collected': data['collected'],
-          'totalQuantity': data['totalQuantity'],
-        };
-      } catch (e) {
-        // 포스트를 찾을 수 없는 경우 기본값 반환
-        return {
-          'title': '알 수 없음',
-          'collectionRate': data['collectionRate'],
-          'collected': data['collected'],
-          'totalQuantity': data['totalQuantity'],
-        };
+      // 수집자 데이터
+      final collectors = stat['collectors'] as Map<String, dynamic>?;
+      if (collectors != null) {
+        final collectionsList = stat['collections'] as List? ?? [];
+        for (final collection in collectionsList) {
+          final userId = collection['userId'] as String;
+          uniqueCollectors.add(userId);
+          collectorCounts[userId] = (collectorCounts[userId] ?? 0) + 1;
+        }
       }
-    }).toList();
 
-    final averageRate = postPerformance.isNotEmpty
-        ? postPerformance.values
-                .map((p) => p['collectionRate'] as double)
-                .reduce((a, b) => a + b) /
-            postPerformance.length
-        : 0.0;
+      // 시간 패턴
+      final timePattern = stat['timePattern'] as Map<String, dynamic>?;
+      if (timePattern != null) {
+        final hourly = timePattern['hourly'] as Map?;
+        if (hourly != null) {
+          hourly.forEach((hour, count) {
+            final h = int.tryParse(hour.toString()) ?? 0;
+            hourlyCollections[h] = (hourlyCollections[h] ?? 0) + (count as int);
+          });
+        }
+
+        final daily = timePattern['daily'] as Map?;
+        if (daily != null) {
+          daily.forEach((day, count) {
+            dailyCollections[day.toString()] = (dailyCollections[day.toString()] ?? 0) + (count as int);
+          });
+        }
+      }
+    }
+
+    // 수집률 및 사용률 계산
+    final collectionRate = totalQuantity > 0 ? (totalCollected / totalQuantity) * 100 : 0.0;
+    final usageRate = totalCollected > 0 ? (totalUsed / totalCollected) * 100 : 0.0;
 
     return {
-      'totalCollections': totalCollections,
-      'averageCollectionRate': averageRate,
-      'topPosts': topPosts,
+      'totalPosts': totalPosts,
+      'draftPosts': draftPosts,
+      'deployedPosts': deployedPosts,
+      'deletedPosts': deletedPosts,
+      'recalledPosts': recalledPosts,
+      'totalDeployments': totalDeployments,
+      'totalQuantity': totalQuantity,
+      'totalCollected': totalCollected,
+      'totalUsed': totalUsed,
+      'collectionRate': collectionRate,
+      'usageRate': usageRate,
+      'uniqueCollectors': uniqueCollectors.length,
+      'collectorCounts': collectorCounts,
+      'hourlyCollections': hourlyCollections,
+      'dailyCollections': dailyCollections,
+      'monthlyCollections': monthlyCollections,
+      'totalRewardBudget': totalRewardBudget,
+      'totalCouponCollections': totalCouponCollections,
+      'totalCouponUsed': totalCouponUsed,
+      'recallReasons': recallReasons,
     };
   }
 
@@ -186,7 +195,7 @@ class _MyPostsStatisticsDashboardScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('내 포스트 통계'),
+        title: const Text('내 포스트 통합 통계'),
         backgroundColor: Colors.blue[700],
         foregroundColor: Colors.white,
         actions: [
@@ -196,12 +205,43 @@ class _MyPostsStatisticsDashboardScreenState
             tooltip: '새로고침',
           ),
         ],
+        bottom: _isLoading || _error != null
+            ? null
+            : TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+                tabs: const [
+                  Tab(text: '기본', icon: Icon(Icons.dashboard, size: 20)),
+                  Tab(text: '수집자', icon: Icon(Icons.people, size: 20)),
+                  Tab(text: '시간', icon: Icon(Icons.schedule, size: 20)),
+                  Tab(text: '위치', icon: Icon(Icons.map, size: 20)),
+                  Tab(text: '성과', icon: Icon(Icons.analytics, size: 20)),
+                  Tab(text: '쿠폰', icon: Icon(Icons.card_giftcard, size: 20)),
+                  Tab(text: '회수', icon: Icon(Icons.restore, size: 20)),
+                ],
+              ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildErrorView()
-              : _buildDashboard(),
+              : _aggregatedStats == null
+                  ? const Center(child: Text('통계 데이터가 없습니다'))
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildBasicTab(),
+                        _buildCollectorTab(),
+                        _buildTimeTab(),
+                        _buildLocationTab(),
+                        _buildPerformanceTab(),
+                        _buildCouponTab(),
+                        _buildRecallTab(),
+                      ],
+                    ),
     );
   }
 
@@ -232,7 +272,8 @@ class _MyPostsStatisticsDashboardScreenState
     );
   }
 
-  Widget _buildDashboard() {
+  // Tab 1: 기본 통계
+  Widget _buildBasicTab() {
     return RefreshIndicator(
       onRefresh: _loadStatistics,
       child: SingleChildScrollView(
@@ -241,91 +282,339 @@ class _MyPostsStatisticsDashboardScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. 전체 개요 (4개 카드)
-            _buildOverviewCards(),
+            const Text(
+              '전체 개요',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.article,
+                    label: '총 포스트',
+                    value: '${_aggregatedStats!['totalPosts']}개',
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.edit_note,
+                    label: '배포 대기',
+                    value: '${_aggregatedStats!['draftPosts']}개',
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.rocket_launch,
+                    label: '배포됨',
+                    value: '${_aggregatedStats!['deployedPosts']}개',
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.restore,
+                    label: '회수됨',
+                    value: '${_aggregatedStats!['recalledPosts']}개',
+                    color: Colors.amber,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
-
-            // 2. 포스트 현황 파이 차트
-            _buildStatusPieChart(),
+            const Text(
+              '배포 통계',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.inventory_2,
+                    label: '배포 수량',
+                    value: '${NumberFormat('#,###').format(_aggregatedStats!['totalQuantity'])}개',
+                    color: Colors.indigo,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.download,
+                    label: '총 수집',
+                    value: '${NumberFormat('#,###').format(_aggregatedStats!['totalCollected'])}건',
+                    color: Colors.purple,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.percent,
+                    label: '수집률',
+                    value: '${_aggregatedStats!['collectionRate'].toStringAsFixed(1)}%',
+                    color: Colors.teal,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.attach_money,
+                    label: '리워드 예산',
+                    value: '${NumberFormat('#,###').format(_aggregatedStats!['totalRewardBudget'])}원',
+                    color: Colors.deepOrange,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
-
-            // 3. 월별 포스트 생성 추이
-            if (_monthlyPostCreation.isNotEmpty) ...[
-              _buildMonthlyTrendChart(),
-              const SizedBox(height: 24),
-            ],
-
-            // 4. 배포 전 포스트 목록
-            _buildDraftPostsList(),
-            const SizedBox(height: 24),
-
-            // 5. 리워드 통계
-            _buildRewardStatistics(),
-            const SizedBox(height: 24),
-
-            // 6. 성과 요약 (배포된 포스트)
-            if (_deployedPosts.isNotEmpty) ...[
-              _buildPerformanceSummary(),
-            ],
+            _buildPostsStatusPieChart(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOverviewCards() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '전체 개요',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Row(
+  // Tab 2: 수집자 분석
+  Widget _buildCollectorTab() {
+    final uniqueCollectors = _aggregatedStats!['uniqueCollectors'] as int;
+    final totalCollected = _aggregatedStats!['totalCollected'] as int;
+    final avgPerCollector = uniqueCollectors > 0 ? totalCollected / uniqueCollectors : 0.0;
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.article,
-                label: '총 포스트',
-                value: '${_allPosts.length}개',
-                color: Colors.blue,
-              ),
+            const Text(
+              '수집자 통계',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.edit_note,
-                label: '배포 전',
-                value: '${_draftPosts.length}개',
-                color: Colors.orange,
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.people,
+                    label: '총 수집자',
+                    value: '${NumberFormat('#,###').format(uniqueCollectors)}명',
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.person,
+                    label: '1인당 평균',
+                    value: '${avgPerCollector.toStringAsFixed(1)}개',
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildTopCollectorsChart(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tab 3: 시간 분석
+  Widget _buildTimeTab() {
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '시간대별 수집 패턴',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildHourlyChart(),
+            const SizedBox(height: 24),
+            const Text(
+              '요일별 수집 패턴',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildDailyChart(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tab 4: 위치 분석
+  Widget _buildLocationTab() {
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '위치 분석',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: Text(
+                    '총 ${_aggregatedStats!['deployedPosts']}개 포스트가 배포되었습니다',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Row(
+      ),
+    );
+  }
+
+  // Tab 5: 성과 분석
+  Widget _buildPerformanceTab() {
+    final collectionRate = _aggregatedStats!['collectionRate'] as double;
+    final totalRewardPaid = (_aggregatedStats!['totalUsed'] as int) *
+        (_allPosts.isNotEmpty ? _allPosts[0].reward : 0);
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.rocket_launch,
-                label: '배포됨',
-                value: '${_deployedPosts.length}개',
-                color: Colors.green,
-              ),
+            const Text(
+              'ROI 분석',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.delete,
-                label: '삭제됨',
-                value: '${_deletedPosts.length}개',
-                color: Colors.red,
-              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.trending_up,
+                    label: '수집률',
+                    value: '${collectionRate.toStringAsFixed(1)}%',
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.attach_money,
+                    label: '지급 리워드',
+                    value: '${NumberFormat('#,###').format(totalRewardPaid)}원',
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
+    );
+  }
+
+  // Tab 6: 쿠폰 분석
+  Widget _buildCouponTab() {
+    final couponPosts = _allPosts.where((p) => p.isCoupon).length;
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '쿠폰 포스트',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildStatCard(
+              icon: Icons.card_giftcard,
+              label: '쿠폰 포스트',
+              value: '$couponPosts개',
+              color: Colors.purple,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tab 7: 회수 분석
+  Widget _buildRecallTab() {
+    final recalledPosts = _aggregatedStats!['recalledPosts'] as int;
+    final totalPosts = _aggregatedStats!['totalPosts'] as int;
+    final recallRate = totalPosts > 0 ? (recalledPosts / totalPosts) * 100 : 0.0;
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '회수 통계',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.restore,
+                    label: '회수된 포스트',
+                    value: '$recalledPosts개',
+                    color: Colors.orange,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.percent,
+                    label: '회수율',
+                    value: '${recallRate.toStringAsFixed(1)}%',
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -372,70 +661,26 @@ class _MyPostsStatisticsDashboardScreenState
     );
   }
 
-  Widget _buildStatusPieChart() {
-    final total = _allPosts.length;
+  Widget _buildPostsStatusPieChart() {
+    final draft = _aggregatedStats!['draftPosts'] as int;
+    final deployed = _aggregatedStats!['deployedPosts'] as int;
+    final recalled = _aggregatedStats!['recalledPosts'] as int;
+    final deleted = _aggregatedStats!['deletedPosts'] as int;
+    final total = draft + deployed + recalled + deleted;
+
     if (total == 0) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                '포스트 현황',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '아직 포스트가 없습니다',
-                style: TextStyle(color: Colors.grey[500]),
-              ),
-            ],
+          child: Center(
+            child: Text(
+              '아직 포스트가 없습니다',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
           ),
         ),
       );
     }
-
-    final sections = [
-      if (_draftPosts.isNotEmpty)
-        PieChartSectionData(
-          value: _draftPosts.length.toDouble(),
-          title:
-              '${(_draftPosts.length / total * 100).toStringAsFixed(0)}%\n배포 전',
-          color: Colors.orange,
-          radius: 100,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      if (_deployedPosts.isNotEmpty)
-        PieChartSectionData(
-          value: _deployedPosts.length.toDouble(),
-          title:
-              '${(_deployedPosts.length / total * 100).toStringAsFixed(0)}%\n배포됨',
-          color: Colors.green,
-          radius: 100,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      if (_deletedPosts.isNotEmpty)
-        PieChartSectionData(
-          value: _deletedPosts.length.toDouble(),
-          title:
-              '${(_deletedPosts.length / total * 100).toStringAsFixed(0)}%\n삭제',
-          color: Colors.red,
-          radius: 100,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-    ];
 
     return Card(
       elevation: 2,
@@ -453,7 +698,56 @@ class _MyPostsStatisticsDashboardScreenState
               height: 250,
               child: PieChart(
                 PieChartData(
-                  sections: sections,
+                  sections: [
+                    if (draft > 0)
+                      PieChartSectionData(
+                        value: draft.toDouble(),
+                        title: '${(draft / total * 100).toStringAsFixed(0)}%\n대기',
+                        color: Colors.orange,
+                        radius: 100,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    if (deployed > 0)
+                      PieChartSectionData(
+                        value: deployed.toDouble(),
+                        title: '${(deployed / total * 100).toStringAsFixed(0)}%\n배포',
+                        color: Colors.green,
+                        radius: 100,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    if (recalled > 0)
+                      PieChartSectionData(
+                        value: recalled.toDouble(),
+                        title: '${(recalled / total * 100).toStringAsFixed(0)}%\n회수',
+                        color: Colors.amber,
+                        radius: 100,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    if (deleted > 0)
+                      PieChartSectionData(
+                        value: deleted.toDouble(),
+                        title: '${(deleted / total * 100).toStringAsFixed(0)}%\n삭제',
+                        color: Colors.red,
+                        radius: 100,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                  ],
                   sectionsSpace: 2,
                   centerSpaceRadius: 0,
                 ),
@@ -465,18 +759,34 @@ class _MyPostsStatisticsDashboardScreenState
     );
   }
 
-  Widget _buildMonthlyTrendChart() {
-    final sortedMonths = _monthlyPostCreation.keys.toList()..sort();
-    final barGroups = <BarChartGroupData>[];
+  Widget _buildTopCollectorsChart() {
+    final collectorCounts = _aggregatedStats!['collectorCounts'] as Map<String, int>;
+    final topCollectors = collectorCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top10 = topCollectors.take(10).toList();
 
-    for (var i = 0; i < sortedMonths.length; i++) {
-      final month = sortedMonths[i];
+    if (top10.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Text(
+              '아직 수집자가 없습니다',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final barGroups = <BarChartGroupData>[];
+    for (int i = 0; i < top10.length; i++) {
       barGroups.add(
         BarChartGroupData(
           x: i,
           barRods: [
             BarChartRodData(
-              toY: (_monthlyPostCreation[month] ?? 0).toDouble(),
+              toY: top10[i].value.toDouble(),
               color: Colors.blue,
               width: 20,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
@@ -494,10 +804,80 @@ class _MyPostsStatisticsDashboardScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '월별 포스트 생성 추이',
+              'Top 10 수집자',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+            SizedBox(
+              height: 300,
+              child: BarChart(
+                BarChartData(
+                  barGroups: barGroups,
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toInt().toString(),
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            '#${value.toInt() + 1}',
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHourlyChart() {
+    final hourlyData = _aggregatedStats!['hourlyCollections'] as Map<int, int>;
+    final barGroups = <BarChartGroupData>[];
+
+    for (int hour = 0; hour < 24; hour++) {
+      barGroups.add(
+        BarChartGroupData(
+          x: hour,
+          barRods: [
+            BarChartRodData(
+              toY: (hourlyData[hour] ?? 0).toDouble(),
+              color: Colors.blue,
+              width: 8,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             SizedBox(
               height: 200,
               child: BarChart(
@@ -520,11 +900,10 @@ class _MyPostsStatisticsDashboardScreenState
                       sideTitles: SideTitles(
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index >= 0 && index < sortedMonths.length) {
-                            final month = sortedMonths[index];
+                          final hour = value.toInt();
+                          if (hour % 3 == 0) {
                             return Text(
-                              month.substring(5),
+                              '${hour}시',
                               style: const TextStyle(fontSize: 10),
                             );
                           }
@@ -532,12 +911,8 @@ class _MyPostsStatisticsDashboardScreenState
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
                   borderData: FlBorderData(show: false),
                   gridData: FlGridData(show: true, drawVerticalLine: false),
@@ -550,7 +925,15 @@ class _MyPostsStatisticsDashboardScreenState
     );
   }
 
-  Widget _buildDraftPostsList() {
+  Widget _buildDailyChart() {
+    final dailyData = _aggregatedStats!['dailyCollections'] as Map<String, int>;
+    final days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+    final spots = <FlSpot>[];
+
+    for (int i = 0; i < days.length; i++) {
+      spots.add(FlSpot(i.toDouble(), (dailyData[days[i]] ?? 0).toDouble()));
+    }
+
     return Card(
       elevation: 2,
       child: Padding(
@@ -558,296 +941,59 @@ class _MyPostsStatisticsDashboardScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Text(
-                  '배포 전 포스트 목록',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                Text(
-                  '${_draftPosts.length}개',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_draftPosts.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: Text(
-                    '배포 전 포스트가 없습니다',
-                    style: TextStyle(color: Colors.grey[500]),
-                  ),
-                ),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _draftPosts.length > 10 ? 10 : _draftPosts.length,
-                separatorBuilder: (context, index) => const Divider(),
-                itemBuilder: (context, index) {
-                  final post = _draftPosts[index];
-                  return ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.orange[100],
-                        borderRadius: BorderRadius.circular(8),
+            SizedBox(
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: Colors.orange,
+                      barWidth: 3,
+                      dotData: const FlDotData(show: true),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: Colors.orange.withOpacity(0.3),
                       ),
-                      child: const Icon(Icons.edit_note, color: Colors.orange),
                     ),
-                    title: Text(
-                      post.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '리워드: ${NumberFormat('#,###').format(post.reward)}원 • ${DateFormat('yyyy-MM-dd').format(post.createdAt)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/post-detail',
-                        arguments: {
-                          'post': post,
-                          'isEditable': true,
+                  ],
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toInt().toString(),
+                            style: const TextStyle(fontSize: 10),
+                          );
                         },
-                      );
-                    },
-                  );
-                },
-              ),
-            if (_draftPosts.length > 10)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Center(
-                  child: Text(
-                    '외 ${_draftPosts.length - 10}개',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRewardStatistics() {
-    final totalDraftReward = _draftPosts.fold<int>(
-      0,
-      (sum, post) => sum + post.reward,
-    );
-    final totalDeployedReward = _deployedPosts.fold<int>(
-      0,
-      (sum, post) => sum + post.reward,
-    );
-
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '리워드 통계',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildRewardCard(
-                    label: '배포 전 예상 비용',
-                    value: NumberFormat('#,###').format(totalDraftReward),
-                    color: Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildRewardCard(
-                    label: '배포된 최대 비용',
-                    value: NumberFormat('#,###').format(totalDeployedReward),
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRewardCard(
-              label: '총 예상 최대 비용',
-              value: NumberFormat('#,###')
-                  .format(totalDraftReward + totalDeployedReward),
-              color: Colors.blue,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRewardCard({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[700],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$value원',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPerformanceSummary() {
-    final summary = _performanceSummary;
-    final totalCollections = summary['totalCollections'] as int? ?? 0;
-    final averageRate = summary['averageCollectionRate'] as double? ?? 0.0;
-    final topPosts =
-        summary['topPosts'] as List<Map<String, dynamic>>? ?? [];
-
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '성과 요약 (배포된 포스트)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    icon: Icons.download,
-                    label: '총 수집',
-                    value: '${NumberFormat('#,###').format(totalCollections)}건',
-                    color: Colors.purple,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                    icon: Icons.trending_up,
-                    label: '평균 수집률',
-                    value: '${averageRate.toStringAsFixed(1)}%',
-                    color: Colors.indigo,
-                  ),
-                ),
-              ],
-            ),
-            if (topPosts.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text(
-                'Top 5 성공 포스트',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              ...topPosts.asMap().entries.map((entry) {
-                final index = entry.key;
-                final post = entry.value;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green[200]!),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${index + 1}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                post['title'] as String,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                '${post['collected']}/${post['totalQuantity']} 수집',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          '${(post['collectionRate'] as double).toStringAsFixed(1)}%',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ],
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index >= 0 && index < days.length) {
+                            return Text(
+                              days[index].substring(0, 1),
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
                     ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
-                );
-              }),
-            ],
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                ),
+              ),
+            ),
           ],
         ),
       ),

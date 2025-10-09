@@ -633,15 +633,21 @@ class MapMarkerService {
       print('🟠 폴백 사용됨: ${postIdFromData == null}');
     }
 
+    // ✅ quantity와 remainingQuantity는 항상 동일하게 설정
+    // 우선순위: remainingQuantity > quantity > 1 (기본값)
+    final int quantityValue = (markerData.data['remainingQuantity'] as num?)?.toInt()
+        ?? (markerData.data['quantity'] as num?)?.toInt()
+        ?? 1;
+
     final result = MarkerModel(
       markerId: markerData.id,
       postId: finalPostId,
       title: markerData.title,
       position: markerData.position,
-      quantity: (markerData.data['quantity'] as num?)?.toInt() ?? 1,
+      quantity: quantityValue, // quantity와 remainingQuantity 동일
       // 🚀 Firebase 실제 데이터와 일치하는 새로운 필드들
-      totalQuantity: (markerData.data['totalQuantity'] as num?)?.toInt() ?? ((markerData.data['quantity'] as num?)?.toInt() ?? 1),
-      remainingQuantity: (markerData.data['remainingQuantity'] as num?)?.toInt() ?? ((markerData.data['quantity'] as num?)?.toInt() ?? 1),
+      totalQuantity: (markerData.data['totalQuantity'] as num?)?.toInt() ?? quantityValue,
+      remainingQuantity: quantityValue, // quantity와 remainingQuantity 동일
       collectedQuantity: (markerData.data['collectedQuantity'] as num?)?.toInt() ?? 0,
       collectionRate: (markerData.data['collectionRate'] as num?)?.toDouble() ?? 0.0,
       tileId: markerData.data['tileId'] as String? ?? '',
