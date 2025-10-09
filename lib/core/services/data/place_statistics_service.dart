@@ -214,7 +214,8 @@ class PlaceStatisticsService {
   Future<Map<String, dynamic>> getTimeAnalytics(String placeId) async {
     try {
       final stats = await getPlaceStatistics(placeId);
-      final collections = stats['collections'] as List<Map<String, dynamic>>;
+      final collectionsRaw = stats['collections'] as List;
+      final collections = collectionsRaw.cast<Map<String, dynamic>>();
 
       if (collections.isEmpty) {
         return {
@@ -283,7 +284,8 @@ class PlaceStatisticsService {
   Future<Map<String, dynamic>> getPerformanceAnalytics(String placeId) async {
     try {
       final stats = await getPlaceStatistics(placeId);
-      final postStats = stats['postStatistics'] as List<Map<String, dynamic>>;
+      final postStatsRaw = stats['postStatistics'] as List<dynamic>;
+      final postStats = postStatsRaw.map((e) => e as Map<String, dynamic>).toList();
 
       if (postStats.isEmpty) {
         return {

@@ -107,6 +107,9 @@ class PostModel {
   final bool isCoupon; // 쿠폰 여부
   final Map<String, dynamic>? couponData; // 쿠폰 정보 (JSON 형태)
 
+  // 유튜브 링크 (홍보용)
+  final String? youtubeUrl; // 유튜브 영상 URL
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -138,6 +141,7 @@ class PostModel {
     this.expiresAt,
     this.isCoupon = false,
     this.couponData,
+    this.youtubeUrl,
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -208,6 +212,7 @@ class PostModel {
           : null,
       isCoupon: data['isCoupon'] ?? false,
       couponData: data['couponData'],
+      youtubeUrl: data['youtubeUrl'],
     );
   }
 
@@ -242,6 +247,7 @@ class PostModel {
       'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
       'isCoupon': isCoupon,
       'couponData': couponData,
+      'youtubeUrl': youtubeUrl,
     };
   }
 
@@ -363,6 +369,7 @@ class PostModel {
     DateTime? expiresAt,
     bool? isCoupon,
     Map<String, dynamic>? couponData,
+    String? youtubeUrl,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -394,6 +401,7 @@ class PostModel {
       expiresAt: expiresAt ?? this.expiresAt,
       isCoupon: isCoupon ?? this.isCoupon,
       couponData: couponData ?? this.couponData,
+      youtubeUrl: youtubeUrl ?? this.youtubeUrl,
     );
   }
 } 

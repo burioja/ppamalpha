@@ -41,6 +41,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   final _contentController = TextEditingController();
   final _priceController = TextEditingController();
   final _soundController = TextEditingController();
+  final _youtubeUrlController = TextEditingController(); // 유튜브 URL
   
   // 선택된 값들
   String _selectedFunction = 'Using';
@@ -131,6 +132,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     _contentController.dispose();
     _priceController.dispose();
     _soundController.dispose();
+    _youtubeUrlController.dispose();
     super.dispose();
   }
 
@@ -528,6 +530,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         defaultExpiresAt: calculatedExpiresAt,
         placeId: widget.place.id, // 스토어 ID 추가
         isCoupon: _selectedPostType == '쿠폰', // 쿠폰 여부 추가
+        youtubeUrl: _youtubeUrlController.text.trim().isNotEmpty
+            ? _youtubeUrlController.text.trim()
+            : null, // 유튜브 URL 추가
       );
 
       if (mounted) {
@@ -635,47 +640,55 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               _buildImageUpload(),
               const SizedBox(height: 16),
               _buildSoundUpload(),
+              const SizedBox(height: 16),
+
+              // 유튜브 URL 입력
+              _buildTextField(
+                controller: _youtubeUrlController,
+                label: '유튜브 URL (선택사항)',
+                hint: 'https://www.youtube.com/watch?v=...',
+              ),
               const SizedBox(height: 24),
 
-              // 기능 옵션 섹션
-              _buildSectionTitle('기능 옵션'),
-              _buildCheckboxOption(
-                title: '소멸시효',
-                value: _hasExpiration,
-                onChanged: (value) {
-                  setState(() {
-                    _hasExpiration = value!;
-                  });
-                },
-              ),
-              _buildCheckboxOption(
-                title: '송금 기능',
-                value: _canTransfer,
-                onChanged: (value) {
-                  setState(() {
-                    _canTransfer = value!;
-                  });
-                },
-              ),
-              _buildCheckboxOption(
-                title: '전달 기능',
-                value: _canForward,
-                onChanged: (value) {
-                  setState(() {
-                    _canForward = value!;
-                  });
-                },
-              ),
-              _buildCheckboxOption(
-                title: '응답 기능',
-                value: _canRespond,
-                onChanged: (value) {
-                  setState(() {
-                    _canRespond = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
+              // 기능 옵션 섹션 (임시 숨김)
+              // _buildSectionTitle('기능 옵션'),
+              // _buildCheckboxOption(
+              //   title: '소멸시효',
+              //   value: _hasExpiration,
+              //   onChanged: (value) {
+              //     setState(() {
+              //       _hasExpiration = value!;
+              //     });
+              //   },
+              // ),
+              // _buildCheckboxOption(
+              //   title: '송금 기능',
+              //   value: _canTransfer,
+              //   onChanged: (value) {
+              //     setState(() {
+              //       _canTransfer = value!;
+              //     });
+              //   },
+              // ),
+              // _buildCheckboxOption(
+              //   title: '전달 기능',
+              //   value: _canForward,
+              //   onChanged: (value) {
+              //     setState(() {
+              //       _canForward = value!;
+              //     });
+              //   },
+              // ),
+              // _buildCheckboxOption(
+              //   title: '응답 기능',
+              //   value: _canRespond,
+              //   onChanged: (value) {
+              //     setState(() {
+              //       _canRespond = value!;
+              //     });
+              //   },
+              // ),
+              // const SizedBox(height: 24),
 
               // 타겟팅 옵션
               _buildSectionTitle('타겟팅 옵션'),
@@ -758,9 +771,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
               // 이미지 섹션 제거됨 (상단 '미디어 업로드'에 통합)
 
-              // 위치 정보 섹션
-              _buildSectionTitle('위치 정보'),
-              _buildLocationInfo(),
+              // 위치 정보 섹션 (임시 제거 - 플레이스 위치 자동 사용)
+              // _buildSectionTitle('위치 정보'),
+              // _buildLocationInfo(),
               const SizedBox(height: 32),
               
               // 하단 완료 버튼
@@ -887,11 +900,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    String? hint,
   }) {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint,
         border: const OutlineInputBorder(),
       ),
       maxLines: maxLines,

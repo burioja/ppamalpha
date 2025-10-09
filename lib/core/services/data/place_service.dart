@@ -5,10 +5,18 @@ class PlaceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'places';
 
+  // 개발모드 플래그 (프로덕션에서는 false로 변경)
+  static const bool isDevelopmentMode = true;
+
   // 플레이스 생성
   Future<String> createPlace(PlaceModel place) async {
     try {
-      DocumentReference docRef = await _firestore.collection(_collection).add(place.toFirestore());
+      // 개발모드에서는 자동으로 인증 처리
+      final verifiedPlace = isDevelopmentMode
+          ? place.copyWith(isVerified: true)
+          : place;
+
+      DocumentReference docRef = await _firestore.collection(_collection).add(verifiedPlace.toFirestore());
       return docRef.id;
     } catch (e) {
       throw Exception('플레이스 생성 실패: $e');

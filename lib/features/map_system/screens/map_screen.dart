@@ -462,50 +462,87 @@ class _MapScreenState extends State<MapScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data();
-        final address = userData?['address'] as String?;
-        
-        if (address != null && address.isNotEmpty) {
-          print('집주소 로드 시도: $address');
-          // 주소를 좌표로 변환
-          final homeCoords = await NominatimService.geocode(address);
-          if (homeCoords != null) {
-            print('집주소 좌표 변환 성공: ${homeCoords.latitude}, ${homeCoords.longitude}');
-            if (mounted) {
-              setState(() {
-                _homeLocation = homeCoords;
-              });
+
+        // ===== 집 주소 로드 =====
+        final homeLocation = userData?['homeLocation'] as GeoPoint?;
+        final secondAddress = userData?['secondAddress'] as String?;
+
+        if (homeLocation != null) {
+          // 저장된 GeoPoint 직접 사용 (geocoding 불필요)
+          debugPrint('✅ 집주소 좌표 로드: ${homeLocation.latitude}, ${homeLocation.longitude}');
+          if (secondAddress != null && secondAddress.isNotEmpty) {
+            debugPrint('   상세주소: $secondAddress');
+          }
+          if (mounted) {
+            setState(() {
+              _homeLocation = LatLng(homeLocation.latitude, homeLocation.longitude);
+            });
+          }
+        } else {
+          // 구버전 데이터: 주소 문자열만 있는 경우 (geocoding 시도)
+          final address = userData?['address'] as String?;
+          debugPrint('⚠️ 집주소 좌표 미저장 (구버전 데이터)');
+          debugPrint('   주소: $address');
+
+          if (address != null && address.isNotEmpty) {
+            final homeCoords = await NominatimService.geocode(address);
+            if (homeCoords != null) {
+              debugPrint('✅ geocoding 성공: ${homeCoords.latitude}, ${homeCoords.longitude}');
+              if (mounted) {
+                setState(() {
+                  _homeLocation = homeCoords;
+                });
+              }
+            } else {
+              debugPrint('❌ geocoding 실패 - 프로필에서 주소를 다시 설정하세요');
             }
           } else {
-            print('집주소 좌표 변환 실패');
+            debugPrint('❌ 집주소 정보 없음');
           }
-        } else {
-          print('집주소가 없거나 비어있음');
         }
 
-        // 워크플레이스 정보 가져오기 (회원가입에서 저장한 구조)
-        final workplaces = userData?['workplaces'] as List<dynamic>?;
+        // ===== 일터 주소 로드 =====
+        final workplaceId = userData?['workplaceId'] as String?;
         final workLocations = <LatLng>[];
-        
-        if (workplaces != null) {
-          print('워크플레이스 개수: ${workplaces.length}');
-          for (final workplace in workplaces) {
-            final workplaceMap = workplace as Map<String, dynamic>?;
-            final workplaceAddress = workplaceMap?['address'] as String?;
-            
-            if (workplaceAddress != null && workplaceAddress.isNotEmpty) {
-              print('워크플레이스 주소 로드 시도: $workplaceAddress');
-              // 워크플레이스 주소를 좌표로 변환
-              final workCoords = await NominatimService.geocode(workplaceAddress);
-              if (workCoords != null) {
-                print('워크플레이스 좌표 변환 성공: ${workCoords.latitude}, ${workCoords.longitude}');
-                workLocations.add(workCoords);
-              } else {
-                print('워크플레이스 좌표 변환 실패');
+
+        if (workplaceId != null && workplaceId.isNotEmpty) {
+          debugPrint('📍 일터 로드 시도: $workplaceId');
+
+          // places 컬렉션에서 일터 정보 가져오기
+          final placeDoc = await FirebaseFirestore.instance
+              .collection('places')
+              .doc(workplaceId)
+              .get();
+
+          if (placeDoc.exists) {
+            final placeData = placeDoc.data();
+            final workLocation = placeData?['location'] as GeoPoint?;
+
+            if (workLocation != null) {
+              // 저장된 GeoPoint 직접 사용
+              debugPrint('✅ 일터 좌표 로드: ${workLocation.latitude}, ${workLocation.longitude}');
+              workLocations.add(LatLng(workLocation.latitude, workLocation.longitude));
+            } else {
+              // 구버전: 주소만 있는 경우 geocoding 시도
+              final workAddress = placeData?['address'] as String?;
+              debugPrint('⚠️ 일터 좌표 미저장 (구버전 데이터)');
+              debugPrint('   주소: $workAddress');
+
+              if (workAddress != null && workAddress.isNotEmpty) {
+                final workCoords = await NominatimService.geocode(workAddress);
+                if (workCoords != null) {
+                  debugPrint('✅ geocoding 성공: ${workCoords.latitude}, ${workCoords.longitude}');
+                  workLocations.add(workCoords);
+                } else {
+                  debugPrint('❌ geocoding 실패');
+                }
               }
             }
+          } else {
+            debugPrint('❌ 일터 정보 없음 (placeId: $workplaceId)');
           }
         } else {
-          print('워크플레이스 정보가 없음');
+          debugPrint('일터 미설정');
         }
 
         if (mounted) {
@@ -514,10 +551,7 @@ class _MapScreenState extends State<MapScreen> {
           });
         }
 
-        print('최종 워크플레이스 좌표 개수: ${workLocations.length}');
-        for (int i = 0; i < workLocations.length; i++) {
-          print('워크플레이스 $i: ${workLocations[i].latitude}, ${workLocations[i].longitude}');
-        }
+        debugPrint('최종 일터 좌표 개수: ${workLocations.length}');
       }
 
       // 과거 방문 위치 로드

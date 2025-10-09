@@ -220,7 +220,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             onTap: () {
               Navigator.pushNamed(context, '/my-places');
             },
-            child: const Icon(Icons.home, size: 22, color: Colors.white),
+            child: const Icon(Icons.work, size: 22, color: Colors.white),
           ),
           const SizedBox(width: 12),
 

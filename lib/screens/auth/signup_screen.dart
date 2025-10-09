@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/services/data/place_service.dart';
+import '../../core/models/place/place_model.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -23,7 +25,9 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _phoneVerificationController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  
+  final TextEditingController _addressDetailController = TextEditingController(); // 상세주소 별도 관리
+  GeoPoint? _homeLocation; // 집 주소 좌표 저장
+
   String? _selectedCountryCode = '+82';
   String? _selectedGender = 'male';
   int _selectedYear = 2000;
@@ -39,9 +43,11 @@ class _SignupScreenState extends State<SignupScreen> {
   
   // 2단계: 추가정보 입력
   final TextEditingController _nicknameController = TextEditingController();
-  final List<Map<String, String>> _workplaces = [];
+  // 단일 일터 정보
   final TextEditingController _workplaceNameController = TextEditingController();
   final TextEditingController _workplaceAddressController = TextEditingController();
+  final TextEditingController _workplaceAddressDetailController = TextEditingController(); // 일터 상세주소
+  GeoPoint? _workplaceLocation; // 일터 위치 정보
   
   bool _allowSexualContent = false;
   bool _allowViolentContent = false;
@@ -65,9 +71,11 @@ class _SignupScreenState extends State<SignupScreen> {
     _phoneController.dispose();
     _phoneVerificationController.dispose();
     _addressController.dispose();
+    _addressDetailController.dispose();
     _nicknameController.dispose();
     _workplaceNameController.dispose();
     _workplaceAddressController.dispose();
+    _workplaceAddressDetailController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -159,60 +167,48 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _pickAddress() async {
-    // 주소 검색 화면으로 이동 (실제로는 주소 검색 API 사용)
+    // 주소 검색 화면으로 이동
     final result = await Navigator.pushNamed(context, '/address-search');
-    if (result != null) {
-      if (result is Map<String, dynamic>) {
-        setState(() {
-          _addressController.text = result['display_name']?.toString() ?? '';
-        });
-      } else {
-        setState(() {
-          _addressController.text = result.toString();
-        });
-      }
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        // 주소와 상세주소를 분리하여 저장
+        _addressController.text = result['address']?.toString() ?? '';
+        _addressDetailController.text = result['detailAddress']?.toString() ?? '';
+
+        // 좌표 정보 저장 (geocoding 불필요하도록)
+        if (result['lat'] != null && result['lon'] != null) {
+          _homeLocation = GeoPoint(
+            double.parse(result['lat'].toString()),
+            double.parse(result['lon'].toString()),
+          );
+          debugPrint('📍 집 주소 좌표 저장: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+        }
+      });
     }
   }
 
   Future<void> _pickWorkplaceAddress() async {
     // 근무지 주소 검색 화면으로 이동
     final result = await Navigator.pushNamed(context, '/address-search');
-    if (result != null) {
-      if (result is Map<String, dynamic>) {
-        setState(() {
-          _workplaceAddressController.text = result['display_name']?.toString() ?? '';
-        });
-      } else {
-        setState(() {
-          _workplaceAddressController.text = result.toString();
-        });
-      }
-    }
-  }
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        // 주소와 상세주소를 분리하여 저장
+        _workplaceAddressController.text = result['address']?.toString() ?? '';
+        _workplaceAddressDetailController.text = result['detailAddress']?.toString() ?? '';
 
-  Future<void> _addWorkplace() async {
-    if (_workplaceNameController.text.trim().isEmpty || _workplaceAddressController.text.trim().isEmpty) {
-      _showToast('근무지명과 주소를 모두 입력해주세요');
-      return;
-    }
-    
-    setState(() {
-      _workplaces.add({
-        'name': _workplaceNameController.text.trim(),
-        'address': _workplaceAddressController.text.trim(),
+        // 위도/경도 정보 저장
+        if (result['lat'] != null && result['lon'] != null) {
+          _workplaceLocation = GeoPoint(
+            double.parse(result['lat'].toString()),
+            double.parse(result['lon'].toString()),
+          );
+          debugPrint('📍 일터 주소 좌표 저장: ${_workplaceLocation!.latitude}, ${_workplaceLocation!.longitude}');
+        }
       });
-      _workplaceNameController.clear();
-      _workplaceAddressController.clear();
-    });
-    
-    _showToast('근무지가 추가되었습니다');
+    }
   }
 
-  void _removeWorkplace(int index) {
-    setState(() {
-      _workplaces.removeAt(index);
-    });
-  }
+  // 일터 추가/제거 기능 제거 (단일 일터만 지원)
 
   Future<void> _checkNicknameDuplicate() async {
     if (_nicknameController.text.trim().isEmpty) {
@@ -293,16 +289,44 @@ class _SignupScreenState extends State<SignupScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      
+
+      final userId = credential.user!.uid;
+      String? workplaceId;
+
+      // 일터 정보가 있으면 플레이스로 자동 생성
+      if (_workplaceNameController.text.trim().isNotEmpty &&
+          _workplaceAddressController.text.trim().isNotEmpty) {
+
+        final placeService = PlaceService();
+
+        // 플레이스 모델 생성 (개발모드에서는 isVerified가 자동으로 true로 설정됨)
+        final newPlace = PlaceModel(
+          id: '', // Firestore가 자동 생성
+          name: _workplaceNameController.text.trim(),
+          description: '${_nicknameController.text.trim()}님의 일터',
+          address: _workplaceAddressController.text.trim(), // 기본 주소만
+          detailAddress: _workplaceAddressDetailController.text.trim(), // 상세주소 분리
+          location: _workplaceLocation,
+          createdBy: userId,
+          createdAt: DateTime.now(),
+          isActive: true,
+        );
+
+        // 플레이스 생성 (개발모드에서 자동 인증)
+        workplaceId = await placeService.createPlace(newPlace);
+      }
+
       // Firestore에 사용자 정보 저장
-      await FirebaseFirestore.instance.collection('users').doc(credential.user!.uid).set({
+      await FirebaseFirestore.instance.collection('users').doc(userId).set({
         'email': _emailController.text.trim(),
         'nickname': _nicknameController.text.trim(),
         'phone': '$_selectedCountryCode${_phoneController.text.trim()}',
-        'address': _addressController.text.trim(),
+        'address': _addressController.text.trim(), // 기본 주소만 저장
+        'secondAddress': _addressDetailController.text.trim(), // 상세주소 별도 저장
+        'homeLocation': _homeLocation, // 집 좌표 저장 (geocoding 불필요)
         'gender': _selectedGender,
         'birthDate': '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDay.toString().padLeft(2, '0')}',
-        'workplaces': _workplaces,
+        'workplaceId': workplaceId, // 단일 일터 ID
         'allowSexualContent': _allowSexualContent,
         'allowViolentContent': _allowViolentContent,
         'allowHateContent': _allowHateContent,
@@ -313,7 +337,7 @@ class _SignupScreenState extends State<SignupScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'profileImageUrl': _profileImage?.path,
       });
-      
+
       _showToast('회원가입이 완료되었습니다');
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/main');
@@ -721,26 +745,26 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
           const SizedBox(height: 24),
           
-          // 근무지 추가
-          const Text('근무지', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+          // 일터 정보 (단일 입력)
+          const Text('일터 정보 (선택사항)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
+          TextFormField(
+            controller: _workplaceNameController,
+            decoration: const InputDecoration(
+              labelText: '일터 이름',
+              hintText: '예: 카페 ABC',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: TextFormField(
-                  controller: _workplaceNameController,
-                  decoration: const InputDecoration(
-                    hintText: '근무지명',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
                   controller: _workplaceAddressController,
                   decoration: const InputDecoration(
-                    hintText: '주소',
+                    labelText: '일터 주소',
+                    hintText: '주소를 검색하세요',
                     border: OutlineInputBorder(),
                   ),
                   readOnly: true,
@@ -754,33 +778,10 @@ class _SignupScreenState extends State<SignupScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _addWorkplace,
-                  child: const Text('근무지 추가'),
-                ),
-              ),
-            ],
+          Text(
+            '※ 일터를 등록하면 자동으로 플레이스가 생성되어 인증됩니다.',
+            style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
           ),
-          const SizedBox(height: 8),
-          
-          // 근무지 목록
-          ..._workplaces.asMap().entries.map((entry) {
-            final index = entry.key;
-            final workplace = entry.value;
-            return Card(
-              child: ListTile(
-                title: Text(workplace['name']!),
-                subtitle: Text(workplace['address']!),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _removeWorkplace(index),
-                ),
-              ),
-            );
-          }),
           
           const SizedBox(height: 24),
           

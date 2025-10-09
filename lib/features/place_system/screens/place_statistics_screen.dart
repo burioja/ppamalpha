@@ -169,7 +169,7 @@ class _PlaceStatisticsScreenState extends State<PlaceStatisticsScreen> with Sing
           children: [
             Row(
               children: [
-                Icon(Icons.store, size: 28, color: Colors.blue[700]),
+                Icon(Icons.work, size: 28, color: Colors.blue[700]),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

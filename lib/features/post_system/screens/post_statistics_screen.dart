@@ -24,6 +24,8 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
   Map<String, dynamic>? _performanceAnalytics;
   Map<String, dynamic>? _predictiveAnalytics;
   Map<String, dynamic>? _storeDistribution;  // Phase 5: 스토어별 분포
+  Map<String, dynamic>? _couponAnalytics;  // Phase 2-F: 쿠폰 통계
+  Map<String, dynamic>? _imageViewAnalytics;  // Phase 2-G: 이미지 뷰 통계
   bool _isLoading = true;
   String? _error;
   late TabController _tabController;
@@ -31,7 +33,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this); // 기본/수집자/시간/위치/성과
+    _tabController = TabController(length: 6, vsync: this); // 기본/수집자/시간/위치/성과/쿠폰
     _loadStatistics();
   }
 
@@ -57,6 +59,8 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _statisticsService.getPerformanceAnalytics(widget.post.postId),
         _statisticsService.getPredictiveAnalytics(widget.post.postId),
         _statisticsService.getStoreDistribution(widget.post.postId),  // Phase 5: 스토어별 분포
+        _statisticsService.getCouponAnalytics(widget.post.postId),  // Phase 2-F: 쿠폰 통계
+        _statisticsService.getImageViewAnalytics(widget.post.postId),  // Phase 2-G: 이미지 뷰 통계
       ]);
 
       setState(() {
@@ -67,6 +71,8 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
         _performanceAnalytics = results[4];
         _predictiveAnalytics = results[5];
         _storeDistribution = results[6];  // Phase 5: 스토어별 분포
+        _couponAnalytics = results[7];  // Phase 2-F: 쿠폰 통계
+        _imageViewAnalytics = results[8];  // Phase 2-G: 이미지 뷰 통계
         _isLoading = false;
       });
     } catch (e) {
@@ -108,6 +114,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
             Tab(text: '시간', icon: Icon(Icons.schedule, size: 20)),
             Tab(text: '위치', icon: Icon(Icons.map, size: 20)),
             Tab(text: '성과', icon: Icon(Icons.analytics, size: 20)),
+            Tab(text: '쿠폰', icon: Icon(Icons.card_giftcard, size: 20)),
           ],
         ),
       ),
@@ -125,6 +132,7 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
                         _buildTimeAnalysisTab(),
                         _buildLocationAnalysisTab(),
                         _buildPerformanceAnalysisTab(),
+                        _buildCouponAnalysisTab(),
                       ],
                     ),
     );
@@ -2315,6 +2323,165 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
                 );
               }).toList(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tab 6: 쿠폰 분석
+  Widget _buildCouponAnalysisTab() {
+    if (_couponAnalytics == null || _couponAnalytics!.isEmpty) {
+      return const Center(child: Text('쿠폰 통계를 불러오는 중...'));
+    }
+
+    // 쿠폰이 아닌 포스트인 경우
+    if (_couponAnalytics!['isCoupon'] == false) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              '이 포스트는 쿠폰이 아닙니다',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final totalCollections = _couponAnalytics!['totalCollections'] ?? 0;
+    final totalCouponUsed = _couponAnalytics!['totalCouponUsed'] ?? 0;
+    final usageRate = _couponAnalytics!['usageRate'] ?? 0.0;
+    final uniqueCollectors = _couponAnalytics!['uniqueCollectors'] ?? 0;
+    final repeatedCollectors = _couponAnalytics!['repeatedCollectors'] ?? 0;
+    final hourlyUsage = _couponAnalytics!['hourlyUsage'] as Map<String, dynamic>? ?? {};
+    final dailyUsage = _couponAnalytics!['dailyUsage'] as Map<String, dynamic>? ?? {};
+    final avgUsagePerCollector = _couponAnalytics!['averageUsagePerCollector'] ?? 0.0;
+
+    return RefreshIndicator(
+      onRefresh: _loadStatistics,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 쿠폰 사용률 KPI 카드
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.card_giftcard,
+                    label: '총 수집',
+                    value: '$totalCollections건',
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.check_circle,
+                    label: '쿠폰 사용',
+                    value: '$totalCouponUsed건',
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.trending_up,
+                    label: '사용률',
+                    value: '${usageRate.toStringAsFixed(1)}%',
+                    color: Colors.orange,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.person,
+                    label: '한번 주운 포스트',
+                    value: '$uniqueCollectors명',
+                    color: Colors.purple,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // 수집자 분석
+            const Text(
+              '수집자 분석',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('한번 주운 포스트 (Unique)', style: TextStyle(fontSize: 14)),
+                        Text('$uniqueCollectors명', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('재수집 사용자 (2번 이상)', style: TextStyle(fontSize: 14)),
+                        Text('$repeatedCollectors명', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('평균 사용 횟수 (사용자당)', style: TextStyle(fontSize: 14)),
+                        Text('${avgUsagePerCollector.toStringAsFixed(1)}회', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 이미지 확대 조회율 (향후 구현)
+            if (_imageViewAnalytics != null && _imageViewAnalytics!.isNotEmpty) ...[
+              const Text(
+                '사진 확대 조회',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 2,
+                color: Colors.grey[100],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Icon(Icons.image_search, size: 48, color: Colors.grey[400]),
+                      const SizedBox(height: 12),
+                      Text(
+                        _imageViewAnalytics!['message'] ?? '이미지 확대 조회 데이터는 향후 추가 예정입니다',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

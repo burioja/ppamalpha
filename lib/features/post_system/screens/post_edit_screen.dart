@@ -35,6 +35,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _rewardController;
   late final TextEditingController _contentController;
+  late final TextEditingController _youtubeUrlController;
 
   bool _canRespond = false;
   bool _canForward = false;
@@ -80,6 +81,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
     _titleController = TextEditingController(text: widget.post.title);
     _rewardController = TextEditingController(text: widget.post.reward.toString());
     _contentController = TextEditingController(text: _extractExistingTextContent());
+    _youtubeUrlController = TextEditingController(text: widget.post.youtubeUrl ?? '');
     _canRespond = widget.post.canRespond;
     _canForward = widget.post.canForward;
     _canRequestReward = widget.post.canRequestReward;
@@ -98,6 +100,7 @@ class _PostEditScreenState extends State<PostEditScreen> {
 
   @override
   void dispose() {
+    _youtubeUrlController.dispose();
     _titleController.dispose();
     _rewardController.dispose();
     _contentController.dispose();
@@ -211,7 +214,10 @@ class _PostEditScreenState extends State<PostEditScreen> {
         'mediaUrl': mediaUrls,
         'expiresAt': Timestamp.fromDate(newExpiresAt),
         'updatedAt': DateTime.now(),
-        'placeId': _selectedPlaceId, // 플레이스 ID 추가
+        'placeId': _selectedPlaceId,
+        'youtubeUrl': _youtubeUrlController.text.trim().isNotEmpty
+            ? _youtubeUrlController.text.trim()
+            : null,
       };
 
       debugPrint('🔄 포스트 수정 데이터:');
@@ -302,29 +308,32 @@ class _PostEditScreenState extends State<PostEditScreen> {
               _buildExistingMediaList(),
               const SizedBox(height: 16),
               _buildSoundUpload(),
+              const SizedBox(height: 16),
+              _buildYoutubeUrlInput(),
               const SizedBox(height: 24),
               _buildSectionTitle('연결된 스토어'),
               _buildPlaceSelection(),
               const SizedBox(height: 24),
-              _buildSectionTitle('기능 옵션'),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('응답 허용'),
-                value: _canRespond,
-                onChanged: (v) { setState(() { _canRespond = v ?? false; }); }, // TODO: 마커 배포 여부로 대체
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('전달 허용'),
-                value: _canForward,
-                onChanged: (v) { setState(() { _canForward = v ?? false; }); }, // TODO: 마커 배포 여부로 대체
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('리워드 수령 허용'),
-                value: _canRequestReward,
-                onChanged: (v) { setState(() { _canRequestReward = v ?? true; }); }, // TODO: 마커 배포 여부로 대체
-              ),
+              // 기능 옵션 임시 숨김 (요구사항: 3.3)
+              // _buildSectionTitle('기능 옵션'),
+              // CheckboxListTile(
+              //   contentPadding: EdgeInsets.zero,
+              //   title: const Text('응답 허용'),
+              //   value: _canRespond,
+              //   onChanged: (v) { setState(() { _canRespond = v ?? false; }); },
+              // ),
+              // CheckboxListTile(
+              //   contentPadding: EdgeInsets.zero,
+              //   title: const Text('전달 허용'),
+              //   value: _canForward,
+              //   onChanged: (v) { setState(() { _canForward = v ?? false; }); },
+              // ),
+              // CheckboxListTile(
+              //   contentPadding: EdgeInsets.zero,
+              //   title: const Text('리워드 수령 허용'),
+              //   value: _canRequestReward,
+              //   onChanged: (v) { setState(() { _canRequestReward = v ?? true; }); },
+              // ),
               const SizedBox(height: 24),
               _buildSectionTitle('타겟팅 옵션'),
               GenderCheckboxGroup(
@@ -412,12 +421,6 @@ class _PostEditScreenState extends State<PostEditScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              _buildReadonlyInfo('생성일', widget.post.createdAt),
-              _buildReadonlyInfo('기본 만료일', widget.post.defaultExpiresAt),
-              // TODO: 위치는 템플릿에서 제거됨, 배포된 마커에서 확인
-              _buildReadonlyInfo('위치', '템플릿 - 배포 시 설정됨'),
-              
               const SizedBox(height: 32),
               // 하단 완료 버튼
               SizedBox(
@@ -935,6 +938,20 @@ class _PostEditScreenState extends State<PostEditScreen> {
       return 'female';
     }
     return 'all';
+  }
+
+  Widget _buildYoutubeUrlInput() {
+    return TextField(
+      controller: _youtubeUrlController,
+      decoration: InputDecoration(
+        labelText: '유튜브 링크 (홍보용, 선택사항)',
+        hintText: 'https://www.youtube.com/watch?v=...',
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.video_library),
+        helperText: '포스트에 연결할 유튜브 영상 링크를 입력하세요',
+      ),
+      keyboardType: TextInputType.url,
+    );
   }
   Widget _buildReadonlyInfo(String label, dynamic value) {
     String text;

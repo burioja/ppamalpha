@@ -41,6 +41,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   List<PostModel> _cachedDeployedPosts = [];
   bool _myPostsLoaded = false;
 
+  // 선택된 포스트 ID 추적 (터치 UX용)
+  String? _selectedPostId;
+
   @override
   void initState() {
     super.initState();
@@ -709,12 +712,23 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             final post = filteredPosts[index];
                             return PostTileCard(
                               post: post,
-                              showDeleteButton: _currentUserId == post.creatorId, // 내 포스트인 경우에만 삭제 버튼 표시
+                              isSelected: _selectedPostId == post.postId,
+                              showDeleteButton: _currentUserId == post.creatorId,
                               onDelete: () => _showDeleteConfirmation(post),
-                              showStatisticsButton: false, // 배포 전 포스트는 통계 버튼 표시 안함
+                              showStatisticsButton: false,
                               onStatistics: null,
-                              onTap: () async {
-                                // 포스트 상세 화면으로 이동
+                              // 1번 탭: 선택 토글
+                              onTap: () {
+                                setState(() {
+                                  if (_selectedPostId == post.postId) {
+                                    _selectedPostId = null; // 선택 해제
+                                  } else {
+                                    _selectedPostId = post.postId; // 선택
+                                  }
+                                });
+                              },
+                              // 2번 탭: 상세 화면 이동
+                              onDoubleTap: () async {
                                 final result = await Navigator.pushNamed(
                                   context,
                                   '/post-detail',
@@ -723,11 +737,10 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                     'isEditable': _currentUserId == post.creatorId,
                                   },
                                 );
-                                
-                                // 포스트 업데이트 또는 삭제 후 인박스 갱신
+
                                 if (result == true || result == 'deleted') {
                                   setState(() {
-                                    // 상태 갱신으로 데이터 재로드
+                                    _selectedPostId = null;
                                   });
                                 }
                               },
@@ -812,18 +825,30 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
                             return PostTileCard(
                               post: post,
+                              isSelected: _selectedPostId == post.postId,
                               showStatisticsButton: true,
-                              onTap: () async {
+                              onTap: () {
+                                setState(() {
+                                  if (_selectedPostId == post.postId) {
+                                    _selectedPostId = null;
+                                  } else {
+                                    _selectedPostId = post.postId;
+                                  }
+                                });
+                              },
+                              onDoubleTap: () async {
                                 final result = await Navigator.pushNamed(
                                   context,
                                   '/post-detail',
                                   arguments: {
                                     'post': post,
-                                    'isEditable': true, // 배포된 포스트는 발행자 기준으로 정보 표시 (편집은 canEdit으로 차단)
+                                    'isEditable': true,
                                   },
                                 );
                                 if (result == true && mounted) {
-                                  setState(() {});
+                                  setState(() {
+                                    _selectedPostId = null;
+                                  });
                                 }
                               },
                               onStatistics: () {
@@ -981,15 +1006,27 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
                                   return PostTileCard(
                                     post: post,
-                                    showStatisticsButton: true, // 배포된 포스트는 항상 통계 버튼 표시
-                                    onTap: () async {
+                                    isSelected: _selectedPostId == post.postId,
+                                    showStatisticsButton: true,
+                                    onTap: () {
+                                      setState(() {
+                                        if (_selectedPostId == post.postId) {
+                                          _selectedPostId = null;
+                                        } else {
+                                          _selectedPostId = post.postId;
+                                        }
+                                      });
+                                    },
+                                    onDoubleTap: () async {
                                       final result = await Navigator.pushNamed(
                                         context,
                                         '/post-detail',
                                         arguments: post,
                                       );
                                       if (result == true && mounted) {
-                                        setState(() {});
+                                        setState(() {
+                                          _selectedPostId = null;
+                                        });
                                       }
                                     },
                                     onStatistics: () {
@@ -1077,19 +1114,6 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                         ),
                       ),
                     ),
-                    // 내 스토어로 이동 버튼 (PRD 요구사항)
-                    TextButton.icon(
-                      onPressed: () => _navigateToMyStore(context),
-                      icon: Icon(Icons.store, size: 16, color: Colors.orange.shade700),
-                      label: Text(
-                        '내 스토어',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -1132,21 +1156,29 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           final post = filteredPosts[index];
                           return PostTileCard(
                             post: post,
-                            onTap: () async {
-                              // 포스트 상세 화면으로 이동
+                            isSelected: _selectedPostId == post.postId,
+                            onTap: () {
+                              setState(() {
+                                if (_selectedPostId == post.postId) {
+                                  _selectedPostId = null;
+                                } else {
+                                  _selectedPostId = post.postId;
+                                }
+                              });
+                            },
+                            onDoubleTap: () async {
                               final result = await Navigator.pushNamed(
                                 context,
                                 '/post-detail',
                                 arguments: {
                                   'post': post,
-                                  'isEditable': false, // 받은 포스트는 수정 불가
+                                  'isEditable': false,
                                 },
                               );
-                              
-                              // 포스트 사용 후 인박스 갱신
+
                               if (result == true || result == 'used') {
                                 setState(() {
-                                  // 상태 갱신으로 데이터 재로드
+                                  _selectedPostId = null;
                                 });
                               }
                             },

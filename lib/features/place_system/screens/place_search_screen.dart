@@ -372,44 +372,8 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
   }
 
   IconData _getCategoryIcon(String? category) {
-    switch (category) {
-      case '음식점':
-      case '요식업':
-        return Icons.restaurant;
-      case '카페/디저트':
-        return Icons.local_cafe;
-      case '소매/쇼핑':
-      case '쇼핑':
-        return Icons.shopping_bag;
-      case '숙박':
-        return Icons.hotel;
-      case '문화/여가':
-      case '엔터테인먼트':
-        return Icons.movie;
-      case '병원/의료':
-        return Icons.local_hospital;
-      case '교육':
-      case '배움':
-        return Icons.school;
-      case '미용/뷰티':
-        return Icons.spa;
-      case '운동/스포츠':
-        return Icons.fitness_center;
-      case '생활서비스':
-      case '생활':
-        return Icons.home_repair_service;
-      case '금융/보험':
-        return Icons.account_balance;
-      case '부동산':
-        return Icons.apartment;
-      case '자동차':
-        return Icons.directions_car;
-      case '공공기관':
-      case '정치':
-        return Icons.account_balance;
-      default:
-        return Icons.place;
-    }
+    // 모든 플레이스 아이콘을 가방 아이콘으로 통일
+    return Icons.work;
   }
 
   String _formatDate(DateTime date) {

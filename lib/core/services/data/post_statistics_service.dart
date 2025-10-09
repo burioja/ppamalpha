@@ -39,7 +39,9 @@ class PostStatisticsService {
       }).toList();
 
       // 4. 통계 계산
-      final deployments = markersQuery.docs.map((doc) => doc.data()).toList();
+      final deployments = markersQuery.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .toList();
       final totalQuantityDeployed = deployments.fold<int>(
         0,
         (sum, marker) => sum + ((marker['totalQuantity'] ?? marker['quantity']) as int? ?? 0),
@@ -292,7 +294,7 @@ class PostStatisticsService {
         .asyncMap((snapshot) async {
       // 실시간 통계 계산
       final collections = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         return {'id': doc.id, ...data};
       }).toList();
 
@@ -323,7 +325,9 @@ class PostStatisticsService {
           .where('postId', isEqualTo: postId)
           .get();
 
-      final collections = collectionsQuery.docs.map((doc) => doc.data()).toList();
+      final collections = collectionsQuery.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .toList();
 
       // 수집자별 데이터
       final collectorData = <String, Map<String, dynamic>>{};
@@ -401,7 +405,9 @@ class PostStatisticsService {
           .where('postId', isEqualTo: postId)
           .get();
 
-      final collections = collectionsQuery.docs.map((doc) => doc.data()).toList();
+      final collections = collectionsQuery.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .toList();
 
       // 월별 추이
       final monthlyTrend = <String, int>{};
@@ -700,5 +706,133 @@ class PostStatisticsService {
 
   double _toRadians(double degrees) {
     return degrees * 3.14159 / 180;
+  }
+
+  /// Phase 2-F: 쿠폰 사용률 통계
+  Future<Map<String, dynamic>> getCouponAnalytics(String postId) async {
+    try {
+      debugPrint('🎟️ PostStatisticsService.getCouponAnalytics 시작: postId=$postId');
+
+      // 1. 포스트가 쿠폰인지 확인
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) return {};
+
+      final post = PostModel.fromFirestore(postDoc);
+      if (!post.isCoupon) {
+        return {
+          'isCoupon': false,
+          'message': '쿠폰 포스트가 아닙니다',
+        };
+      }
+
+      // 2. 총 수집 건수
+      final collectionsQuery = await _firestore
+          .collection('post_collections')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      final totalCollections = collectionsQuery.size;
+
+      // 3. 쿠폰 사용 건수
+      final couponUsageQuery = await _firestore
+          .collection('coupon_usage')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      final totalCouponUsed = couponUsageQuery.size;
+
+      // 4. 사용률 계산
+      final usageRate = totalCollections > 0
+          ? (totalCouponUsed / totalCollections) * 100
+          : 0.0;
+
+      // 5. 한번 주운 포스트 갯수 (unique collectors)
+      final uniqueCollectors = <String>{};
+      for (final doc in collectionsQuery.docs) {
+        final data = doc.data();
+        uniqueCollectors.add(data['userId'] as String);
+      }
+
+      // 6. 재수집 사용자 수 (2번 이상 수집)
+      final collectorCounts = <String, int>{};
+      for (final doc in collectionsQuery.docs) {
+        final data = doc.data();
+        final userId = data['userId'] as String;
+        collectorCounts[userId] = (collectorCounts[userId] ?? 0) + 1;
+      }
+      final repeatedCollectors = collectorCounts.values.where((count) => count > 1).length;
+
+      // 7. 시간대별 쿠폰 사용 패턴
+      final hourlyUsage = <int, int>{};
+      for (final doc in couponUsageQuery.docs) {
+        final data = doc.data();
+        final usedAt = (data['usedAt'] as Timestamp).toDate();
+        hourlyUsage[usedAt.hour] = (hourlyUsage[usedAt.hour] ?? 0) + 1;
+      }
+
+      // 8. 일별 쿠폰 사용 추이
+      final dailyUsage = <String, int>{};
+      for (final doc in couponUsageQuery.docs) {
+        final data = doc.data();
+        final usedAt = (data['usedAt'] as Timestamp).toDate();
+        final dateKey = DateFormat('yyyy-MM-dd').format(usedAt);
+        dailyUsage[dateKey] = (dailyUsage[dateKey] ?? 0) + 1;
+      }
+
+      // Convert Map<int, int> to Map<String, int>
+      final hourlyUsageMap = <String, int>{};
+      hourlyUsage.forEach((hour, count) {
+        hourlyUsageMap[hour.toString()] = count;
+      });
+
+      debugPrint('📊 쿠폰 통계 조회 완료: 수집=$totalCollections, 사용=$totalCouponUsed, 사용률=${usageRate.toStringAsFixed(1)}%');
+
+      return {
+        'isCoupon': true,
+        'totalCollections': totalCollections,
+        'totalCouponUsed': totalCouponUsed,
+        'usageRate': usageRate,
+        'uniqueCollectors': uniqueCollectors.length,
+        'repeatedCollectors': repeatedCollectors,
+        'hourlyUsage': hourlyUsageMap,
+        'dailyUsage': dailyUsage,
+        'averageUsagePerCollector': uniqueCollectors.isNotEmpty
+            ? totalCouponUsed / uniqueCollectors.length
+            : 0.0,
+      };
+    } catch (e) {
+      debugPrint('❌ getCouponAnalytics 오류: $e');
+      return {};
+    }
+  }
+
+  /// Phase 2-G: 사진 확대 조회율 (이미지 뷰 통계)
+  Future<Map<String, dynamic>> getImageViewAnalytics(String postId) async {
+    try {
+      debugPrint('🖼️ PostStatisticsService.getImageViewAnalytics 시작: postId=$postId');
+
+      // post_collections에서 이미지 확대 정보 조회
+      // 현재는 post_collections에 imageViewed 필드가 없으므로 기본 통계만 제공
+      final collectionsQuery = await _firestore
+          .collection('post_collections')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      final totalCollections = collectionsQuery.size;
+
+      // TODO: 향후 post_collections에 imageViewed 필드 추가 필요
+      // 현재는 수집 건수만 반환
+      debugPrint('📊 이미지 뷰 통계: 총 수집=$totalCollections');
+
+      return {
+        'totalCollections': totalCollections,
+        'imageViewsAvailable': false,
+        'message': '이미지 확대 조회 데이터는 향후 추가 예정입니다',
+        'estimatedViewRate': 0.0, // 기본값
+      };
+    } catch (e) {
+      debugPrint('❌ getImageViewAnalytics 오류: $e');
+      return {};
+    }
   }
 }

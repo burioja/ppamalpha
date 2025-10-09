@@ -6,6 +6,7 @@ import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/network_image_fallback_with_data.dart';
+import 'dart:math' as math;
 
 class MyPlacesScreen extends StatefulWidget {
   const MyPlacesScreen({super.key});
@@ -17,15 +18,25 @@ class MyPlacesScreen extends StatefulWidget {
 class _MyPlacesScreenState extends State<MyPlacesScreen> {
   final PlaceService _placeService = PlaceService();
   final FirebaseService _firebaseService = FirebaseService();
+  MapController? _mapController;
 
   List<PlaceModel> _myPlaces = [];
   bool _isLoading = true;
   String? _error;
+  String? _selectedPlaceId; // 선택된 플레이스 ID 추적
+  LatLngBounds? _initialBounds; // 초기 지도 bounds
 
   @override
   void initState() {
     super.initState();
+    _mapController = MapController();
     _loadMyPlaces();
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMyPlaces() async {
@@ -70,6 +81,43 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
     ).then((_) => _loadMyPlaces()); // Refresh on return
   }
 
+  void _zoomToPlace(PlaceModel place) {
+    if (_mapController != null && place.location != null) {
+      _mapController!.move(
+        LatLng(place.location!.latitude, place.location!.longitude),
+        16.0, // 줌 레벨 16 (건물 수준에서 주변 맥락 확인 가능)
+      );
+    }
+  }
+
+  void _onPlaceTap(PlaceModel place) {
+    if (_selectedPlaceId == place.id) {
+      // 두번째 클릭 - 상세 페이지로 이동
+      _navigateToPlaceDetail(place);
+    } else {
+      // 첫번째 클릭 - 선택 + 지도 줌인
+      setState(() {
+        _selectedPlaceId = place.id;
+      });
+      _zoomToPlace(place);
+    }
+  }
+
+  void _resetMapToInitial() {
+    if (_mapController != null && _initialBounds != null) {
+      setState(() {
+        _selectedPlaceId = null; // 선택 해제
+      });
+      _mapController!.fitCamera(
+        CameraFit.bounds(
+          bounds: _initialBounds!,
+          padding: const EdgeInsets.all(80),
+          maxZoom: 15.0,
+        ),
+      );
+    }
+  }
+
   void _navigateToCreatePlace() {
     Navigator.pushNamed(
       context,
@@ -78,33 +126,24 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
   }
 
   IconData _getCategoryIcon(String? category) {
-    switch (category) {
-      case '요식업':
-        return Icons.restaurant;
-      case '배움':
-        return Icons.school;
-      case '생활':
-        return Icons.home;
-      case '쇼핑':
-        return Icons.shopping_bag;
-      case '엔터테인먼트':
-        return Icons.movie;
-      case '정치':
-        return Icons.account_balance;
-      default:
-        return Icons.place;
-    }
+    // 모든 플레이스 아이콘을 가방 아이콘으로 통일
+    return Icons.work;
   }
 
   Widget _buildPlaceCard(PlaceModel place) {
+    final isSelected = _selectedPlaceId == place.id;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
+      elevation: isSelected ? 8 : 2, // 선택시 그림자 강조
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
+        side: isSelected
+          ? BorderSide(color: Colors.blue[700]!, width: 3) // 선택시 파란 테두리
+          : BorderSide.none,
       ),
       child: InkWell(
-        onTap: () => _navigateToPlaceDetail(place),
+        onTap: () => _onPlaceTap(place),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -126,7 +165,7 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                           width: 80,
                           height: 80,
                           color: Colors.grey[300],
-                          child: const Icon(Icons.store, size: 40, color: Colors.grey),
+                          child: const Icon(Icons.work, size: 40, color: Colors.grey),
                         ),
                 ),
               ),
@@ -182,6 +221,7 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
+                        // 활성 상태
                         Icon(
                           place.isActive ? Icons.check_circle : Icons.cancel,
                           size: 14,
@@ -195,6 +235,30 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                             color: place.isActive ? Colors.green : Colors.red,
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        // 인증 상태
+                        if (place.isVerified)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.verified, size: 12, color: Colors.white),
+                                SizedBox(width: 2),
+                                Text(
+                                  '인증',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -215,9 +279,12 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
         .where((place) => place.location != null)
         .toList();
 
+    // 화면 높이의 40% (2/5)
+    final mapHeight = MediaQuery.of(context).size.height * 0.4;
+
     if (placesWithLocations.isEmpty) {
       return Container(
-        height: 100,
+        height: mapHeight,
         color: Colors.grey[200],
         child: Center(
           child: Text(
@@ -228,32 +295,63 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
       );
     }
 
-    // Calculate center point
-    double avgLat = placesWithLocations.fold(
-          0.0,
-          (sum, place) => sum + place.location!.latitude,
-        ) /
-        placesWithLocations.length;
-    double avgLng = placesWithLocations.fold(
-          0.0,
-          (sum, place) => sum + place.location!.longitude,
-        ) /
-        placesWithLocations.length;
+    // Calculate bounds to fit all places
+    double minLat = placesWithLocations
+        .map((p) => p.location!.latitude)
+        .reduce((a, b) => math.min(a, b));
+    double maxLat = placesWithLocations
+        .map((p) => p.location!.latitude)
+        .reduce((a, b) => math.max(a, b));
+    double minLng = placesWithLocations
+        .map((p) => p.location!.longitude)
+        .reduce((a, b) => math.min(a, b));
+    double maxLng = placesWithLocations
+        .map((p) => p.location!.longitude)
+        .reduce((a, b) => math.max(a, b));
 
-    return Container(
-      height: 200, // 지도 높이 증가
-      child: FlutterMap(
-        options: MapOptions(
-          initialCenter: LatLng(avgLat, avgLng),
-          initialZoom: 13.0,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-          ),
-        ),
+    final bounds = LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+    );
+
+    final center = LatLng(
+      (minLat + maxLat) / 2,
+      (minLng + maxLng) / 2,
+    );
+
+    // 초기 상태 저장 (처음 한번만)
+    _initialBounds ??= bounds;
+
+    return SizedBox(
+      height: mapHeight, // 화면 높이의 40%
+      child: Stack(
         children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 13.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate, // 회전만 비활성화
+              ),
+              onMapReady: () {
+                // Auto-fit to bounds when map is ready
+                if (_mapController != null) {
+                  _mapController!.fitCamera(
+                    CameraFit.bounds(
+                      bounds: bounds,
+                      padding: const EdgeInsets.all(80), // 패딩 증가 (50 → 80)
+                      maxZoom: 15.0, // 최대 줌 제한 (충분한 줌아웃 허용)
+                    ),
+                  );
+                }
+              },
+            ),
+            children: [
           TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.ppam.alpha',
+            urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
+            userAgentPackageName: 'com.ppamalpha.app',
           ),
           MarkerLayer(
             markers: placesWithLocations.map((place) {
@@ -262,15 +360,86 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                   place.location!.latitude,
                   place.location!.longitude,
                 ),
-                width: 40,
-                height: 40,
-                child: Icon(
-                  _getCategoryIcon(place.category),
-                  color: Colors.blue[700],
-                  size: 30,
+                width: 200, // 마커 + 레이블 공간
+                height: 50,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    // 마커 아이콘
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.blue[700]!,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _getCategoryIcon(place.category),
+                        color: Colors.blue[700],
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 플레이스 이름 레이블
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.blue[700]!,
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          place.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               );
             }).toList(),
+          ),
+            ],
+          ),
+          // 초기 화면으로 버튼 (우측 상단)
+          Positioned(
+            top: 10,
+            right: 10,
+            child: FloatingActionButton.small(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.blue[700],
+              elevation: 4,
+              onPressed: _resetMapToInitial,
+              child: const Icon(Icons.refresh, size: 20),
+            ),
           ),
         ],
       ),
@@ -315,7 +484,7 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
+                          Icon(Icons.work_outline, size: 64, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           Text(
                             '등록된 플레이스가 없습니다',
@@ -341,37 +510,44 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                         ],
                       ),
                     )
-                  : RefreshIndicator(
-                      onRefresh: _loadMyPlaces,
-                      child: ListView(
-                        children: [
-                          // Top Map Widget
-                          _buildMapWidget(),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  : Column(
+                      children: [
+                        // Top Map Widget - Fixed (does not scroll)
+                        _buildMapWidget(),
+                        const SizedBox(height: 8),
+                        // Place List - Scrollable
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: _loadMyPlaces,
+                            child: ListView(
                               children: [
-                                Text(
-                                  '총 ${_myPlaces.length}개의 플레이스',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '총 ${_myPlaces.length}개의 플레이스',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: _navigateToCreatePlace,
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('새 플레이스'),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                TextButton.icon(
-                                  onPressed: _navigateToCreatePlace,
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('새 플레이스'),
-                                ),
+                                ..._myPlaces.map((place) => _buildPlaceCard(place)),
+                                const SizedBox(height: 80),
                               ],
                             ),
                           ),
-                          ..._myPlaces.map((place) => _buildPlaceCard(place)),
-                          const SizedBox(height: 80),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
       floatingActionButton: _myPlaces.isNotEmpty
           ? FloatingActionButton.extended(

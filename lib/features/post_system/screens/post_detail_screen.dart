@@ -29,6 +29,7 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   late PostModel currentPost;
+  bool _isDeveloperInfoExpanded = false;
 
   @override
   void initState() {
@@ -61,94 +62,25 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 사용자 뷰: 미디어 우선 표시
+            // 사용자 뷰: 사진 → 리워드 → 스토어 → 쿠폰 순서
             if (!widget.isEditable) ...[
-              // 미디어(그림/텍스트/사운드) 최상단 배치
-              if (currentPost.mediaType.isNotEmpty && currentPost.mediaUrl.isNotEmpty)
-                _buildMediaSection(context),
-
+              // 1. 사진 (메인 이미지)
+              _buildMainPostImage(),
               const SizedBox(height: 16),
 
-              // 포스트 헤더 (간소화)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentPost.title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.person, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          currentPost.creatorName,
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.wallet_giftcard, size: 16, color: Colors.green),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${currentPost.reward}P',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (currentPost.isCoupon) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: currentPost.canUse ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.card_giftcard,
-                              size: 16,
-                              color: currentPost.canUse ? Colors.green : Colors.grey,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              currentPost.canUse ? '쿠폰 사용 가능' : '쿠폰 사용 불가',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: currentPost.canUse ? Colors.green : Colors.grey,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
+              // 2. 리워드 정보 (강조된 카드)
+              _buildRewardCard(),
               const SizedBox(height: 16),
 
-              // 스토어 링크 (사용자에게 중요) - 강조된 카드 형태
+              // 3. 스토어 정보
               if (currentPost.placeId != null && currentPost.placeId!.isNotEmpty)
                 _buildStoreLinkCard(),
+              if (currentPost.placeId != null && currentPost.placeId!.isNotEmpty)
+                const SizedBox(height: 16),
+
+              // 4. 쿠폰 정보 및 액션 버튼
+              if (currentPost.isCoupon)
+                _buildCouponSection(),
 
               const SizedBox(height: 24),
 
@@ -236,53 +168,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
               const SizedBox(height: 24),
 
-              // 기본 정보
-              _buildInfoSection('기본 정보', [
-                _buildInfoRow(Icons.tag, '포스트 ID', currentPost.postId),
-                _buildInfoRow(Icons.person, '발행자', currentPost.creatorName),
-                _buildStatusRow(), // 상태 표시
-                // 스토어 링크 (placeId가 있는 경우)
-                Builder(
-                  builder: (context) {
-                    debugPrint('📍 포스트 placeId 체크: ${currentPost.placeId}');
-                    if (currentPost.placeId != null && currentPost.placeId!.isNotEmpty) {
-                      debugPrint('✅ 스토어 링크 표시');
-                      return _buildStoreLink();
-                    } else {
-                      debugPrint('❌ placeId가 없어서 스토어 링크 미표시');
-                      return const SizedBox.shrink();
-                    }
-                  },
-                ),
-                _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(currentPost.createdAt)),
-                // 배포된 포스트만 배포 정보 표시
-                if (currentPost.isDeployed) ...[
-                  if (currentPost.deployedAt != null)
-                    _buildInfoRow(Icons.rocket_launch, '배포일', _formatDate(currentPost.deployedAt!)),
-                  _buildInfoRow(Icons.timer, '배포 기간', '${_calculateDeploymentDuration()}일'),
-                ],
-                _buildInfoRow(Icons.price_change, '리워드', '${currentPost.reward}'),
-                _buildInfoRow(Icons.settings, '기능', _buildCapabilitiesText()),
-                _buildInfoRow(Icons.group, '타겟', _buildTargetText()),
-                // 쿠폰 상태 표시
-                if (currentPost.isCoupon)
-                  _buildInfoRow(
-                    Icons.card_giftcard,
-                    '쿠폰 상태',
-                    currentPost.canUse ? '사용 가능 ✅' : '사용 불가 ❌',
-                  ),
-              ]),
+              // 개발자 정보 (토글 가능)
+              _buildDeveloperInfoSection(),
 
               const SizedBox(height: 24),
 
               // 액션 버튼들 (상태별 분기)
               ..._buildStatusBasedActions(),
-
-              const SizedBox(height: 24),
-
-              // 미디어(그림/텍스트/사운드) - 화면 하단에 배치
-              if (currentPost.mediaType.isNotEmpty && currentPost.mediaUrl.isNotEmpty)
-                _buildMediaSection(context),
 
               const SizedBox(height: 16),
 
@@ -290,23 +182,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               _buildPostStatusSection(),
             ],
 
-            const SizedBox(height: 16),
-
-            // 포스트 수정 버튼 - 최하단 배치 (편집 가능한 경우 + DRAFT 상태인 경우만)
-            if (widget.isEditable && currentPost.canEdit)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: () => _editPost(context),
-                  icon: const Icon(Icons.edit),
-                  label: const Text('포스트 수정'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -490,6 +365,283 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return '없음';
     return '${date.year}년 ${date.month}월 ${date.day}일';
+  }
+
+  // 리워드 카드 (사용자 뷰)
+  Widget _buildRewardCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.green.shade50, Colors.green.shade100],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.wallet_giftcard,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      currentPost.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.person, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          currentPost.creatorName,
+                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  '리워드',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${currentPost.reward}P',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 쿠폰 섹션 (사용자 뷰)
+  Widget _buildCouponSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: currentPost.canUse ? Colors.orange.shade50 : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: currentPost.canUse ? Colors.orange.shade200 : Colors.grey.shade300,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.card_giftcard,
+            size: 32,
+            color: currentPost.canUse ? Colors.orange : Colors.grey,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '쿠폰 포스트',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: currentPost.canUse ? Colors.orange.shade700 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  currentPost.canUse ? '이 포스트는 쿠폰으로 사용할 수 있습니다' : '쿠폰 사용이 불가능합니다',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: currentPost.canUse ? Colors.orange.shade600 : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (currentPost.canUse)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '사용 가능',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 개발자 정보 섹션 (토글 가능)
+  Widget _buildDeveloperInfoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isDeveloperInfoExpanded = !_isDeveloperInfoExpanded;
+            });
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.code,
+                  color: Colors.grey.shade700,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '개발자 정보',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _isDeveloperInfoExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.grey.shade700,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_isDeveloperInfoExpanded) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoRow(Icons.tag, '포스트 ID', currentPost.postId),
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.person, '발행자', currentPost.creatorName),
+                const SizedBox(height: 8),
+                _buildStatusRow(), // 상태 표시
+                const SizedBox(height: 8),
+                // 스토어 링크 (placeId가 있는 경우)
+                Builder(
+                  builder: (context) {
+                    if (currentPost.placeId != null && currentPost.placeId!.isNotEmpty) {
+                      return Column(
+                        children: [
+                          _buildStoreLink(),
+                          const SizedBox(height: 8),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+                _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(currentPost.createdAt)),
+                // 배포된 포스트만 배포 정보 표시
+                if (currentPost.isDeployed) ...[
+                  const SizedBox(height: 8),
+                  if (currentPost.deployedAt != null)
+                    _buildInfoRow(Icons.rocket_launch, '배포일', _formatDate(currentPost.deployedAt!)),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(Icons.timer, '배포 기간', '${_calculateDeploymentDuration()}일'),
+                ],
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.price_change, '리워드', '${currentPost.reward}'),
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.settings, '기능', _buildCapabilitiesText()),
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.group, '타겟', _buildTargetText()),
+                // 쿠폰 상태 표시
+                if (currentPost.isCoupon) ...[
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                    Icons.card_giftcard,
+                    '쿠폰 상태',
+                    currentPost.canUse ? '사용 가능 ✅' : '사용 불가 ❌',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildStatusRow() {
@@ -1985,38 +2137,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     switch (currentPost.status) {
       case PostStatus.DRAFT:
-        // 초안 상태: 편집 및 배포 가능
-        if (widget.isEditable) {
-          actions.addAll([
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () => _editPost(context),
-                icon: const Icon(Icons.edit),
-                label: const Text('포스트 편집'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () => _deployPost(context),
-                icon: const Icon(Icons.publish),
-                label: const Text('포스트 배포하기'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ]);
-        }
+        // 초안 상태: 액션 버튼 제거 (AppBar의 edit/delete 버튼 사용)
         break;
 
       case PostStatus.DEPLOYED:

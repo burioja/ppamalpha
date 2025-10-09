@@ -13,6 +13,7 @@ import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../screens/auth/address_search_screen.dart';
+import 'edit_place_screen_fields.dart';
 
 class EditPlaceScreen extends StatefulWidget {
   final PlaceModel place;
@@ -38,6 +39,24 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _couponPasswordController = TextEditingController();
 
+  // Phase 1 필드 컨트롤러
+  final TextEditingController _mobileController = TextEditingController();
+  final TextEditingController _faxController = TextEditingController();
+  final TextEditingController _parkingFeeController = TextEditingController();
+  final TextEditingController _websiteController = TextEditingController();
+
+  // Phase 2 필드 컨트롤러
+  final TextEditingController _floorController = TextEditingController();
+  final TextEditingController _buildingNameController = TextEditingController();
+  final TextEditingController _landmarkController = TextEditingController();
+  final TextEditingController _areaSizeController = TextEditingController();
+
+  // Phase 3 필드 컨트롤러
+  final TextEditingController _reservationUrlController = TextEditingController();
+  final TextEditingController _reservationPhoneController = TextEditingController();
+  final TextEditingController _virtualTourUrlController = TextEditingController();
+  final TextEditingController _closureReasonController = TextEditingController();
+
   // 선택된 카테고리들
   String? _selectedCategory;
   String? _selectedSubCategory;
@@ -54,6 +73,34 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
 
   // 대문 이미지 인덱스
   int _coverImageIndex = 0;
+
+  // Phase 1 상태 변수
+  Map<String, dynamic> _operatingHours = {}; // 요일별 운영시간
+  List<String> _selectedFacilities = [];
+  List<String> _selectedPaymentMethods = [];
+  String? _selectedParkingType;
+  int? _parkingCapacity;
+  bool _isOpen24Hours = false;
+  bool _hasValetParking = false;
+  Map<String, String> _socialMediaHandles = {};
+  List<String> _regularHolidays = [];
+  Map<String, String> _breakTimes = {};
+
+  // Phase 2 상태 변수
+  List<String> _selectedAccessibility = [];
+  String? _selectedPriceRange;
+  int? _capacity;
+  List<String> _nearbyTransit = [];
+
+  // Phase 3 상태 변수
+  List<String> _certifications = [];
+  List<String> _awards = [];
+  bool _hasReservation = false;
+  List<String> _videoUrls = [];
+  List<String> _interiorImageUrls = [];
+  List<String> _exteriorImageUrls = [];
+  bool _isTemporarilyClosed = false;
+  DateTime? _reopeningDate;
 
   // 카테고리 옵션들
   final Map<String, List<String>> _categoryOptions = {
@@ -100,6 +147,46 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _phoneController.text = widget.place.contactInfo?['phone'] ?? '';
     _emailController.text = widget.place.contactInfo?['email'] ?? '';
     _couponPasswordController.text = widget.place.couponPassword ?? '';
+
+    // Phase 1 필드 초기화
+    _operatingHours = Map.from(widget.place.operatingHours ?? {});
+    _mobileController.text = widget.place.mobile ?? '';
+    _faxController.text = widget.place.fax ?? '';
+    _websiteController.text = widget.place.contactInfo?['website'] ?? '';
+    _parkingFeeController.text = widget.place.parkingFee ?? '';
+    _selectedFacilities = List.from(widget.place.facilities);
+    _selectedPaymentMethods = List.from(widget.place.paymentMethods);
+    _selectedParkingType = widget.place.parkingType;
+    _parkingCapacity = widget.place.parkingCapacity;
+    _isOpen24Hours = widget.place.isOpen24Hours;
+    _hasValetParking = widget.place.hasValetParking;
+    _socialMediaHandles = Map.from(widget.place.socialMedia ?? {});
+    _regularHolidays = List.from(widget.place.regularHolidays ?? []);
+    _breakTimes = Map.from(widget.place.breakTimes ?? {});
+
+    // Phase 2 필드 초기화
+    _selectedAccessibility = List.from(widget.place.accessibility ?? []);
+    _selectedPriceRange = widget.place.priceRange;
+    _capacity = widget.place.capacity;
+    _floorController.text = widget.place.floor ?? '';
+    _buildingNameController.text = widget.place.buildingName ?? '';
+    _landmarkController.text = widget.place.landmark ?? '';
+    _areaSizeController.text = widget.place.areaSize ?? '';
+    _nearbyTransit = List.from(widget.place.nearbyTransit ?? []);
+
+    // Phase 3 필드 초기화
+    _certifications = List.from(widget.place.certifications ?? []);
+    _awards = List.from(widget.place.awards ?? []);
+    _hasReservation = widget.place.hasReservation;
+    _reservationUrlController.text = widget.place.reservationUrl ?? '';
+    _reservationPhoneController.text = widget.place.reservationPhone ?? '';
+    _videoUrls = List.from(widget.place.videoUrls ?? []);
+    _virtualTourUrlController.text = widget.place.virtualTourUrl ?? '';
+    _interiorImageUrls = List.from(widget.place.interiorImageUrls ?? []);
+    _exteriorImageUrls = List.from(widget.place.exteriorImageUrls ?? []);
+    _isTemporarilyClosed = widget.place.isTemporarilyClosed;
+    _reopeningDate = widget.place.reopeningDate;
+    _closureReasonController.text = widget.place.closureReason ?? '';
 
     // 카테고리 마이그레이션 (이전 카테고리 → 새 카테고리)
     final categoryMapping = {
@@ -159,6 +246,25 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _couponPasswordController.dispose();
+
+    // Phase 1 컨트롤러 dispose
+    _mobileController.dispose();
+    _faxController.dispose();
+    _parkingFeeController.dispose();
+    _websiteController.dispose();
+
+    // Phase 2 컨트롤러 dispose
+    _floorController.dispose();
+    _buildingNameController.dispose();
+    _landmarkController.dispose();
+    _areaSizeController.dispose();
+
+    // Phase 3 컨트롤러 dispose
+    _reservationUrlController.dispose();
+    _reservationPhoneController.dispose();
+    _virtualTourUrlController.dispose();
+    _closureReasonController.dispose();
+
     super.dispose();
   }
 
@@ -226,11 +332,52 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
         contactInfo: {
           'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+          'website': _websiteController.text.trim().isEmpty ? null : _websiteController.text.trim(),
         },
         couponPassword: _enableCoupon && _couponPasswordController.text.trim().isNotEmpty
             ? _couponPasswordController.text.trim()
             : null,
         isCouponEnabled: _enableCoupon && _couponPasswordController.text.trim().isNotEmpty,
+
+        // Phase 1 필드
+        operatingHours: _operatingHours.isEmpty ? null : _operatingHours,
+        mobile: _mobileController.text.trim().isEmpty ? null : _mobileController.text.trim(),
+        fax: _faxController.text.trim().isEmpty ? null : _faxController.text.trim(),
+        regularHolidays: _regularHolidays.isEmpty ? null : _regularHolidays,
+        isOpen24Hours: _isOpen24Hours,
+        breakTimes: _breakTimes.isEmpty ? null : _breakTimes,
+        socialMedia: _socialMediaHandles.isEmpty ? null : _socialMediaHandles,
+        parkingType: _selectedParkingType,
+        parkingCapacity: _parkingCapacity,
+        parkingFee: _parkingFeeController.text.trim().isEmpty ? null : _parkingFeeController.text.trim(),
+        hasValetParking: _hasValetParking,
+        facilities: _selectedFacilities,
+        paymentMethods: _selectedPaymentMethods,
+
+        // Phase 2 필드
+        accessibility: _selectedAccessibility.isEmpty ? null : _selectedAccessibility,
+        priceRange: _selectedPriceRange,
+        capacity: _capacity,
+        areaSize: _areaSizeController.text.trim().isEmpty ? null : _areaSizeController.text.trim(),
+        floor: _floorController.text.trim().isEmpty ? null : _floorController.text.trim(),
+        buildingName: _buildingNameController.text.trim().isEmpty ? null : _buildingNameController.text.trim(),
+        landmark: _landmarkController.text.trim().isEmpty ? null : _landmarkController.text.trim(),
+        nearbyTransit: _nearbyTransit.isEmpty ? null : _nearbyTransit,
+
+        // Phase 3 필드
+        certifications: _certifications.isEmpty ? null : _certifications,
+        awards: _awards.isEmpty ? null : _awards,
+        hasReservation: _hasReservation,
+        reservationUrl: _reservationUrlController.text.trim().isEmpty ? null : _reservationUrlController.text.trim(),
+        reservationPhone: _reservationPhoneController.text.trim().isEmpty ? null : _reservationPhoneController.text.trim(),
+        videoUrls: _videoUrls.isEmpty ? null : _videoUrls,
+        virtualTourUrl: _virtualTourUrlController.text.trim().isEmpty ? null : _virtualTourUrlController.text.trim(),
+        interiorImageUrls: _interiorImageUrls.isEmpty ? null : _interiorImageUrls,
+        exteriorImageUrls: _exteriorImageUrls.isEmpty ? null : _exteriorImageUrls,
+        isTemporarilyClosed: _isTemporarilyClosed,
+        reopeningDate: _reopeningDate,
+        closureReason: _closureReasonController.text.trim().isEmpty ? null : _closureReasonController.text.trim(),
+
         updatedAt: DateTime.now(),
       );
 
@@ -651,6 +798,11 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
               ],
 
               // 연락처 정보
+              const SizedBox(height: 24),
+              const Text(
+                '연락처 정보',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -660,11 +812,26 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                       decoration: const InputDecoration(
                         labelText: '전화번호',
                         border: OutlineInputBorder(),
-                        hintText: '010-1234-5678',
+                        hintText: '02-1234-5678',
                       ),
                     ),
                   ),
                   const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _mobileController,
+                      decoration: const InputDecoration(
+                        labelText: '휴대전화',
+                        border: OutlineInputBorder(),
+                        hintText: '010-1234-5678',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
                   Expanded(
                     child: TextFormField(
                       controller: _emailController,
@@ -675,7 +842,7 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
-                        if (value == null || value.isEmpty) return null; // 선택사항
+                        if (value == null || value.isEmpty) return null;
                         final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                         if (!emailRegex.hasMatch(value)) {
                           return '올바른 이메일 형식이 아닙니다';
@@ -684,7 +851,36 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                       },
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _faxController,
+                      decoration: const InputDecoration(
+                        labelText: '팩스',
+                        border: OutlineInputBorder(),
+                        hintText: '02-1234-5678',
+                      ),
+                    ),
+                  ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _websiteController,
+                decoration: const InputDecoration(
+                  labelText: '웹사이트',
+                  border: OutlineInputBorder(),
+                  hintText: 'https://example.com',
+                  prefixIcon: Icon(Icons.language),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 요일별 운영시간
+              EditPlaceFieldsHelper.buildOperatingHoursDetailSection(
+                operatingHours: _operatingHours,
+                onEditOperatingHours: _editOperatingHours,
               ),
 
               const SizedBox(height: 24),
@@ -772,6 +968,134 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
                     ],
                   ],
                 ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // ========== Phase 1 입력 폼 ==========
+
+              // 주차 정보
+              EditPlaceFieldsHelper.buildParkingSection(
+                selectedParkingType: _selectedParkingType,
+                parkingCapacity: _parkingCapacity,
+                parkingFeeController: _parkingFeeController,
+                hasValetParking: _hasValetParking,
+                onParkingTypeChanged: (value) => setState(() => _selectedParkingType = value),
+                onCapacityChanged: (value) => setState(() => _parkingCapacity = value),
+                onValetParkingChanged: (value) => setState(() => _hasValetParking = value),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 편의시설
+              EditPlaceFieldsHelper.buildFacilitiesSection(
+                selectedFacilities: _selectedFacilities,
+                onFacilityChanged: (facility, selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedFacilities.add(facility);
+                    } else {
+                      _selectedFacilities.remove(facility);
+                    }
+                  });
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // 결제 수단
+              EditPlaceFieldsHelper.buildPaymentMethodsSection(
+                selectedPaymentMethods: _selectedPaymentMethods,
+                onPaymentMethodChanged: (method, selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedPaymentMethods.add(method);
+                    } else {
+                      _selectedPaymentMethods.remove(method);
+                    }
+                  });
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // 운영시간 상세
+              EditPlaceFieldsHelper.buildOperatingHoursSection(
+                isOpen24Hours: _isOpen24Hours,
+                regularHolidays: _regularHolidays,
+                breakTimes: _breakTimes,
+                on24HoursChanged: (value) => setState(() => _isOpen24Hours = value),
+                onAddHoliday: _addHoliday,
+                onRemoveHoliday: (index) => setState(() => _regularHolidays.removeAt(index)),
+                onAddBreakTime: _addBreakTime,
+              ),
+
+              const SizedBox(height: 32),
+
+              // ========== Phase 2 입력 폼 ==========
+
+              // 접근성
+              EditPlaceFieldsHelper.buildAccessibilitySection(
+                selectedAccessibility: _selectedAccessibility,
+                onAccessibilityChanged: (item, selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedAccessibility.add(item);
+                    } else {
+                      _selectedAccessibility.remove(item);
+                    }
+                  });
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // 가격대 및 규모
+              EditPlaceFieldsHelper.buildPriceAndCapacitySection(
+                selectedPriceRange: _selectedPriceRange,
+                capacity: _capacity,
+                areaSizeController: _areaSizeController,
+                onPriceRangeChanged: (value) => setState(() => _selectedPriceRange = value),
+                onCapacityChanged: (value) => setState(() => _capacity = value),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 상세 위치 정보
+              EditPlaceFieldsHelper.buildLocationDetailsSection(
+                floorController: _floorController,
+                buildingNameController: _buildingNameController,
+                landmarkController: _landmarkController,
+              ),
+
+              const SizedBox(height: 32),
+
+              // ========== Phase 3 입력 폼 ==========
+
+              // 예약 시스템
+              EditPlaceFieldsHelper.buildReservationSection(
+                hasReservation: _hasReservation,
+                reservationUrlController: _reservationUrlController,
+                reservationPhoneController: _reservationPhoneController,
+                onReservationChanged: (value) => setState(() => _hasReservation = value),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 임시 휴업
+              EditPlaceFieldsHelper.buildClosureSection(
+                isTemporarilyClosed: _isTemporarilyClosed,
+                reopeningDate: _reopeningDate,
+                closureReasonController: _closureReasonController,
+                onClosureChanged: (value) => setState(() => _isTemporarilyClosed = value),
+                onSelectReopeningDate: _selectReopeningDate,
+              ),
+
+              const SizedBox(height: 24),
+
+              // 추가 미디어
+              EditPlaceFieldsHelper.buildMediaSection(
+                virtualTourUrlController: _virtualTourUrlController,
               ),
 
               const SizedBox(height: 32),
@@ -1078,6 +1402,202 @@ class _EditPlaceScreenState extends State<EditPlaceScreen> {
       height: 120,
       color: Colors.grey[300],
       child: Icon(Icons.image, size: 40, color: Colors.grey[600]),
+    );
+  }
+
+  // ========== Phase 1-3 헬퍼 메서드 ==========
+
+  void _addHoliday() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String? selectedDay;
+        return AlertDialog(
+          title: const Text('정기 휴무일 추가'),
+          content: DropdownButtonFormField<String>(
+            value: selectedDay,
+            decoration: const InputDecoration(
+              labelText: '요일 선택',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: '월요일', child: Text('월요일')),
+              DropdownMenuItem(value: '화요일', child: Text('화요일')),
+              DropdownMenuItem(value: '수요일', child: Text('수요일')),
+              DropdownMenuItem(value: '목요일', child: Text('목요일')),
+              DropdownMenuItem(value: '금요일', child: Text('금요일')),
+              DropdownMenuItem(value: '토요일', child: Text('토요일')),
+              DropdownMenuItem(value: '일요일', child: Text('일요일')),
+              DropdownMenuItem(value: '첫째주', child: Text('매월 첫째주')),
+              DropdownMenuItem(value: '셋째주', child: Text('매월 셋째주')),
+            ],
+            onChanged: (value) => selectedDay = value,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (selectedDay != null && !_regularHolidays.contains(selectedDay)) {
+                  setState(() => _regularHolidays.add(selectedDay!));
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('추가'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _addBreakTime() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String? selectedDay;
+        String? breakTimeText;
+        return AlertDialog(
+          title: const Text('브레이크타임 추가'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedDay,
+                decoration: const InputDecoration(
+                  labelText: '요일 선택',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: '평일', child: Text('평일')),
+                  DropdownMenuItem(value: '주말', child: Text('주말')),
+                  DropdownMenuItem(value: '매일', child: Text('매일')),
+                ],
+                onChanged: (value) => selectedDay = value,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: '브레이크타임',
+                  border: OutlineInputBorder(),
+                  hintText: '예: 15:00-17:00',
+                ),
+                onChanged: (value) => breakTimeText = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (selectedDay != null && breakTimeText != null && breakTimeText!.isNotEmpty) {
+                  setState(() => _breakTimes[selectedDay!] = breakTimeText!);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('추가'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _selectReopeningDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _reopeningDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() => _reopeningDate = picked);
+    }
+  }
+
+  void _editOperatingHours() {
+    final days = ['월', '화', '수', '목', '금', '토', '일'];
+    final controllers = <String, TextEditingController>{};
+
+    // 기존 운영시간으로 컨트롤러 초기화
+    for (final day in days) {
+      controllers[day] = TextEditingController(text: _operatingHours[day] ?? '');
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('요일별 운영시간 설정'),
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: days.map((day) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        child: Text(
+                          day,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: controllers[day],
+                          decoration: const InputDecoration(
+                            hintText: '09:00-18:00 또는 "휴무"',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              for (final controller in controllers.values) {
+                controller.dispose();
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              final newOperatingHours = <String, dynamic>{};
+              for (final day in days) {
+                final value = controllers[day]!.text.trim();
+                if (value.isNotEmpty && value != '휴무') {
+                  newOperatingHours[day] = value;
+                }
+              }
+              setState(() => _operatingHours = newOperatingHours);
+
+              for (final controller in controllers.values) {
+                controller.dispose();
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
     );
   }
 }

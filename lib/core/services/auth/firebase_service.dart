@@ -110,16 +110,21 @@ class FirebaseService {
       print('파일명: $fileName');
       print('폴더: $folder');
       print('이미지 크기: ${imageBytes.length} bytes');
-      
+
+      // 실제 이미지 타입 감지 (파일명이 아닌 바이트 데이터 기반)
+      final detectedType = _detectImageType(imageBytes);
+      print('감지된 이미지 타입: $detectedType');
+
       // 원본 이미지 업로드
       final originalPath = '$folder/original/$fileName';
       final originalRef = _storage.ref().child(originalPath);
       print('원본 경로: $originalPath');
-      final originalMetadata = SettableMetadata(contentType: _guessContentType(fileName));
+      // 감지된 타입 사용 (파일명 기반이 아닌 실제 데이터 기반)
+      final originalMetadata = SettableMetadata(contentType: detectedType);
       final originalSnapshot = await originalRef.putData(imageBytes, originalMetadata);
       final originalUrl = await originalSnapshot.ref.getDownloadURL();
       print('원본 URL: $originalUrl');
-      
+
       // 썸네일 생성 및 업로드
       final thumbnailData = await _createThumbnail(imageBytes);
       final thumbnailPath = '$folder/thumbnails/$fileName';
@@ -129,7 +134,7 @@ class FirebaseService {
       final thumbnailSnapshot = await thumbnailRef.putData(thumbnailData, thumbnailMetadata);
       final thumbnailUrl = await thumbnailSnapshot.ref.getDownloadURL();
       print('썸네일 URL: $thumbnailUrl');
-      
+
       final result = {
         'original': originalUrl,
         'thumbnail': thumbnailUrl,
@@ -262,6 +267,39 @@ class FirebaseService {
       print('에러: 썸네일 생성 실패 - $e');
       throw Exception('썸네일 생성 실패: $e');
     }
+  }
+
+  // 실제 이미지 바이트 데이터로부터 타입 감지
+  String _detectImageType(Uint8List bytes) {
+    if (bytes.length < 12) return 'image/jpeg'; // 기본값
+
+    // PNG 시그니처: 89 50 4E 47 0D 0A 1A 0A
+    if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      return 'image/png';
+    }
+
+    // JPEG 시그니처: FF D8 FF
+    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+
+    // WebP 시그니처: RIFF ... WEBP
+    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+
+    // GIF 시그니처: GIF87a 또는 GIF89a
+    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+      return 'image/gif';
+    }
+
+    // BMP 시그니처: BM
+    if (bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return 'image/bmp';
+    }
+
+    return 'image/jpeg'; // 기본값: JPEG
   }
 
   String? _guessContentType(String fileName) {

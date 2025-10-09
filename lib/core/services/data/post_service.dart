@@ -33,6 +33,7 @@ class PostService {
     DateTime? defaultExpiresAt, // 기본 만료일
     String? placeId, // 플레이스 ID (선택사항)
     bool isCoupon = false, // 쿠폰 여부 (선택사항)
+    String? youtubeUrl, // 유튜브 URL (선택사항)
   }) async {
     try {
       debugPrint('🚀 포스트 템플릿 생성 시작: title="$title", creator=$creatorId');
@@ -66,6 +67,7 @@ class PostService {
         'isCoupon': isCoupon, // 쿠폰 여부 추가
         'status': 'draft', // 기본적으로 초안 상태
         'placeId': placeId, // 플레이스 ID 추가
+        'youtubeUrl': youtubeUrl, // 유튜브 URL 추가
       });
 
       final postId = docRef.id;

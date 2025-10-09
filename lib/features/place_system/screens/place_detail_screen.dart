@@ -1,12 +1,9 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
-import '../../../widgets/network_image_fallback_with_data.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final String placeId;
@@ -19,9 +16,9 @@ class PlaceDetailScreen extends StatefulWidget {
 
 class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
   final PlaceService _placeService = PlaceService();
-  int? _selectedImageIndex; // null이면 대문 이미지 사용
-  PlaceModel? _place; // 캐시된 PlaceModel
   Future<PlaceModel?>? _placeFuture; // Future 캐싱
+  PageController? _pageController; // 이미지 캐러셀 컨트롤러 (nullable)
+  int _currentImageIndex = 0; // 현재 이미지 인덱스
 
   @override
   void initState() {
@@ -30,15 +27,22 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     _placeFuture = _loadPlace();
   }
 
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
+
   Future<PlaceModel?> _loadPlace() async {
     final place = await _placeService.getPlaceById(widget.placeId);
     if (place != null) {
-      _place = place; // 캐싱
       debugPrint('📍 Place loaded: ${place.name}');
-      debugPrint('🖼️ Image URLs: ${place.imageUrls}');
-      debugPrint('🔢 Image count: ${place.imageUrls.length}');
-      for (int i = 0; i < place.imageUrls.length; i++) {
-        debugPrint('  Image[$i]: ${place.imageUrls[i]}');
+      debugPrint('🖼️ Has images: ${place.hasImages}');
+      debugPrint('🖼️ Image count: ${place.imageUrls.length}');
+      if (place.imageUrls.isNotEmpty) {
+        for (int i = 0; i < place.imageUrls.length; i++) {
+          debugPrint('  Image[$i]: ${place.imageUrls[i].substring(0, place.imageUrls[i].length > 100 ? 100 : place.imageUrls[i].length)}...');
+        }
       }
     }
     return place;
@@ -46,25 +50,17 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('플레이스 상세'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => _editPlace(context),
-          ),
-        ],
-      ),
-      body: FutureBuilder<PlaceModel?>(
-        future: _placeFuture, // 캐싱된 Future 사용
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(
+    return FutureBuilder<PlaceModel?>(
+      future: _placeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        } else if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('플레이스 상세')),
+            body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -75,304 +71,487 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   Text('${snapshot.error}', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                 ],
               ),
-            );
-          } else if (!snapshot.hasData) {
-            return const Center(
+            ),
+          );
+        } else if (!snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('플레이스 상세')),
+            body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.place, size: 64, color: Colors.grey),
+                  Icon(Icons.work_outline, size: 64, color: Colors.grey),
                   SizedBox(height: 16),
                   Text('플레이스를 찾을 수 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
                 ],
               ),
-            );
-          } else {
-            final place = snapshot.data!;
-            debugPrint('📸 PlaceDetailScreen - Place ID: ${place.id}');
-            debugPrint('📸 PlaceDetailScreen - imageUrls: ${place.imageUrls}');
-            debugPrint('📸 PlaceDetailScreen - hasImages: ${place.hasImages}');
-            debugPrint('📸 PlaceDetailScreen - imageUrls.length: ${place.imageUrls.length}');
+            ),
+          );
+        } else {
+          final place = snapshot.data!;
+          return _buildGooglePlaceStyleUI(place);
+        }
+      },
+    );
+  }
 
-              return SingleChildScrollView(
+  // Google Place 스타일 UI (Store 화면 참조)
+  Widget _buildGooglePlaceStyleUI(PlaceModel place) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          // 상단 이미지 슬라이더 앱바
+          SliverAppBar(
+            expandedHeight: 300,
+            pinned: true,
+            backgroundColor: Colors.white,
+            title: Text(place.name),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () => _editPlace(context),
+              ),
+              IconButton(
+                icon: const Icon(Icons.share),
+                onPressed: () => _sharePlace(context, place),
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                ),
+                child: _buildImageSlider(place),
+              ),
+            ),
+          ),
+
+          // 플레이스 정보 섹션
+          SliverToBoxAdapter(
+            child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 지도 (최상단 배치)
+                  _buildPlaceHeader(place),
+                  const SizedBox(height: 24),
                   if (place.location != null) ...[
                     _buildPlaceMap(place),
                     const SizedBox(height: 24),
                   ],
-
-                  // 상단 이미지 갤러리 (대문 이미지 + 나머지 이미지)
-                  if (place.hasImages) ...[
-                    _buildImageGallery(place),
-                    const SizedBox(height: 16),
-                  ] else ...[
-                    // 이미지가 없을 때 표시
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.image_not_supported, size: 60, color: Colors.grey.shade400),
-                          const SizedBox(height: 8),
-                          Text(
-                            '등록된 이미지가 없습니다',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // 플레이스 헤더 (간소화)
-                  _buildSimplePlaceHeader(place),
-
-                  const SizedBox(height: 20),
-
-                  // 간결한 기본 정보
-                  _buildCompactInfo(place),
-
+                  _buildOperatingHours(place),
                   const SizedBox(height: 24),
-
-                  // 액션 버튼들
+                  _buildContactInfo(place),
+                  const SizedBox(height: 24),
+                  // Phase 1 새 섹션들
+                  if (place.parkingType != null || place.facilities.isNotEmpty) ...[
+                    _buildParkingInfo(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.facilities.isNotEmpty) ...[
+                    _buildFacilities(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.paymentMethods.isNotEmpty) ...[
+                    _buildPaymentMethods(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.socialMedia != null && place.socialMedia!.isNotEmpty) ...[
+                    _buildSocialMedia(place),
+                    const SizedBox(height: 24),
+                  ],
+                  // Phase 2 섹션들
+                  if (place.accessibility != null && place.accessibility!.isNotEmpty) ...[
+                    _buildAccessibility(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.priceRange != null || place.capacity != null || place.areaSize != null) ...[
+                    _buildCapacityInfo(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.floor != null || place.buildingName != null || place.landmark != null) ...[
+                    _buildLocationDetails(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.nearbyTransit != null && place.nearbyTransit!.isNotEmpty) ...[
+                    _buildTransitInfo(place),
+                    const SizedBox(height: 24),
+                  ],
+                  // Phase 3 섹션들
+                  if (place.isTemporarilyClosed) ...[
+                    _buildClosureBanner(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if ((place.certifications != null && place.certifications!.isNotEmpty) ||
+                      (place.awards != null && place.awards!.isNotEmpty)) ...[
+                    _buildCertificationsAndAwards(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if (place.hasReservation) ...[
+                    _buildReservationInfo(place),
+                    const SizedBox(height: 24),
+                  ],
+                  if ((place.videoUrls != null && place.videoUrls!.isNotEmpty) ||
+                      place.virtualTourUrl != null ||
+                      (place.interiorImageUrls != null && place.interiorImageUrls!.isNotEmpty) ||
+                      (place.exteriorImageUrls != null && place.exteriorImageUrls!.isNotEmpty)) ...[
+                    _buildMediaGallery(place),
+                    const SizedBox(height: 24),
+                  ],
                   _buildActionButtons(context, place),
                 ],
               ),
-            );
-          }
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // 상단 이미지 갤러리 (대문 이미지 + 나머지 이미지)
-  Widget _buildImageGallery(PlaceModel place) {
-    if (place.imageUrls.isEmpty) return const SizedBox.shrink();
-
-    // 현재 선택된 이미지 인덱스 (null이면 대문 이미지 사용)
-    final selectedIndex = (_selectedImageIndex ?? place.coverImageIndex).clamp(0, place.imageUrls.length - 1);
-    final selectedImageUrl = place.imageUrls[selectedIndex];
-    final selectedThumbnailUrl = place.thumbnailUrls.isNotEmpty && selectedIndex < place.thumbnailUrls.length
-        ? place.thumbnailUrls[selectedIndex]
-        : null;
-
-    debugPrint('🎨 Gallery - Selected index: $selectedIndex');
-    debugPrint('🎨 Gallery - Selected image URL: $selectedImageUrl');
-    debugPrint('🎨 Gallery - Is base64: ${selectedImageUrl.startsWith('data:')}');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 선택된 이미지 (원본 크게 표시)
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 250,
-            child: _buildImageWidget(selectedImageUrl, fit: BoxFit.cover),
+  // 이미지 슬라이더 위젯
+  Widget _buildImageSlider(PlaceModel place) {
+    if (!place.hasImages) {
+      return Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_a_photo, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                '등록된 사진이 없습니다',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            ],
           ),
         ),
+      );
+    }
 
-        // 모든 이미지 썸네일 (가로 스크롤 리스트)
-        if (place.imageUrls.length > 1) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 88,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: place.imageUrls.length,
-              itemBuilder: (context, index) {
-                final imageUrl = place.imageUrls[index];
-                // 썸네일 URL 사용하지 않고 원본만 사용 (statusCode: 0 에러 해결)
-                final isSelected = index == selectedIndex;
+    // PageController 초기화 (이미지가 있을 때만)
+    _pageController ??= PageController(initialPage: 0);
 
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedImageIndex = index;
-                      });
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected ? Colors.blue : Colors.transparent,
-                          width: 3,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: SizedBox(
-                          width: 80,
-                          height: 80,
-                          child: _buildImageWidget(imageUrl, fit: BoxFit.cover, isThumb: true),
-                        ),
-                      ),
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: place.imageUrls.length,
+          onPageChanged: (index) {
+            setState(() {
+              _currentImageIndex = index;
+            });
+          },
+          itemBuilder: (context, index) {
+            final imageUrl = place.imageUrls[index];
+            debugPrint('🖼️ Loading image[$index]: $imageUrl');
+
+            return Image.network(
+              imageUrl,
+              key: ValueKey('place_image_${place.id}_$index'),
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) {
+                  debugPrint('✅ Image loaded successfully[$index]');
+                  return child;
+                }
+                debugPrint('⏳ Loading image[$index]: ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes ?? "?"}');
+                return Container(
+                  color: Colors.grey[200],
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                          : null,
                     ),
                   ),
                 );
               },
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  // 이미지 위젯 빌더 (base64 및 일반 URL 모두 처리)
-  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover, bool isThumb = false}) {
-    debugPrint('🖼️ Building image widget: ${imageUrl.substring(0, imageUrl.length > 100 ? 100 : imageUrl.length)}...');
-    debugPrint('🖼️ Is base64: ${imageUrl.startsWith('data:')}');
-
-    // base64 이미지 처리
-    if (imageUrl.startsWith('data:')) {
-      try {
-        // data:image/png;base64, 부분을 제거하고 base64 데이터만 추출
-        final base64String = imageUrl.split(',')[1];
-        final Uint8List bytes = base64Decode(base64String);
-
-        return Image.memory(
-          bytes,
-          fit: fit,
-          errorBuilder: (context, error, stackTrace) {
-            debugPrint('❌ Base64 image error: $error');
-            return Container(
-              color: Colors.grey[300],
-              child: Center(
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: isThumb ? 30 : 50,
-                  color: Colors.grey
-                ),
-              ),
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('❌ Image load error: $error');
+                debugPrint('❌ Failed URL: $imageUrl');
+                return Container(
+                  color: Colors.grey[200],
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, size: 48, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      Text(
+                        '이미지 로드 실패',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          error.toString(),
+                          style: TextStyle(color: Colors.grey[500], fontSize: 10),
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
-        );
-      } catch (e) {
-        debugPrint('❌ Base64 decode error: $e');
-        return Container(
-          color: Colors.grey[300],
-          child: Center(
-            child: Icon(
-              Icons.image_not_supported,
-              size: isThumb ? 30 : 50,
-              color: Colors.grey
+        ),
+
+        // 좌측 화살표
+        if (place.imageUrls.length > 1 && _currentImageIndex > 0)
+          Positioned(
+            left: 16,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    if (_pageController != null) {
+                      _pageController!.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(Icons.chevron_left, color: Colors.white, size: 30),
+                  ),
+                ),
+              ),
             ),
           ),
-        );
-      }
+
+        // 우측 화살표
+        if (place.imageUrls.length > 1 && _currentImageIndex < place.imageUrls.length - 1)
+          Positioned(
+            right: 16,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    if (_pageController != null) {
+                      _pageController!.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(Icons.chevron_right, color: Colors.white, size: 30),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // 이미지 카운터
+        if (place.imageUrls.length > 1)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_currentImageIndex + 1}/${place.imageUrls.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // 플레이스 헤더 (이름, 업종, 인증)
+  Widget _buildPlaceHeader(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (place.category != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      place.category!,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (place.isVerified)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Text('인증됨', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        if (place.description.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            place.description,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 운영시간
+  Widget _buildOperatingHours(PlaceModel place) {
+    if (place.operatingHours == null || place.operatingHours!.isEmpty) {
+      return const SizedBox.shrink();
     }
 
-    // 일반 URL 이미지 처리
-    return Image.network(
-      imageUrl,
-      fit: fit,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Center(
-          child: CircularProgressIndicator(
-            value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
-                : null,
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('❌ Network image error: $error');
-        debugPrint('❌ Failed URL: $imageUrl');
-        return Container(
-          color: Colors.grey[300],
-          child: Center(
-            child: Icon(
-              Icons.image_not_supported,
-              size: isThumb ? 30 : 50,
-              color: Colors.grey
-            ),
-          ),
-        );
-      },
-    );
-  }
+    // operatingHours를 읽기 쉬운 문자열로 변환
+    String hoursText = '';
+    place.operatingHours!.forEach((day, hours) {
+      if (hours != null && hours is Map) {
+        final hour = hours['hour']?.toString().padLeft(2, '0') ?? '00';
+        final minute = hours['minute']?.toString().padLeft(2, '0') ?? '00';
+        hoursText += '$day: $hour:$minute\n';
+      }
+    });
 
-  Widget _buildSingleImage(String imageUrl, PlaceModel place, int index) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: buildHighQualityImageWithData(
-        imageUrl,
-        place.thumbnailUrls.isNotEmpty ? place.thumbnailUrls : null,
-        index,
-      ),
-    );
-  }
+    if (hoursText.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-  Widget _buildDoubleImages(List<String> images, PlaceModel place) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-            ),
-            child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
+        const Text(
+          '운영 시간',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 2),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topRight: Radius.circular(16),
-              bottomRight: Radius.circular(16),
-            ),
-            child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Text(
+            hoursText.trim(),
+            style: const TextStyle(fontSize: 14),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTripleImages(List<String> images, PlaceModel place) {
-    return Row(
+  // 연락처 정보
+  Widget _buildContactInfo(PlaceModel place) {
+    // contactInfo에서 정보 추출 (PlaceModel getter와 일치하도록 'phone' 사용)
+    final phoneNumber = place.phoneNumber; // PlaceModel getter 사용
+    final email = place.contactInfo?['email'] as String?;
+    final website = place.website; // PlaceModel getter 사용
+
+    // Phase 1 추가 연락처
+    final mobile = place.mobile;
+    final fax = place.fax;
+
+    final hasContact = phoneNumber != null ||
+                       email != null ||
+                       website != null ||
+                       mobile != null ||
+                       fax != null ||
+                       place.address != null;
+
+    if (!hasContact) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 2,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-            ),
-            child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
+        const Text(
+          '연락처',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 2),
-        Expanded(
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
           child: Column(
             children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[2], place.thumbnailUrls, 2),
-                ),
-              ),
+              if (phoneNumber != null) ...[
+                _buildContactRow(Icons.phone, '전화', phoneNumber),
+                const SizedBox(height: 12),
+              ],
+              if (mobile != null) ...[
+                _buildContactRow(Icons.phone_android, '휴대전화', mobile),
+                const SizedBox(height: 12),
+              ],
+              if (fax != null) ...[
+                _buildContactRow(Icons.print, '팩스', fax),
+                const SizedBox(height: 12),
+              ],
+              if (email != null) ...[
+                _buildContactRow(Icons.email, '이메일', email),
+                const SizedBox(height: 12),
+              ],
+              if (website != null) ...[
+                _buildContactRow(Icons.language, '웹사이트', website),
+                const SizedBox(height: 12),
+              ],
+              if (place.address != null)
+                _buildContactRow(Icons.location_on, '주소', place.address!),
             ],
           ),
         ),
@@ -380,157 +559,11 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     );
   }
 
-  Widget _buildQuadImages(List<String> images, PlaceModel place) {
-    return Column(
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[0], place.thumbnailUrls, 0),
-                ),
-              ),
-              const SizedBox(width: 2),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[1], place.thumbnailUrls, 1),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 2),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[2], place.thumbnailUrls, 2),
-                ),
-              ),
-              const SizedBox(width: 2),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
-                  child: buildHighQualityImageWithData(images[3], place.thumbnailUrls, 3),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 간소화된 플레이스 헤더
-  Widget _buildSimplePlaceHeader(PlaceModel place) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          place.name,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        if (place.category != null) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Text(
-              place.fullCategoryPath,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.blue.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  // 간결한 정보 카드
-  Widget _buildCompactInfo(PlaceModel place) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade100,
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 기본 설명
-          if (place.description != null && place.description!.isNotEmpty) ...[
-            Text(
-              place.description!,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black87,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 위치 정보
-          _buildInfoRow(Icons.location_on, '위치', place.formattedAddress ?? '위치 정보 없음'),
-
-          // 연락처
-          if (place.phoneNumber != null && place.phoneNumber!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.phone, '전화번호', place.phoneNumber!),
-          ],
-
-          // 웹사이트
-          if (place.website != null && place.website!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.web, '웹사이트', place.website!),
-          ],
-
-          // 운영시간
-          if (place.hasOperatingHours) ...[
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.access_time, '운영시간', _getOperatingHoursSummary(place)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildContactRow(IconData icon, String label, String value) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 18, color: Colors.blue.shade600),
-        ),
+        Icon(icon, size: 20, color: Colors.blue[700]),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -540,17 +573,13 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black87,
-                ),
+                style: const TextStyle(fontSize: 14),
               ),
             ],
           ),
@@ -559,211 +588,6 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     );
   }
 
-  String _getOperatingHoursSummary(PlaceModel place) {
-    // 간단한 운영시간 요약 (예: "월-금 09:00-18:00")
-    if (place.operatingHours == null || place.operatingHours!.isEmpty) {
-      return '운영시간 정보 없음';
-    }
-
-    // 첫 번째 요일의 운영시간을 표시
-    final firstDay = place.operatingHours!.keys.first;
-    final hours = place.operatingHours![firstDay];
-    if (hours != null) {
-      return '$firstDay ${hours['hour']?.toString().padLeft(2, '0')}:${hours['minute']?.toString().padLeft(2, '0')} 등';
-    }
-    return '운영시간 정보 없음';
-  }
-
-  Widget _buildPlaceHeader(PlaceModel place) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade50, Colors.blue.shade100],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade600,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getCategoryIcon(place.category),
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      place.name,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    if (place.category != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        place.fullCategoryPath,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            place.description,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBasicInfo(PlaceModel place) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '기본 정보',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              if (place.address != null) ...[
-                _buildInfoRow(Icons.location_on, '주소', place.address!),
-                const SizedBox(height: 12),
-              ],
-              _buildInfoRow(Icons.calendar_today, '생성일', _formatDate(place.createdAt)),
-              if (place.updatedAt != null) ...[
-                const SizedBox(height: 12),
-                _buildInfoRow(Icons.update, '수정일', _formatDate(place.updatedAt!)),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContactInfo(PlaceModel place) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '연락처 정보',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              if (place.contactInfo?['phone'] != null) ...[
-                _buildInfoRow(Icons.phone, '전화번호', place.contactInfo!['phone']!),
-                const SizedBox(height: 12),
-              ],
-              if (place.contactInfo?['email'] != null) ...[
-                _buildInfoRow(Icons.email, '이메일', place.contactInfo!['email']!),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOperatingHours(PlaceModel place) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '운영 시간',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: place.operatingHours!.entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        entry.key,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        '${entry.value['hour']?.toString().padLeft(2, '0')}:${entry.value['minute']?.toString().padLeft(2, '0')}',
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildPlaceMap(PlaceModel place) {
     return Column(
@@ -775,7 +599,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
         ),
         const SizedBox(height: 12),
         Container(
-          height: 250, // 지도 높이
+          height: 150, // 지도 높이 1.5cm (약 150px)
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
@@ -801,7 +625,8 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.ppam.alpha',
                 ),
                 MarkerLayer(
@@ -811,12 +636,28 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                         place.location!.latitude,
                         place.location!.longitude,
                       ),
-                      width: 40,
-                      height: 40,
-                      child: const Icon(
-                        Icons.place,
-                        size: 40,
-                        color: Colors.red,
+                      width: 50,
+                      height: 50,
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.blue.shade700, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.work,
+                          size: 30,
+                          color: Colors.blue.shade700,
+                        ),
                       ),
                     ),
                   ],
@@ -877,29 +718,748 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     );
   }
 
+  // === Phase 1: 새로운 섹션 위젯들 ===
 
-  IconData _getCategoryIcon(String? category) {
-    switch (category) {
-      case '요식업':
-        return Icons.restaurant;
-      case '배움':
-        return Icons.school;
-      case '생활':
-        return Icons.home;
-      case '쇼핑':
-        return Icons.shopping_bag;
-      case '엔터테인먼트':
-        return Icons.movie;
-      case '정치':
-        return Icons.account_balance;
+  // 주차 정보 섹션
+  Widget _buildParkingInfo(PlaceModel place) {
+    if (place.parkingType == null && place.parkingCapacity == null && place.parkingFee == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '주차 정보',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              if (place.parkingType != null) ...[
+                _buildInfoRow(Icons.local_parking, '주차 형태', _getParkingTypeLabel(place.parkingType!)),
+                if (place.parkingCapacity != null || place.parkingFee != null || place.hasValetParking) const SizedBox(height: 12),
+              ],
+              if (place.parkingCapacity != null) ...[
+                _buildInfoRow(Icons.pin_drop, '주차 가능 대수', '${place.parkingCapacity}대'),
+                if (place.parkingFee != null || place.hasValetParking) const SizedBox(height: 12),
+              ],
+              if (place.parkingFee != null) ...[
+                _buildInfoRow(Icons.payments, '주차 요금', place.parkingFee!),
+                if (place.hasValetParking) const SizedBox(height: 12),
+              ],
+              if (place.hasValetParking)
+                _buildInfoRow(Icons.car_rental, '발레파킹', '제공'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getParkingTypeLabel(String type) {
+    switch (type) {
+      case 'self':
+        return '자체 주차장';
+      case 'valet':
+        return '발레파킹';
+      case 'nearby':
+        return '인근 주차장';
+      case 'none':
+        return '주차 불가';
       default:
-        return Icons.place;
+        return type;
     }
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}년 ${date.month}월 ${date.day}일';
+  // 편의시설 섹션
+  Widget _buildFacilities(PlaceModel place) {
+    if (place.facilities.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '편의시설',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: place.facilities.map((facility) {
+            final facilityInfo = _getFacilityInfo(facility);
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(facilityInfo['icon'] as IconData, size: 16, color: Colors.blue.shade700),
+                  const SizedBox(width: 6),
+                  Text(
+                    facilityInfo['label'] as String,
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
+
+  Map<String, dynamic> _getFacilityInfo(String facility) {
+    switch (facility) {
+      case 'wifi':
+        return {'icon': Icons.wifi, 'label': 'Wi-Fi'};
+      case 'wheelchair':
+        return {'icon': Icons.accessible, 'label': '휠체어 이용 가능'};
+      case 'kids_zone':
+        return {'icon': Icons.child_care, 'label': '키즈존'};
+      case 'pet_friendly':
+        return {'icon': Icons.pets, 'label': '반려동물 동반 가능'};
+      case 'smoking_area':
+        return {'icon': Icons.smoking_rooms, 'label': '흡연 구역'};
+      case 'restroom':
+        return {'icon': Icons.wc, 'label': '화장실'};
+      case 'elevator':
+        return {'icon': Icons.elevator, 'label': '엘리베이터'};
+      case 'ac':
+        return {'icon': Icons.ac_unit, 'label': '에어컨'};
+      case 'heating':
+        return {'icon': Icons.local_fire_department, 'label': '난방'};
+      default:
+        return {'icon': Icons.check_circle, 'label': facility};
+    }
+  }
+
+  // 결제 수단 섹션
+  Widget _buildPaymentMethods(PlaceModel place) {
+    if (place.paymentMethods.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '결제 수단',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: place.paymentMethods.map((method) {
+            final methodInfo = _getPaymentMethodInfo(method);
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(methodInfo['icon'] as IconData, size: 16, color: Colors.green.shade700),
+                  const SizedBox(width: 6),
+                  Text(
+                    methodInfo['label'] as String,
+                    style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _getPaymentMethodInfo(String method) {
+    switch (method) {
+      case 'card':
+        return {'icon': Icons.credit_card, 'label': '카드'};
+      case 'cash':
+        return {'icon': Icons.money, 'label': '현금'};
+      case 'mobile_pay':
+        return {'icon': Icons.phone_android, 'label': '모바일 결제'};
+      case 'cryptocurrency':
+        return {'icon': Icons.currency_bitcoin, 'label': '암호화폐'};
+      case 'account_transfer':
+        return {'icon': Icons.account_balance, 'label': '계좌이체'};
+      default:
+        return {'icon': Icons.payment, 'label': method};
+    }
+  }
+
+  // 소셜미디어 섹션
+  Widget _buildSocialMedia(PlaceModel place) {
+    if (place.socialMedia == null || place.socialMedia!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '소셜미디어',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: place.socialMedia!.entries.map((entry) {
+            final platform = entry.key;
+            final handle = entry.value;
+            final platformInfo = _getSocialMediaInfo(platform);
+
+            return InkWell(
+              onTap: () {
+                // TODO: 소셜미디어 링크 열기
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$platform: $handle')),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: platformInfo['color'] as Color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(platformInfo['icon'] as IconData, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      handle,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _getSocialMediaInfo(String platform) {
+    switch (platform.toLowerCase()) {
+      case 'instagram':
+        return {'icon': Icons.camera_alt, 'color': Colors.purple};
+      case 'facebook':
+        return {'icon': Icons.facebook, 'color': Colors.blue.shade800};
+      case 'twitter':
+        return {'icon': Icons.alternate_email, 'color': Colors.lightBlue};
+      case 'youtube':
+        return {'icon': Icons.play_circle_filled, 'color': Colors.red};
+      case 'blog':
+        return {'icon': Icons.article, 'color': Colors.orange};
+      default:
+        return {'icon': Icons.link, 'color': Colors.grey};
+    }
+  }
+
+  // 공통 정보 행 위젯
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.blue[700]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // === Phase 2: 부가 정보 섹션 위젯들 ===
+
+  // 접근성 정보
+  Widget _buildAccessibility(PlaceModel place) {
+    if (place.accessibility == null || place.accessibility!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '접근성',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: place.accessibility!.map((item) {
+            final info = _getAccessibilityInfo(item);
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.teal.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.teal.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(info['icon'] as IconData, size: 16, color: Colors.teal.shade700),
+                  const SizedBox(width: 6),
+                  Text(
+                    info['label'] as String,
+                    style: TextStyle(fontSize: 12, color: Colors.teal.shade700),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _getAccessibilityInfo(String item) {
+    switch (item) {
+      case 'wheelchair_ramp':
+        return {'icon': Icons.accessible, 'label': '휠체어 경사로'};
+      case 'elevator':
+        return {'icon': Icons.elevator, 'label': '엘리베이터'};
+      case 'braille':
+        return {'icon': Icons.text_fields, 'label': '점자 안내'};
+      case 'accessible_restroom':
+        return {'icon': Icons.wc, 'label': '장애인 화장실'};
+      case 'accessible_parking':
+        return {'icon': Icons.local_parking, 'label': '장애인 주차'};
+      case 'guide_dog':
+        return {'icon': Icons.pets, 'label': '안내견 동반 가능'};
+      default:
+        return {'icon': Icons.accessibility_new, 'label': item};
+    }
+  }
+
+  // 용량 및 가격대 정보
+  Widget _buildCapacityInfo(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '규모 및 가격',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              if (place.priceRange != null) ...[
+                _buildInfoRow(Icons.attach_money, '가격대', place.priceRange!),
+                if (place.capacity != null || place.areaSize != null) const SizedBox(height: 12),
+              ],
+              if (place.capacity != null) ...[
+                _buildInfoRow(Icons.people, '최대 수용 인원', '${place.capacity}명'),
+                if (place.areaSize != null) const SizedBox(height: 12),
+              ],
+              if (place.areaSize != null)
+                _buildInfoRow(Icons.square_foot, '면적', place.areaSize!),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 상세 위치 정보
+  Widget _buildLocationDetails(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '상세 위치',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              if (place.buildingName != null) ...[
+                _buildInfoRow(Icons.business, '건물명', place.buildingName!),
+                if (place.floor != null || place.landmark != null) const SizedBox(height: 12),
+              ],
+              if (place.floor != null) ...[
+                _buildInfoRow(Icons.layers, '층', place.floor!),
+                if (place.landmark != null) const SizedBox(height: 12),
+              ],
+              if (place.landmark != null)
+                _buildInfoRow(Icons.location_on, '랜드마크', place.landmark!),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 대중교통 정보
+  Widget _buildTransitInfo(PlaceModel place) {
+    if (place.nearbyTransit == null || place.nearbyTransit!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '대중교통',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: place.nearbyTransit!.map((transit) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.directions_transit, size: 20, color: Colors.blue[700]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(transit, style: const TextStyle(fontSize: 14)),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // === Phase 3: 고급 기능 섹션 위젯들 ===
+
+  // 임시 휴업 배너
+  Widget _buildClosureBanner(PlaceModel place) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade300, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cancel, color: Colors.red.shade700, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                '임시 휴업 중',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade700,
+                ),
+              ),
+            ],
+          ),
+          if (place.reopeningDate != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '재개업 예정: ${place.reopeningDate!.year}-${place.reopeningDate!.month.toString().padLeft(2, '0')}-${place.reopeningDate!.day.toString().padLeft(2, '0')}',
+              style: TextStyle(fontSize: 14, color: Colors.red.shade900),
+            ),
+          ],
+          if (place.closureReason != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '사유: ${place.closureReason}',
+              style: TextStyle(fontSize: 14, color: Colors.red.shade900),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // 인증 및 수상 내역
+  Widget _buildCertificationsAndAwards(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '인증 및 수상',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (place.certifications != null && place.certifications!.isNotEmpty) ...[
+              const Text('인증', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: place.certifications!.map((cert) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified, size: 16, color: Colors.amber.shade700),
+                        const SizedBox(width: 6),
+                        Text(
+                          cert,
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+            if (place.awards != null && place.awards!.isNotEmpty) ...[
+              if (place.certifications != null && place.certifications!.isNotEmpty)
+                const SizedBox(height: 16),
+              const Text('수상', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: place.awards!.map((award) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.orange.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.emoji_events, size: 16, color: Colors.orange.shade700),
+                        const SizedBox(width: 6),
+                        Text(
+                          award,
+                          style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 예약 정보
+  Widget _buildReservationInfo(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '예약',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, color: Colors.green.shade700),
+                  const SizedBox(width: 12),
+                  const Text('예약 가능', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              if (place.reservationPhone != null) ...[
+                const SizedBox(height: 12),
+                _buildInfoRow(Icons.phone, '예약 전화', place.reservationPhone!),
+              ],
+              if (place.reservationUrl != null) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () {
+                    // TODO: 예약 URL 열기
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('예약 페이지: ${place.reservationUrl}')),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.open_in_new, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          '예약하기',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 미디어 갤러리
+  Widget _buildMediaGallery(PlaceModel place) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '미디어',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (place.virtualTourUrl != null) ...[
+              InkWell(
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('가상 투어 열기')),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.purple.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.view_in_ar, color: Colors.purple.shade700, size: 32),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('360도 가상 투어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text('내부를 둘러보세요', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (place.videoUrls != null && place.videoUrls!.isNotEmpty) ...[
+              const Text('동영상', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              ...place.videoUrls!.map((videoUrl) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('동영상 재생: $videoUrl')),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.play_circle_filled, color: Colors.red.shade700),
+                          const SizedBox(width: 12),
+                          const Expanded(child: Text('동영상 보기')),
+                          const Icon(Icons.arrow_forward_ios, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
 
   void _editPlace(BuildContext context) async {
     // 현재 플레이스 정보를 가져온 후 수정 화면으로 이동

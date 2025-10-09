@@ -3,9 +3,10 @@ import '../../../core/models/post/post_model.dart';
 import '../../../../widgets/network_image_fallback_web.dart' if (dart.library.io) '../../../../widgets/network_image_fallback_stub.dart';
 import 'package:intl/intl.dart';
 
-class PostTileCard extends StatelessWidget {
+class PostTileCard extends StatefulWidget {
   final PostModel post;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
   final bool isSelected;
   final bool showDeleteButton;
   final VoidCallback? onDelete;
@@ -16,6 +17,7 @@ class PostTileCard extends StatelessWidget {
     super.key,
     required this.post,
     this.onTap,
+    this.onDoubleTap,
     this.isSelected = false,
     this.showDeleteButton = false,
     this.onDelete,
@@ -24,31 +26,81 @@ class PostTileCard extends StatelessWidget {
   });
 
   @override
+  State<PostTileCard> createState() => _PostTileCardState();
+}
+
+class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  DateTime? _lastTapTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    // 선택되지 않은 상태면 선택만 하고 (1번 탭)
+    // 이미 선택된 상태면 onTap 호출 (2번 탭)
+    if (!widget.isSelected) {
+      // 1번 탭: 선택만 하기
+      if (widget.onTap != null) {
+        widget.onTap!();
+      }
+    } else {
+      // 2번 탭: 포스트 상세로 이동
+      _animationController.forward().then((_) {
+        _animationController.reverse();
+      });
+      if (widget.onDoubleTap != null) {
+        widget.onDoubleTap!();
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     try {
-      final isDeleted = post.status == PostStatus.DELETED;
+      final isDeleted = widget.post.status == PostStatus.DELETED;
       // 🚀 제거된 필드들: isCollected, isUsed, isUsedByCurrentUser
       // 이들은 이제 post_collections 컬렉션에서 쿼리해야 함
       final isCollected = false; // TODO: 쿼리 기반으로 변경 필요
       final isUsed = false; // TODO: 쿼리 기반으로 변경 필요
 
       return GestureDetector(
-        onTap: onTap,
-        child: Container(
+        onTap: _handleTap,
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) => Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Container(
         decoration: BoxDecoration(
-          color: isUsed 
+          color: isUsed
               ? Colors.grey.shade100
-              : isSelected 
-                  ? const Color(0xFF4D4DFF).withValues(alpha: 0.1) 
+              : widget.isSelected
+                  ? const Color(0xFF4D4DFF).withValues(alpha: 0.1)
                   : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isUsed
                 ? Colors.grey.shade400
-                : isSelected 
-                    ? const Color(0xFF4D4DFF) 
+                : widget.isSelected
+                    ? const Color(0xFF4D4DFF)
                     : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
+            width: widget.isSelected ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
@@ -88,12 +140,12 @@ class PostTileCard extends StatelessWidget {
                       child: _buildStatusBadge(isDeleted, isCollected, isUsed),
                     ),
                     // 삭제 버튼 (좌상단)
-                    if (showDeleteButton && onDelete != null)
+                    if (widget.showDeleteButton && widget.onDelete != null)
                       Positioned(
                         top: 8,
                         left: 8,
                         child: GestureDetector(
-                          onTap: onDelete,
+                          onTap: widget.onDelete,
                           child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
@@ -141,18 +193,31 @@ class PostTileCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 제목
-                    Text(
-                      post.title.isNotEmpty ? post.title : '(제목 없음)',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isUsed ? Colors.grey.shade600 : Colors.black87,
-                        decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    // 제목 (선택 시 스크롤 애니메이션)
+                    widget.isSelected
+                        ? SizedBox(
+                            height: 32,
+                            child: _ScrollingText(
+                              text: widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isUsed ? Colors.grey.shade600 : Colors.black87,
+                                decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isUsed ? Colors.grey.shade600 : Colors.black87,
+                              decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                     const SizedBox(height: 4),
                     // 하단 정보 (리워드, 통계버튼/배포일)
                     Row(
@@ -162,7 +227,7 @@ class PostTileCard extends StatelessWidget {
                         Flexible(
                           flex: 2,
                           child: Text(
-                            isUsed ? '사용완료' : '₩${NumberFormat('#,###').format(post.reward)}',
+                            isUsed ? '사용완료' : '₩${NumberFormat('#,###').format(widget.post.reward)}',
                             style: TextStyle(
                               fontSize: 12,
                               color: isUsed ? Colors.grey.shade600 : const Color(0xFF4D4DFF),
@@ -178,9 +243,9 @@ class PostTileCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             // 통계 버튼 (배포된 포스트만)
-                            if (showStatisticsButton && post.isDeployed && onStatistics != null)
+                            if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
                               GestureDetector(
-                                onTap: onStatistics,
+                                onTap: widget.onStatistics,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
@@ -208,12 +273,12 @@ class PostTileCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            if (showStatisticsButton && post.isDeployed && onStatistics != null)
+                            if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
                               const SizedBox(height: 2),
                             // 배포일 (배포된 포스트만 표시)
-                            if (post.isDeployed)
+                            if (widget.post.isDeployed)
                               Text(
-                                DateFormat('MM/dd').format(post.createdAt),
+                                DateFormat('MM/dd').format(widget.post.createdAt),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey.shade600,
@@ -230,11 +295,13 @@ class PostTileCard extends StatelessWidget {
           ],
         ),
       ),
+          ),
+        ),
       );
     } catch (e, stackTrace) {
       debugPrint('❌ PostTileCard 빌드 에러: $e');
       debugPrint('스택 트레이스: $stackTrace');
-      debugPrint('포스트 정보: postId=${post.postId}, title=${post.title}');
+      debugPrint('포스트 정보: postId=${widget.post.postId}, title=${widget.post.title}');
 
       // 에러 발생 시 간단한 에러 카드 표시
       return Container(
@@ -265,11 +332,11 @@ class PostTileCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'ID: ${post.postId}',
+              'ID: ${widget.post.postId}',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
             ),
             Text(
-              '제목: ${post.title}',
+              '제목: ${widget.post.title}',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
             ),
             const SizedBox(height: 4),
@@ -288,14 +355,14 @@ class PostTileCard extends StatelessWidget {
   Widget _buildImageWidget() {
     try {
       // 썸네일 우선 사용
-      final imageUrl = post.thumbnailUrl.isNotEmpty
-          ? post.thumbnailUrl.first
-          : (post.mediaUrl.isNotEmpty ? post.mediaUrl.first : '');
+      final imageUrl = widget.post.thumbnailUrl.isNotEmpty
+          ? widget.post.thumbnailUrl.first
+          : (widget.post.mediaUrl.isNotEmpty ? widget.post.mediaUrl.first : '');
 
       if (imageUrl.isNotEmpty) {
         // 이미지 타입 체크를 더 관대하게 변경
-        bool hasImageMedia = post.mediaType.isNotEmpty &&
-            (post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
+        bool hasImageMedia = widget.post.mediaType.isNotEmpty &&
+            (widget.post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
              imageUrl.toLowerCase().contains('.jpg') ||
              imageUrl.toLowerCase().contains('.jpeg') ||
              imageUrl.toLowerCase().contains('.png') ||
@@ -386,7 +453,7 @@ class PostTileCard extends StatelessWidget {
     }
 
     // 비활성 상태 (DELETED)
-    if (post.status == PostStatus.DELETED) {
+    if (widget.post.status == PostStatus.DELETED) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -404,24 +471,99 @@ class PostTileCard extends StatelessWidget {
       );
     }
 
+    // RECALLED 상태 - 회수된 포스트
+    if (widget.post.status == PostStatus.RECALLED) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text(
+          '회수됨',
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
     // DEPLOYED 상태면 배지 숨김 (배포된 포스트 탭에서는 모든 포스트가 DEPLOYED이므로 중복 정보)
-    if (post.status == PostStatus.DEPLOYED) {
+    if (widget.post.status == PostStatus.DEPLOYED) {
       return const SizedBox.shrink();
     }
 
-    // DRAFT 상태 등 기타 활성 상태
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFF4D4DFF),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Text(
-        '작성중',
-        style: TextStyle(
-          fontSize: 10,
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
+    // DRAFT 상태 - "작성중" 배지 숨김 처리
+    if (widget.post.status == PostStatus.DRAFT) {
+      return const SizedBox.shrink();
+    }
+
+    // 기타 상태는 배지 표시 안 함
+    return const SizedBox.shrink();
+  }
+}
+
+/// 좌우 스크롤 애니메이션 텍스트 위젯
+class _ScrollingText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const _ScrollingText({
+    required this.text,
+    required this.style,
+  });
+
+  @override
+  State<_ScrollingText> createState() => _ScrollingTextState();
+}
+
+class _ScrollingTextState extends State<_ScrollingText> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _animation;
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    );
+
+    // 좌우 반복 애니메이션
+    _animation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(-1.0, 0.0),
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.linear,
+    ));
+
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: SlideTransition(
+        position: _animation,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.text, style: widget.style),
+            const SizedBox(width: 20),
+            Text(widget.text, style: widget.style),
+          ],
         ),
       ),
     );
