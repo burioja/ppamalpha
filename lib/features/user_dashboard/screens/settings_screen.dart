@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/data/place_service.dart';
+import '../../../core/models/place/place_model.dart';
 import '../../../providers/user_provider.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/data/user_service.dart';
@@ -47,8 +49,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _workplaceInfoExpanded = true;
   bool _contentFilterExpanded = true;
   
-  // 워크플레이스 관련
-  final List<Map<String, String>> _workplaces = [];
+  // 일터 관련 (단일 workplaceId 기반)
+  final PlaceService _placeService = PlaceService();
+  String? _workplaceId;
+  PlaceModel? _workplace;
   final TextEditingController _workplaceNameController = TextEditingController();
   final TextEditingController _workplaceAddressController = TextEditingController();
   
@@ -110,25 +114,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _allowViolentContent = userData['allowViolentContent'] ?? false;
           _allowHateContent = userData['allowHateContent'] ?? false;
 
-          // 워크플레이스 로드
-          final workplaces = userData['workplaces'] as List<dynamic>?;
-          _workplaces.clear();
-          if (workplaces != null && workplaces.isNotEmpty) {
-            for (final workplace in workplaces) {
-              final workplaceMap = workplace as Map<String, dynamic>;
-              _workplaces.add({
-                'name': workplaceMap['name'] ?? '',
-                'address': workplaceMap['address'] ?? '',
-              });
-            }
-            print('로드된 근무지 개수: ${_workplaces.length}');
-          } else {
-            print('저장된 근무지가 없음');
-          }
+          // 일터 정보 로드 (workplaceId 기반)
+          _workplaceId = userData['workplaceId'] as String?;
         });
+
+        // workplaceId가 있으면 플레이스 정보 조회
+        if (_workplaceId != null && _workplaceId!.isNotEmpty) {
+          _loadWorkplaceInfo();
+        }
+      }
       }
     } catch (e) {
       _showToast('사용자 정보를 불러오는 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  Future<void> _loadWorkplaceInfo() async {
+    try {
+      if (_workplaceId == null) return;
+      
+      final place = await _placeService.getPlaceById(_workplaceId!);
+      if (place != null && mounted) {
+        setState(() {
+          _workplace = place;
+          _workplaceNameController.text = place.name;
+          _workplaceAddressController.text = place.formattedAddress ?? place.address ?? '';
+        });
+        debugPrint('✅ 일터 정보 로드 완료: ${place.name}');
+      }
+    } catch (e) {
+      debugPrint('❌ 일터 정보 로드 실패: $e');
     }
   }
 
@@ -151,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         profileImageUrl: _profileImageUrl,
       );
 
-      // 워크플레이스 및 콘텐츠 필터는 별도 저장
+      // 콘텐츠 필터는 별도 저장
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance
@@ -161,7 +176,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'allowSexualContent': _allowSexualContent,
           'allowViolentContent': _allowViolentContent,
           'allowHateContent': _allowHateContent,
-          'workplaces': _workplaces,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
@@ -177,29 +191,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _saveWorkplacesOnly() async {
+  Future<void> _saveOrUpdateWorkplace() async {
+    if (_workplaceNameController.text.trim().isEmpty || 
+        _workplaceAddressController.text.trim().isEmpty) {
+      _showToast('일터 이름과 주소를 모두 입력해주세요');
+      return;
+    }
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      print('근무지만 저장 시작');
-      print('저장할 근무지 개수: ${_workplaces.length}');
-      for (int i = 0; i < _workplaces.length; i++) {
-        print('근무지 $i: ${_workplaces[i]}');
+      // 일터 정보가 이미 있으면 업데이트, 없으면 생성
+      if (_workplaceId != null && _workplace != null) {
+        // 기존 플레이스 업데이트
+        final updatedPlace = _workplace!.copyWith(
+          name: _workplaceNameController.text.trim(),
+          address: _workplaceAddressController.text.trim(),
+          updatedAt: DateTime.now(),
+        );
+        
+        await _placeService.updatePlace(updatedPlace);
+        _showToast('일터 정보가 수정되었습니다');
+        debugPrint('✅ 일터 업데이트 완료: ${updatedPlace.name}');
+      } else {
+        // 새 플레이스 생성 (회원가입과 동일한 로직)
+        _showToast('일터 생성 기능은 회원가입에서만 가능합니다');
       }
 
+      await _loadWorkplaceInfo(); // 정보 새로고침
+    } catch (e) {
+      debugPrint('❌ 일터 저장 실패: $e');
+      _showToast('일터 저장 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  Future<void> _deleteWorkplace() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('일터 삭제'),
+        content: const Text('일터를 삭제하시겠습니까?\n내플레이스 및 맵에서도 사라집니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || _workplaceId == null) return;
+
+      // 플레이스 비활성화
+      if (_workplace != null) {
+        await _placeService.updatePlace(_workplace!.copyWith(isActive: false));
+      }
+
+      // users 문서에서 workplaceId 제거
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .update({
-        'workplaces': _workplaces,
+        'workplaceId': null,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      print('근무지 저장 완료');
+      setState(() {
+        _workplaceId = null;
+        _workplace = null;
+        _workplaceNameController.clear();
+        _workplaceAddressController.clear();
+      });
+
+      _showToast('일터가 삭제되었습니다');
+      debugPrint('✅ 일터 삭제 완료');
     } catch (e) {
-      print('근무지 저장 실패: $e');
-      _showToast('근무지 저장 중 오류가 발생했습니다: $e');
+      debugPrint('❌ 일터 삭제 실패: $e');
+      _showToast('일터 삭제 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -231,47 +309,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _addWorkplace() async {
-    if (_workplaceNameController.text.trim().isEmpty || 
-        _workplaceAddressController.text.trim().isEmpty) {
-      _showToast('근무지명과 주소를 모두 입력해주세요');
-      return;
+  Future<void> _showEditWorkplaceDialog() async {
+    // 현재 일터 정보를 임시 컨트롤러에 복사
+    final tempNameController = TextEditingController(text: _workplace?.name ?? '');
+    final tempAddressController = TextEditingController(text: _workplace?.formattedAddress ?? _workplace?.address ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('일터 정보 수정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: tempNameController,
+              decoration: const InputDecoration(
+                labelText: '일터 이름',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: tempAddressController,
+              decoration: const InputDecoration(
+                labelText: '주소',
+                border: OutlineInputBorder(),
+              ),
+              readOnly: true,
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () async {
+                final searchResult = await Navigator.pushNamed(dialogContext, '/address-search');
+                if (searchResult != null) {
+                  if (searchResult is Map<String, dynamic>) {
+                    tempAddressController.text = searchResult['address'] ?? '';
+                  } else {
+                    tempAddressController.text = searchResult.toString();
+                  }
+                }
+              },
+              icon: const Icon(Icons.search),
+              label: const Text('주소 검색'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              tempNameController.dispose();
+              tempAddressController.dispose();
+              Navigator.pop(dialogContext, false);
+            },
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      // 수정된 정보로 업데이트
+      final updatedPlace = _workplace!.copyWith(
+        name: tempNameController.text.trim(),
+        address: tempAddressController.text.trim(),
+        updatedAt: DateTime.now(),
+      );
+      
+      try {
+        await _placeService.updatePlace(updatedPlace);
+        _showToast('일터 정보가 수정되었습니다');
+        await _loadWorkplaceInfo(); // 정보 새로고침
+      } catch (e) {
+        _showToast('일터 수정 중 오류가 발생했습니다: $e');
+      }
     }
 
-    final workplaceName = _workplaceNameController.text.trim();
-    final workplaceAddress = _workplaceAddressController.text.trim();
-    
-    print('근무지 추가 시도: $workplaceName, $workplaceAddress');
-
-    // 근무지 추가
-    _workplaces.add({
-      'name': workplaceName,
-      'address': workplaceAddress,
-    });
-    
-    print('근무지 목록에 추가됨. 총 개수: ${_workplaces.length}');
-
-    // UI 업데이트
-    setState(() {
-      _workplaceNameController.clear();
-      _workplaceAddressController.clear();
-    });
-
-    // 근무지 추가 후 즉시 저장 (폼 검증 없이)
-    await _saveWorkplacesOnly();
-    _showToast('근무지가 추가되었습니다');
+    tempNameController.dispose();
+    tempAddressController.dispose();
   }
 
-  void _removeWorkplace(int index) async {
-    _workplaces.removeAt(index);
-
-    // UI 업데이트
-    setState(() {});
-
-    // 근무지 삭제 후 즉시 저장 (폼 검증 없이)
-    await _saveWorkplacesOnly();
-    _showToast('근무지가 삭제되었습니다');
-  }
 
   String _getDisplayAddress(String address) {
     // 이미 저장된 근무지 주소가 JSON 형식일 수 있으므로 처리
@@ -581,139 +704,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       isExpanded: _workplaceInfoExpanded,
                       onToggle: () => setState(() => _workplaceInfoExpanded = !_workplaceInfoExpanded),
                       children: [
-                        // 근무지 추가 폼
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.purple.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.purple.withOpacity(0.2),
+                        // 일터 정보 표시/수정 폼
+                        if (_workplace != null) ...[
+                          // 등록된 일터 정보 표시
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.purple.withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.business, color: Colors.purple, size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _workplace!.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _workplace!.formattedAddress ?? _workplace!.address ?? '주소 없음',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          // 수정 다이얼로그 표시
+                                          _showEditWorkplaceDialog();
+                                        },
+                                        icon: const Icon(Icons.edit),
+                                        label: const Text('수정'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.purple,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _deleteWorkplace,
+                                        icon: const Icon(Icons.delete),
+                                        label: const Text('삭제'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: TextFormField(
-                                      controller: _workplaceNameController,
-                                      decoration: InputDecoration(
-                                        labelText: '근무지명',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    flex: 2,
-                                    child: TextFormField(
-                                      controller: _workplaceAddressController,
-                                      decoration: InputDecoration(
-                                        labelText: '주소',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 14,
-                                        ),
-                                      ),
-                                      readOnly: true,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton(
-                                    onPressed: _pickWorkplaceAddress,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.purple,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Icon(Icons.search),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: _addWorkplace,
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('근무지 추가'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.purple,
-                                    foregroundColor: Colors.white,
+                        ] else ...[
+                          // 일터가 없을 때 안내 메시지
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(Icons.business_outlined, size: 48, color: Colors.grey[400]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '등록된 일터가 없습니다',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  '회원가입 시에만 일터를 등록할 수 있습니다',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-
-                        if (_workplaces.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          // 근무지 목록
-                          ..._workplaces.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final workplace = entry.value;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.grey[300]!,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.business,
-                                    color: Colors.purple,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          workplace['name']!,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        Text(
-                                          _getDisplayAddress(workplace['address']!),
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    onPressed: () => _removeWorkplace(index),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
                         ],
                       ],
                     ),

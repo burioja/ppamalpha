@@ -564,11 +564,10 @@ class _PostStatisticsScreenState extends State<PostStatisticsScreen> with Single
                   maxZoom: 18.0,
                 ),
                 children: [
-                  // 플레이스 리스트와 동일한 CartoDB Voyager 스타일 (라벨 없음)
+                  // OSM 타일 레이어
                   TileLayer(
-                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'],
-                    userAgentPackageName: 'com.ppamalpha.app',
+                    urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    userAgentPackageName: 'com.example.ppam',
                   ),
                   MarkerLayer(markers: markers),
                 ],

@@ -32,13 +32,41 @@ class OSMGeocodingService {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final displayName = data['display_name'] as String?;
+        final address = data['address'] as Map<String, dynamic>?;
         
-        if (displayName != null && displayName.isNotEmpty) {
+        // 건물명만 추출 (가장 구체적인 정보 우선)
+        String? buildingName = address?['building'] ?? 
+                               address?['amenity'] ?? 
+                               address?['shop'] ?? 
+                               address?['house_name'] ?? 
+                               address?['name'];
+        
+        // 건물명이 없으면 도로명 + 번지
+        if (buildingName == null || buildingName.trim().isEmpty) {
+          final road = address?['road'];
+          final houseNumber = address?['house_number'];
+          if (road != null && road.toString().trim().isNotEmpty) {
+            if (houseNumber != null && houseNumber.toString().trim().isNotEmpty) {
+              buildingName = '${road.toString().trim()} ${houseNumber.toString().trim()}';
+            } else {
+              buildingName = road.toString().trim();
+            }
+          }
+        }
+        
+        // 그것도 없으면 display_name의 첫 부분
+        if (buildingName == null || buildingName.trim().isEmpty) {
+          final displayName = data['display_name'] as String?;
+          if (displayName != null && displayName.isNotEmpty) {
+            buildingName = displayName.split(',').first.trim();
+          }
+        }
+        
+        if (buildingName != null && buildingName.isNotEmpty) {
           // 캐시에 저장
-          _locationCache[cacheKey] = displayName;
-          print('✅ OSM 건물명 조회 성공: $displayName');
-          return displayName;
+          _locationCache[cacheKey] = buildingName;
+          print('✅ OSM 건물명 조회 성공: $buildingName');
+          return buildingName;
         }
       } else {
         print('❌ OSM API 오류: ${response.statusCode}');

@@ -624,10 +624,10 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                 ),
               ),
               children: [
+                // OSM 타일 레이어
                 TileLayer(
-                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.ppam.alpha',
+                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  userAgentPackageName: 'com.example.ppam',
                 ),
                 MarkerLayer(
                   markers: [

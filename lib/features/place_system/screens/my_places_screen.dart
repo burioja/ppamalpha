@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/models/place/place_model.dart';
 import '../../../core/services/data/place_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
@@ -25,12 +26,35 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
   String? _error;
   String? _selectedPlaceId; // 선택된 플레이스 ID 추적
   LatLngBounds? _initialBounds; // 초기 지도 bounds
+  LatLng? _currentPosition; // 현재 위치
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _getCurrentLocation();
     _loadMyPlaces();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+        });
+      }
+    } catch (e) {
+      print('현재 위치 가져오기 실패: $e');
+      // 실패 시 서울 기본값 사용
+      if (mounted) {
+        setState(() {
+          _currentPosition = const LatLng(37.5665, 126.9780);
+        });
+      }
+    }
   }
 
   @override
@@ -130,6 +154,52 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
     return Icons.work;
   }
 
+  Future<void> _deletePlace(PlaceModel place) async {
+    // 확인 다이얼로그 표시
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('플레이스 삭제'),
+        content: Text('${place.name}을(를) 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _placeService.deletePlace(place.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${place.name}이(가) 삭제되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadMyPlaces(); // 목록 새로고침
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildPlaceCard(PlaceModel place) {
     final isSelected = _selectedPlaceId == place.id;
 
@@ -198,6 +268,15 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        // 삭제 버튼
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          color: Colors.red[400],
+                          onPressed: () => _deletePlace(place),
+                          tooltip: '플레이스 삭제',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -264,8 +343,6 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                   ],
                 ),
               ),
-              // Arrow Icon
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
             ],
           ),
         ),
@@ -314,13 +391,14 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
       LatLng(maxLat, maxLng),
     );
 
-    final center = LatLng(
+    // 초기 상태 저장 (처음 한번만)
+    _initialBounds ??= bounds;
+
+    // 초기 중심점: 현재 위치 우선, 없으면 플레이스 중심
+    final center = _currentPosition ?? LatLng(
       (minLat + maxLat) / 2,
       (minLng + maxLng) / 2,
     );
-
-    // 초기 상태 저장 (처음 한번만)
-    _initialBounds ??= bounds;
 
     return SizedBox(
       height: mapHeight, // 화면 높이의 40%
@@ -330,7 +408,9 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: center,
-              initialZoom: 13.0,
+              initialZoom: 14.0,  // 시작 줌 레벨
+              minZoom: 10.0,      // 최소 줌 레벨 (줌 아웃 한계)
+              maxZoom: 17.0,      // 최대 줌 레벨 (줌 인 한계)
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate, // 회전만 비활성화
               ),
@@ -341,17 +421,20 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                     CameraFit.bounds(
                       bounds: bounds,
                       padding: const EdgeInsets.all(80), // 패딩 증가 (50 → 80)
-                      maxZoom: 15.0, // 최대 줌 제한 (충분한 줌아웃 허용)
+                      maxZoom: 17.0, // 최대 줌 제한 (메인 맵스크린과 동일)
                     ),
                   );
                 }
               },
             ),
             children: [
+          // OSM 기반 CartoDB Voyager 타일 (라벨 없음) - 메인 맵스크린과 동일
           TileLayer(
             urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
             subdomains: const ['a', 'b', 'c', 'd'],
             userAgentPackageName: 'com.ppamalpha.app',
+            minZoom: 10.0,  // 타일 서버 최소 줌
+            maxZoom: 17.0,  // 타일 서버 최대 줌
           ),
           MarkerLayer(
             markers: placesWithLocations.map((place) {
@@ -360,65 +443,71 @@ class _MyPlacesScreenState extends State<MyPlacesScreen> {
                   place.location!.latitude,
                   place.location!.longitude,
                 ),
-                width: 200, // 마커 + 레이블 공간
+                width: 50, // 아이콘 크기만큼 (위치 고정)
                 height: 50,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                child: Stack(
+                  clipBehavior: Clip.none, // 레이블이 밖으로 나갈 수 있게
                   children: [
-                    // 마커 아이콘
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.blue[700]!,
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        _getCategoryIcon(place.category),
-                        color: Colors.blue[700],
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // 플레이스 이름 레이블
-                    Flexible(
+                    // 중앙: 마커 아이콘 (GPS 좌표의 정확한 위치)
+                    Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        width: 50,
+                        height: 50,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
+                          shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.blue[700]!,
-                            width: 1,
+                            width: 3,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: Text(
-                          place.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[900],
+                        child: Icon(
+                          _getCategoryIcon(place.category),
+                          color: Colors.blue[700],
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                    // 오른쪽: 플레이스 이름 레이블
+                    Positioned(
+                      left: 58, // 아이콘(50) + 여백(8)
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: Colors.blue[700]!,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            place.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[900],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.visible,
+                          ),
                         ),
                       ),
                     ),

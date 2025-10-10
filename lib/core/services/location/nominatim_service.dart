@@ -36,18 +36,32 @@ class NominatimService {
         return data['display_name'] ?? '주소 변환 실패';
       }
 
-      // 한국식 가독 포맷 (넓은 범위 → 세부)
-      final parts = [
-        address['state'], // 시/도
-        address['county'] ?? address['city'] ?? address['town'] ?? address['municipality'], // 시/군/구
-        address['suburb'] ?? address['village'] ?? address['neighbourhood'], // 동/읍/면
-        address['road'], // 도로명
-        address['house_number'], // 건물번호
-      ].whereType<String>().where((e) => e.trim().isNotEmpty).toList();
-
-      return parts.isEmpty 
-          ? (data['display_name'] ?? '주소 변환 실패')
-          : parts.join(' ');
+      // 건물명만 추출 (가장 구체적인 정보 우선)
+      final buildingName = address['building'] ?? 
+                          address['amenity'] ?? 
+                          address['shop'] ?? 
+                          address['house_name'] ?? 
+                          address['name'];
+      
+      // 건물명이 있으면 건물명만 반환, 없으면 도로명 + 번지 반환
+      if (buildingName != null && buildingName.toString().trim().isNotEmpty) {
+        return buildingName.toString().trim();
+      }
+      
+      // 건물명이 없으면 도로명 + 번지로 대체
+      final road = address['road'];
+      final houseNumber = address['house_number'];
+      if (road != null && road.toString().trim().isNotEmpty) {
+        if (houseNumber != null && houseNumber.toString().trim().isNotEmpty) {
+          return '${road.toString().trim()} ${houseNumber.toString().trim()}';
+        }
+        return road.toString().trim();
+      }
+      
+      // 그것도 없으면 전체 display_name의 첫 부분 반환
+      final displayName = data['display_name'] ?? '주소 변환 실패';
+      final firstPart = displayName.toString().split(',').first.trim();
+      return firstPart.isNotEmpty ? firstPart : displayName.toString();
     } catch (e) {
       return '주소 변환 오류: $e';
     }

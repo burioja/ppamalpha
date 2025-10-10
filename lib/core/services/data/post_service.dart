@@ -934,6 +934,12 @@ class PostService {
 
       debugPrint('✅ markers 컬렉션 수령 조건 확인 완료, 수령 처리 시작');
 
+      // 원본 포스트 정보 조회 (이미지 URL 가져오기)
+      final originalPostDoc = await _firestore.collection('posts').doc(originalPostId).get();
+      final originalPostData = originalPostDoc.data();
+      final imageUrls = originalPostData?['imageUrls'] as List<dynamic>? ?? [];
+      final thumbnailUrls = originalPostData?['thumbnailUrls'] as List<dynamic>? ?? [];
+
       // 트랜잭션으로 마커 수량 차감 및 수령자 추가 (멱등 처리)
       await _firestore.runTransaction((tx) async {
         final markerRef = _firestore.collection('markers').doc(markerId);
@@ -989,6 +995,8 @@ class PostService {
         'confirmedAt': null,
         'reward': (markerData['reward'] as num?)?.toInt() ?? 0,
         'statusBadge': '미션 중',
+        'imageUrls': imageUrls,           // 실제 포스트 이미지
+        'thumbnailUrls': thumbnailUrls,   // 썸네일 이미지
       }, SetOptions(merge: true)); // 멱등
 
       // 포인트 처리는 확인 시점으로 이동 (confirmPost 함수에서 처리)

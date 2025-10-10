@@ -3203,7 +3203,7 @@ class _MapScreenState extends State<MapScreen> {
                 },
               ),
         children: [
-                // 기본 OSM 타일
+                // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
                 TileLayer(
                   urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
@@ -4151,19 +4151,15 @@ class _MapScreenState extends State<MapScreen> {
                     final collectionId = post['collectionId'] as String;
                     final postId = post['postId'] as String;
                     final creatorId = post['postCreatorId'] ?? '';
+                    final imageUrls = post['imageUrls'] as List<dynamic>? ?? [];
+                    final thumbnailUrls = post['thumbnailUrls'] as List<dynamic>? ?? [];
+                    
+                    // 표시할 이미지 URL (썸네일 우선, 없으면 원본, 둘 다 없으면 null)
+                    final displayImageUrl = thumbnailUrls.isNotEmpty 
+                        ? thumbnailUrls.first as String?
+                        : (imageUrls.isNotEmpty ? imageUrls.first as String? : null);
 
-                    return GestureDetector(
-                      onTap: () async {
-                        await _confirmUnconfirmedPost(
-                          collectionId: collectionId,
-                          userId: currentUserId,
-                          postId: postId,
-                          creatorId: creatorId,
-                          reward: reward,
-                          title: title,
-                        );
-                      },
-                      child: Container(
+                    return Container(
                         margin: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
@@ -4171,7 +4167,7 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                         child: Column(
                           children: [
-                            // 포스트 이미지 (전체 화면 차지)
+                            // 포스트 이미지 (실제 이미지)
                             Expanded(
                               flex: 3,
                               child: Container(
@@ -4182,33 +4178,57 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                                  child: Image.network(
-                                    'https://via.placeholder.com/400x300/FF6B35/FFFFFF?text=$title',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[200],
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.image_not_supported,
-                                              size: 64,
-                                              color: Colors.grey[400],
-                                            ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              '이미지를 불러올 수 없습니다',
-                                              style: TextStyle(
-                                                color: Colors.grey[600],
-                                                fontSize: 14,
+                                  child: displayImageUrl != null
+                                      ? Image.network(
+                                          displayImageUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: Colors.grey[200],
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(
+                                                    Icons.image_not_supported,
+                                                    size: 64,
+                                                    color: Colors.grey[400],
+                                                  ),
+                                                  SizedBox(height: 8),
+                                                  Text(
+                                                    '이미지를 불러올 수 없습니다',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[600],
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ),
-                                          ],
+                                            );
+                                          },
+                                        )
+                                      : Container(
+                                          color: Colors.grey[200],
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.card_giftcard,
+                                                size: 64,
+                                                color: Colors.orange[300],
+                                              ),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                title,
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      );
-                                    },
-                                  ),
                                 ),
                               ),
                             ),
@@ -4267,28 +4287,50 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                             ),
                             
-                            // 터치 안내
+                            // 확인 버튼
                             Container(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.touch_app, color: Colors.orange, size: 20),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    '터치하여 확인하기',
-                                    style: TextStyle(
-                                      color: Colors.orange,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    await _confirmUnconfirmedPost(
+                                      collectionId: collectionId,
+                                      userId: currentUserId,
+                                      postId: postId,
+                                      creatorId: creatorId,
+                                      reward: reward,
+                                      title: title,
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
+                                    elevation: 2,
                                   ),
-                                ],
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.check_circle, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '확인하고 ${reward}포인트 받기',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
                     );
                   },
                 ),

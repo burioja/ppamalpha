@@ -338,7 +338,6 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         title: Text(_getScreenTitle()),
         backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: false, // 뒤로가기 버튼 제거
       ),
       body: _selectedLocation == null
           ? const Center(child: Text('위치 정보가 없습니다.'))
