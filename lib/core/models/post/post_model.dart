@@ -114,6 +114,9 @@ class PostModel {
   final String? recallReason; // 회수 사유 (재고소진/프로모션종료/오류수정/기타)
   final DateTime? recalledAt; // 회수 시점
 
+  // 배포자 인증 상태
+  final bool isVerified; // 배포자가 인증된 사용자인지 여부
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -148,6 +151,7 @@ class PostModel {
     this.youtubeUrl,
     this.recallReason,
     this.recalledAt,
+    this.isVerified = false, // 기본값 false
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -223,6 +227,7 @@ class PostModel {
       recalledAt: data['recalledAt'] != null
           ? (data['recalledAt'] as Timestamp).toDate()
           : null,
+      isVerified: data['isVerified'] ?? false,
     );
   }
 
@@ -260,6 +265,7 @@ class PostModel {
       'youtubeUrl': youtubeUrl,
       'recallReason': recallReason,
       'recalledAt': recalledAt != null ? Timestamp.fromDate(recalledAt!) : null,
+      'isVerified': isVerified,
     };
   }
 
@@ -290,7 +296,7 @@ class PostModel {
   // 배포되었거나 회수된 포스트 모두 통계 분석 가능 (회수된 것도 과거 배포 이력이 있음)
   bool get isDeployed => status == PostStatus.DEPLOYED || status == PostStatus.RECALLED;
   bool get canEdit => status == PostStatus.DRAFT; // 배포 대기 상태에서만 수정 가능
-  bool get canDeploy => status == PostStatus.DRAFT; // DRAFT 상태에서만 배포 가능
+  bool get canDeploy => status == PostStatus.DRAFT || status == PostStatus.DEPLOYED || status == PostStatus.RECALLED; // DRAFT, DEPLOYED, RECALLED 모두 배포 가능 (다회 배포 지원)
   bool get canDelete => status == PostStatus.DRAFT || status == PostStatus.DEPLOYED;
 
   // 🚀 간소화된 상태 관리 메서드들
@@ -385,6 +391,7 @@ class PostModel {
     String? youtubeUrl,
     String? recallReason,
     DateTime? recalledAt,
+    bool? isVerified,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -419,6 +426,7 @@ class PostModel {
       youtubeUrl: youtubeUrl ?? this.youtubeUrl,
       recallReason: recallReason ?? this.recallReason,
       recalledAt: recalledAt ?? this.recalledAt,
+      isVerified: isVerified ?? this.isVerified,
     );
   }
 } 

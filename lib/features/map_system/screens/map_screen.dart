@@ -115,6 +115,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _showCouponsOnly = false;
   bool _showMyPostsOnly = false;
   bool _showUrgentOnly = false; // 마감임박 필터 추가
+  bool _showVerifiedOnly = false; // 인증 포스트만 필터 추가
+  bool _showUnverifiedOnly = false; // 미인증 포스트만 필터 추가
   bool _isPremiumUser = false; // 유료 사용자 여부
   UserType _userType = UserType.normal; // 사용자 타입 추가
   
@@ -1033,7 +1035,20 @@ class _MapScreenState extends State<MapScreen> {
         'myPostsOnly': _showMyPostsOnly,
         'minReward': _minReward,
         'showUrgentOnly': _showUrgentOnly,
+        'showVerifiedOnly': _showVerifiedOnly, // 인증 필터 추가
+        'showUnverifiedOnly': _showUnverifiedOnly, // 미인증 필터 추가
       };
+      
+      print('');
+      print('🟢🟢🟢 ========== 필터 상태 확인 ========== 🟢🟢🟢');
+      print('🟢 _showMyPostsOnly: $_showMyPostsOnly');
+      print('🟢 _showVerifiedOnly: $_showVerifiedOnly');
+      print('🟢 _showUnverifiedOnly: $_showUnverifiedOnly');
+      print('🟢 _showCouponsOnly: $_showCouponsOnly');
+      print('🟢 _showUrgentOnly: $_showUrgentOnly');
+      print('🟢 전달되는 filters 맵: $filters');
+      print('🟢🟢🟢 ====================================== 🟢🟢🟢');
+      print('');
 
       // 3. 서버에서 일반 포스트와 슈퍼포스트를 병렬로 조회
       final primaryCenter = centers.first; // 첫 번째 중심점 사용
@@ -1737,19 +1752,19 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('🟢🟢🟢 [map_screen] 회수 버튼 클릭 - 마커 정보 🟢🟢🟢');
       debugPrint('🟢 marker.markerId: ${marker.markerId}');
       debugPrint('🟢 marker.postId: ${marker.postId}');
-      debugPrint('🟢 PostService().recallPost() 호출 시작...');
+      debugPrint('🟢 PostService().recallMarker() 호출 시작...');
       debugPrint('');
 
-      // 포스트 회수 (마커는 recallPost 내부에서 숨김 처리됨)
-      await PostService().recallPost(marker.postId);
+      // 개별 마커 회수 (포스트와 다른 마커는 유지)
+      await PostService().recallMarker(marker.markerId);
 
       debugPrint('');
-      debugPrint('🟢 [map_screen] PostService().recallPost() 완료');
+      debugPrint('🟢 [map_screen] PostService().recallMarker() 완료');
       debugPrint('🟢🟢🟢 ========================================== 🟢🟢🟢');
       debugPrint('');
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('포스트를 회수했습니다')),
+        const SnackBar(content: Text('마커를 회수했습니다')),
       );
       
       Navigator.of(context).pop(); // 다이얼로그 닫기
@@ -2497,6 +2512,8 @@ class _MapScreenState extends State<MapScreen> {
       _showCouponsOnly = false;
       _showMyPostsOnly = false;
       _showUrgentOnly = false;
+      _showVerifiedOnly = false; // 인증 필터 초기화
+      _showUnverifiedOnly = false; // 미인증 필터 초기화
     });
     _updateMarkers();
   }
@@ -2560,28 +2577,8 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _navigateToPostPlace() async {
     if (_longPressedLatLng == null) return;
 
-    // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
-    LatLng? referencePosition;
-    if (_isMockModeEnabled && _mockPosition != null) {
-      referencePosition = _mockPosition;
-    } else {
-      referencePosition = _currentPosition;
-    }
-
-    // 기준 위치 확인
-    if (referencePosition == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
-      );
-      return;
-    }
-
-    // 마커 배포 가능 거리 확인 (1단계 영역에서만 가능)
-    final canDeploy = MarkerService.canDeployMarker(
-      _userType,
-      referencePosition,
-      _longPressedLatLng!,
-    );
+    // 현재위치, 집, 일터 주변에서 배포 가능한지 확인
+    final canDeploy = _canLongPressAtLocation(_longPressedLatLng!);
 
     if (!canDeploy) {
       // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
@@ -3070,6 +3067,93 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  Future<void> _showMockPositionInputDialog() async {
+    final latController = TextEditingController(
+      text: _mockPosition?.latitude.toStringAsFixed(6) ?? '',
+    );
+    final lngController = TextEditingController(
+      text: _mockPosition?.longitude.toStringAsFixed(6) ?? '',
+    );
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mock 위치 직접 입력'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: latController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              decoration: const InputDecoration(
+                labelText: '위도 (Latitude)',
+                hintText: '37.5665',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: lngController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              decoration: const InputDecoration(
+                labelText: '경도 (Longitude)',
+                hintText: '126.9780',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '예시: 서울시청 (37.5665, 126.9780)',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('이동'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      try {
+        final lat = double.parse(latController.text);
+        final lng = double.parse(lngController.text);
+        
+        // 유효 범위 체크 (대략적인 한국 범위)
+        if (lat < 33.0 || lat > 39.0 || lng < 124.0 || lng > 132.0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('한국 범위 내의 좌표를 입력해주세요')),
+          );
+          return;
+        }
+
+        final newPosition = LatLng(lat, lng);
+        await _setMockPosition(newPosition);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Mock 위치 이동: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('올바른 숫자를 입력해주세요')),
+        );
+      }
+    }
+
+    latController.dispose();
+    lngController.dispose();
+  }
+
   // 통합된 회색 영역 업데이트 (DB에서 최신 방문 기록 로드)
   void _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
     try {
@@ -3426,6 +3510,38 @@ class _MapScreenState extends State<MapScreen> {
                             selectedColor: Colors.orange,
                             icon: Icons.access_time_filled,
                           ),
+                          const SizedBox(width: 6),
+                          
+                          // 인증 필터
+                          _buildFilterChip(
+                            label: '인증',
+                            selected: _showVerifiedOnly,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showVerifiedOnly = selected;
+                                if (selected) _showUnverifiedOnly = false; // 둘 중 하나만
+                              });
+                              _updatePostsBasedOnFogLevel();
+                            },
+                            selectedColor: Colors.blue,
+                            icon: Icons.verified,
+                          ),
+                          const SizedBox(width: 6),
+                          
+                          // 미인증 필터
+                          _buildFilterChip(
+                            label: '미인증',
+                            selected: _showUnverifiedOnly,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showUnverifiedOnly = selected;
+                                if (selected) _showVerifiedOnly = false; // 둘 중 하나만
+                              });
+                              _updatePostsBasedOnFogLevel();
+                            },
+                            selectedColor: Colors.grey,
+                            icon: Icons.work_outline,
+                          ),
                         ],
                       ),
                     ),
@@ -3694,28 +3810,45 @@ class _MapScreenState extends State<MapScreen> {
                         ],
                       ),
                     ),
-                    // 현재 위치 정보
+                    // 현재 위치 정보 (클릭하여 직접 입력 가능)
                     if (_mockPosition != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(12),
-                            bottomRight: Radius.circular(12),
+                      GestureDetector(
+                        onTap: _showMockPositionInputDialog,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(12),
+                              bottomRight: Radius.circular(12),
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              '위도: ${_mockPosition!.latitude.toStringAsFixed(4)}',
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                            Text(
-                              '경도: ${_mockPosition!.longitude.toStringAsFixed(4)}',
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '위도: ${_mockPosition!.latitude.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit, size: 10, color: Colors.grey),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '경도: ${_mockPosition!.longitude.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit, size: 10, color: Colors.grey),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                   ],
@@ -4287,46 +4420,76 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                             ),
                             
-                            // 확인 버튼
+                            // 확인 및 삭제 버튼
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    await _confirmUnconfirmedPost(
-                                      collectionId: collectionId,
-                                      userId: currentUserId,
-                                      postId: postId,
-                                      creatorId: creatorId,
-                                      reward: reward,
-                                      title: title,
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                    foregroundColor: Colors.white,
-                                    padding: EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                children: [
+                                  // 확인 버튼
+                                  Expanded(
+                                    flex: 3,
+                                    child: ElevatedButton(
+                                      onPressed: () async {
+                                        await _confirmUnconfirmedPost(
+                                          collectionId: collectionId,
+                                          userId: currentUserId,
+                                          postId: postId,
+                                          creatorId: creatorId,
+                                          reward: reward,
+                                          title: title,
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.symmetric(vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        elevation: 2,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.check_circle, size: 18),
+                                          SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              '확인 (+${reward}P)',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    elevation: 2,
                                   ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.check_circle, size: 20),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        '확인하고 ${reward}포인트 받기',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                  SizedBox(width: 8),
+                                  // 삭제 버튼
+                                  Expanded(
+                                    flex: 1,
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        await _deleteUnconfirmedPost(
+                                          collectionId: collectionId,
+                                          title: title,
+                                        );
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                        side: BorderSide(color: Colors.red, width: 1.5),
+                                        padding: EdgeInsets.symmetric(vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                       ),
-                                    ],
+                                      child: Icon(Icons.delete_outline, size: 20),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
                           ],
@@ -4424,6 +4587,111 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('미확인 포스트 확인 실패: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 확인에 실패했습니다: $e')),
+      );
+    }
+  }
+
+  /// 미확인 포스트 삭제 처리 (보상 없이 제거)
+  Future<void> _deleteUnconfirmedPost({
+    required String collectionId,
+    required String title,
+  }) async {
+    // 삭제 확인 다이얼로그
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('포스트 삭제'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('이 포스트를 삭제하시겠습니까?'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ 주의',
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• 삭제하면 보상을 받을 수 없습니다\n• 이 작업은 되돌릴 수 없습니다',
+                    style: TextStyle(
+                      color: Colors.red[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // post_collections에서 삭제 (보상 없음)
+      await FirebaseFirestore.instance
+          .collection('post_collections')
+          .doc(collectionId)
+          .delete();
+
+      debugPrint('✅ 미확인 포스트 삭제 성공: $collectionId');
+
+      // 성공 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🗑️ $title 삭제되었습니다'),
+          backgroundColor: Colors.grey[700],
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // 다이얼로그 새로고침을 위해 닫고 다시 열기
+      Navigator.pop(context);
+      await _showUnconfirmedPostsDialog();
+      
+    } catch (e) {
+      debugPrint('❌ 미확인 포스트 삭제 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('포스트 삭제에 실패했습니다: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

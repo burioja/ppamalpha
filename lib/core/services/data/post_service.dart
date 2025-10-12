@@ -41,6 +41,36 @@ class PostService {
       final now = DateTime.now();
       final expiresAt = defaultExpiresAt ?? now.add(const Duration(days: 30));
 
+      // 🔍 사용자 인증 상태 확인
+      bool isVerified = false;
+      try {
+        debugPrint('🔍 [POST_CREATE] 사용자 인증 상태 확인 시작: creatorId=$creatorId');
+        final userDoc = await _firestore.collection('users').doc(creatorId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data();
+          final workplaceId = userData?['workplaceId'] as String?;
+          debugPrint('🔍 [POST_CREATE] workplaceId: $workplaceId');
+          
+          if (workplaceId != null && workplaceId.isNotEmpty) {
+            // workplaceId가 있으면 해당 Place의 isVerified 확인
+            final placeDoc = await _firestore.collection('places').doc(workplaceId).get();
+            if (placeDoc.exists) {
+              isVerified = placeDoc.data()?['isVerified'] as bool? ?? false;
+              debugPrint('✅ [POST_CREATE] Place 인증 상태: $isVerified (workplaceId: $workplaceId)');
+            } else {
+              debugPrint('⚠️ [POST_CREATE] Place 문서가 존재하지 않음');
+            }
+          } else {
+            debugPrint('⚠️ [POST_CREATE] 일터 미등록 사용자 → 미인증');
+          }
+        } else {
+          debugPrint('⚠️ [POST_CREATE] User 문서가 존재하지 않음');
+        }
+      } catch (e) {
+        debugPrint('❌ [POST_CREATE] 사용자 인증 상태 확인 실패: $e → 기본값 false');
+      }
+      debugPrint('🔍 [POST_CREATE] 최종 isVerified 값: $isVerified');
+
       // Firestore에 먼저 저장하여 문서 ID 생성
       final docRef = await _firestore.collection('posts').add({
         'postId': '', // 임시로 빈 문자열, 문서 ID 생성 후 업데이트
@@ -68,6 +98,7 @@ class PostService {
         'status': 'draft', // 기본적으로 초안 상태
         'placeId': placeId, // 플레이스 ID 추가
         'youtubeUrl': youtubeUrl, // 유튜브 URL 추가
+        'isVerified': isVerified, // 배포자 인증 상태 추가
       });
 
       final postId = docRef.id;
@@ -80,7 +111,9 @@ class PostService {
       debugPrint('💰 리워드: ${reward}원');
       debugPrint('🎯 기본 반경: ${defaultRadius}m');
       debugPrint('⏰ 기본 만료일: $expiresAt');
-      print('🆔 [POST_TEMPLATE_CREATED] ID: $postId | Title: $title');
+      debugPrint('🔐 배포자 인증: $isVerified');
+      debugPrint('🎫 쿠폰 여부: $isCoupon');
+      print('🆔 [POST_TEMPLATE_CREATED] ID: $postId | Title: $title | Verified: $isVerified | Coupon: $isCoupon');
 
       // 생성된 문서 ID를 postId 필드에 업데이트
       await docRef.update({'postId': postId});
@@ -107,6 +140,7 @@ class PostService {
         canForward: canForward,
         canRequestReward: canRequestReward,
         canUse: canUse,
+        isVerified: isVerified,
       );
 
       // Meilisearch에 인덱싱 (실제 구현 시 Meilisearch 클라이언트 사용)
@@ -1960,6 +1994,34 @@ class PostService {
       debugPrint('🔴🔴🔴 ========================================== 🔴🔴🔴');
       debugPrint('');
       throw Exception('포스트 회수 중 오류가 발생했습니다');
+    }
+  }
+
+  /// 개별 마커 회수 (특정 마커만 회수, 포스트는 유지)
+  Future<void> recallMarker(String markerId) async {
+    debugPrint('');
+    debugPrint('🟡🟡🟡 ========== recallMarker() 시작 ========== 🟡🟡🟡');
+    debugPrint('🟡 markerId: $markerId');
+
+    try {
+      // 특정 마커만 회수 처리
+      await _firestore.collection('markers').doc(markerId).update({
+        'status': 'RECALLED',
+        'isActive': false,
+        'recalledAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('✅ 마커 회수 완료: $markerId');
+      debugPrint('📌 포스트는 유지되며, 다른 마커들도 영향받지 않습니다.');
+      debugPrint('🟡🟡🟡 ========== recallMarker() 종료 (성공) ========== 🟡🟡🟡');
+      debugPrint('');
+    } catch (e) {
+      debugPrint('');
+      debugPrint('🔴🔴🔴 ========== recallMarker() 에러 ========== 🔴🔴🔴');
+      debugPrint('❌ 마커 회수 실패: $e');
+      debugPrint('🔴🔴🔴 ========================================== 🔴🔴🔴');
+      debugPrint('');
+      throw Exception('마커 회수 중 오류가 발생했습니다');
     }
   }
 }

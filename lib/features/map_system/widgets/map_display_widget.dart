@@ -46,10 +46,11 @@ class MapDisplayWidget extends StatelessWidget {
         onPositionChanged: (position, hasGesture) => onPositionChanged?.call(),
       ),
       children: [
-        // OSM 타일 레이어
+        // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
         TileLayer(
-          urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-          userAgentPackageName: 'com.example.ppam',
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.ppamalpha.app',
         ),
 
         // 회색 폴리곤 (과거 방문 위치)

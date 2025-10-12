@@ -227,6 +227,8 @@ class MapMarkerService {
       print('🔵 showCouponsOnly: ${filters['showCouponsOnly']}');
       print('🔵 minReward: ${filters['minReward']}');
       print('🔵 showUrgentOnly: ${filters['showUrgentOnly']}');
+      print('🔵 showVerifiedOnly: ${filters['showVerifiedOnly']}');
+      print('🔵 showUnverifiedOnly: ${filters['showUnverifiedOnly']}');
 
       // markers 컬렉션에서 직접 조회 (서버 필터 추가)
       final now = Timestamp.now();
@@ -236,9 +238,17 @@ class MapMarkerService {
           .where('expiresAt', isGreaterThan: now);     // ✅ 만료 제외 (서버 필터)
 
       // 서버사이드 필터링 적용
+      print('');
+      print('🔴🔴🔴 ========== 필터 적용 체크 ========== 🔴🔴🔴');
+      print('🔴 filters[\'myPostsOnly\'] 값: ${filters['myPostsOnly']}');
+      print('🔴 filters[\'myPostsOnly\'] == true: ${filters['myPostsOnly'] == true}');
+      print('🔴 user != null: ${user != null}');
+      
       if (filters['myPostsOnly'] == true && user != null) {
         query = query.where('creatorId', isEqualTo: user.uid);
-        print('🔍 서버사이드 필터: 내 포스트만 조회 (creatorId: ${user.uid})');
+        print('✅ 서버사이드 필터 적용됨: 내 포스트만 조회 (creatorId: ${user.uid})');
+      } else {
+        print('⚠️ 내 포스트 필터 적용 안 됨');
       }
 
       if (filters['showCouponsOnly'] == true) {
@@ -259,12 +269,45 @@ class MapMarkerService {
         print('🔍 서버사이드 필터: 마감임박 (24시간 이내 만료)');
       }
 
+      // 인증 필터 (서버사이드)
+      print('🔴 filters[\'showVerifiedOnly\'] 값: ${filters['showVerifiedOnly']}');
+      print('🔴 filters[\'showVerifiedOnly\'] == true: ${filters['showVerifiedOnly'] == true}');
+      print('🔴 filters[\'showUnverifiedOnly\'] 값: ${filters['showUnverifiedOnly']}');
+      print('🔴 filters[\'showUnverifiedOnly\'] == true: ${filters['showUnverifiedOnly'] == true}');
+      
+      if (filters['showVerifiedOnly'] == true) {
+        query = query.where('isVerified', isEqualTo: true);
+        print('✅ 서버사이드 필터 적용됨: 인증 포스트만 조회');
+      } else if (filters['showUnverifiedOnly'] == true) {
+        query = query.where('isVerified', isEqualTo: false);
+        print('✅ 서버사이드 필터 적용됨: 미인증 포스트만 조회');
+      } else {
+        print('⚠️ 인증 필터 적용 안 됨');
+      }
+      print('🔴🔴🔴 ====================================== 🔴🔴🔴');
+      print('');
+
       final snapshot = await query
           .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
           .limit(pageSize)                             // 제한 증가
           .get();
 
       print('🔵 Firebase 쿼리 결과: ${snapshot.docs.length}개 마커');
+      
+      // 쿼리 결과 샘플 로그 (처음 5개)
+      for (var i = 0; i < snapshot.docs.length && i < 5; i++) {
+        final doc = snapshot.docs[i];
+        final data = doc.data() as Map<String, dynamic>?;
+        print('');
+        print('🔍 [쿼리 결과 샘플 ${i+1}/${snapshot.docs.length}] markerId: ${doc.id}');
+        print('   📌 title: ${data?['title']}');
+        print('   👤 creatorId: ${data?['creatorId']}');
+        print('   🔐 isVerified: ${data?['isVerified']} (타입: ${data?['isVerified'].runtimeType})');
+        print('   🎫 isCoupon: ${data?['isCoupon']}');
+        print('   📦 remainingQuantity: ${data?['remainingQuantity']}');
+        print('   📋 postId: ${data?['postId']}');
+      }
+      print('');
 
       // 필터링 통계 변수
       int totalCount = snapshot.docs.length;
@@ -463,6 +506,15 @@ class MapMarkerService {
         final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
         query = query.where('expiresAt', isLessThan: tomorrowTimestamp);
         print('🔍 슈퍼마커 서버사이드 필터: 마감임박 (24시간 이내 만료)');
+      }
+
+      // 인증 필터 (서버사이드)
+      if (filters['showVerifiedOnly'] == true) {
+        query = query.where('isVerified', isEqualTo: true);
+        print('🔍 슈퍼마커 서버사이드 필터: 인증 포스트만 조회');
+      } else if (filters['showUnverifiedOnly'] == true) {
+        query = query.where('isVerified', isEqualTo: false);
+        print('🔍 슈퍼마커 서버사이드 필터: 미인증 포스트만 조회');
       }
 
       final snapshot = await query

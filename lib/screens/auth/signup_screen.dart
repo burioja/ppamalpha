@@ -299,7 +299,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
         final placeService = PlaceService();
 
-        // 플레이스 모델 생성 (개발모드에서는 isVerified가 자동으로 true로 설정됨)
+        // 플레이스 모델 생성 (회원가입 일터는 인증됨)
         final newPlace = PlaceModel(
           id: '', // Firestore가 자동 생성
           name: _workplaceNameController.text.trim(),
@@ -310,9 +310,10 @@ class _SignupScreenState extends State<SignupScreen> {
           createdBy: userId,
           createdAt: DateTime.now(),
           isActive: true,
+          isVerified: true, // 👈 회원가입 일터는 인증됨
         );
 
-        // 플레이스 생성 (개발모드에서 자동 인증)
+        // 플레이스 생성
         workplaceId = await placeService.createPlace(newPlace);
       }
 

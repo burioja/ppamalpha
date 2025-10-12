@@ -624,10 +624,11 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                 ),
               ),
               children: [
-                // OSM 타일 레이어
+                // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
                 TileLayer(
-                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  userAgentPackageName: 'com.example.ppam',
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  userAgentPackageName: 'com.ppamalpha.app',
                 ),
                 MarkerLayer(
                   markers: [

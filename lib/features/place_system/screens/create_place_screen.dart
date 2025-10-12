@@ -270,6 +270,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         createdBy: _currentUserId!,
         createdAt: DateTime.now(),
         isActive: true,
+        isVerified: false, // 👈 인박스에서 추가한 플레이스는 미인증
       );
 
       await _placeService.createPlace(place);

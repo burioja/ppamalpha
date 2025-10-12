@@ -89,19 +89,22 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         debugPrint('사용자 ID: $uid');
-        // DRAFT 상태 포스트만 로드 (배포 가능한 포스트만)
-        // 배포된 포스트(DEPLOYED)는 추가 배포 불가
-        final posts = await _postService.getDraftPosts(uid);
-        debugPrint('배포 가능한 포스트 로드 완료: ${posts.length}개 (DRAFT 상태만)');
+        // DRAFT와 DEPLOYED 포스트 모두 로드 (다회 배포 지원)
+        final allPosts = await _postService.getUserPosts(uid);
+        debugPrint('전체 포스트 로드 완료: ${allPosts.length}개');
 
-        // 추가 검증: DRAFT 상태가 아닌 포스트 필터링
-        final draftPosts = posts.where((post) => post.isDraft).toList();
-        if (draftPosts.length != posts.length) {
-          debugPrint('⚠️ 배포 불가능한 포스트 필터링됨: ${posts.length - draftPosts.length}개');
-        }
+        // DELETED 상태만 제외 (DRAFT, DEPLOYED, RECALLED 모두 표시)
+        final deployablePosts = allPosts.where((post) {
+          return post.status != PostStatus.DELETED;
+        }).toList();
+        
+        debugPrint('배포 가능한 포스트: ${deployablePosts.length}개 (DRAFT + DEPLOYED + RECALLED)');
+        debugPrint('  - DRAFT: ${deployablePosts.where((p) => p.status == PostStatus.DRAFT).length}개');
+        debugPrint('  - DEPLOYED: ${deployablePosts.where((p) => p.status == PostStatus.DEPLOYED).length}개');
+        debugPrint('  - RECALLED: ${deployablePosts.where((p) => p.status == PostStatus.RECALLED).length}개');
 
         setState(() {
-          _userPosts = draftPosts;
+          _userPosts = deployablePosts;
         });
       } else {
         debugPrint('사용자가 로그인되어 있지 않습니다');
@@ -165,11 +168,11 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    // 3. 배포 가능 상태 검증 (DRAFT만 배포 가능)
+    // 3. 배포 가능 상태 검증 (DRAFT, DEPLOYED 배포 가능)
     if (!_selectedPost!.canDeploy) {
       _showErrorDialog(
         title: '배포 불가',
-        message: '이미 배포된 포스트는 추가로 배포할 수 없습니다.\n\n현재 상태: ${_selectedPost!.status.name}\n배포 가능 상태: 배포 대기 (DRAFT)',
+        message: '회수되었거나 삭제된 포스트는 배포할 수 없습니다.\n\n현재 상태: ${_selectedPost!.status.name}\n배포 가능 상태: 배포 대기 또는 배포됨',
         action: '확인',
       );
       return;
@@ -441,10 +444,31 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.post_add,
-            size: 48,
-            color: Colors.grey,
+          InkWell(
+            onTap: () async {
+              // 아이콘 클릭 시 포스트 만들기 화면으로 이동
+              final result = await Navigator.pushNamed(
+                context, 
+                '/post-place-selection',
+                arguments: {
+                  'fromPostDeploy': true,
+                  'returnToPostDeploy': true,
+                },
+              );
+              
+              if (result == true && mounted) {
+                _loadUserPosts();
+              }
+            },
+            borderRadius: BorderRadius.circular(50),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(
+                Icons.post_add,
+                size: 48,
+                color: Colors.grey[600],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -561,13 +585,36 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${post.reward}원',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF4D4DFF),
-                          fontWeight: FontWeight.w500,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '${post.reward}원',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF4D4DFF),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          // 이미 배포된 포스트 표시
+                          if (post.status == PostStatus.DEPLOYED) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '배포됨',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -990,10 +1037,31 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.post_add,
-            size: 64,
-            color: Colors.grey[400],
+          InkWell(
+            onTap: () async {
+              // 아이콘 클릭 시 포스트 만들기 화면으로 이동
+              final result = await Navigator.pushNamed(
+                context, 
+                '/post-place-selection',
+                arguments: {
+                  'fromPostDeploy': true,
+                  'returnToPostDeploy': true,
+                },
+              );
+              
+              if (result == true && mounted) {
+                _loadUserPosts();
+              }
+            },
+            borderRadius: BorderRadius.circular(50),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Icon(
+                Icons.post_add,
+                size: 64,
+                color: Colors.grey[600],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Text(

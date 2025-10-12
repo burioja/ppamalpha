@@ -82,6 +82,12 @@ class MarkerService {
       // 포인트 차감 비활성화 (수집 시에만 차감)
       print('📝 배포는 무료입니다. 포인트 차감은 수집 시에만 이루어집니다.');
 
+      // 🔍 포스트 배포자의 인증 상태를 마커에 전달
+      final isVerified = post.isVerified;
+      print('✅ 배포자 인증 상태: $isVerified (postId: ${post.postId})');
+      print('✅ 쿠폰 여부: ${post.isCoupon}');
+      print('✅ 생성자 ID: ${post.creatorId}');
+
       // 트랜잭션으로 마커 생성과 포스트 상태 변경을 원자적으로 처리
       await _firestore.runTransaction((transaction) async {
         // 1. 포스트 템플릿 정보는 이미 위에서 가져왔으므로 바로 사용
@@ -124,6 +130,16 @@ class MarkerService {
         if (s2_10 != null) markerData['s2_10'] = s2_10;
         if (s2_12 != null) markerData['s2_12'] = s2_12;
         if (fogLevel != null) markerData['fogLevel'] = fogLevel;
+
+        // 배포자 인증 상태 저장 (서버사이드 필터링용)
+        markerData['isVerified'] = isVerified;
+        print('🔍 [MARKER_DEPLOY] isVerified 저장: $isVerified');
+        
+        // 쿠폰 여부 저장 (서버사이드 필터링용)
+        markerData['isCoupon'] = post.isCoupon;
+        print('🔍 [MARKER_DEPLOY] isCoupon 저장: ${post.isCoupon}');
+        
+        print('🔍 [MARKER_DEPLOY] creatorId 저장: ${post.creatorId}');
 
         // 5. 마커 생성 (트랜잭션 내에서)
         final markerRef = _firestore.collection('markers').doc();
@@ -187,6 +203,21 @@ class MarkerService {
       print('💰 마커 생성 비용 정보: 보상=${reward ?? 0}, 수량=$quantity, 총예상비용=$totalCost');
       print('📝 포인트 차감은 수집 시에만 이루어집니다 (배포는 무료)');
 
+      // 🔍 Post 정보 조회하여 isVerified, isCoupon 가져오기
+      bool isVerified = false;
+      bool isCoupon = false;
+      try {
+        final postDoc = await _firestore.collection('posts').doc(postId).get();
+        if (postDoc.exists) {
+          final postData = postDoc.data();
+          isVerified = postData?['isVerified'] as bool? ?? false;
+          isCoupon = postData?['isCoupon'] as bool? ?? false;
+          print('✅ Post 정보 조회: isVerified=$isVerified, isCoupon=$isCoupon');
+        }
+      } catch (e) {
+        print('⚠️ Post 정보 조회 실패: $e (기본값 사용)');
+      }
+
       // 타일 ID 계산
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
 
@@ -229,6 +260,10 @@ class MarkerService {
       if (fogLevel != null) {
         markerData['fogLevel'] = fogLevel;
       }
+
+      // 배포자 인증 상태 및 쿠폰 여부 저장 (서버사이드 필터링용)
+      markerData['isVerified'] = isVerified;
+      markerData['isCoupon'] = isCoupon;
 
       // ✅ 즉시 쿼리 통과/표시를 위한 기본값 보정 (필요 시 이미 있으면 유지)
       markerData.putIfAbsent('createdAt', () => Timestamp.fromDate(DateTime.now()));

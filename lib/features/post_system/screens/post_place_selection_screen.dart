@@ -173,16 +173,41 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                           ),
                           const SizedBox(width: 6),
                         ],
-                        // Place Name
+                        // Place Name with Verification Badge
                         Expanded(
-                          child: Text(
-                            place.name,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  place.name,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // 인증 뱃지
+                              if (place.isVerified) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '인증',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
@@ -335,10 +360,11 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
               },
             ),
             children: [
-              // OSM 타일 레이어
+              // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
               TileLayer(
-                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                userAgentPackageName: 'com.example.ppam',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: 'com.ppamalpha.app',
               ),
               MarkerLayer(
                 markers: placesWithLocations.map((place) {
@@ -347,65 +373,71 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                       place.location!.latitude,
                       place.location!.longitude,
                     ),
-                    width: 200, // 마커 + 레이블 공간
+                    width: 50,
                     height: 50,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
-                        // 마커 아이콘
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.blue[700]!,
-                              width: 3,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _getCategoryIcon(place.category),
-                            color: Colors.blue[700],
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // 플레이스 이름 레이블
-                        Flexible(
+                        // 중앙: 마커 아이콘 (GPS 좌표의 정확한 위치)
+                        Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            width: 50,
+                            height: 50,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
+                              shape: BoxShape.circle,
                               border: Border.all(
                                 color: Colors.blue[700]!,
-                                width: 1,
+                                width: 3,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 3,
-                                  offset: const Offset(0, 1),
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: Text(
-                              place.name,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue[900],
+                            child: Icon(
+                              _getCategoryIcon(place.category),
+                              color: Colors.blue[700],
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                        // 오른쪽: 플레이스 이름 레이블
+                        Positioned(
+                          left: 58,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: Colors.blue[700]!,
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              child: Text(
+                                place.name,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[900],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.visible,
+                              ),
                             ),
                           ),
                         ),

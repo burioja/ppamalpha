@@ -49,6 +49,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _workplaceInfoExpanded = true;
   bool _contentFilterExpanded = true;
   
+  // 집 주소 관련 (좌표 포함)
+  GeoPoint? _homeLocation;
+  String? _homeAddress;
+  String? _homeSecondAddress;
+  
   // 일터 관련 (단일 workplaceId 기반)
   final PlaceService _placeService = PlaceService();
   String? _workplaceId;
@@ -114,6 +119,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _allowViolentContent = userData['allowViolentContent'] ?? false;
           _allowHateContent = userData['allowHateContent'] ?? false;
 
+          // 집 주소 정보 로드 (좌표 포함)
+          _homeAddress = userData['address'] as String?;
+          _homeSecondAddress = userData['secondAddress'] as String?;
+          _homeLocation = userData['homeLocation'] as GeoPoint?;
+          if (_homeLocation != null) {
+            debugPrint('🏠 집 주소 좌표 로드: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+          }
+
           // 일터 정보 로드 (workplaceId 기반)
           _workplaceId = userData['workplaceId'] as String?;
         });
@@ -122,7 +135,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (_workplaceId != null && _workplaceId!.isNotEmpty) {
           _loadWorkplaceInfo();
         }
-      }
       }
     } catch (e) {
       _showToast('사용자 정보를 불러오는 중 오류가 발생했습니다: $e');
@@ -166,24 +178,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
         profileImageUrl: _profileImageUrl,
       );
 
-      // 콘텐츠 필터는 별도 저장
+      // 콘텐츠 필터 및 집 주소 좌표는 별도 저장
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
+        final updates = <String, dynamic>{
           'allowSexualContent': _allowSexualContent,
           'allowViolentContent': _allowViolentContent,
           'allowHateContent': _allowHateContent,
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
+        
+        // 집 주소 좌표 저장 (회원가입과 동일)
+        if (_homeLocation != null) {
+          updates['homeLocation'] = _homeLocation;
+          debugPrint('🏠 집 주소 좌표 업데이트: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+        }
+        
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update(updates);
       }
 
       _showToast('개인정보가 성공적으로 저장되었습니다');
     } catch (e) {
       print('사용자 데이터 저장 실패: $e');
       _showToast('저장 중 오류가 발생했습니다: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _createNewWorkplace(String name, String address, GeoPoint? location) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showToast('로그인이 필요합니다');
+        return;
+      }
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 새 플레이스 생성 (회원가입과 동일한 로직)
+      final newPlace = PlaceModel(
+        id: '', // Firestore가 자동 생성
+        name: name,
+        description: '${_nicknameController.text.trim()}님의 일터',
+        address: address,
+        location: location,
+        createdBy: user.uid,
+        createdAt: DateTime.now(),
+        isActive: true,
+        isVerified: true, // 회원가입 일터와 동일하게 인증됨
+      );
+
+      final newWorkplaceId = await _placeService.createPlace(newPlace);
+
+      // users 문서에 workplaceId 저장
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'workplaceId': newWorkplaceId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      setState(() {
+        _workplaceId = newWorkplaceId;
+      });
+
+      await _loadWorkplaceInfo(); // 일터 정보 로드
+      _showToast('일터가 추가되었습니다');
+      debugPrint('✅ 일터 추가 완료: $name');
+    } catch (e) {
+      debugPrint('❌ 일터 추가 실패: $e');
+      _showToast('일터 추가 중 오류가 발생했습니다: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -202,7 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 일터 정보가 이미 있으면 업데이트, 없으면 생성
+      // 일터 정보가 이미 있으면 업데이트
       if (_workplaceId != null && _workplace != null) {
         // 기존 플레이스 업데이트
         final updatedPlace = _workplace!.copyWith(
@@ -211,12 +284,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           updatedAt: DateTime.now(),
         );
         
-        await _placeService.updatePlace(updatedPlace);
+        await _placeService.updatePlace(updatedPlace.id, updatedPlace);
         _showToast('일터 정보가 수정되었습니다');
         debugPrint('✅ 일터 업데이트 완료: ${updatedPlace.name}');
-      } else {
-        // 새 플레이스 생성 (회원가입과 동일한 로직)
-        _showToast('일터 생성 기능은 회원가입에서만 가능합니다');
       }
 
       await _loadWorkplaceInfo(); // 정보 새로고침
@@ -254,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // 플레이스 비활성화
       if (_workplace != null) {
-        await _placeService.updatePlace(_workplace!.copyWith(isActive: false));
+        await _placeService.updatePlace(_workplace!.id, _workplace!.copyWith(isActive: false));
       }
 
       // users 문서에서 workplaceId 제거
@@ -281,15 +351,311 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // 집 주소 추가 다이얼로그
+  Future<void> _showAddHomeAddressDialog() async {
+    final TextEditingController addressController = TextEditingController();
+    final TextEditingController detailController = TextEditingController();
+    GeoPoint? selectedLocation;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('집 주소 추가'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 주소 검색
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: addressController,
+                      decoration: const InputDecoration(
+                        labelText: '주소',
+                        hintText: '주소 검색을 눌러주세요',
+                      ),
+                      readOnly: true,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () async {
+                      final result = await Navigator.pushNamed(context, '/address-search');
+                      if (result != null && result is Map<String, dynamic>) {
+                        addressController.text = result['address'] ?? '';
+                        if (result['lat'] != null && result['lon'] != null) {
+                          selectedLocation = GeoPoint(
+                            double.parse(result['lat'].toString()),
+                            double.parse(result['lon'].toString()),
+                          );
+                          debugPrint('🏠 집 주소 좌표: ${selectedLocation!.latitude}, ${selectedLocation!.longitude}');
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // 상세주소
+              TextField(
+                controller: detailController,
+                decoration: const InputDecoration(
+                  labelText: '상세주소',
+                  hintText: '동, 호수 등 상세주소를 입력해주세요',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (addressController.text.isEmpty) {
+                _showToast('주소를 입력해주세요');
+                return;
+              }
+              if (selectedLocation == null) {
+                _showToast('주소 검색을 통해 좌표를 선택해주세요');
+                return;
+              }
+
+              // 집 주소 정보 저장
+              setState(() {
+                _homeAddress = addressController.text.trim();
+                _homeSecondAddress = detailController.text.trim();
+                _homeLocation = selectedLocation;
+                _addressController.text = _homeAddress!;
+                _secondAddressController.text = _homeSecondAddress!;
+              });
+
+              // Firestore에 저장
+              try {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .update({
+                    'address': _homeAddress,
+                    'secondAddress': _homeSecondAddress,
+                    'homeLocation': _homeLocation,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+                  _showToast('집 주소가 추가되었습니다');
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                debugPrint('❌ 집 주소 추가 실패: $e');
+                _showToast('집 주소 추가 중 오류가 발생했습니다: $e');
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 집 주소 수정 다이얼로그
+  Future<void> _showEditHomeAddressDialog() async {
+    final TextEditingController addressController = TextEditingController(text: _homeAddress);
+    final TextEditingController detailController = TextEditingController(text: _homeSecondAddress);
+    GeoPoint? selectedLocation = _homeLocation;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('집 주소 수정'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 주소 검색
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: addressController,
+                      decoration: const InputDecoration(
+                        labelText: '주소',
+                        hintText: '주소 검색을 눌러주세요',
+                      ),
+                      readOnly: true,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () async {
+                      final result = await Navigator.pushNamed(context, '/address-search');
+                      if (result != null && result is Map<String, dynamic>) {
+                        addressController.text = result['address'] ?? '';
+                        if (result['lat'] != null && result['lon'] != null) {
+                          selectedLocation = GeoPoint(
+                            double.parse(result['lat'].toString()),
+                            double.parse(result['lon'].toString()),
+                          );
+                          debugPrint('🏠 집 주소 좌표: ${selectedLocation!.latitude}, ${selectedLocation!.longitude}');
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // 상세주소
+              TextField(
+                controller: detailController,
+                decoration: const InputDecoration(
+                  labelText: '상세주소',
+                  hintText: '동, 호수 등 상세주소를 입력해주세요',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (addressController.text.isEmpty) {
+                _showToast('주소를 입력해주세요');
+                return;
+              }
+              if (selectedLocation == null) {
+                _showToast('주소 검색을 통해 좌표를 선택해주세요');
+                return;
+              }
+
+              // 집 주소 정보 업데이트
+              setState(() {
+                _homeAddress = addressController.text.trim();
+                _homeSecondAddress = detailController.text.trim();
+                _homeLocation = selectedLocation;
+                _addressController.text = _homeAddress!;
+                _secondAddressController.text = _homeSecondAddress!;
+              });
+
+              // Firestore에 저장
+              try {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .update({
+                    'address': _homeAddress,
+                    'secondAddress': _homeSecondAddress,
+                    'homeLocation': _homeLocation,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+                  _showToast('집 주소가 수정되었습니다');
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                debugPrint('❌ 집 주소 수정 실패: $e');
+                _showToast('집 주소 수정 중 오류가 발생했습니다: $e');
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 집 주소 삭제
+  Future<void> _deleteHomeAddress() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('집 주소 삭제'),
+        content: const Text('정말로 집 주소를 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'address': FieldValue.delete(),
+          'secondAddress': FieldValue.delete(),
+          'homeLocation': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        setState(() {
+          _homeAddress = null;
+          _homeSecondAddress = null;
+          _homeLocation = null;
+          _addressController.clear();
+          _secondAddressController.clear();
+        });
+
+        _showToast('집 주소가 삭제되었습니다');
+      }
+    } catch (e) {
+      debugPrint('❌ 집 주소 삭제 실패: $e');
+      _showToast('집 주소 삭제 중 오류가 발생했습니다: $e');
+    }
+  }
+
   Future<void> _pickAddress() async {
     final result = await Navigator.pushNamed(context, '/address-search');
     if (result != null) {
       setState(() {
-        // result가 Map인 경우 address 필드만 추출
+        // result가 Map인 경우 address 필드와 좌표 정보 추출
         if (result is Map<String, dynamic>) {
-          _addressController.text = result['address'] ?? '';
+          _homeAddress = result['address'] ?? '';
+          _homeSecondAddress = result['detailAddress'] ?? '';
+          _addressController.text = _homeAddress ?? '';
+          _secondAddressController.text = _homeSecondAddress ?? '';
+          
+          // 좌표 정보 저장 (회원가입과 동일)
+          if (result['lat'] != null && result['lon'] != null) {
+            _homeLocation = GeoPoint(
+              double.parse(result['lat'].toString()),
+              double.parse(result['lon'].toString()),
+            );
+            debugPrint('🏠 집 주소 좌표 저장: ${_homeLocation!.latitude}, ${_homeLocation!.longitude}');
+          }
         } else {
-          _addressController.text = result.toString();
+          _homeAddress = result.toString();
+          _addressController.text = _homeAddress ?? '';
         }
       });
     }
@@ -307,6 +673,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       });
     }
+  }
+
+  Future<void> _showAddWorkplaceDialog() async {
+    // 새 일터 추가용 임시 컨트롤러
+    final tempNameController = TextEditingController();
+    final tempAddressController = TextEditingController();
+    GeoPoint? tempLocation;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('일터 추가'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: tempNameController,
+              decoration: const InputDecoration(
+                labelText: '일터 이름',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: tempAddressController,
+              decoration: const InputDecoration(
+                labelText: '주소',
+                border: OutlineInputBorder(),
+              ),
+              readOnly: true,
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () async {
+                final searchResult = await Navigator.pushNamed(dialogContext, '/address-search');
+                if (searchResult != null) {
+                  if (searchResult is Map<String, dynamic>) {
+                    tempAddressController.text = searchResult['address'] ?? '';
+                    // 좌표 정보 저장
+                    if (searchResult['lat'] != null && searchResult['lon'] != null) {
+                      tempLocation = GeoPoint(
+                        double.parse(searchResult['lat'].toString()),
+                        double.parse(searchResult['lon'].toString()),
+                      );
+                    }
+                  } else {
+                    tempAddressController.text = searchResult.toString();
+                  }
+                }
+              },
+              icon: const Icon(Icons.search),
+              label: const Text('주소 검색'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              tempNameController.dispose();
+              tempAddressController.dispose();
+              Navigator.pop(dialogContext, false);
+            },
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (tempNameController.text.trim().isEmpty || 
+                  tempAddressController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('일터 이름과 주소를 모두 입력해주세요')),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      // 새 일터 생성
+      await _createNewWorkplace(
+        tempNameController.text.trim(),
+        tempAddressController.text.trim(),
+        tempLocation,
+      );
+    }
+
+    tempNameController.dispose();
+    tempAddressController.dispose();
   }
 
   Future<void> _showEditWorkplaceDialog() async {
@@ -383,7 +842,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       
       try {
-        await _placeService.updatePlace(updatedPlace);
+        await _placeService.updatePlace(updatedPlace.id, updatedPlace);
         _showToast('일터 정보가 수정되었습니다');
         await _loadWorkplaceInfo(); // 정보 새로고침
       } catch (e) {
@@ -592,7 +1051,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
 
-                    // 주소 정보 섹션
+                    // 주소 정보 섹션 (일터와 동일한 카드 형태)
                     InfoSectionCard(
                       title: '주소 정보',
                       icon: Icons.location_on,
@@ -601,62 +1060,147 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       isExpanded: _addressInfoExpanded,
                       onToggle: () => setState(() => _addressInfoExpanded = !_addressInfoExpanded),
                       children: [
-                        InfoField(
-                          label: '주소',
-                          isRequired: true,
-                          child: Row(
+                        // 집 주소 정보 표시/수정 폼
+                        if (_homeAddress != null && _homeAddress!.isNotEmpty) ...[
+                          // 등록된 집 주소 정보 표시
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.orange.withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.home, color: Colors.orange, size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _homeAddress!,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          if (_homeSecondAddress != null && _homeSecondAddress!.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _homeSecondAddress!,
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                          if (_homeLocation != null) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.my_location, size: 12, color: Colors.green),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '좌표 저장됨',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.green[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showEditHomeAddressDialog,
+                                        icon: const Icon(Icons.edit),
+                                        label: const Text('수정'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.orange,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _deleteHomeAddress,
+                                        icon: const Icon(Icons.delete),
+                                        label: const Text('삭제'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          // 집 주소가 없을 때 안내 메시지 및 추가 버튼
+                          Column(
                             children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _addressController,
-                                  decoration: InputDecoration(
-                                    hintText: '주소 검색을 눌러주세요',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.home_outlined, size: 48, color: Colors.grey[400]),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '등록된 집 주소가 없습니다',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 14,
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '집 주소를 추가하세요',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
                                     ),
-                                  ),
-                                  readOnly: true,
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '주소를 입력해주세요';
-                                    }
-                                    return null;
-                                  },
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: _pickAddress,
-                                icon: const Icon(Icons.search, size: 18),
-                                label: const Text('검색'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton.icon(
+                                  onPressed: _showAddHomeAddressDialog,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('집 주소 추가'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        InfoField(
-                          label: '상세주소',
-                          child: TextFormField(
-                            controller: _secondAddressController,
-                            decoration: InputDecoration(
-                              hintText: '동, 호수 등 상세주소를 입력해주세요',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ),
+                        ],
                       ],
                     ),
 
@@ -779,34 +1323,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ] else ...[
-                          // 일터가 없을 때 안내 메시지
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(Icons.business_outlined, size: 48, color: Colors.grey[400]),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '등록된 일터가 없습니다',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
+                          // 일터가 없을 때 안내 메시지 및 추가 버튼
+                          Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.business_outlined, size: 48, color: Colors.grey[400]),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '등록된 일터가 없습니다',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '새로운 일터를 추가하세요',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton.icon(
+                                  onPressed: _showAddWorkplaceDialog,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('일터 추가'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.purple,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '회원가입 시에만 일터를 등록할 수 있습니다',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ],
                       ],
