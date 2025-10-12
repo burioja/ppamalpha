@@ -36,7 +36,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _widgetOptions = [
-      MapScreen(onAddressChanged: _onAddressChanged),
+      MapScreen(
+        onAddressChanged: _onAddressChanged,
+        onNavigateToInbox: () {
+          setState(() => _selectedIndex = 1); // 인박스 탭으로 이동
+        },
+      ),
       const InboxScreen(),
     ];
     _loadCurrentAddress();

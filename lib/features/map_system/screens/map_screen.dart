@@ -64,8 +64,9 @@ class MarkerItem {
 
 class MapScreen extends StatefulWidget {
   final Function(String)? onAddressChanged;
+  final VoidCallback? onNavigateToInbox;
   
-  const MapScreen({super.key, this.onAddressChanged});
+  const MapScreen({super.key, this.onAddressChanged, this.onNavigateToInbox});
   static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
@@ -1124,8 +1125,41 @@ class _MapScreenState extends State<MapScreen> {
         MapMarkerService.convertToMarkerModel(markerData)
       ).toList();
 
-      // 6. 포스트 정보도 함께 가져오기
-      final postIds = uniqueMarkers.map((marker) => marker.postId).toSet().toList();
+      // 6. 이미 수령한 포스트 필터링
+      final currentUser = FirebaseAuth.instance.currentUser;
+      Set<String> collectedPostIds = {};
+      
+      if (currentUser != null) {
+        try {
+          print('🔍 이미 수령한 포스트 확인 중...');
+          final collectedSnapshot = await FirebaseFirestore.instance
+              .collection('post_collections')
+              .where('userId', isEqualTo: currentUser.uid)
+              .get();
+          
+          collectedPostIds = collectedSnapshot.docs
+              .map((doc) => doc.data()['postId'] as String)
+              .toSet();
+          
+          print('📦 이미 수령한 포스트: ${collectedPostIds.length}개');
+        } catch (e) {
+          print('❌ 수령 기록 조회 실패: $e');
+        }
+      }
+      
+      // 이미 수령한 포스트의 마커 제거
+      final filteredMarkers = uniqueMarkers.where((marker) {
+        final isCollected = collectedPostIds.contains(marker.postId);
+        if (isCollected) {
+          print('🚫 이미 수령한 포스트의 마커 제거: ${marker.title} (postId: ${marker.postId})');
+        }
+        return !isCollected;
+      }).toList();
+      
+      print('✅ 필터링 후 마커: ${filteredMarkers.length}개 (${uniqueMarkers.length - filteredMarkers.length}개 제거됨)');
+
+      // 7. 포스트 정보도 함께 가져오기
+      final postIds = filteredMarkers.map((marker) => marker.postId).toSet().toList();
       final posts = <PostModel>[];
       
       if (postIds.isNotEmpty) {
@@ -1151,7 +1185,7 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       setState(() {
-        _markers = uniqueMarkers;
+        _markers = filteredMarkers;
         _posts = posts; // 포스트 정보도 업데이트
         _isLoading = false;
         print('✅ _updatePostsBasedOnFogLevel: 총 ${_markers.length}개의 고유 마커, ${_posts.length}개의 포스트 업데이트됨');
@@ -1349,7 +1383,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 마커 상세 정보 표시
-  void _showMarkerDetails(MarkerModel marker) {
+  void _showMarkerDetails(MarkerModel marker) async {
     // 🔍 마커 탭 시 데이터 확인
     print('[MARKER_TAP_DEBUG] 마커 탭됨:');
     print('  - markerId: "${marker.markerId}"');
@@ -1366,73 +1400,356 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     final distance = _calculateDistance(_currentPosition!, marker.position);
-    final isWithinRange = distance <= 100; // 100m 이내
+    final isWithinRange = distance <= 200; // 200m 이내
     final currentUser = FirebaseAuth.instance.currentUser;
     final isOwner = currentUser != null && marker.creatorId == currentUser.uid;
 
-    showDialog(
+    // 포스트 정보 가져오기 (이미지 포함)
+    String imageUrl = '';
+    String description = '';
+    int reward = 0;
+    
+    try {
+      final postDoc = await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(marker.postId)
+          .get();
+          
+      if (postDoc.exists) {
+        final postData = postDoc.data()!;
+        final mediaUrls = postData['mediaUrl'] as List<dynamic>?;
+        if (mediaUrls != null && mediaUrls.isNotEmpty) {
+          imageUrl = mediaUrls.first as String;
+        }
+        description = postData['description'] as String? ?? '';
+        reward = postData['reward'] as int? ?? 0;
+      }
+    } catch (e) {
+      print('포스트 정보 조회 실패: $e');
+    }
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(marker.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
             children: [
-              Text('포스트 ID: ${marker.postId}'),
-              const SizedBox(height: 8),
-              Text('수량: ${marker.quantity}개'),
-              const SizedBox(height: 8),
-              Text('거리: ${distance.toStringAsFixed(0)}m'),
-              const SizedBox(height: 8),
-              Text('생성자: ${marker.creatorId}'),
-              const SizedBox(height: 8),
-              Text('생성일: ${marker.createdAt}'),
-              if (marker.expiresAt != null) ...[
-                const SizedBox(height: 8),
-                Text('만료일: ${marker.expiresAt}'),
-              ],
-              if (isOwner) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  '내가 배포한 포스트',
-                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              // 헤더
+              Container(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOwner ? Icons.edit_location : Icons.card_giftcard, 
+                      color: isOwner ? Colors.blue : Colors.orange, 
+                      size: 24
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isOwner ? '내가 배포한 포스트' : '포스트',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isOwner ? Colors.blue[800] : Colors.orange[800],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close),
+                    ),
+                  ],
                 ),
-              ],
-              if (!isWithinRange) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '수령 불가: 200m 이내에서만 수령 가능합니다',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              
+              // 내용
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 상태 배지
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isWithinRange ? Colors.green : Colors.grey,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isWithinRange ? '수령 가능' : '범위 밖 (${distance.toStringAsFixed(0)}m)',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: marker.quantity > 0 ? Colors.blue : Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${marker.quantity}개 남음',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      SizedBox(height: 20),
+                      
+                      // 포스트 제목
+                      Text(
+                        marker.title,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      
+                      SizedBox(height: 12),
+                      
+                      // 포스트 설명
+                      if (description.isNotEmpty) ...[
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[700],
+                            height: 1.5,
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                      ],
+                      
+                      // 포스트 이미지 (중앙에 크게)
+                      if (imageUrl.isNotEmpty) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            width: double.infinity,
+                            height: 300,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  size: 48,
+                                  color: Colors.grey[400],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                      ] else if (description.isEmpty) ...[
+                        // 이미지도 없고 설명도 없으면 기본 아이콘 표시
+                        Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.card_giftcard,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                      ],
+                      
+                      // 포인트 정보
+                      if (reward > 0) ...[
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.monetization_on, color: Colors.green, size: 24),
+                              SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '포인트 지급',
+                                    style: TextStyle(
+                                      color: Colors.green[700],
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '+${reward}포인트',
+                                    style: TextStyle(
+                                      color: Colors.green[700],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                      ],
+                      
+                      // 거리 정보
+                      if (!isWithinRange) ...[
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_off, color: Colors.red, size: 24),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  '200m 이내로 접근해주세요\n현재 거리: ${distance.toStringAsFixed(0)}m',
+                                  style: TextStyle(
+                                    color: Colors.red[700],
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ],
+              ),
+              
+              // 하단 버튼
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text('닫기'),
+                      ),
+                    ),
+                    if (isOwner) ...[
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _removeMarker(marker);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            '회수하기',
+                            style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ] else if (isWithinRange && marker.quantity > 0) ...[
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _collectPostFromMarker(marker);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            '수령하기 (${marker.quantity}개)',
+                            style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ] else if (marker.quantity <= 0) ...[
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: null,
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            '수량 소진',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-            if (isOwner) ...[
-              // 배포자는 회수 버튼
-              TextButton(
-                onPressed: () => _removeMarker(marker),
-                child: const Text('회수하기', style: TextStyle(color: Colors.red)),
-              ),
-            ] else             if (isWithinRange && marker.quantity > 0) ...[
-              // 다른 사용자는 수령 버튼
-              TextButton(
-                onPressed: () => _collectPostFromMarker(marker),
-                child: Text('수령하기 (${marker.quantity}개 남음)'),
-              ),
-            ] else if (marker.quantity <= 0) ...[
-              // 수량 소진
-              const Text(
-                '수령 완료',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ],
         );
       },
     );
@@ -1534,6 +1851,8 @@ class _MapScreenState extends State<MapScreen> {
           ? '포스트를 수령했습니다! 🎉\n${reward}포인트가 지급되었습니다! (${marker.quantity - 1}개 남음)'
           : '포스트를 수령했습니다! (${marker.quantity - 1}개 남음)';
 
+      Navigator.of(context).pop(); // 다이얼로그 먼저 닫기
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
@@ -1541,11 +1860,26 @@ class _MapScreenState extends State<MapScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
-      Navigator.of(context).pop(); // 다이얼로그 닫기
       
-      // 수령 완료 후 잠시 대기 후 마커 목록 새로고침 (DB 업데이트 반영 시간)
+      // 수령 완료 후 즉시 마커 목록 새로고침
+      print('🔄 마커 수령 완료 - 마커 목록 새로고침 시작');
+      
+      // 1. 로컬에서 같은 포스트의 모든 마커 즉시 제거 (UI 반응성)
+      setState(() {
+        final postId = marker.postId;
+        final removedCount = _markers.where((m) => m.postId == postId).length;
+        _markers.removeWhere((m) => m.postId == postId);
+        print('🗑️ 같은 포스트의 모든 마커 제거: ${marker.title} (${removedCount}개 마커 제거됨)');
+        print('   - postId: $postId');
+        _updateMarkers(); // 클러스터 재계산
+      });
+      
+      // 2. 서버에서 실제 마커 상태 확인 및 동기화
       await Future.delayed(const Duration(milliseconds: 500));
-      await _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+      await _updatePostsBasedOnFogLevel();
+      _updateReceivablePosts(); // 수령 가능 개수 업데이트
+      
+      print('✅ 마커 목록 새로고침 완료');
 
       // 메인 스크린의 포인트 새로고침 (GlobalKey 사용)
       try {
@@ -2038,37 +2372,43 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   SizedBox(height: 16),
+                  
+                  // 항상 표시되는 버튼들
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context); // 다이얼로그 닫기
+                            // 인박스로 이동
+                            if (widget.onNavigateToInbox != null) {
+                              widget.onNavigateToInbox!();
+                            }
+                          },
+                          icon: Icon(Icons.inbox),
+                          label: Text('인박스 보기'),
                           style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                            padding: EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          child: Text('나중에 확인하기'),
                         ),
                       ),
                       SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: confirmedPosts.length == posts.length
-                              ? () => Navigator.pop(context)
-                              : null,
+                          onPressed: () => Navigator.pop(context),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            disabledBackgroundColor: Colors.grey[300],
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Colors.blue[600],
+                            padding: EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
                           child: Text(
-                            '모두 확인 완료',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
+                            '나중에 확인',
+                            style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -2220,6 +2560,62 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
+          
+          // 확인 안내 (확인되지 않은 경우에만)
+          if (!isConfirmed) ...[
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!, width: 2),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.touch_app, size: 24, color: Colors.orange[700]),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '이 영역을 터치하면\n포인트를 받고 확인됩니다',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.arrow_upward, size: 28, color: Colors.orange[700]),
+                ],
+              ),
+            ),
+          ] else ...[
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green[200]!, width: 2),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, size: 24, color: Colors.green[700]),
+                  SizedBox(width: 12),
+                  Text(
+                    '확인 완료!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -4010,11 +4406,15 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _receiveNearbyPosts() async {
     setState(() => _isReceiving = true);
     
+    // 스코프 밖에 변수 선언 (finally 블록에서 접근 가능)
+    final actuallyReceived = <ReceiptItem>[];
+    final failedToReceive = <String>[];
+    final nearbyMarkers = <MarkerModel>[];
+    
     try {
       final user = FirebaseAuth.instance.currentUser!;
       
       // 1. 현재 위치에서 200m 이내의 마커들 찾기
-      final nearbyMarkers = <MarkerModel>[];
       
       for (final marker in _markers) {
         if (_currentPosition == null) continue;
@@ -4039,8 +4439,6 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       // 2. 수령 처리 (PostService 사용하여 수량 차감 포함)
-      final actuallyReceived = <ReceiptItem>[];
-      final failedToReceive = <String>[];
 
       for (final marker in nearbyMarkers) {
         try {
@@ -4184,10 +4582,39 @@ class _MapScreenState extends State<MapScreen> {
     } finally {
       setState(() => _isReceiving = false);
       
-      // 수령 완료 후 잠시 대기 후 마커 목록 새로고침 (DB 업데이트 반영 시간)
+      // 수령 완료 후 즉시 마커 새로고침
+      print('🔄 배치 수령 완료 - 마커 목록 새로고침 시작');
+      
+      // 1. 로컬에서 수령한 포스트의 모든 마커 즉시 제거 (UI 반응성)
+      if (actuallyReceived.isNotEmpty) {
+        setState(() {
+          // 수령한 포스트 ID들 수집
+          final collectedPostIds = <String>{};
+          for (final receipt in actuallyReceived) {
+            // markerId로 원본 마커 찾기
+            final originalMarker = nearbyMarkers.firstWhere(
+              (m) => m.markerId == receipt.markerId,
+              orElse: () => nearbyMarkers.first,
+            );
+            collectedPostIds.add(originalMarker.postId);
+          }
+          
+          // 수령한 포스트들의 모든 마커 제거 (같은 postId를 가진 다른 마커들도 함께)
+          final removedCount = _markers.where((m) => collectedPostIds.contains(m.postId)).length;
+          _markers.removeWhere((m) => collectedPostIds.contains(m.postId));
+          print('🗑️ 수령한 포스트들의 모든 마커 제거: ${removedCount}개');
+          print('   - 수령한 포스트 IDs: $collectedPostIds');
+          
+          _updateMarkers(); // 클러스터 재계산
+        });
+      }
+      
+      // 2. 서버에서 실제 마커 상태 확인 및 동기화
       await Future.delayed(const Duration(milliseconds: 500));
       await _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
       _updateReceivablePosts(); // 개수 업데이트
+      
+      print('✅ 배치 마커 새로고침 완료');
     }
   }
 
@@ -4292,201 +4719,204 @@ class _MapScreenState extends State<MapScreen> {
                         ? thumbnailUrls.first as String?
                         : (imageUrls.isNotEmpty ? imageUrls.first as String? : null);
 
-                    return Container(
-                        margin: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.orange, width: 2),
-                        ),
+                    return GestureDetector(
+                      onTap: () async {
+                        // 터치하여 확인
+                        await _confirmUnconfirmedPost(
+                          collectionId: collectionId,
+                          userId: currentUserId,
+                          postId: postId,
+                          creatorId: creatorId,
+                          reward: reward,
+                          title: title,
+                        );
+                      },
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(20),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 포스트 이미지 (실제 이미지)
-                            Expanded(
-                              flex: 3,
-                              child: Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                                  color: Colors.grey[100],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                                  child: displayImageUrl != null
-                                      ? Image.network(
-                                          displayImageUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Container(
-                                              color: Colors.grey[200],
-                                              child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.image_not_supported,
-                                                    size: 64,
-                                                    color: Colors.grey[400],
-                                                  ),
-                                                  SizedBox(height: 8),
-                                                  Text(
-                                                    '이미지를 불러올 수 없습니다',
-                                                    style: TextStyle(
-                                                      color: Colors.grey[600],
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        )
-                                      : Container(
-                                          color: Colors.grey[200],
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                Icons.card_giftcard,
-                                                size: 64,
-                                                color: Colors.orange[300],
-                                              ),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                title,
-                                                style: TextStyle(
-                                                  color: Colors.grey[700],
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                            
-                            // 포스트 정보
-                            Expanded(
-                              flex: 1,
-                              child: Container(
-                                padding: EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          collectedAt != null 
-                                              ? '수령일: ${_formatDate(collectedAt.toDate())}'
-                                              : '수령일: 알 수 없음',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.monetization_on, size: 16, color: Colors.green[700]),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          '보상: ${reward}포인트',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green[700],
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            
-                            // 확인 및 삭제 버튼
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              child: Row(
-                                children: [
-                                  // 확인 버튼
-                                  Expanded(
-                                    flex: 3,
-                                    child: ElevatedButton(
-                                      onPressed: () async {
-                                        await _confirmUnconfirmedPost(
-                                          collectionId: collectionId,
-                                          userId: currentUserId,
-                                          postId: postId,
-                                          creatorId: creatorId,
-                                          reward: reward,
-                                          title: title,
-                                        );
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.orange,
-                                        foregroundColor: Colors.white,
-                                        padding: EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        elevation: 2,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.check_circle, size: 18),
-                                          SizedBox(width: 6),
-                                          Flexible(
-                                            child: Text(
-                                              '확인 (+${reward}P)',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                            // 상태 배지
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '터치하여 확인',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  // 삭제 버튼
-                                  Expanded(
-                                    flex: 1,
-                                    child: OutlinedButton(
-                                      onPressed: () async {
-                                        await _deleteUnconfirmedPost(
-                                          collectionId: collectionId,
-                                          title: title,
-                                        );
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                        side: BorderSide(color: Colors.red, width: 1.5),
-                                        padding: EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                ),
+                                Spacer(),
+                                if (unconfirmedPosts.length > 1)
+                                  Text(
+                                    '${index + 1}/${unconfirmedPosts.length} 👈 스와이프',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            
+                            SizedBox(height: 20),
+                            
+                            // 포스트 제목
+                            Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            
+                            SizedBox(height: 12),
+                            
+                            // 수령일 정보
+                            if (collectedAt != null) ...[
+                              Row(
+                                children: [
+                                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '수령일: ${_formatDate(collectedAt.toDate())}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                            
+                            // 포스트 이미지 (중앙에 크게)
+                            if (displayImageUrl != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  displayImageUrl,
+                                  width: double.infinity,
+                                  height: 300,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 200,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 48,
+                                        color: Colors.grey[400],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                            ] else ...[
+                              // 이미지가 없으면 큰 카드 형태로 텍스트 표시
+                              Container(
+                                height: 200,
+                                padding: EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.orange[200]!),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.card_giftcard,
+                                        size: 64,
+                                        color: Colors.orange[400],
+                                      ),
+                                      SizedBox(height: 12),
+                                      Text(
+                                        title,
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                            
+                            // 포인트 정보
+                            Container(
+                              padding: EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.green[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.green[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.monetization_on, color: Colors.green, size: 24),
+                                  SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '포인트 지급',
+                                        style: TextStyle(
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
                                         ),
                                       ),
-                                      child: Icon(Icons.delete_outline, size: 20),
+                                      Text(
+                                        '+${reward}포인트',
+                                        style: TextStyle(
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            SizedBox(height: 16),
+                            
+                            // 확인 안내
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[50],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.touch_app, size: 16, color: Colors.orange[700]),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '이 영역을 터치하면 확인하고 포인트를 받습니다',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.orange[700],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -4494,6 +4924,7 @@ class _MapScreenState extends State<MapScreen> {
                             ),
                           ],
                         ),
+                      ),
                     );
                   },
                 ),

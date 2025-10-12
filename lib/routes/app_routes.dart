@@ -30,6 +30,7 @@ import '../features/post_system/screens/post_deploy_screen.dart';
 import '../features/post_system/screens/post_statistics_screen.dart';
 import '../features/post_system/screens/deployment_statistics_dashboard_screen.dart';
 import '../features/post_system/screens/my_posts_statistics_dashboard_screen.dart';
+import '../features/post_system/screens/post_deploy_design_demo.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
@@ -76,6 +77,9 @@ class AppRoutes {
   // Admin routes
   static const String adminCleanup = '/admin-cleanup';
   static const String store = '/store';
+  
+  // Design demo routes
+  static const String postDeployDesignDemo = '/post-deploy-design-demo';
 
   static Map<String, WidgetBuilder> get routes => {
     login: (context) => const LoginScreen(),
@@ -183,5 +187,8 @@ class AppRoutes {
     },
     store: (context) => const StoreScreen(),
     adminCleanup: (context) => const AdminCleanupScreen(),
+    
+    // Design demo
+    postDeployDesignDemo: (context) => const PostDeployDesignDemo(),
   };
 } 

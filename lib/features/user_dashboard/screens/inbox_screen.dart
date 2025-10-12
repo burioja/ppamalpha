@@ -47,7 +47,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this); // 내 포스트/받은 포스트 2개 탭
+    _tabController = TabController(length: 3, vsync: this); // 내 포스트/받은 포스트/통계 3개 탭
     _tabController.addListener(() {
       setState(() {});
     });
@@ -311,194 +311,44 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('인박스'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          // 배포 통계 대시보드 버튼
-          if (_tabController.index == 0) // 내 포스트 탭일 때만 표시
-            IconButton(
-              icon: const Icon(Icons.bar_chart),
-              onPressed: () {
-                Navigator.pushNamed(context, '/deployment-statistics');
-              },
-              tooltip: '배포 통계',
+      backgroundColor: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: AppBar(
+          backgroundColor: Colors.blue[600],
+          foregroundColor: Colors.white,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          flexibleSpace: SafeArea(
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: const [
+                Tab(text: '내 포스트'),
+                Tab(text: '받은 포스트'),
+                Tab(text: '통계'),
+              ],
             ),
-          // 새로고침 버튼
-          if (_tabController.index == 0) // 내 포스트 탭일 때만 표시
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _refreshMyPosts,
-              tooltip: '새로고침',
-            ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.black87,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.blue,
-          tabs: const [
-            Tab(text: '내 포스트'),
-            Tab(text: '받은 포스트'),
-          ],
+          ),
         ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-
-          // 검색 및 필터 영역
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: Column(
-              children: [
-                // 검색/필터 토글 버튼
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: () => setState(() => _showFilters = !_showFilters),
-                    icon: const Icon(Icons.search),
-                    label: Text(_showFilters ? '검색/필터 닫기' : '검색/필터 열기'),
-                  ),
-                ),
-                if (_showFilters) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: '포스트 검색...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                _applyFilters();
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    onChanged: (value) => _applyFilters(),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (_showFilters) ...[
-                  // 필터 및 정렬 옵션들
-                  Row(
-                   children: [
-                     // 상태 필터
-                     Expanded(
-                       child: DropdownButtonFormField<String>(
-                         value: _statusFilter,
-                         decoration: const InputDecoration(
-                           labelText: '상태',
-                           border: OutlineInputBorder(),
-                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                         ),
-                         items: const [
-                           DropdownMenuItem(value: 'all', child: Text('전체')),
-                           DropdownMenuItem(value: 'active', child: Text('활성')),
-                           DropdownMenuItem(value: 'inactive', child: Text('비활성')),
-                           DropdownMenuItem(value: 'deleted', child: Text('삭제됨')),
-                         ],
-                         onChanged: _onStatusFilterChanged,
-                         hint: const Text('상태를 선택하세요'),
-                       ),
-                     ),
-                     
-                     const SizedBox(width: 12),
-                     
-                     // 기간 필터
-                     Expanded(
-                       child: DropdownButtonFormField<String>(
-                         value: _periodFilter,
-                         decoration: const InputDecoration(
-                           labelText: '기간',
-                           border: OutlineInputBorder(),
-                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                         ),
-                         items: const [
-                           DropdownMenuItem(value: 'all', child: Text('전체')),
-                           DropdownMenuItem(value: 'today', child: Text('오늘')),
-                           DropdownMenuItem(value: 'week', child: Text('1주일')),
-                           DropdownMenuItem(value: 'month', child: Text('1개월')),
-                         ],
-                         onChanged: _onPeriodFilterChanged,
-                         hint: const Text('기간을 선택하세요'),
-                       ),
-                     ),
-                   ],
-                 ),
-                 const SizedBox(height: 12),
-                 // 정렬 옵션들
-                 Row(
-                   children: [
-                     // 정렬 기준
-                     Expanded(
-                       child: DropdownButtonFormField<String>(
-                         value: _sortBy,
-                         decoration: const InputDecoration(
-                           labelText: '정렬 기준',
-                           border: OutlineInputBorder(),
-                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                         ),
-                         items: const [
-                           DropdownMenuItem(value: 'createdAt', child: Text('생성일')),
-                           DropdownMenuItem(value: 'title', child: Text('제목')),
-                           DropdownMenuItem(value: 'reward', child: Text('리워드')),
-                           DropdownMenuItem(value: 'expiresAt', child: Text('만료일')),
-                         ],
-                         onChanged: _onSortByChanged,
-                         hint: const Text('정렬 기준을 선택하세요'),
-                       ),
-                     ),
-                     
-                     const SizedBox(width: 12),
-                     
-                     // 정렬 순서
-                     Expanded(
-                       child: DropdownButtonFormField<String>(
-                         value: _sortOrder,
-                         decoration: const InputDecoration(
-                           labelText: '정렬 순서',
-                           border: OutlineInputBorder(),
-                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                         ),
-                         items: const [
-                           DropdownMenuItem(value: 'desc', child: Text('내림차순')),
-                           DropdownMenuItem(value: 'asc', child: Text('오름차순')),
-                         ],
-                         onChanged: _onSortOrderChanged,
-                         hint: const Text('정렬 순서를 선택하세요'),
-                       ),
-                     ),
-                   ],
-                 ),
-                ],
-              ],
-            ),
-          ),
-          
-          // 탭 내용
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildMyPostsTab(),
-                _buildCollectedPostsTab(),
-              ],
-            ),
-          ),
+          _buildMyPostsUnifiedTab(),
+          _buildCollectedPostsTab(),
+          _buildStatisticsTab(),
         ],
       ),
       floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
@@ -532,7 +382,241 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 내 포스트 탭 (배포 전/배포된 nested tabs)
+  // 내 포스트 통합 탭 (배포 전 + 배포된 모두 표시)
+  Widget _buildMyPostsUnifiedTab() {
+    // 첫 로드 시에만 데이터 가져오기
+    if (!_myPostsLoaded) {
+      _loadMyPosts();
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('포스트를 불러오는 중...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    final allMyPosts = [..._cachedDraftPosts, ..._cachedDeployedPosts];
+    final filteredPosts = _filterAndSortPosts(allMyPosts);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.blue[50]!, Colors.white],
+        ),
+      ),
+      child: Column(
+        children: [
+          // 필터 영역 (토글)
+          if (_showFilters) _buildFiltersSection(),
+          
+          const SizedBox(height: 20),
+          // 요약 통계 카드
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue[400]!, Colors.purple[400]!],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildSummaryItem('전체', '${allMyPosts.length}', Icons.list_alt),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+                Expanded(
+                  child: _buildSummaryItem('배포 전', '${_cachedDraftPosts.length}', Icons.drafts),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+                Expanded(
+                  child: _buildSummaryItem('배포됨', '${_cachedDeployedPosts.length}', Icons.rocket_launch),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 데이터 정보 헤더 + 필터/새로고침 버튼
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${filteredPosts.length}개 표시 중',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                // 필터 버튼
+                IconButton(
+                  icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list, 
+                    color: Colors.blue.shade700, size: 20),
+                  onPressed: () => setState(() => _showFilters = !_showFilters),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                  tooltip: '필터',
+                ),
+                // 새로고침 버튼
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Colors.blue.shade700, size: 20),
+                  onPressed: _refreshMyPosts,
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                  tooltip: '새로고침',
+                ),
+                // 배포 포스트 통계 링크
+                TextButton.icon(
+                  onPressed: () => _showDistributedPostsStats(context),
+                  icon: Icon(Icons.analytics, size: 16, color: Colors.blue.shade700),
+                  label: Text(
+                    '통계',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 포스트 목록
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refreshMyPosts,
+              child: filteredPosts.isEmpty
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 200),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.filter_list, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                              SizedBox(height: 8),
+                              Text('검색어나 필터를 변경해보세요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        int crossAxisCount = _getCrossAxisCount(constraints.maxWidth);
+
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                            childAspectRatio: 0.68,
+                          ),
+                          itemCount: filteredPosts.length,
+                          itemBuilder: (context, index) {
+                            final post = filteredPosts[index];
+                            final isDraft = post.status == PostStatus.DRAFT;
+                            
+                            return PostTileCard(
+                              post: post,
+                              isSelected: _selectedPostId == post.postId,
+                              showDeleteButton: _currentUserId == post.creatorId && isDraft,
+                              onDelete: () => _showDeleteConfirmation(post),
+                              showStatisticsButton: !isDraft,
+                              onStatistics: !isDraft ? () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/post-statistics',
+                                  arguments: {'post': post},
+                                );
+                              } : null,
+                              onTap: () {
+                                setState(() {
+                                  if (_selectedPostId == post.postId) {
+                                    _selectedPostId = null;
+                                  } else {
+                                    _selectedPostId = post.postId;
+                                  }
+                                });
+                              },
+                              onDoubleTap: () async {
+                                final result = await Navigator.pushNamed(
+                                  context,
+                                  '/post-detail',
+                                  arguments: {
+                                    'post': post,
+                                    'isEditable': _currentUserId == post.creatorId,
+                                  },
+                                );
+
+                                if (result == true || result == 'deleted') {
+                                  setState(() {
+                                    _selectedPostId = null;
+                                    _myPostsLoaded = false; // 새로고침
+                                  });
+                                }
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 내 포스트 탭 (배포 전/배포된 nested tabs) - 하위 호환성 유지
   Widget _buildMyPostsTab() {
     // 첫 로드 시에만 데이터 가져오기
     if (!_myPostsLoaded) {
@@ -618,48 +702,105 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     final totalPosts = draftPosts.length + deployedPosts.length;
     final filteredPosts = _filterAndSortPosts(draftPosts);
 
-    return Column(
-      children: [
-        // 데이터 정보 헤더
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.blue.shade600),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '총 ${totalPosts}개 중 ${filteredPosts.length}개 표시',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              // 배포 포스트 통계 링크 (PRD 요구사항)
-              TextButton.icon(
-                onPressed: () => _showDistributedPostsStats(context),
-                icon: Icon(Icons.analytics, size: 16, color: Colors.blue.shade700),
-                label: Text(
-                  '배포 통계',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.blue[50]!, Colors.white],
         ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          // 요약 통계 카드
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue[400]!, Colors.purple[400]!],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildSummaryItem('전체', '$totalPosts', Icons.list_alt),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+                Expanded(
+                  child: _buildSummaryItem('배포 전', '${draftPosts.length}', Icons.drafts),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+                Expanded(
+                  child: _buildSummaryItem('배포됨', '${deployedPosts.length}', Icons.rocket_launch),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 데이터 정보 헤더
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${filteredPosts.length}개 표시 중',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                // 배포 포스트 통계 링크 (PRD 요구사항)
+                TextButton.icon(
+                  onPressed: () => _showDistributedPostsStats(context),
+                  icon: Icon(Icons.analytics, size: 16, color: Colors.blue.shade700),
+                  label: Text(
+                    '통계',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         // 포스트 목록
         Expanded(
           child: RefreshIndicator(
@@ -752,6 +893,145 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                   ),
           ),
         ),
+        ],
+      ),
+    );
+  }
+
+  // 필터 섹션
+  Widget _buildFiltersSection() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune, color: Colors.blue),
+              const SizedBox(width: 8),
+              const Text(
+                '필터',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: '포스트 검색...',
+              prefixIcon: const Icon(Icons.search, color: Colors.blue),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _applyFilters();
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onChanged: (value) => _applyFilters(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFilterChip('전체', _statusFilter == 'all', () {
+                  setState(() => _statusFilter = 'all');
+                }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildFilterChip('활성', _statusFilter == 'active', () {
+                  setState(() => _statusFilter = 'active');
+                }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildFilterChip('비활성', _statusFilter == 'inactive', () {
+                  setState(() => _statusFilter = 'inactive');
+                }),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? LinearGradient(
+                  colors: [Colors.blue[400]!, Colors.purple[400]!],
+                )
+              : null,
+          color: isSelected ? null : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : Colors.grey[700],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 요약 통계 아이템 위젯
+  Widget _buildSummaryItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
       ],
     );
   }
@@ -765,35 +1045,72 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       debugPrint('  📦 배포된 포스트: ${post.title} (status: ${post.status.name})');
     }
 
-    return Column(
-      children: [
-        // 데이터 정보 헤더
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.green.shade600),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '총 ${deployedPosts.length}개 배포됨',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.green.shade700,
-                    fontWeight: FontWeight.w500,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.green[50]!, Colors.white],
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          // 헤더 카드
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green[400]!, Colors.teal[400]!],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.rocket_launch, color: Colors.white, size: 32),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '배포된 포스트',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${deployedPosts.length}개',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
 
         // 포스트 그리드
         Expanded(
@@ -880,7 +1197,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                   ),
                 ),
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1076,50 +1394,142 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         } else if (snapshot.hasError) {
           return Center(child: Text('받은 포스트 로드 오류: ${snapshot.error}'));
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.collections_bookmark, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('아직 받은 포스트가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                SizedBox(height: 8),
-                Text('지도에서 포스트를 찾아 수집해보세요!', 
-                     style: TextStyle(fontSize: 14, color: Colors.grey)),
-              ],
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.purple[50]!, Colors.white],
+              ),
+            ),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.card_giftcard, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('아직 받은 포스트가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  SizedBox(height: 8),
+                  Text('지도에서 포스트를 찾아 수집해보세요!', 
+                       style: TextStyle(fontSize: 14, color: Colors.grey)),
+                ],
+              ),
             ),
           );
         } else {
           final filteredPosts = _filterAndSortPosts(snapshot.data!);
-          return Column(
-            children: [
-              // 데이터 정보 헤더
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.orange.shade600),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '총 ${snapshot.data!.length}개 중 ${filteredPosts.length}개 표시',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.orange.shade700,
-                          fontWeight: FontWeight.w500,
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.purple[50]!, Colors.white],
+              ),
+            ),
+            child: Column(
+              children: [
+                // 필터 영역 (토글)
+                if (_showFilters) _buildFiltersSection(),
+                
+                const SizedBox(height: 20),
+                // 헤더 카드
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.purple[400]!, Colors.pink[400]!],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.purple.withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.card_giftcard, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '수집한 포스트',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${snapshot.data!.length}개',
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                // 필터 버튼 바
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Colors.purple.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${filteredPosts.length}개 표시 중',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.purple.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      // 필터 버튼
+                      IconButton(
+                        icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list, 
+                          color: Colors.purple.shade700, size: 20),
+                        onPressed: () => setState(() => _showFilters = !_showFilters),
+                        padding: const EdgeInsets.all(4),
+                        constraints: const BoxConstraints(),
+                        tooltip: '필터',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
               // 포스트 목록
               Expanded(
                 child: RefreshIndicator(
@@ -1192,7 +1602,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                       ),
                 ),
               ),
-            ],
+              ],
+            ),
           );
         }
       },
@@ -1308,6 +1719,229 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
   // 내 스토어로 이동 (PRD 요구사항)
   void _navigateToMyStore(BuildContext context) {
     Navigator.pushNamed(context, '/store');
+  }
+
+  // 통계 탭
+  Widget _buildStatisticsTab() {
+    return FutureBuilder<List<PostModel>>(
+      future: _postService.getDeployedPosts(_currentUserId!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final deployedPosts = snapshot.data ?? [];
+        final totalDeployed = deployedPosts.length;
+        
+        // 간단한 통계 계산
+        int totalCollections = 0;
+        for (var post in deployedPosts) {
+          // TODO: 실제 수집 수 계산 (마커 데이터에서)
+          totalCollections += 0;
+        }
+        
+        final collectionRate = totalDeployed > 0 ? (totalCollections / totalDeployed * 100).toStringAsFixed(0) : '0';
+
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.orange[50]!, Colors.white],
+            ),
+          ),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // 전체 통계 카드
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.orange[400]!, Colors.red[400]!],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.bar_chart, color: Colors.white, size: 32),
+                        SizedBox(width: 12),
+                        Text(
+                          '배포 통계',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatItem('총 배포', '$totalDeployed개', Icons.rocket_launch),
+                        ),
+                        Container(
+                          width: 1,
+                          height: 50,
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        Expanded(
+                          child: _buildStatItem('총 수집', '${totalCollections}개', Icons.download),
+                        ),
+                        Container(
+                          width: 1,
+                          height: 50,
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        Expanded(
+                          child: _buildStatItem('수집률', '$collectionRate%', Icons.trending_up),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // 개별 통계 카드들
+              _buildDetailStatCard(
+                '오늘 배포',
+                '${deployedPosts.where((p) => _isSameDay(p.createdAt, DateTime.now())).length}개',
+                Icons.today,
+                Colors.blue,
+              ),
+              const SizedBox(height: 16),
+              _buildDetailStatCard(
+                '이번 주 배포',
+                '${deployedPosts.where((p) => p.createdAt.isAfter(DateTime.now().subtract(const Duration(days: 7)))).length}개',
+                Icons.date_range,
+                Colors.green,
+              ),
+              const SizedBox(height: 16),
+              _buildDetailStatCard(
+                '배포된 포스트',
+                '$totalDeployed개',
+                Icons.list_alt,
+                Colors.purple,
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // 상세 통계 버튼
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/deployment-statistics');
+                },
+                icon: const Icon(Icons.analytics),
+                label: const Text('상세 통계 보기'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailStatCard(String label, String value, IconData icon, MaterialColor color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color[300]!, color[500]!],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: Colors.white, size: 32),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: color[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_forward_ios, size: 20, color: Colors.grey[300]),
+        ],
+      ),
+    );
   }
 
 
