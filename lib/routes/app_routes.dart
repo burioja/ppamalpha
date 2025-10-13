@@ -31,6 +31,7 @@ import '../features/post_system/screens/post_statistics_screen.dart';
 import '../features/post_system/screens/deployment_statistics_dashboard_screen.dart';
 import '../features/post_system/screens/my_posts_statistics_dashboard_screen.dart';
 import '../features/post_system/screens/post_deploy_design_demo.dart';
+import '../features/post_system/screens/post_place_screen_design_demo.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
@@ -80,6 +81,7 @@ class AppRoutes {
   
   // Design demo routes
   static const String postDeployDesignDemo = '/post-deploy-design-demo';
+  static const String postPlaceDesignDemo = '/post-place-design-demo';
 
   static Map<String, WidgetBuilder> get routes => {
     login: (context) => const LoginScreen(),
@@ -190,5 +192,6 @@ class AppRoutes {
     
     // Design demo
     postDeployDesignDemo: (context) => const PostDeployDesignDemo(),
+    postPlaceDesignDemo: (context) => const PostPlaceScreenDesignDemo(),
   };
 } 

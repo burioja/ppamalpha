@@ -133,94 +133,99 @@ class _LoginScreenState extends State<LoginScreen> {
                 flex: 2,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                      const SizedBox(height: 24),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '이메일',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF4D4DFF),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _emailController,
-                        decoration: const InputDecoration(
-                          hintText: '이메일을 입력하세요',
-                          hintStyle: TextStyle(color: Colors.grey),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF4D4DFF)),
-
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0XFF4D4DFF), width: 2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '비밀번호',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF4D4DFF),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        onSubmitted: (_) => _login(),
-                        decoration: const InputDecoration(
-                          hintText: '비밀번호를 입력하세요',
-                          hintStyle: TextStyle(color: Colors.grey),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF4D4DFF)),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Column(
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      scrollbars: false,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Center(
-                            child: TextButton(
-                              onPressed: () {
-                                // 이메일 찾기 구현
-                              },
-                              child: const Text(
-                                '이메일을 잃어버렸어요',
-                                style: TextStyle(color: Color(0xFF4D4DFF)),
+                          const SizedBox(height: 24),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '이메일',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF4D4DFF),
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
-                          Center(
-                            child: TextButton(
-                              onPressed: () {
-                                // 비밀번호 찾기 구현
-                              },
-                              child: const Text(
-                                '비밀번호를 잊어버렸어요',
-                                style: TextStyle(color: Color(0xFF4D4DFF)),
+                          const SizedBox(height: 4),
+                          TextField(
+                            controller: _emailController,
+                            decoration: const InputDecoration(
+                              hintText: '이메일을 입력하세요',
+                              hintStyle: TextStyle(color: Colors.grey),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Color(0xFF4D4DFF)),
+
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Color(0XFF4D4DFF), width: 2),
                               ),
                             ),
                           ),
+                          const SizedBox(height: 24),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '비밀번호',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF4D4DFF),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            onSubmitted: (_) => _login(),
+                            decoration: const InputDecoration(
+                              hintText: '비밀번호를 입력하세요',
+                              hintStyle: TextStyle(color: Colors.grey),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Color(0xFF4D4DFF)),
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Color(0xFF4D4DFF), width: 2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Column(
+                            children: [
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    // 이메일 찾기 구현
+                                  },
+                                  child: const Text(
+                                    '이메일을 잃어버렸어요',
+                                    style: TextStyle(color: Color(0xFF4D4DFF)),
+                                  ),
+                                ),
+                              ),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    // 비밀번호 찾기 구현
+                                  },
+                                  child: const Text(
+                                    '비밀번호를 잊어버렸어요',
+                                    style: TextStyle(color: Color(0xFF4D4DFF)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: bottomInset + 120), // 버튼과 간섭 안되게 추가 여백
                         ],
                       ),
-                      SizedBox(height: bottomInset + 120), // 버튼과 간섭 안되게 추가 여백
-                    ],
                     ),
                   ),
                 ),

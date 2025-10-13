@@ -9,6 +9,7 @@ class PriceCalculator extends StatefulWidget {
   final TextEditingController priceController;
   final String? Function(String?)? validator;
   final VoidCallback? onPriceCalculated; // 콜백 추가
+  final bool isCompact; // 컴팩트 모드 추가
 
   const PriceCalculator({
     super.key,
@@ -17,6 +18,7 @@ class PriceCalculator extends StatefulWidget {
     required this.priceController,
     this.validator,
     this.onPriceCalculated,
+    this.isCompact = false,
   });
 
   @override
@@ -96,11 +98,11 @@ class PriceCalculatorState extends State<PriceCalculator> {
     }
   }
 
-  /// 100원 단위로 올림
-  /// 예: 149원 → 200원, 251원 → 300원, 300원 → 300원
-  double _roundUpToHundred(double price) {
+  /// 10원 단위로 올림
+  /// 예: 14원 → 20원, 25원 → 30원, 30원 → 30원
+  double _roundUpToTen(double price) {
     if (price <= 0) return 0;
-    return ((price / 100).ceil() * 100).toDouble();
+    return ((price / 10).ceil() * 10).toDouble();
   }
 
   void _calculateMinimumPrice() {
@@ -170,11 +172,11 @@ class PriceCalculatorState extends State<PriceCalculator> {
     // 최소 단가 계산 (100KB당 100원)
     final rawPrice = (_totalSizeKB / 100.0) * _basePricePer100KB;
 
-    // 100원 단위로 올림 적용
-    _minimumPrice = _roundUpToHundred(rawPrice);
+    // 10원 단위로 올림 적용
+    _minimumPrice = _roundUpToTen(rawPrice);
 
     print('계산된 원본 가격: ${rawPrice.toStringAsFixed(2)}원');
-    print('100원 단위 올림 후 최소 단가: ${_minimumPrice.toStringAsFixed(0)}원');
+    print('10원 단위 올림 후 최소 단가: ${_minimumPrice.toStringAsFixed(0)}원');
     print('=== [_calculateMinimumPrice] 완료 ===');
 
     setState(() {});
@@ -201,15 +203,15 @@ class PriceCalculatorState extends State<PriceCalculator> {
       return '단가는 0 이상이어야 합니다';
     }
 
-    // 100원 단위 검증
-    if (price % 100 != 0) {
-      final roundedPrice = _roundUpToHundred(price);
-      return '단가는 100원 단위여야 합니다 (${roundedPrice.toInt()}원으로 올림됩니다)';
+    // 10원 단위 검증
+    if (price % 10 != 0) {
+      final roundedPrice = _roundUpToTen(price);
+      return '단가는 10원 단위여야 합니다 (${roundedPrice.toInt()}원으로 올림됩니다)';
     }
 
-    // 미디어가 있는 경우 최소 단가 검증 (100원 단위 올림 적용된 값)
+    // 미디어가 있는 경우 최소 단가 검증 (10원 단위 올림 적용된 값)
     if (_totalSizeKB > 0 && price < _minimumPrice) {
-      return '최소 단가는 ${_minimumPrice.toInt()}원 이상이어야 합니다\n(미디어 용량 기준, 100원 단위 올림 적용)';
+      return '최소 단가는 ${_minimumPrice.toInt()}원 이상이어야 합니다\n(미디어 용량 기준, 10원 단위 올림 적용)';
     }
 
     // 사용자 정의 validator가 있는 경우 호출
@@ -223,6 +225,50 @@ class PriceCalculatorState extends State<PriceCalculator> {
   @override
   Widget build(BuildContext context) {
     print('[PriceCalculator] build 호출됨 - 이미지: ${widget.images.length}개, 사운드: ${widget.sound != null}, 총 크기: ${_totalSizeKB}KB, 최소가격: ${_minimumPrice}원');
+    
+    // 컴팩트 모드
+    if (widget.isCompact) {
+      return TextFormField(
+        controller: widget.priceController,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.right,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        decoration: InputDecoration(
+          labelText: '단가',
+          labelStyle: const TextStyle(fontSize: 11),
+          prefixIcon: const Icon(Icons.monetization_on, size: 16),
+          suffixText: '원',
+          suffixStyle: const TextStyle(fontSize: 12),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          isDense: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF4D4DFF), width: 1.5),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Colors.red, width: 1),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Colors.red, width: 1.5),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        validator: _validatePrice,
+      );
+    }
+    
+    // 기본 모드 (전체 UI)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -241,8 +287,8 @@ class PriceCalculatorState extends State<PriceCalculator> {
             border: const OutlineInputBorder(),
             suffixText: '원',
             helperText: _totalSizeKB > 0
-                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 100원 단위 올림 적용)'
-                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다 (100원 단위 올림)',
+                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 10원 단위 올림 적용)'
+                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다 (10원 단위 올림)',
           ),
           keyboardType: TextInputType.number,
           validator: _validatePrice,
