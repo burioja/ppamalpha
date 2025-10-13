@@ -568,7 +568,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             return PostTileCard(
                               post: post,
                               isSelected: _selectedPostId == post.postId,
-                              showDeleteButton: _currentUserId == post.creatorId && isDraft,
+                              showDeleteButton: true, // 모든 포스트에 삭제 버튼 표시
                               onDelete: () => _showDeleteConfirmation(post),
                               showStatisticsButton: !isDraft,
                               onStatistics: !isDraft ? () {
@@ -1570,6 +1570,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           return PostTileCard(
                             post: post,
                             isSelected: _selectedPostId == post.postId,
+                            showDeleteButton: true, // 받은 포스트도 삭제 버튼 표시
+                            onDelete: () => _showDeleteCollectedPost(post),
                             onTap: () {
                               setState(() {
                                 if (_selectedPostId == post.postId) {
@@ -1610,7 +1612,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 포스트 삭제 확인 다이얼로그
+  // 내 포스트 삭제 확인 다이얼로그
   void _showDeleteConfirmation(PostModel post) {
     showDialog(
       context: context,
@@ -1645,7 +1647,42 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 포스트 삭제 실행
+  // 받은 포스트 삭제 확인 다이얼로그
+  void _showDeleteCollectedPost(PostModel post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('수집 기록 삭제'),
+          content: Text(
+            '이 포스트의 수집 기록을 삭제하시겠습니까?\n\n"${post.title}"\n\n삭제된 기록은 복구할 수 없습니다.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                '취소',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _deleteCollectedPost(post);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 내 포스트 삭제 실행
   Future<void> _deletePost(PostModel post) async {
     try {
       // 로딩 다이얼로그 표시
@@ -1681,7 +1718,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         );
         
         // 인박스 새로고침
-        setState(() {});
+        setState(() {
+          _myPostsLoaded = false;
+        });
       }
     } catch (e) {
       // 로딩 다이얼로그 닫기
@@ -1692,6 +1731,66 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('포스트 삭제에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 받은 포스트 삭제 실행 (수집 기록 제거)
+  Future<void> _deleteCollectedPost(PostModel post) async {
+    try {
+      // 로딩 다이얼로그 표시
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("수집 기록을 삭제하는 중..."),
+              ],
+            ),
+          );
+        },
+      );
+
+      // post_collections에서 수집 기록 삭제
+      final collectionId = '${post.postId}_$_currentUserId';
+      await FirebaseFirestore.instance
+          .collection('post_collections')
+          .doc(collectionId)
+          .delete();
+
+      // 로딩 다이얼로그 닫기
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        // 성공 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('수집 기록이 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // 인박스 새로고침
+        setState(() {
+          _loadInitialData();
+        });
+      }
+    } catch (e) {
+      // 로딩 다이얼로그 닫기
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        // 에러 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('수집 기록 삭제에 실패했습니다: $e'),
             backgroundColor: Colors.red,
           ),
         );

@@ -125,39 +125,43 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                 child: _buildImageWidget(),
               ),
               
-              // 삭제 버튼 (좌상단)
-              if (widget.showDeleteButton && widget.onDelete != null)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: GestureDetector(
-                    onTap: widget.onDelete,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.delete,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              
-              // 상태 배지 (우상단)
+              // 우상단 버튼 영역 (상태 배지 + 삭제 버튼)
               Positioned(
                 top: 8,
                 right: 8,
-                child: _buildStatusBadge(isDeleted, isCollected, isUsed),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // 삭제 버튼 (우상단)
+                    if (widget.showDeleteButton && widget.onDelete != null)
+                      GestureDetector(
+                        onTap: widget.onDelete,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.delete,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    // 상태 배지와 삭제 버튼 사이 간격
+                    if (widget.showDeleteButton && widget.onDelete != null)
+                      const SizedBox(height: 4),
+                    // 상태 배지
+                    _buildStatusBadge(isDeleted, isCollected, isUsed),
+                  ],
+                ),
               ),
               
               // 하단 그라데이션 + 텍스트 오버레이
@@ -571,15 +575,19 @@ class _ScrollingTextState extends State<_ScrollingText> with SingleTickerProvide
   @override
   Widget build(BuildContext context) {
     return ClipRect(
-      child: SlideTransition(
-        position: _animation,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.text, style: widget.style),
-            const SizedBox(width: 20),
-            Text(widget.text, style: widget.style),
-          ],
+      child: OverflowBox(
+        maxWidth: double.infinity,
+        alignment: Alignment.centerLeft,
+        child: SlideTransition(
+          position: _animation,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.text, style: widget.style, overflow: TextOverflow.visible),
+              const SizedBox(width: 20),
+              Text(widget.text, style: widget.style, overflow: TextOverflow.visible),
+            ],
+          ),
         ),
       ),
     );

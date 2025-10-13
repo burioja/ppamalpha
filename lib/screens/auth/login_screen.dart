@@ -197,28 +197,32 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          Column(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Center(
-                                child: TextButton(
-                                  onPressed: () {
-                                    // 이메일 찾기 구현
-                                  },
-                                  child: const Text(
-                                    '이메일을 잃어버렸어요',
-                                    style: TextStyle(color: Color(0xFF4D4DFF)),
-                                  ),
+                              TextButton(
+                                onPressed: () {
+                                  // 이메일 찾기 구현
+                                },
+                                child: const Text(
+                                  '이메일을 잃어버렸어요',
+                                  style: TextStyle(color: Color(0xFF4D4DFF)),
                                 ),
                               ),
-                              Center(
-                                child: TextButton(
-                                  onPressed: () {
-                                    // 비밀번호 찾기 구현
-                                  },
-                                  child: const Text(
-                                    '비밀번호를 잊어버렸어요',
-                                    style: TextStyle(color: Color(0xFF4D4DFF)),
-                                  ),
+                              const SizedBox(width: 8),
+                              Container(
+                                height: 16,
+                                width: 1,
+                                color: Colors.grey.shade300,
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () {
+                                  // 비밀번호 찾기 구현
+                                },
+                                child: const Text(
+                                  '비밀번호를 잊어버렸어요',
+                                  style: TextStyle(color: Color(0xFF4D4DFF)),
                                 ),
                               ),
                             ],

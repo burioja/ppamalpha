@@ -6,8 +6,89 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import '../../../core/models/place/place_model.dart';
+
+// 커스텀 네모 썸 Shape (나이 텍스트 포함)
+class RectangularAgeThumbShape extends RangeSliderThumbShape {
+  final double thumbWidth;
+  final double thumbHeight;
+  final RangeValues values;
+
+  RectangularAgeThumbShape({
+    this.thumbWidth = 32,
+    this.thumbHeight = 24,
+    required this.values,
+  });
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) {
+    return Size(thumbWidth, thumbHeight);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    bool? isDiscrete,
+    bool? isEnabled,
+    bool? isOnTop,
+    TextDirection? textDirection,
+    required SliderThemeData sliderTheme,
+    Thumb? thumb,
+    bool? isPressed,
+  }) {
+    final Canvas canvas = context.canvas;
+
+    // 네모 배경
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: thumbWidth, height: thumbHeight),
+      const Radius.circular(4),
+    );
+
+    final paint = Paint()
+      ..color = sliderTheme.thumbColor ?? Colors.orange
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRRect(rect, paint);
+
+    // 테두리
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    canvas.drawRRect(rect, borderPaint);
+
+    // 어느 썸인지에 따라 다른 값 표시
+    final value = thumb == Thumb.start ? values.start.toInt() : values.end.toInt();
+    
+    // 텍스트 페인터 생성
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$value',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // 텍스트 그리기
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2,
+      ),
+    );
+  }
+}
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
@@ -1689,39 +1770,50 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    height: 40, // 성별 칩과 동일한 높이
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.orange.shade200),
                     ),
-                    child: Text(
-                      '${_selectedAgeRange.start.toInt()}세 ~ ${_selectedAgeRange.end.toInt()}세',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800, fontWeight: FontWeight.w600),
-                      textAlign: TextAlign.center,
-                    ),
+                    child: _buildAgeRangeSlider(),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        // 나이 범위 슬라이더
-        RangeSliderWithInput(
-          label: '',
-          initialValues: _selectedAgeRange,
-          min: 10,
-          max: 90,
-          divisions: 80,
-          onChanged: (range) {
-            setState(() {
-              _selectedAgeRange = range;
-            });
-          },
-          labelBuilder: (value) => '${value.toInt()}세',
-        ),
       ],
+    );
+  }
+
+  Widget _buildAgeRangeSlider() {
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        activeTrackColor: Colors.orange.shade400,
+        inactiveTrackColor: Colors.orange.shade200,
+        thumbColor: Colors.orange.shade600,
+        overlayColor: Colors.transparent,
+        trackHeight: 3,
+        rangeThumbShape: RectangularAgeThumbShape(
+          thumbWidth: 32,
+          thumbHeight: 24,
+          values: _selectedAgeRange,
+        ),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+      ),
+      child: RangeSlider(
+        values: _selectedAgeRange,
+        min: 10,
+        max: 90,
+        divisions: 80,
+        onChanged: (range) {
+          setState(() {
+            _selectedAgeRange = range;
+          });
+        },
+      ),
     );
   }
 
@@ -1740,12 +1832,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        height: 40, // 나이 박스와 동일한 높이
         decoration: BoxDecoration(
           color: isSelected ? color : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: color.withOpacity(0.3)),
         ),
+        alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(

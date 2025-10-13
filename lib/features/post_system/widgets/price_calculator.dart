@@ -26,7 +26,9 @@ class PriceCalculator extends StatefulWidget {
 }
 
 class PriceCalculatorState extends State<PriceCalculator> {
-  static const double _basePricePer100KB = 100.0; // 100KB당 100원 기준
+  static const double _basePrice = 30.0; // 기본 최소 단가 (1MB까지)
+  static const double _baseSizeKB = 1024.0; // 기본 용량 (1MB)
+  static const double _additionalPer300KB = 10.0; // 300KB당 추가 비용
   double _minimumPrice = 0.0;
   double _totalSizeKB = 0.0;
 
@@ -169,8 +171,17 @@ class PriceCalculatorState extends State<PriceCalculator> {
 
     print('총 미디어 크기: ${_totalSizeKB.toStringAsFixed(2)} KB');
 
-    // 최소 단가 계산 (100KB당 100원)
-    final rawPrice = (_totalSizeKB / 100.0) * _basePricePer100KB;
+    // 최소 단가 계산
+    // 1MB(1024KB)까지: 30원
+    // 이후 300KB당: 10원 추가
+    double rawPrice;
+    if (_totalSizeKB <= _baseSizeKB) {
+      rawPrice = _basePrice;
+    } else {
+      final excessKB = _totalSizeKB - _baseSizeKB;
+      final additionalChunks = (excessKB / 300.0).ceil();
+      rawPrice = _basePrice + (additionalChunks * _additionalPer300KB);
+    }
 
     // 10원 단위로 올림 적용
     _minimumPrice = _roundUpToTen(rawPrice);
@@ -287,8 +298,8 @@ class PriceCalculatorState extends State<PriceCalculator> {
             border: const OutlineInputBorder(),
             suffixText: '원',
             helperText: _totalSizeKB > 0
-                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 10원 단위 올림 적용)'
-                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다 (10원 단위 올림)',
+                ? '📷 이미지/🔊 사운드 포함 시 최소 단가: ${_minimumPrice.toInt()}원 (${_totalSizeKB.toStringAsFixed(1)}KB, 1MB까지 30원, 이후 300KB당 +10원)'
+                : '💡 이미지나 사운드 추가 시 자동으로 최소 단가가 계산됩니다 (1MB까지 30원)',
           ),
           keyboardType: TextInputType.number,
           validator: _validatePrice,
@@ -308,7 +319,7 @@ class PriceCalculatorState extends State<PriceCalculator> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '총 미디어 크기: ${_totalSizeKB.toStringAsFixed(1)}KB (100KB당 ${_basePricePer100KB.toInt()}원)',
+                    '총 미디어 크기: ${_totalSizeKB.toStringAsFixed(1)}KB (1MB까지 ${_basePrice.toInt()}원, 이후 300KB당 +${_additionalPer300KB.toInt()}원)',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.blue[700],
