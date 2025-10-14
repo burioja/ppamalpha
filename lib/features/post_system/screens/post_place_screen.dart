@@ -452,7 +452,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_usedRefLocation ? '위치 정보를 가져올 수 없어 기본 참조 위치를 사용합니다.' : '플레이스 위치를 사용합니다.')),
+          SnackBar(content: Text(_usedRefLocation ? '위치 정보를 가져올 수 없어 기본 참조 위치를 사용합니다.' : '배포자 위치를 사용합니다.')),
         );
       }
     }
@@ -648,7 +648,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                // 플레이스 헤더
+                // 배포자 헤더
                 _buildModernPlaceHeader(),
                 
                 // 메인 컨텐츠
@@ -803,7 +803,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
               ),
               const SizedBox(width: 12),
               const Text(
-                '연결된 플레이스',
+                '연결된 배포자',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,

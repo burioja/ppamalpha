@@ -20,6 +20,7 @@ import '../features/user_dashboard/screens/settings_screen.dart';
 import '../features/user_dashboard/screens/location_picker_screen.dart';
 import '../features/user_dashboard/screens/store_screen.dart';
 import '../features/user_dashboard/screens/points_screen.dart';
+import '../features/user_dashboard/screens/trash_screen.dart';
 
 // Post System
 import '../features/post_system/screens/post_place_screen.dart';
@@ -78,6 +79,7 @@ class AppRoutes {
   // Admin routes
   static const String adminCleanup = '/admin-cleanup';
   static const String store = '/store';
+  static const String trash = '/trash';
   
   // Design demo routes
   static const String postDeployDesignDemo = '/post-deploy-design-demo';
@@ -188,6 +190,7 @@ class AppRoutes {
       return PlaceStatisticsScreen(place: place);
     },
     store: (context) => const StoreScreen(),
+    trash: (context) => const TrashScreen(),
     adminCleanup: (context) => const AdminCleanupScreen(),
     
     // Design demo

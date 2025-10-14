@@ -489,6 +489,58 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                     ),
                   ),
                 ),
+                // 정렬 드롭다운
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.sort, color: Colors.blue.shade700, size: 20),
+                  tooltip: '정렬',
+                  padding: const EdgeInsets.all(4),
+                  onSelected: (value) {
+                    setState(() {
+                      _sortBy = value;
+                      _applyFiltersAndSorting();
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'createdAt',
+                      child: Row(
+                        children: [
+                          Icon(Icons.access_time, size: 16, color: _sortBy == 'createdAt' ? Colors.blue : Colors.grey),
+                          const SizedBox(width: 8),
+                          Text('최신순', style: TextStyle(color: _sortBy == 'createdAt' ? Colors.blue : Colors.black)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'reward',
+                      child: Row(
+                        children: [
+                          Icon(Icons.attach_money, size: 16, color: _sortBy == 'reward' ? Colors.blue : Colors.grey),
+                          const SizedBox(width: 8),
+                          Text('가격순', style: TextStyle(color: _sortBy == 'reward' ? Colors.blue : Colors.black)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'title',
+                      child: Row(
+                        children: [
+                          Icon(Icons.text_fields, size: 16, color: _sortBy == 'title' ? Colors.blue : Colors.grey),
+                          const SizedBox(width: 8),
+                          Text('이름순', style: TextStyle(color: _sortBy == 'title' ? Colors.blue : Colors.black)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                // 휴지통 버튼
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.orange.shade700, size: 20),
+                  onPressed: () => Navigator.pushNamed(context, '/trash'),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                  tooltip: '휴지통',
+                ),
                 // 필터 버튼
                 IconButton(
                   icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list, 
@@ -1523,6 +1575,50 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                           ),
                         ),
                       ),
+                      // 정렬 드롭다운
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.sort, color: Colors.purple.shade700, size: 20),
+                        tooltip: '정렬',
+                        padding: const EdgeInsets.all(4),
+                        onSelected: (value) {
+                          setState(() {
+                            _sortBy = value;
+                            _applyFiltersAndSorting();
+                          });
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'createdAt',
+                            child: Row(
+                              children: [
+                                Icon(Icons.access_time, size: 16, color: _sortBy == 'createdAt' ? Colors.purple : Colors.grey),
+                                const SizedBox(width: 8),
+                                Text('최신순', style: TextStyle(color: _sortBy == 'createdAt' ? Colors.purple : Colors.black)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'reward',
+                            child: Row(
+                              children: [
+                                Icon(Icons.attach_money, size: 16, color: _sortBy == 'reward' ? Colors.purple : Colors.grey),
+                                const SizedBox(width: 8),
+                                Text('가격순', style: TextStyle(color: _sortBy == 'reward' ? Colors.purple : Colors.black)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'title',
+                            child: Row(
+                              children: [
+                                Icon(Icons.text_fields, size: 16, color: _sortBy == 'title' ? Colors.purple : Colors.grey),
+                                const SizedBox(width: 8),
+                                Text('이름순', style: TextStyle(color: _sortBy == 'title' ? Colors.purple : Colors.black)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                       // 필터 버튼
                       IconButton(
                         icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list, 
@@ -1578,31 +1674,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                             isSelected: _selectedPostId == post.postId,
                             showDeleteButton: true, // 받은 포스트도 삭제 버튼 표시
                             onDelete: () => _showDeleteCollectedPost(post),
-                            onTap: () {
-                              setState(() {
-                                if (_selectedPostId == post.postId) {
-                                  _selectedPostId = null;
-                                } else {
-                                  _selectedPostId = post.postId;
-                                }
-                              });
-                            },
-                            onDoubleTap: () async {
-                              final result = await Navigator.pushNamed(
-                                context,
-                                '/post-detail',
-                                arguments: {
-                                  'post': post,
-                                  'isEditable': false,
-                                },
-                              );
-
-                              if (result == true || result == 'used') {
-                                setState(() {
-                                  _selectedPostId = null;
-                                });
-                              }
-                            },
+                            hideTextOverlay: true, // 제목/가격 숨김
+                            enableImageViewer: true, // 이미지 확대 뷰어 활성화
                           );
                         },
                           );
@@ -1618,15 +1691,15 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 내 포스트 삭제 확인 다이얼로그
+  // 내 포스트 휴지통 이동 확인 다이얼로그
   void _showDeleteConfirmation(PostModel post) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('포스트 삭제'),
+          title: const Text('휴지통으로 이동'),
           content: Text(
-            '정말 이 포스트를 삭제하겠습니까?\n\n"${post.title}"\n\n삭제된 포스트는 복구할 수 없습니다.',
+            '이 포스트를 휴지통으로 이동하시겠습니까?\n\n"${post.title}"\n\n휴지통에서 30일 이내에 복원할 수 있습니다.\n30일 후 자동으로 영구 삭제됩니다.',
             style: const TextStyle(fontSize: 16),
           ),
           actions: [
@@ -1643,9 +1716,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 await _deletePost(post);
               },
               style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
+                foregroundColor: Colors.orange,
               ),
-              child: const Text('삭제'),
+              child: const Text('휴지통으로 이동'),
             ),
           ],
         );
@@ -1688,7 +1761,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     );
   }
 
-  // 내 포스트 삭제 실행
+  // 내 포스트 휴지통으로 이동
   Future<void> _deletePost(PostModel post) async {
     try {
       // 로딩 다이얼로그 표시
@@ -1701,15 +1774,15 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
               children: [
                 CircularProgressIndicator(),
                 SizedBox(width: 20),
-                Text("포스트를 삭제하는 중..."),
+                Text("휴지통으로 이동하는 중..."),
               ],
             ),
           );
         },
       );
 
-      // 포스트 삭제
-      await _postService.deletePost(post.postId);
+      // 포스트를 휴지통으로 이동
+      await _postService.moveToTrash(post.postId);
 
       // 로딩 다이얼로그 닫기
       if (mounted) {
@@ -1718,8 +1791,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         // 성공 메시지 표시
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('포스트가 삭제되었습니다.'),
+            content: Text('포스트를 휴지통으로 이동했습니다. 30일 후 자동 삭제됩니다.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
         
@@ -1736,7 +1810,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         // 에러 메시지 표시
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('포스트 삭제에 실패했습니다: $e'),
+            content: Text('휴지통 이동에 실패했습니다: $e'),
             backgroundColor: Colors.red,
           ),
         );
