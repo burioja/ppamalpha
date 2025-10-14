@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,7 +14,6 @@ import '../../../core/services/auth/firebase_service.dart';
 import '../../../core/utils/file_helper.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../screens/auth/address_search_screen.dart';
-import 'edit_place_screen_fields.dart';
 
 class CreatePlaceScreen extends StatefulWidget {
   const CreatePlaceScreen({super.key});
@@ -22,11 +22,12 @@ class CreatePlaceScreen extends StatefulWidget {
   State<CreatePlaceScreen> createState() => _CreatePlaceScreenState();
 }
 
-class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
+class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _placeService = PlaceService();
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
   final _firebaseService = FirebaseService();
+  late TabController _tabController;
   
   // 폼 컨트롤러들
   final TextEditingController _nameController = TextEditingController();
@@ -55,38 +56,23 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
   final TextEditingController _virtualTourUrlController = TextEditingController();
   final TextEditingController _closureReasonController = TextEditingController();
 
-  // 선택된 카테고리들
+  // 기본 필드들
   String? _selectedCategory;
   String? _selectedSubCategory;
   String? _selectedSubSubCategory;
-
-  // 쿠폰 활성화 여부
-  bool _enableCoupon = false;
-
-  // 선택된 위치 좌표
-  GeoPoint? _selectedLocation;
-
-  // Phase 1 상태 변수
   Map<String, dynamic> _operatingHours = {};
+  List<String> _regularHolidays = [];
+  List<String> _breakTimes = [];
+  bool _isOpen24Hours = false;
   List<String> _selectedFacilities = [];
   List<String> _selectedPaymentMethods = [];
   String? _selectedParkingType;
   int? _parkingCapacity;
-  bool _isOpen24Hours = false;
   bool _hasValetParking = false;
-  Map<String, String> _socialMediaHandles = {};
-  List<String> _regularHolidays = [];
-  Map<String, String> _breakTimes = {};
-
-  // Phase 2 상태 변수
+  bool _enableCoupon = false;
   List<String> _selectedAccessibility = [];
   String? _selectedPriceRange;
   int? _capacity;
-  List<String> _nearbyTransit = [];
-
-  // Phase 3 상태 변수
-  List<String> _certifications = [];
-  List<String> _awards = [];
   bool _hasReservation = false;
   List<String> _videoUrls = [];
   List<String> _interiorImageUrls = [];
@@ -123,8 +109,34 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
   final List<String> _imageNames = [];
   int _coverImageIndex = 0; // 대문 이미지 인덱스 (기본값: 첫 번째 이미지)
 
+  // 옵션 리스트들
+  final List<String> _facilityOptions = [
+    'WiFi', '에어컨', '화장실', '주차장', '엘리베이터', '에스컬레이터',
+    '휠체어 접근', '흡연실', '금연실', '냉난방', '음료 서비스',
+    '간식 서비스', '대기실', '로커', '샤워실', '체육관', '수영장',
+    '사우나', '마사지', '네일샵', '미용실', '세탁소', '편의점',
+  ];
+
+  final List<String> _paymentOptions = [
+    '현금', '카드', '계좌이체', '모바일페이', '간편결제', '쿠폰',
+    '포인트', '상품권', '할인카드', '신용카드', '체크카드',
+  ];
+
+  final List<String> _accessibilityOptions = [
+    '휠체어 접근', '엘리베이터', '경사로', '점자 안내', '청각 보조',
+    '시각 보조', '장애인 화장실', '장애인 주차장', '보조견 동반',
+    '수화 통역', '음성 안내', '큰 글씨 안내',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
   @override
   void dispose() {
+    _tabController.dispose();
     _nameController.dispose();
     _descriptionController.dispose();
     _addressController.dispose();
@@ -189,8 +201,14 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
             FileHelper.createFile(img),
             'places',
           );
+        } else if (img is Uint8List) {
+          // 모바일: 바이트 데이터
+          uploadResult = await _firebaseService.uploadImageBytesWithThumbnail(
+            img,
+            'places',
+            'place_${DateTime.now().millisecondsSinceEpoch}.png',
+          );
         } else {
-          // 지원하지 않는 타입
           continue;
         }
 
@@ -198,131 +216,80 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
         thumbnailUrls.add(uploadResult['thumbnail']!);
       }
 
-      // coverImageIndex 검증 (이미지 개수 범위 내로 제한)
-      final validCoverIndex = imageUrls.isNotEmpty ? _coverImageIndex.clamp(0, imageUrls.length - 1) : 0;
-
+      // PlaceModel 생성
       final place = PlaceModel(
-        id: '',
+        id: '', // Firestore에서 자동 생성
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
-        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-        detailAddress: _detailAddressController.text.trim().isEmpty ? null : _detailAddressController.text.trim(),
-        location: _selectedLocation,
-        category: _selectedCategory,
+        category: _selectedCategory!,
         subCategory: _selectedSubCategory,
         subSubCategory: _selectedSubSubCategory,
+        address: _addressController.text.trim(),
+        detailAddress: _detailAddressController.text.trim(),
+        location: null, // 주소 검색에서 설정
         imageUrls: imageUrls,
         thumbnailUrls: thumbnailUrls,
-        coverImageIndex: validCoverIndex,
-
-        // 운영시간 및 연락처
-        operatingHours: _operatingHours.isEmpty ? null : _operatingHours,
+        coverImageIndex: _coverImageIndex,
+        operatingHours: _operatingHours,
         contactInfo: {
-          'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-          'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-          'website': _websiteController.text.trim().isEmpty ? null : _websiteController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'email': _emailController.text.trim(),
         },
-
-        // 쿠폰 설정
-        couponPassword: _enableCoupon && _couponPasswordController.text.trim().isNotEmpty
-            ? _couponPasswordController.text.trim()
-            : null,
-        isCouponEnabled: _enableCoupon && _couponPasswordController.text.trim().isNotEmpty,
-
-        // Phase 1 필드
-        mobile: _mobileController.text.trim().isEmpty ? null : _mobileController.text.trim(),
-        fax: _faxController.text.trim().isEmpty ? null : _faxController.text.trim(),
-        regularHolidays: _regularHolidays.isEmpty ? null : _regularHolidays,
+        createdBy: _currentUserId!,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        isActive: true,
         isOpen24Hours: _isOpen24Hours,
-        breakTimes: _breakTimes.isEmpty ? null : _breakTimes,
-        socialMedia: _socialMediaHandles.isEmpty ? null : _socialMediaHandles,
+        regularHolidays: _regularHolidays,
+        breakTimes: _breakTimes.isNotEmpty ? {for (int i = 0; i < _breakTimes.length; i++) i.toString(): _breakTimes[i]} : null,
+        mobile: _mobileController.text.trim(),
+        fax: _faxController.text.trim(),
+        socialMedia: _websiteController.text.trim().isNotEmpty ? {'website': _websiteController.text.trim()} : null,
         parkingType: _selectedParkingType,
         parkingCapacity: _parkingCapacity,
-        parkingFee: _parkingFeeController.text.trim().isEmpty ? null : _parkingFeeController.text.trim(),
+        parkingFee: _parkingFeeController.text.trim(),
         hasValetParking: _hasValetParking,
         facilities: _selectedFacilities,
         paymentMethods: _selectedPaymentMethods,
-
-        // Phase 2 필드
-        accessibility: _selectedAccessibility.isEmpty ? null : _selectedAccessibility,
+        accessibility: _selectedAccessibility,
         priceRange: _selectedPriceRange,
         capacity: _capacity,
-        areaSize: _areaSizeController.text.trim().isEmpty ? null : _areaSizeController.text.trim(),
-        floor: _floorController.text.trim().isEmpty ? null : _floorController.text.trim(),
-        buildingName: _buildingNameController.text.trim().isEmpty ? null : _buildingNameController.text.trim(),
-        landmark: _landmarkController.text.trim().isEmpty ? null : _landmarkController.text.trim(),
-        nearbyTransit: _nearbyTransit.isEmpty ? null : _nearbyTransit,
-
-        // Phase 3 필드
-        certifications: _certifications.isEmpty ? null : _certifications,
-        awards: _awards.isEmpty ? null : _awards,
+        areaSize: _areaSizeController.text.trim(),
+        floor: _floorController.text.trim(),
+        buildingName: _buildingNameController.text.trim(),
+        landmark: _landmarkController.text.trim(),
         hasReservation: _hasReservation,
-        reservationUrl: _reservationUrlController.text.trim().isEmpty ? null : _reservationUrlController.text.trim(),
-        reservationPhone: _reservationPhoneController.text.trim().isEmpty ? null : _reservationPhoneController.text.trim(),
-        videoUrls: _videoUrls.isEmpty ? null : _videoUrls,
-        virtualTourUrl: _virtualTourUrlController.text.trim().isEmpty ? null : _virtualTourUrlController.text.trim(),
-        interiorImageUrls: _interiorImageUrls.isEmpty ? null : _interiorImageUrls,
-        exteriorImageUrls: _exteriorImageUrls.isEmpty ? null : _exteriorImageUrls,
+        reservationUrl: _reservationUrlController.text.trim(),
+        reservationPhone: _reservationPhoneController.text.trim(),
+        videoUrls: _videoUrls,
+        virtualTourUrl: _virtualTourUrlController.text.trim(),
+        interiorImageUrls: _interiorImageUrls,
+        exteriorImageUrls: _exteriorImageUrls,
         isTemporarilyClosed: _isTemporarilyClosed,
         reopeningDate: _reopeningDate,
-        closureReason: _closureReasonController.text.trim().isEmpty ? null : _closureReasonController.text.trim(),
-
-        createdBy: _currentUserId!,
-        createdAt: DateTime.now(),
-        isActive: true,
-        isVerified: false, // 👈 인박스에서 추가한 플레이스는 미인증
+        closureReason: _closureReasonController.text.trim(),
+        isCouponEnabled: _enableCoupon,
+        couponPassword: _couponPasswordController.text.trim(),
+        isVerified: false,
       );
 
       await _placeService.createPlace(place);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('플레이스가 성공적으로 생성되었습니다!'),
+            content: Text('배포자가 성공적으로 생성되었습니다!'),
             backgroundColor: Colors.green,
           ),
         );
         Navigator.pop(context, true);
       }
-    } catch (e, stackTrace) {
-      debugPrint('❌ 플레이스 생성 실패: $e');
-      debugPrint('스택 트레이스: $stackTrace');
-
+    } catch (e) {
       if (mounted) {
-        String errorMessage = '플레이스 생성 실패';
-        String suggestion = '';
-
-        final errorString = e.toString();
-        if (errorString.contains('permission-denied')) {
-          errorMessage = '권한 오류';
-          suggestion = '플레이스를 생성할 권한이 없습니다.';
-        } else if (errorString.contains('network')) {
-          errorMessage = '네트워크 오류';
-          suggestion = '인터넷 연결을 확인해주세요.';
-        } else if (errorString.contains('storage')) {
-          errorMessage = '이미지 업로드 실패';
-          suggestion = '이미지 크기를 줄이거나 다시 시도해주세요.';
-        } else {
-          suggestion = errorString.length > 80 ? errorString.substring(0, 80) + '...' : errorString;
-        }
-
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 28),
-                const SizedBox(width: 8),
-                Expanded(child: Text(errorMessage)),
-              ],
-            ),
-            content: Text(suggestion),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('확인'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('배포자 생성 실패: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -335,726 +302,43 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('플레이스 생성'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 플레이스명
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: '플레이스명 *',
-                  border: OutlineInputBorder(),
-                  hintText: '예: 뺌햄버거 서초점',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '플레이스명을 입력해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // 설명
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: '설명 *',
-                  border: OutlineInputBorder(),
-                  hintText: '플레이스에 대한 간단한 설명을 입력하세요.',
-                ),
-                maxLines: 3,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '설명을 입력해주세요.';
-                  }
-                  return null;
-                },
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // 카테고리 선택
-              const Text(
-                '카테고리 *',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              
-              // 메인 카테고리
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: '메인 카테고리',
-                  border: OutlineInputBorder(),
-                ),
-                items: _categoryOptions.keys.map((category) {
-                  return DropdownMenuItem(
-                    value: category,
-                    child: Text(category),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value;
-                    _selectedSubCategory = null;
-                    _selectedSubSubCategory = null;
-                  });
-                },
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // 서브 카테고리
-              if (_selectedCategory != null)
-                DropdownButtonFormField<String>(
-                  value: _selectedSubCategory,
-                  decoration: const InputDecoration(
-                    labelText: '서브 카테고리',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _categoryOptions[_selectedCategory]!.map((subCategory) {
-                    return DropdownMenuItem(
-                      value: subCategory,
-                      child: Text(subCategory),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSubCategory = value;
-                      _selectedSubSubCategory = null;
-                    });
-                  },
-                ),
-              
-              const SizedBox(height: 16),
-
-              // 주소
-              const Text(
-                '주소',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _addressController,
-                      decoration: const InputDecoration(
-                        hintText: '주소를 검색하세요',
-                        border: OutlineInputBorder(),
-                      ),
-                      readOnly: true,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _pickAddress,
-                    child: const Text('주소 검색'),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              // 상세주소 입력 필드
-              TextFormField(
-                controller: _detailAddressController,
-                decoration: const InputDecoration(
-                  hintText: '상세주소 (동/호수 등)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // 플레이스 이미지 업로드
-              Row(
-                children: [
-                  const Text(
-                    '플레이스 이미지',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  if (_selectedImages.length >= 2) ...[
-                    const SizedBox(width: 8),
-                    const Text(
-                      '(⭐ 대문 이미지)',
-                      style: TextStyle(fontSize: 12, color: Colors.orange),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.add_photo_alternate),
-                    label: const Text('이미지 추가'),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('최대 5장'),
-                ],
-              ),
-              if (_selectedImages.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: _selectedImages.length >= 2 ? 160 : 120,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _selectedImages.length,
-                    itemBuilder: (context, index) {
-                      final isCover = index == _coverImageIndex;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Stack(
-                          children: [
-                            Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      border: isCover ? Border.all(color: Colors.orange, width: 3) : null,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: _buildCrossPlatformImage(_selectedImages[index]),
-                                  ),
-                                ),
-                                if (_selectedImages.length >= 2) ...[
-                                  const SizedBox(height: 4),
-                                  SizedBox(
-                                    width: 120,
-                                    height: 32,
-                                    child: ElevatedButton(
-                                      onPressed: isCover ? null : () {
-                                        setState(() {
-                                          _coverImageIndex = index;
-                                        });
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        backgroundColor: isCover ? Colors.orange : Colors.grey[200],
-                                        foregroundColor: isCover ? Colors.white : Colors.black87,
-                                      ),
-                                      child: Text(
-                                        isCover ? '⭐ 대문' : '대문으로',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeImage(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 16),
-                                ),
-                              ),
-                            ),
-                            if (isCover)
-                              Positioned(
-                                top: 4,
-                                left: 4,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    '⭐',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-              
-              // 연락처 정보
-              const SizedBox(height: 24),
-              const Text(
-                '연락처 정보',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: '전화번호',
-                        border: OutlineInputBorder(),
-                        hintText: '02-1234-5678',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _mobileController,
-                      decoration: const InputDecoration(
-                        labelText: '휴대전화',
-                        border: OutlineInputBorder(),
-                        hintText: '010-1234-5678',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: '이메일',
-                        border: OutlineInputBorder(),
-                        hintText: 'example@email.com',
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return null;
-                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                        if (!emailRegex.hasMatch(value)) {
-                          return '올바른 이메일 형식이 아닙니다';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _faxController,
-                      decoration: const InputDecoration(
-                        labelText: '팩스',
-                        border: OutlineInputBorder(),
-                        hintText: '02-1234-5678',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _websiteController,
-                decoration: const InputDecoration(
-                  labelText: '웹사이트',
-                  border: OutlineInputBorder(),
-                  hintText: 'https://example.com',
-                  prefixIcon: Icon(Icons.language),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // 요일별 운영시간
-              EditPlaceFieldsHelper.buildOperatingHoursDetailSection(
-                operatingHours: _operatingHours,
-                onEditOperatingHours: _editOperatingHours,
-              ),
-
-              const SizedBox(height: 24),
-
-              // 쿠폰 설정 섹션
-              const Text(
-                '쿠폰 설정 (선택사항)',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _enableCoupon ? Colors.orange.shade50 : Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _enableCoupon ? Colors.orange.shade200 : Colors.grey.shade300,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Checkbox to enable coupon
-                    CheckboxListTile(
-                      value: _enableCoupon,
-                      onChanged: (value) {
-                        setState(() {
-                          _enableCoupon = value ?? false;
-                          if (!_enableCoupon) {
-                            _couponPasswordController.clear();
-                          }
-                        });
-                      },
-                      title: Row(
-                        children: [
-                          Icon(
-                            Icons.card_giftcard,
-                            color: _enableCoupon ? Colors.orange.shade700 : Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '쿠폰 시스템 사용',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                              color: _enableCoupon ? Colors.black87 : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                    ),
-                    if (_enableCoupon) ...[
-                      const SizedBox(height: 12),
-                      const Text(
-                        '고객이 쿠폰 사용 시 입력해야 하는 암호를 설정하세요.\n매장에서 암호를 알려주면 고객이 입력하여 포인트를 받을 수 있습니다.',
-                        style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _couponPasswordController,
-                        decoration: InputDecoration(
-                          labelText: '쿠폰 암호 *',
-                          border: const OutlineInputBorder(),
-                          hintText: '예: 1234',
-                          prefixIcon: const Icon(Icons.lock, color: Colors.orange),
-                          helperText: '숫자 또는 문자 4자리 이상 권장',
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                        obscureText: true,
-                        validator: (value) {
-                          if (_enableCoupon) {
-                            if (value == null || value.isEmpty) {
-                              return '쿠폰을 활성화하려면 암호를 입력해주세요.';
-                            }
-                            if (value.length < 4) {
-                              return '암호는 4자리 이상이어야 합니다.';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // ========== Phase 1 입력 폼 ==========
-
-              // 주차 정보
-              EditPlaceFieldsHelper.buildParkingSection(
-                selectedParkingType: _selectedParkingType,
-                parkingCapacity: _parkingCapacity,
-                parkingFeeController: _parkingFeeController,
-                hasValetParking: _hasValetParking,
-                onParkingTypeChanged: (value) => setState(() => _selectedParkingType = value),
-                onCapacityChanged: (value) => setState(() => _parkingCapacity = value),
-                onValetParkingChanged: (value) => setState(() => _hasValetParking = value),
-              ),
-
-              const SizedBox(height: 24),
-
-              // 편의시설
-              EditPlaceFieldsHelper.buildFacilitiesSection(
-                selectedFacilities: _selectedFacilities,
-                onFacilityChanged: (facility, selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedFacilities.add(facility);
-                    } else {
-                      _selectedFacilities.remove(facility);
-                    }
-                  });
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // 결제 수단
-              EditPlaceFieldsHelper.buildPaymentMethodsSection(
-                selectedPaymentMethods: _selectedPaymentMethods,
-                onPaymentMethodChanged: (method, selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedPaymentMethods.add(method);
-                    } else {
-                      _selectedPaymentMethods.remove(method);
-                    }
-                  });
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // 운영시간 상세
-              EditPlaceFieldsHelper.buildOperatingHoursSection(
-                isOpen24Hours: _isOpen24Hours,
-                regularHolidays: _regularHolidays,
-                breakTimes: _breakTimes,
-                on24HoursChanged: (value) => setState(() => _isOpen24Hours = value),
-                onAddHoliday: _addHoliday,
-                onRemoveHoliday: (index) => setState(() => _regularHolidays.removeAt(index)),
-                onAddBreakTime: _addBreakTime,
-              ),
-
-              const SizedBox(height: 32),
-
-              // ========== Phase 2 입력 폼 ==========
-
-              // 접근성
-              EditPlaceFieldsHelper.buildAccessibilitySection(
-                selectedAccessibility: _selectedAccessibility,
-                onAccessibilityChanged: (item, selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedAccessibility.add(item);
-                    } else {
-                      _selectedAccessibility.remove(item);
-                    }
-                  });
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // 가격대 및 규모
-              EditPlaceFieldsHelper.buildPriceAndCapacitySection(
-                selectedPriceRange: _selectedPriceRange,
-                capacity: _capacity,
-                areaSizeController: _areaSizeController,
-                onPriceRangeChanged: (value) => setState(() => _selectedPriceRange = value),
-                onCapacityChanged: (value) => setState(() => _capacity = value),
-              ),
-
-              const SizedBox(height: 24),
-
-              // 상세 위치 정보
-              EditPlaceFieldsHelper.buildLocationDetailsSection(
-                floorController: _floorController,
-                buildingNameController: _buildingNameController,
-                landmarkController: _landmarkController,
-              ),
-
-              const SizedBox(height: 32),
-
-              // ========== Phase 3 입력 폼 ==========
-
-              // 예약 시스템
-              EditPlaceFieldsHelper.buildReservationSection(
-                hasReservation: _hasReservation,
-                reservationUrlController: _reservationUrlController,
-                reservationPhoneController: _reservationPhoneController,
-                onReservationChanged: (value) => setState(() => _hasReservation = value),
-              ),
-
-              const SizedBox(height: 24),
-
-              // 임시 휴업
-              EditPlaceFieldsHelper.buildClosureSection(
-                isTemporarilyClosed: _isTemporarilyClosed,
-                reopeningDate: _reopeningDate,
-                closureReasonController: _closureReasonController,
-                onClosureChanged: (value) => setState(() => _isTemporarilyClosed = value),
-                onSelectReopeningDate: _selectReopeningDate,
-              ),
-
-              const SizedBox(height: 24),
-
-              // 추가 미디어
-              EditPlaceFieldsHelper.buildMediaSection(
-                virtualTourUrlController: _virtualTourUrlController,
-              ),
-
-              const SizedBox(height: 32),
-
-              // 생성 버튼
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _createPlace,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          '플레이스 생성',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Helpers for image selection (web/mobile)
-extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
-  Widget _buildCrossPlatformImage(dynamic imageData) {
-    if (imageData is String) {
-      if (imageData.startsWith('data:image/')) {
-        // 웹: base64 데이터
-        try {
-          return Image.memory(
-            base64Decode(imageData.split(',')[1]),
-            width: 120,
-            height: 120,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 120,
-                height: 120,
-                color: Colors.grey[300],
-                child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-              );
-            },
-          );
-        } catch (e) {
-          return Container(
-            width: 120,
-            height: 120,
-            color: Colors.grey[300],
-            child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-          );
-        }
-      } else if (imageData.startsWith('http')) {
-        // 네트워크 URL
-        return Image.network(
-          imageData,
-          width: 120,
-          height: 120,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 120,
-              height: 120,
-              color: Colors.grey[300],
-              child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-            );
-          },
-        );
-      } else if (!kIsWeb) {
-        // 모바일: 파일 경로
-        return Image.file(
-          FileHelper.createFile(imageData),
-          width: 120,
-          height: 120,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 120,
-              height: 120,
-              color: Colors.grey[300],
-              child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-            );
-          },
-        );
-      }
-    }
-    return Container(
-      width: 120,
-      height: 120,
-      color: Colors.grey[300],
-      child: const Icon(Icons.image, size: 40, color: Colors.grey),
-    );
-  }
-
   Future<void> _pickImage() async {
     try {
-      if (Theme.of(context).platform == TargetPlatform.android || Theme.of(context).platform == TargetPlatform.iOS) {
-        await _pickImageMobile();
-      } else {
-        await _pickImageWeb();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('이미지 선택 실패: $e')));
-      }
-    }
-  }
-
-  Future<void> _pickImageMobile() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
-    if (image != null) {
-      if (mounted) {
-        setState(() {
-          _selectedImages.add(image.path); // 파일 경로를 String으로 저장
-          _imageNames.add(image.name);
-        });
-      }
-    }
-  }
-
-  Future<void> _pickImageWeb() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-        allowCompression: true,
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        for (final file in result.files) {
-          if (file.size > 10 * 1024 * 1024) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미지 크기는 10MB 이하여야 합니다.')));
-            }
-            continue;
-          }
+      if (image != null) {
+        if (_selectedImages.length >= 5) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('최대 5장까지만 업로드할 수 있습니다.')),
+          );
+          return;
+        }
 
-          // 웹에서는 bytes를 base64로 변환해서 저장
-          if (file.bytes != null) {
-            final base64Image = 'data:image/${file.extension};base64,${base64Encode(file.bytes!)}';
-            if (mounted) {
-              setState(() {
-                _selectedImages.add(base64Image);
-                _imageNames.add(file.name);
-              });
-            }
-          }
+        if (kIsWeb) {
+          final bytes = await image.readAsBytes();
+          final base64String = base64Encode(bytes);
+          final dataUrl = 'data:image/jpeg;base64,$base64String';
+          setState(() {
+            _selectedImages.add(dataUrl);
+            _imageNames.add(image.name);
+          });
+        } else {
+          setState(() {
+            _selectedImages.add(image.path);
+            _imageNames.add(image.name);
+          });
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('이미지 선택 실패: $e')));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('이미지 선택 실패: $e')),
+      );
     }
   }
 
@@ -1062,201 +346,156 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
     setState(() {
       _selectedImages.removeAt(index);
       _imageNames.removeAt(index);
-
+      
       // 대문 이미지 인덱스 조정
-      if (_coverImageIndex == index) {
-        // 삭제된 이미지가 대문이었다면 첫 번째 이미지를 대문으로
+      if (_coverImageIndex >= _selectedImages.length) {
+        _coverImageIndex = _selectedImages.length - 1;
+      }
+      if (_coverImageIndex < 0) {
         _coverImageIndex = 0;
-      } else if (_coverImageIndex > index) {
-        // 대문 이미지보다 앞의 이미지가 삭제되면 인덱스 조정
-        _coverImageIndex--;
       }
     });
   }
 
   Future<void> _pickAddress() async {
-    // 주소 검색 화면으로 이동
-    final result = await Navigator.push(
+    final result = await Navigator.pushNamed(
       context,
-      MaterialPageRoute(builder: (_) => const AddressSearchScreen()),
+      '/address-search',
+      arguments: {'returnAddress': true},
     );
 
     if (result != null && result is Map<String, dynamic>) {
-      final address = result['address'] as String?;
-      final detailAddress = result['detailAddress'] as String?;
-      final lat = double.tryParse(result['lat']?.toString() ?? '');
-      final lon = double.tryParse(result['lon']?.toString() ?? '');
-
-      if (address != null && lat != null && lon != null) {
-        setState(() {
-          _addressController.text = address;
-          _detailAddressController.text = detailAddress ?? '';
-          _selectedLocation = GeoPoint(lat, lon);
-        });
-      }
+      setState(() {
+        _addressController.text = result['address'] ?? '';
+      });
     }
   }
 
-  // ========== Phase 1-3 헬퍼 메서드 ==========
-
-  void _addHoliday() {
-    showDialog(
+  Future<void> _addHoliday() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) {
-        String? selectedDay;
-        return AlertDialog(
-          title: const Text('정기 휴무일 추가'),
-          content: DropdownButtonFormField<String>(
-            value: selectedDay,
-            decoration: const InputDecoration(
-              labelText: '요일 선택',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: '월요일', child: Text('월요일')),
-              DropdownMenuItem(value: '화요일', child: Text('화요일')),
-              DropdownMenuItem(value: '수요일', child: Text('수요일')),
-              DropdownMenuItem(value: '목요일', child: Text('목요일')),
-              DropdownMenuItem(value: '금요일', child: Text('금요일')),
-              DropdownMenuItem(value: '토요일', child: Text('토요일')),
-              DropdownMenuItem(value: '일요일', child: Text('일요일')),
-              DropdownMenuItem(value: '첫째주', child: Text('매월 첫째주')),
-              DropdownMenuItem(value: '셋째주', child: Text('매월 셋째주')),
-            ],
-            onChanged: (value) => selectedDay = value,
+      builder: (context) => AlertDialog(
+        title: const Text('휴무일 추가'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '예: 매주 월요일',
+            border: OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (selectedDay != null && !_regularHolidays.contains(selectedDay)) {
-                  setState(() => _regularHolidays.add(selectedDay!));
-                }
-                Navigator.pop(context);
-              },
-              child: const Text('추가'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
     );
+
+    if (result != null && result.trim().isNotEmpty) {
+      setState(() {
+        _regularHolidays.add(result.trim());
+      });
+    }
   }
 
-  void _addBreakTime() {
-    showDialog(
+  Future<void> _addBreakTime() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) {
-        String? selectedDay;
-        String? breakTimeText;
-        return AlertDialog(
-          title: const Text('브레이크타임 추가'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedDay,
-                decoration: const InputDecoration(
-                  labelText: '요일 선택',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: '평일', child: Text('평일')),
-                  DropdownMenuItem(value: '주말', child: Text('주말')),
-                  DropdownMenuItem(value: '매일', child: Text('매일')),
-                ],
-                onChanged: (value) => selectedDay = value,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: '브레이크타임',
-                  border: OutlineInputBorder(),
-                  hintText: '예: 15:00-17:00',
-                ),
-                onChanged: (value) => breakTimeText = value,
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('휴게시간 추가'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '예: 15:00-16:00',
+            border: OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (selectedDay != null && breakTimeText != null && breakTimeText!.isNotEmpty) {
-                  setState(() => _breakTimes[selectedDay!] = breakTimeText!);
-                }
-                Navigator.pop(context);
-              },
-              child: const Text('추가'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
     );
+
+    if (result != null && result.trim().isNotEmpty) {
+      setState(() {
+        _breakTimes.add(result.trim());
+      });
+    }
   }
 
-  void _selectReopeningDate() async {
-    final DateTime? picked = await showDatePicker(
+  Future<void> _selectReopeningDate() async {
+    final date = await showDatePicker(
       context: context,
-      initialDate: _reopeningDate ?? DateTime.now(),
+      initialDate: DateTime.now().add(const Duration(days: 1)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) {
-      setState(() => _reopeningDate = picked);
+
+    if (date != null) {
+      setState(() {
+        _reopeningDate = date;
+      });
     }
   }
 
-  void _editOperatingHours() {
+  Future<void> _editOperatingHours() async {
     final days = ['월', '화', '수', '목', '금', '토', '일'];
     final controllers = <String, TextEditingController>{};
-
+    
     for (final day in days) {
-      controllers[day] = TextEditingController(text: _operatingHours[day] ?? '');
+      controllers[day] = TextEditingController(
+        text: _operatingHours[day] ?? '',
+      );
     }
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('요일별 운영시간 설정'),
-        content: SingleChildScrollView(
-          child: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: days.map((day) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          day,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+        title: const Text('운영시간 설정'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: days.map((day) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        day,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[day],
+                        decoration: const InputDecoration(
+                          hintText: '예: 09:00-22:00 또는 휴무',
+                          border: OutlineInputBorder(),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                          controller: controllers[day],
-                          decoration: const InputDecoration(
-                            hintText: '09:00-18:00 또는 "휴무"',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
         ),
         actions: [
@@ -1291,5 +530,1031 @@ extension _CreatePlaceScreenImageHelpers on _CreatePlaceScreenState {
       ),
     );
   }
-}
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.blue[600],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          '배포자 생성',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.palette),
+            tooltip: '디자인 프리뷰',
+            onPressed: () {
+              Navigator.pushNamed(context, '/create-place-design-demo');
+            },
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 기본 정보 섹션
+                    _buildSectionHeader('기본 정보', Icons.info_outline, Colors.blue),
+                    const SizedBox(height: 12),
+                    
+                    // 배포자명 + 카테고리 (같은 행)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 배포자명 (flex: 3)
+                        Expanded(
+                          flex: 3,
+                          child: _buildCompactField(
+                            icon: Icons.store,
+                            iconColor: Colors.blue.shade700,
+                            label: '배포자명',
+                            required: true,
+                            child: TextFormField(
+                              controller: _nameController,
+                              decoration: _buildInputDecoration(hintText: '배포자 이름'),
+                              style: const TextStyle(fontSize: 14),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return '배포자명을 입력해주세요.';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // 카테고리 (flex: 1)
+                        Expanded(
+                          flex: 1,
+                          child: _buildCompactField(
+                            icon: Icons.category,
+                            iconColor: Colors.orange.shade700,
+                            label: '카테고리',
+                            required: true,
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedCategory,
+                              decoration: _buildInputDecoration(
+                                fillColor: Colors.orange.shade50,
+                                borderColor: Colors.orange.shade200,
+                                hintText: '선택',
+                              ),
+                              isExpanded: true,
+                              items: _categoryOptions.keys.map((String category) {
+                                return DropdownMenuItem<String>(
+                                  value: category,
+                                  child: Text(
+                                    category,
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                setState(() {
+                                  _selectedCategory = newValue;
+                                  _selectedSubCategory = null;
+                                  _selectedSubSubCategory = null;
+                                });
+                              },
+                              style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                              dropdownColor: Colors.white,
+                              icon: Icon(Icons.arrow_drop_down, size: 20, color: Colors.orange.shade700),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return '선택';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 설명
+                    _buildCompactField(
+                      icon: Icons.description,
+                      iconColor: Colors.green.shade700,
+                      label: '설명',
+                      required: true,
+                      child: TextFormField(
+                        controller: _descriptionController,
+                        maxLines: 3,
+                        decoration: _buildInputDecoration(hintText: '배포자에 대한 설명을 입력하세요'),
+                        style: const TextStyle(fontSize: 14),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '설명을 입력해주세요.';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 주소
+                    _buildCompactField(
+                      icon: Icons.location_on,
+                      iconColor: Colors.red.shade700,
+                      label: '주소',
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _addressController,
+                                  readOnly: true,
+                                  decoration: _buildInputDecoration(hintText: '주소 검색'),
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: _pickAddress,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  minimumSize: Size.zero,
+                                ),
+                                child: const Icon(Icons.search, size: 18),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _detailAddressController,
+                            decoration: _buildInputDecoration(hintText: '상세주소 (동/호수 등)'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 이미지 업로드
+                    _buildCompactField(
+                      icon: Icons.image,
+                      iconColor: Colors.purple.shade700,
+                      label: '이미지',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _pickImage,
+                                icon: const Icon(Icons.camera_alt, size: 16),
+                                label: const Text('이미지 추가', style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.purple,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '최대 5장',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                          if (_selectedImages.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 80,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _selectedImages.length,
+                                itemBuilder: (context, index) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: _selectedImages[index] is String
+                                              ? Image.network(
+                                                  _selectedImages[index],
+                                                  width: 80,
+                                                  height: 80,
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : Image.memory(
+                                                  _selectedImages[index],
+                                                  width: 80,
+                                                  height: 80,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                        ),
+                                        Positioned(
+                                          top: 4,
+                                          right: 4,
+                                          child: GestureDetector(
+                                            onTap: () => _removeImage(index),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.close,
+                                                size: 12,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (index == _coverImageIndex)
+                                          Positioned(
+                                            bottom: 4,
+                                            left: 4,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                '대문',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 연락처 정보
+                    _buildCompactField(
+                      icon: Icons.contact_phone,
+                      iconColor: Colors.teal.shade700,
+                      label: '연락처 정보',
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: _buildInputDecoration(
+                              hintText: '이메일',
+                              prefixIcon: Icons.email,
+                            ),
+                            style: const TextStyle(fontSize: 14),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return null;
+                              final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                              if (!emailRegex.hasMatch(value)) {
+                                return '올바른 이메일 형식이 아닙니다';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: _buildInputDecoration(
+                              hintText: '전화번호',
+                              prefixIcon: Icons.phone,
+                            ),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // 운영 정보 섹션
+                    _buildSectionHeader('운영 정보', Icons.schedule, Colors.teal),
+                    const SizedBox(height: 12),
+                    
+                    // 운영시간
+                    _buildCompactField(
+                      icon: Icons.access_time,
+                      iconColor: Colors.teal,
+                      label: '운영시간',
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _operatingHours.isEmpty ? '운영시간 설정' : '${_operatingHours.length}일 설정됨',
+                                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _editOperatingHours,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('편집', style: TextStyle(fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 24시간 운영
+                    _buildCompactField(
+                      icon: Icons.all_inclusive,
+                      iconColor: Colors.indigo,
+                      label: '24시간 운영',
+                      child: CheckboxListTile(
+                        value: _isOpen24Hours,
+                        onChanged: (value) {
+                          setState(() {
+                            _isOpen24Hours = value ?? false;
+                          });
+                        },
+                        title: const Text('24시간 운영', style: TextStyle(fontSize: 14)),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 정기 휴무일
+                    _buildCompactField(
+                      icon: Icons.event_busy,
+                      iconColor: Colors.red,
+                      label: '정기 휴무일',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _regularHolidays.isEmpty ? '휴무일 없음' : '${_regularHolidays.length}개 설정됨',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _addHoliday,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('추가', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                          if (_regularHolidays.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: _regularHolidays.map((holiday) {
+                                return Chip(
+                                  label: Text(holiday, style: const TextStyle(fontSize: 12)),
+                                  deleteIcon: const Icon(Icons.close, size: 16),
+                                  onDeleted: () {
+                                    setState(() {
+                                      _regularHolidays.remove(holiday);
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 휴게시간
+                    _buildCompactField(
+                      icon: Icons.coffee,
+                      iconColor: Colors.brown,
+                      label: '휴게시간',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _breakTimes.isEmpty ? '휴게시간 없음' : '${_breakTimes.length}개 설정됨',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _addBreakTime,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('추가', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                          if (_breakTimes.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: _breakTimes.map((breakTime) {
+                                return Chip(
+                                  label: Text(breakTime, style: const TextStyle(fontSize: 12)),
+                                  deleteIcon: const Icon(Icons.close, size: 16),
+                                  onDeleted: () {
+                                    setState(() {
+                                      _breakTimes.remove(breakTime);
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 시설
+                    _buildCompactField(
+                      icon: Icons.home_work,
+                      iconColor: Colors.cyan,
+                      label: '시설',
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _facilityOptions.map((facility) {
+                          return _buildFacilityChip(facility);
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 결제방법
+                    _buildCompactField(
+                      icon: Icons.payment,
+                      iconColor: Colors.green,
+                      label: '결제방법',
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _paymentOptions.map((payment) {
+                          return _buildPaymentChip(payment);
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 주차 정보
+                    _buildCompactField(
+                      icon: Icons.local_parking,
+                      iconColor: Colors.amber,
+                      label: '주차 정보',
+                      child: Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedParkingType,
+                            decoration: _buildInputDecoration(hintText: '주차 형태'),
+                            items: const [
+                              DropdownMenuItem(value: 'self', child: Text('자체 주차장')),
+                              DropdownMenuItem(value: 'valet', child: Text('발레파킹')),
+                              DropdownMenuItem(value: 'nearby', child: Text('인근 주차장 이용')),
+                              DropdownMenuItem(value: 'none', child: Text('주차 불가')),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedParkingType = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  initialValue: _parkingCapacity?.toString() ?? '',
+                                  keyboardType: TextInputType.number,
+                                  decoration: _buildInputDecoration(hintText: '주차 가능 대수'),
+                                  onChanged: (value) {
+                                    _parkingCapacity = int.tryParse(value);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _parkingFeeController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: _buildInputDecoration(hintText: '주차 요금'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          CheckboxListTile(
+                            value: _hasValetParking,
+                            onChanged: (value) {
+                              setState(() {
+                                _hasValetParking = value ?? false;
+                              });
+                            },
+                            title: const Text('발레파킹 서비스', style: TextStyle(fontSize: 14)),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 추가 연락처
+                    _buildCompactField(
+                      icon: Icons.contact_mail,
+                      iconColor: Colors.deepPurple,
+                      label: '추가 연락처',
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _mobileController,
+                            keyboardType: TextInputType.phone,
+                            decoration: _buildInputDecoration(hintText: '모바일'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _faxController,
+                            keyboardType: TextInputType.phone,
+                            decoration: _buildInputDecoration(hintText: '팩스'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _websiteController,
+                            keyboardType: TextInputType.url,
+                            decoration: _buildInputDecoration(hintText: '웹사이트'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 쿠폰 설정
+                    _buildCompactField(
+                      icon: Icons.card_giftcard,
+                      iconColor: Colors.orange,
+                      label: '쿠폰 설정',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CheckboxListTile(
+                            value: _enableCoupon,
+                            onChanged: (value) {
+                              setState(() {
+                                _enableCoupon = value ?? false;
+                                if (!_enableCoupon) {
+                                  _couponPasswordController.clear();
+                                }
+                              });
+                            },
+                            title: const Text('쿠폰 시스템 사용', style: TextStyle(fontSize: 14)),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                          ),
+                          if (_enableCoupon) ...[
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _couponPasswordController,
+                              decoration: _buildInputDecoration(hintText: '쿠폰 암호'),
+                              obscureText: true,
+                              validator: (value) {
+                                if (_enableCoupon && (value == null || value.length < 4)) {
+                                  return '4자리 이상 입력해주세요';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // 추가 정보 섹션
+                    _buildSectionHeader('추가 정보', Icons.more_horiz, Colors.purple),
+                    const SizedBox(height: 12),
+                    
+                    // 접근성
+                    _buildCompactField(
+                      icon: Icons.accessibility,
+                      iconColor: Colors.pink,
+                      label: '접근성',
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _accessibilityOptions.map((accessibility) {
+                          return _buildAccessibilityChip(accessibility);
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 가격대 & 수용인원 & 면적
+                    _buildCompactField(
+                      icon: Icons.attach_money,
+                      iconColor: Colors.green,
+                      label: '가격대 & 수용인원 & 면적',
+                      child: Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedPriceRange,
+                            decoration: _buildInputDecoration(hintText: '가격대'),
+                            items: const [
+                              DropdownMenuItem(value: 'low', child: Text('저가 (1만원 이하)')),
+                              DropdownMenuItem(value: 'medium', child: Text('중가 (1-5만원)')),
+                              DropdownMenuItem(value: 'high', child: Text('고가 (5만원 이상)')),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedPriceRange = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  initialValue: _capacity?.toString() ?? '',
+                                  keyboardType: TextInputType.number,
+                                  decoration: _buildInputDecoration(hintText: '수용인원'),
+                                  onChanged: (value) => _capacity = int.tryParse(value),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _areaSizeController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: _buildInputDecoration(hintText: '면적'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 상세 위치 정보
+                    _buildCompactField(
+                      icon: Icons.apartment,
+                      iconColor: Colors.cyan,
+                      label: '상세 위치 정보',
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _floorController,
+                            decoration: _buildInputDecoration(hintText: '층수'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _buildingNameController,
+                            decoration: _buildInputDecoration(hintText: '건물명'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _landmarkController,
+                            decoration: _buildInputDecoration(hintText: '주변 랜드마크'),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 예약 시스템
+                    _buildCompactField(
+                      icon: Icons.event_seat,
+                      iconColor: Colors.indigo,
+                      label: '예약 시스템',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CheckboxListTile(
+                            value: _hasReservation,
+                            onChanged: (value) {
+                              setState(() {
+                                _hasReservation = value ?? false;
+                              });
+                            },
+                            title: const Text('예약 가능', style: TextStyle(fontSize: 14)),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                          ),
+                          if (_hasReservation) ...[
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _reservationUrlController,
+                              keyboardType: TextInputType.url,
+                              decoration: _buildInputDecoration(hintText: '예약 URL'),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _reservationPhoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: _buildInputDecoration(hintText: '예약 전화번호'),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 임시 휴업
+                    _buildCompactField(
+                      icon: Icons.pause_circle,
+                      iconColor: Colors.red,
+                      label: '임시 휴업',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CheckboxListTile(
+                            value: _isTemporarilyClosed,
+                            onChanged: (value) {
+                              setState(() {
+                                _isTemporarilyClosed = value ?? false;
+                              });
+                            },
+                            title: const Text('임시 휴업', style: TextStyle(fontSize: 14)),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                          ),
+                          if (_isTemporarilyClosed) ...[
+                            const SizedBox(height: 8),
+                            ListTile(
+                              title: Text(
+                                _reopeningDate != null
+                                    ? '재개업일: ${_reopeningDate!.toString().split(' ')[0]}'
+                                    : '재개업일 선택',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              trailing: const Icon(Icons.calendar_today),
+                              onTap: _selectReopeningDate,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _closureReasonController,
+                              decoration: _buildInputDecoration(hintText: '휴업 사유'),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 추가 미디어
+                    _buildCompactField(
+                      icon: Icons.video_library,
+                      iconColor: Colors.deepOrange,
+                      label: '추가 미디어',
+                      child: TextFormField(
+                        controller: _virtualTourUrlController,
+                        keyboardType: TextInputType.url,
+                        decoration: _buildInputDecoration(hintText: '가상투어 URL'),
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createPlace,
+        backgroundColor: Colors.blue,
+        icon: const Icon(Icons.check, color: Colors.white),
+        label: const Text('배포자 생성', style: TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
+  // 섹션 헤더
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 컴팩트 필드
+  Widget _buildCompactField({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required Widget child,
+    bool required = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              if (required)
+                const Text(' *', style: TextStyle(color: Colors.red, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
+  // 입력 필드 데코레이션
+  InputDecoration _buildInputDecoration({
+    String? hintText,
+    IconData? prefixIcon,
+    Color? fillColor,
+    Color? borderColor,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+      prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18, color: Colors.grey[600]) : null,
+      filled: true,
+      fillColor: fillColor ?? Colors.grey[50],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: borderColor ?? Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: borderColor ?? Colors.blue.shade300, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      isDense: true,
+    );
+  }
+
+  // 시설 칩
+  Widget _buildFacilityChip(String facility) {
+    final isSelected = _selectedFacilities.contains(facility);
+    return FilterChip(
+      label: Text(facility, style: const TextStyle(fontSize: 12)),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          if (selected) {
+            _selectedFacilities.add(facility);
+          } else {
+            _selectedFacilities.remove(facility);
+          }
+        });
+      },
+      backgroundColor: Colors.grey[100],
+      selectedColor: Colors.cyan.withOpacity(0.3),
+      checkmarkColor: Colors.cyan.shade700,
+    );
+  }
+
+  // 결제방법 칩
+  Widget _buildPaymentChip(String payment) {
+    final isSelected = _selectedPaymentMethods.contains(payment);
+    return FilterChip(
+      label: Text(payment, style: const TextStyle(fontSize: 12)),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          if (selected) {
+            _selectedPaymentMethods.add(payment);
+          } else {
+            _selectedPaymentMethods.remove(payment);
+          }
+        });
+      },
+      backgroundColor: Colors.grey[100],
+      selectedColor: Colors.green.withOpacity(0.3),
+      checkmarkColor: Colors.green.shade700,
+    );
+  }
+
+  // 접근성 칩
+  Widget _buildAccessibilityChip(String accessibility) {
+    final isSelected = _selectedAccessibility.contains(accessibility);
+    return FilterChip(
+      label: Text(accessibility, style: const TextStyle(fontSize: 12)),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          if (selected) {
+            _selectedAccessibility.add(accessibility);
+          } else {
+            _selectedAccessibility.remove(accessibility);
+          }
+        });
+      },
+      backgroundColor: Colors.grey[100],
+      selectedColor: Colors.pink.withOpacity(0.3),
+      checkmarkColor: Colors.pink.shade700,
+    );
+  }
+}

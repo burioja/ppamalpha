@@ -117,6 +117,58 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     return Icons.work;
   }
 
+  Future<void> _deletePlace(PlaceModel place) async {
+    // 확인 다이얼로그 표시
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('배포자 삭제'),
+        content: Text('${place.name}을(를) 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _placeService.deletePlace(place.id);
+      if (mounted) {
+        // 선택된 배포자가 삭제되었다면 선택 해제
+        if (_selectedPlaceId == place.id) {
+          setState(() {
+            _selectedPlaceId = null;
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${place.name}이(가) 삭제되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadUserPlaces(); // 목록 새로고침
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildPlaceCard(PlaceModel place) {
     final isSelected = _selectedPlaceId == place.id;
 
@@ -209,6 +261,15 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                               ],
                             ],
                           ),
+                        ),
+                        // 삭제 버튼
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          color: Colors.red[400],
+                          onPressed: () => _deletePlace(place),
+                          tooltip: '배포자 삭제',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
