@@ -3087,17 +3087,32 @@ class _MapScreenState extends State<MapScreen> {
     );
 
     if (result != null && mounted) {
-      // 배포 완료 후 마커 새로고침 (인덱싱 대기: 7초)
+      // 배포 완료 후 마커 새로고침
       setState(() {
         _isLoading = true;
         _longPressedLatLng = null;
       });
       
-      print('🚀 배포 완료 - Firestore 인덱싱 대기 중 (7초)...');
-      await Future.delayed(const Duration(seconds: 7));
+      print('🚀 배포 완료 - 즉시 마커 조회 시작');
       
-      print('✅ 인덱싱 대기 완료 - 마커 조회 시작');
+      // ✅ 해결책 2: 포그/타일/캐시 파생값 재빌드
+      if (_currentPosition != null) {
+        final currentTileId = TileUtils.getKm1TileId(
+          _currentPosition!.latitude, 
+          _currentPosition!.longitude
+        );
+        _rebuildFogWithUserLocations(_currentPosition!);
+        _setLevel1TileLocally(currentTileId);
+        print('✅ 포그/타일 상태 재빌드 완료');
+      }
+      
+      // ✅ 해결책 3: 1단계 타일 캐시 초기화 (새 마커 쿼리 보장)
+      _clearFogLevel1Cache();
+      print('✅ 1단계 타일 캐시 초기화 완료');
+      
+      // ✅ 해결책 4: 강제 fetch
       await _updatePostsBasedOnFogLevel();
+      print('✅ 마커 조회 완료');
       
       setState(() {
         _isLoading = false;

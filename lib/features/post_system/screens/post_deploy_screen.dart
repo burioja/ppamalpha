@@ -968,7 +968,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                       
                       // 제목 (한 줄)
                       Text(
-                        post.title,
+                        post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -1149,7 +1149,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                   children: [
                     // 제목
                     Text(
-                      post.title,
+                      post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
