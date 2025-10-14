@@ -2043,64 +2043,71 @@ class PostService {
   }
 
   /// 포스트 회수 (배포된 포스트를 회수)
+  /// - 회수 시 포스트는 삭제되지 않고 RECALLED 상태로 변경됨
+  /// - 남은 수량만큼만 회수되며, 이미 수집된 마커는 유지됨
+  /// - 회수 시점 이전에 수집한 사용자는 포인트를 받을 수 있음
+  /// - 회수된 포스트는 재배포 가능
   Future<void> recallPost(String postId) async {
     debugPrint('');
     debugPrint('🔵🔵🔵 ========== recallPost() 시작 ========== 🔵🔵🔵');
     debugPrint('🔵 postId: $postId');
 
     try {
-      // 포스트 상태를 RECALLED로 변경
+      // 포스트 상태를 RECALLED로 변경 (삭제하지 않음!)
       debugPrint('🔵 1단계: 포스트 상태를 RECALLED로 변경 시작...');
       try {
         await _firestore.collection('posts').doc(postId).update({
           'status': 'RECALLED',
           'recalledAt': FieldValue.serverTimestamp(),
         });
-        debugPrint('🔵 ✅ 포스트 상태 변경 완료');
+        debugPrint('🔵 ✅ 포스트 상태 변경 완료 (내 포스트함에 유지됨)');
       } on FirebaseException catch (e) {
         debugPrint('🔴 FirebaseException 발생: ${e.code} - ${e.message}');
         if (e.code == 'not-found') {
-          debugPrint('⚠️ 포스트가 이미 삭제됨: $postId');
+          debugPrint('⚠️ 포스트를 찾을 수 없음: $postId');
           debugPrint('🔵🔵🔵 ========== recallPost() 종료 (not-found) ========== 🔵🔵🔵');
           debugPrint('');
-          return; // 이미 삭제된 것으로 간주
+          throw Exception('포스트를 찾을 수 없습니다.');
         }
         rethrow;
       }
 
-      // 관련된 마커들 회수 처리
+      // 관련된 마커들 회수 처리 (남은 수량만 회수)
       debugPrint('🔵 2단계: 관련 마커 조회 시작...');
       final markers = await _firestore
           .collection('markers')
           .where('postId', isEqualTo: postId)
+          .where('isActive', isEqualTo: true)  // 활성화된 마커만 조회
           .get();
-      debugPrint('🔵 ✅ 총 ${markers.docs.length}개 마커 발견');
+      debugPrint('🔵 ✅ 총 ${markers.docs.length}개 활성 마커 발견');
 
-      // 배치 작업으로 모든 마커 업데이트
+      // 배치 작업으로 남은 수량의 마커만 회수
       debugPrint('🔵 3단계: 마커 배치 업데이트 시작...');
       final batch = _firestore.batch();
       int recalledCount = 0;
+      int totalRecalledQuantity = 0;
       int collectedCount = 0;
 
       for (var marker in markers.docs) {
         final data = marker.data();
-        final status = data['status'] as String?;
-        debugPrint('🔵   마커 ${marker.id}: status=$status');
+        final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
+        
+        debugPrint('🔵   마커 ${marker.id}: remainingQuantity=$remainingQuantity');
 
-        // 이미 수령된 마커는 그대로 유지 (COLLECTED 상태)
-        if (status == 'COLLECTED') {
-          debugPrint('🔵     → 이미 수령됨, 건너뜀');
+        // 남은 수량이 있는 마커만 회수 처리
+        if (remainingQuantity > 0) {
+          debugPrint('🔵     → isActive=false로 변경 (남은 수량: $remainingQuantity개)');
+          batch.update(marker.reference, {
+            'status': 'RECALLED',  // 상태를 RECALLED로 변경
+            'isActive': false,  // 비활성화 (더 이상 지도에 표시 안 됨)
+            'recalledAt': FieldValue.serverTimestamp(),
+          });
+          recalledCount++;
+          totalRecalledQuantity += remainingQuantity;
+        } else {
+          debugPrint('🔵     → 이미 모두 수집됨 (수량: 0), 유지');
           collectedCount++;
-          continue;
         }
-
-        // 수령되지 않은 마커만 회수 처리
-        debugPrint('🔵     → RECALLED로 변경');
-        batch.update(marker.reference, {
-          'status': 'RECALLED',
-          'visible': false,
-        });
-        recalledCount++;
       }
 
       debugPrint('🔵 배치 커밋 시작...');
@@ -2110,8 +2117,9 @@ class PostService {
       debugPrint('');
       debugPrint('✅ 포스트 회수 완료: $postId');
       debugPrint('📍 총 ${markers.docs.length}개 마커 중:');
-      debugPrint('   - 회수됨: $recalledCount개');
-      debugPrint('   - 이미 수령됨: $collectedCount개 (유지)');
+      debugPrint('   - 회수됨: $recalledCount개 (총 $totalRecalledQuantity개 수량)');
+      debugPrint('   - 이미 수집됨: $collectedCount개 (포인트 지급 가능)');
+      debugPrint('💡 포스트는 "회수됨" 상태로 내 포스트함에 유지되며 재배포 가능합니다.');
       debugPrint('🔵🔵🔵 ========== recallPost() 종료 (성공) ========== 🔵🔵🔵');
       debugPrint('');
     } catch (e) {
@@ -2120,7 +2128,7 @@ class PostService {
       debugPrint('❌ 포스트 회수 실패: $e');
       debugPrint('🔴🔴🔴 ========================================== 🔴🔴🔴');
       debugPrint('');
-      throw Exception('포스트 회수 중 오류가 발생했습니다');
+      rethrow;
     }
   }
 

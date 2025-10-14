@@ -170,7 +170,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   void _initializeForm() {
-    _titleController.text = '${widget.place.name} 관련 포스트';
+    _titleController.text = '';
 
     if (widget.place.hasLocation) {
       _currentLocation = widget.place.location;

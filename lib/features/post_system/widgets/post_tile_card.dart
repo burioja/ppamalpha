@@ -227,25 +227,9 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                         // 제목
                         widget.isSelected
                             ? SizedBox(
-                                height: 20,
-                                child: _ScrollingText(
-                                  text: widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
-                                    shadows: const [
-                                      Shadow(
-                                        color: Colors.black45,
-                                        blurRadius: 4,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : Text(
-                                widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                              height: 20,
+                              child: _ScrollingText(
+                                text: (widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)').replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -257,6 +241,22 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                                       blurRadius: 4,
                                     ),
                                   ],
+                                ),
+                              ),
+                            )
+                          : Text(
+                              (widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)').replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                decoration: isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                                shadows: const [
+                                  Shadow(
+                                    color: Colors.black45,
+                                    blurRadius: 4,
+                                  ),
+                                ],
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,

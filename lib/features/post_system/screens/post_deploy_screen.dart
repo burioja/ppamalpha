@@ -675,7 +675,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        post.title,
+                        post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,

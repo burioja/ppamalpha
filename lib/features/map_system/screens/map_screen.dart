@@ -920,6 +920,7 @@ class _MapScreenState extends State<MapScreen> {
     print('🚀 타일 $tileId 로컬에 즉시 반영됨');
   }
 
+
   /// 1단계 타일 캐시 초기화 (지도 이동 시 호출)
   void _clearFogLevel1Cache() {
     setState(() {
@@ -1428,6 +1429,17 @@ class _MapScreenState extends State<MapScreen> {
       print('포스트 정보 조회 실패: $e');
     }
 
+    // 거리가 멀면 토스트 메시지 표시
+    if (!isWithinRange) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${distance.toStringAsFixed(0)}m 떨어져 있습니다. 200m 이내로 접근해주세요.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1446,19 +1458,13 @@ class _MapScreenState extends State<MapScreen> {
                 padding: EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    Icon(
-                      isOwner ? Icons.edit_location : Icons.card_giftcard, 
-                      color: isOwner ? Colors.blue : Colors.orange, 
-                      size: 24
-                    ),
-                    SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isOwner ? '내가 배포한 포스트' : '포스트',
+                        marker.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: isOwner ? Colors.blue[800] : Colors.orange[800],
+                          color: Colors.black87,
                         ),
                       ),
                     ),
@@ -1477,57 +1483,6 @@ class _MapScreenState extends State<MapScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상태 배지
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: isWithinRange ? Colors.green : Colors.grey,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              isWithinRange ? '수령 가능' : '범위 밖 (${distance.toStringAsFixed(0)}m)',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: marker.quantity > 0 ? Colors.blue : Colors.red,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${marker.quantity}개 남음',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      SizedBox(height: 20),
-                      
-                      // 포스트 제목
-                      Text(
-                        marker.title,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      
-                      SizedBox(height: 12),
-                      
                       // 포스트 설명
                       if (description.isNotEmpty) ...[
                         Text(
@@ -1541,30 +1496,157 @@ class _MapScreenState extends State<MapScreen> {
                         SizedBox(height: 20),
                       ],
                       
-                      // 포스트 이미지 (중앙에 크게)
+                      // 포스트 이미지 (오버레이 배지 포함)
                       if (imageUrl.isNotEmpty) ...[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            imageUrl,
-                            width: double.infinity,
-                            height: 300,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(12),
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                imageUrl,
+                                width: double.infinity,
+                                height: MediaQuery.of(context).size.height * 0.6,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    height: 300,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      size: 48,
+                                      color: Colors.grey[400],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            // 오버레이 배지들
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Row(
+                                children: [
+                                  // 수령 가능/범위 밖 배지
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isWithinRange ? Colors.green : Colors.grey,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.3),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      isWithinRange ? '수령 가능' : '범위 밖',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  // 수량 배지
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: marker.quantity > 0 ? Colors.blue : Colors.red,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.3),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      '${marker.quantity}개 남음',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // 내 포스트 배지 (우상단)
+                            if (isOwner)
+                              Positioned(
+                                top: 12,
+                                right: 12,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '내 포스트',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                                child: Icon(
-                                  Icons.image_not_supported,
-                                  size: 48,
-                                  color: Colors.grey[400],
+                              ),
+                            // 포인트 배지 (좌하단)
+                            if (reward > 0)
+                              Positioned(
+                                bottom: 12,
+                                left: 12,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [Colors.green[400]!, Colors.green[600]!],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.monetization_on, color: Colors.white, size: 16),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        '+${reward}포인트',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                          ],
                         ),
                         SizedBox(height: 20),
                       ] else if (description.isEmpty) ...[
@@ -1586,73 +1668,7 @@ class _MapScreenState extends State<MapScreen> {
                         SizedBox(height: 20),
                       ],
                       
-                      // 포인트 정보
-                      if (reward > 0) ...[
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.green[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green[200]!),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.monetization_on, color: Colors.green, size: 24),
-                              SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '포인트 지급',
-                                    style: TextStyle(
-                                      color: Colors.green[700],
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    '+${reward}포인트',
-                                    style: TextStyle(
-                                      color: Colors.green[700],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 20),
-                      ],
                       
-                      // 거리 정보
-                      if (!isWithinRange) ...[
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.red[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.red[200]!),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.location_off, color: Colors.red, size: 24),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  '200m 이내로 접근해주세요\n현재 거리: ${distance.toStringAsFixed(0)}m',
-                                  style: TextStyle(
-                                    color: Colors.red[700],
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -2044,6 +2060,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('로그인이 필요합니다')),
         );
@@ -2052,33 +2069,10 @@ class _MapScreenState extends State<MapScreen> {
 
       // 배포자 확인
       if (marker.creatorId != user.uid) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('자신이 배포한 포스트만 회수할 수 있습니다')),
         );
-        return;
-      }
-
-      // 확인 다이얼로그
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('포스트 회수'),
-          content: const Text('이 포스트를 회수하시겠습니까? 회수된 포스트는 복구할 수 없습니다.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('회수', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true) {
-        debugPrint('🟡 [map_screen] 회수 취소됨');
         return;
       }
 
@@ -2097,13 +2091,15 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('🟢🟢🟢 ========================================== 🟢🟢🟢');
       debugPrint('');
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('마커를 회수했습니다')),
       );
       
-      Navigator.of(context).pop(); // 다이얼로그 닫기
+      // ❌ Navigator.of(context).pop() 제거 - 버튼에서 이미 닫음
       _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('포스트 회수 중 오류가 발생했습니다: $e')),
       );
@@ -3091,14 +3087,16 @@ class _MapScreenState extends State<MapScreen> {
     );
 
     if (result != null && mounted) {
-      // 배포 완료 후 마커 새로고침
+      // 배포 완료 후 마커 새로고침 (인덱싱 대기: 7초)
       setState(() {
         _isLoading = true;
         _longPressedLatLng = null;
       });
       
-      await _updatePostsBasedOnFogLevel();
-      await Future.delayed(const Duration(milliseconds: 1500));
+      print('🚀 배포 완료 - Firestore 인덱싱 대기 중 (7초)...');
+      await Future.delayed(const Duration(seconds: 7));
+      
+      print('✅ 인덱싱 대기 완료 - 마커 조회 시작');
       await _updatePostsBasedOnFogLevel();
       
       setState(() {
