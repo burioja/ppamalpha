@@ -415,11 +415,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           // 필터 영역 (토글)
           if (_showFilters) _buildFiltersSection(),
           
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           // 요약 통계 카드
           Container(
+            height: 140,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.blue[400]!, Colors.purple[400]!],
@@ -712,11 +713,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       ),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           // 요약 통계 카드
           Container(
+            height: 140,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.blue[400]!, Colors.purple[400]!],
@@ -1055,11 +1057,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       ),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           // 헤더 카드
           Container(
+            height: 140,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.green[400]!, Colors.teal[400]!],
@@ -1086,6 +1089,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
@@ -1431,11 +1435,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 // 필터 영역 (토글)
                 if (_showFilters) _buildFiltersSection(),
                 
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 // 헤더 카드
                 Container(
+                  height: 140,
                   margin: const EdgeInsets.symmetric(horizontal: 20),
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.purple[400]!, Colors.pink[400]!],
@@ -1462,6 +1467,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
@@ -1850,10 +1856,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
             ),
           ),
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             children: [
               // 전체 통계 카드
               Container(
+                height: 140,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -1868,46 +1875,26 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                     ),
                   ],
                 ),
-                child: Column(
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.bar_chart, color: Colors.white, size: 32),
-                        SizedBox(width: 12),
-                        Text(
-                          '배포 통계',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: _buildStatItem('총 배포', '$totalDeployed개', Icons.rocket_launch),
                     ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatItem('총 배포', '$totalDeployed개', Icons.rocket_launch),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 50,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildStatItem('총 수집', '${totalCollections}개', Icons.download),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 50,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildStatItem('수집률', '$collectionRate%', Icons.trending_up),
-                        ),
-                      ],
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    Expanded(
+                      child: _buildStatItem('총 수집', '${totalCollections}개', Icons.download),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    Expanded(
+                      child: _buildStatItem('수집률', '$collectionRate%', Icons.trending_up),
                     ),
                   ],
                 ),
