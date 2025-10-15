@@ -80,6 +80,10 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTicker
   bool _isTemporarilyClosed = false;
   DateTime? _reopeningDate;
 
+  // 섹션 접기/펼치기 상태
+  bool _isOperatingInfoExpanded = false;
+  bool _isAdditionalInfoExpanded = false;
+
   // 카테고리 옵션들
   final Map<String, List<String>> _categoryOptions = {
     '음식점': ['한식', '중식', '일식', '양식', '분식', '치킨', '피자', '버거', '아시안', '뷔페', '해산물', '고기집', '찌개/탕', '국수/면', '죽/백반'],
@@ -851,7 +855,18 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTicker
                     const SizedBox(height: 24),
                     
                     // 운영 정보 섹션
-                    _buildSectionHeader('운영 정보', Icons.schedule, Colors.teal),
+                    _buildCollapsibleSectionHeader(
+                      '운영 정보',
+                      Icons.schedule,
+                      Colors.teal,
+                      _isOperatingInfoExpanded,
+                      () {
+                        setState(() {
+                          _isOperatingInfoExpanded = !_isOperatingInfoExpanded;
+                        });
+                      },
+                    ),
+                    if (_isOperatingInfoExpanded) ...[
                     const SizedBox(height: 12),
                     
                     // 운영시간
@@ -1180,11 +1195,23 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTicker
                         ],
                       ),
                     ),
+                    ], // 운영 정보 섹션 끝
                     
                     const SizedBox(height: 24),
                     
                     // 추가 정보 섹션
-                    _buildSectionHeader('추가 정보', Icons.more_horiz, Colors.purple),
+                    _buildCollapsibleSectionHeader(
+                      '추가 정보',
+                      Icons.more_horiz,
+                      Colors.purple,
+                      _isAdditionalInfoExpanded,
+                      () {
+                        setState(() {
+                          _isAdditionalInfoExpanded = !_isAdditionalInfoExpanded;
+                        });
+                      },
+                    ),
+                    if (_isAdditionalInfoExpanded) ...[
                     const SizedBox(height: 12),
                     
                     // 접근성
@@ -1376,6 +1403,7 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTicker
                         style: const TextStyle(fontSize: 14),
                       ),
                     ),
+                    ], // 추가 정보 섹션 끝
                     
                     const SizedBox(height: 80),
                   ],
@@ -1413,6 +1441,48 @@ class _CreatePlaceScreenState extends State<CreatePlaceScreen> with SingleTicker
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // 접을 수 있는 섹션 헤더
+  Widget _buildCollapsibleSectionHeader(
+    String title,
+    IconData icon,
+    Color color,
+    bool isExpanded,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              size: 24,
+              color: color,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1875,40 +1875,29 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         const SizedBox(height: 16),
         const Divider(),
         const SizedBox(height: 12),
-        // 체크박스 옵션들
-        _buildOptionRow('기한 설정', _hasExpiration, (v) => setState(() => _hasExpiration = v), Icons.schedule),
-        const Divider(height: 20),
-        _buildOptionRow('전달 가능', _canForward, (v) => setState(() => _canForward = v), Icons.forward),
-        const Divider(height: 20),
-        _buildOptionRow('응답 가능', _canRespond, (v) => setState(() => _canRespond = v), Icons.reply),
-        const Divider(height: 20),
-        _buildOptionRow('송금 요청', _canTransfer, (v) => setState(() => _canTransfer = v), Icons.attach_money),
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 8),
-        // 배포 기간 안내
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '배포 기간은 지도에서 마커를 뿌릴 때 설정됩니다',
-                  style: TextStyle(
-                    color: Colors.blue.shade700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
+        // 체크박스 옵션들 (2행 x 2열)
+        Row(
+          children: [
+            Expanded(
+              child: _buildOptionRow('기한 설정', _hasExpiration, (v) => setState(() => _hasExpiration = v), Icons.schedule),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildOptionRow('전달 가능', _canForward, (v) => setState(() => _canForward = v), Icons.forward),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildOptionRow('응답 가능', _canRespond, (v) => setState(() => _canRespond = v), Icons.reply),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildOptionRow('송금 요청', _canTransfer, (v) => setState(() => _canTransfer = v), Icons.attach_money),
+            ),
+          ],
         ),
       ],
     );

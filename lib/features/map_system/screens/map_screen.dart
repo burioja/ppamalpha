@@ -156,6 +156,9 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _originalGpsPosition; // 원래 GPS 위치 백업
   LatLng? _previousMockPosition; // 이전 Mock 위치 (회색 영역 표시용)
   LatLng? _previousGpsPosition; // 이전 GPS 위치 (회색 영역 표시용)
+  
+  // ✅ 일터 리스너 구독 관리 (중복 방지)
+  StreamSubscription<DocumentSnapshot>? _workplaceSubscription;
 
   @override
   void initState() {
@@ -202,6 +205,12 @@ class _MapScreenState extends State<MapScreen> {
               _isPremiumUser = userModel.userType == UserType.superSite;
             });
           }
+          
+          // ✅ 일터 변경 감지를 위한 리스너 설정
+          final workplaceId = data['workplaceId'] as String?;
+          if (workplaceId != null && workplaceId.isNotEmpty) {
+            _setupWorkplaceListener(workplaceId);
+          }
         }
         _loadUserLocations();
       } else {
@@ -209,6 +218,35 @@ class _MapScreenState extends State<MapScreen> {
       }
     }, onError: (error) {
       print('사용자 데이터 리스너 오류: $error');
+    });
+  }
+
+  // ✅ 일터(Place) 변경사항 실시간 감지 리스너
+  void _setupWorkplaceListener(String workplaceId) {
+    print('💼 일터 리스너 설정 시작: $workplaceId');
+    
+    // ✅ 기존 리스너 취소 (중복 방지)
+    _workplaceSubscription?.cancel();
+    
+    // ✅ 새로운 리스너 설정
+    _workplaceSubscription = FirebaseFirestore.instance
+        .collection('places')
+        .doc(workplaceId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        print('💼 일터 정보 변경 감지됨 - 타임스탬프: ${DateTime.now()}');
+        final data = snapshot.data();
+        if (data != null) {
+          final location = data['location'] as GeoPoint?;
+          print('💼 변경된 일터 좌표: ${location?.latitude}, ${location?.longitude}');
+          
+          // 일터 위치 정보 새로고침
+          _loadUserLocations();
+        }
+      }
+    }, onError: (error) {
+      print('❌ 일터 리스너 오류: $error');
     });
   }
 
@@ -3625,6 +3663,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _workplaceSubscription?.cancel(); // ✅ 일터 리스너 구독 취소
     _mapMoveTimer?.cancel(); // 타이머 정리
     _clusterDebounceTimer?.cancel(); // 클러스터 디바운스 타이머 정리
     super.dispose();
