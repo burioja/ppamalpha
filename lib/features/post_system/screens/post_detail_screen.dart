@@ -2226,108 +2226,72 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final isDeployed = currentPost.status == PostStatus.DEPLOYED;
     debugPrint('🟣 isDeployed: $isDeployed');
 
-    // 삭제/회수 확인 다이얼로그
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(isDeployed ? '포스트 회수' : '포스트 삭제'),
-          content: Text(
-            isDeployed
-                ? '이 포스트를 회수하시겠습니까?\n\n'
-                  '회수된 포스트는 지도에서 사라지며, '
-                  '재배포할 수 없습니다.'
-                : '이 포스트를 삭제하시겠습니까?\n\n'
-                  '삭제된 포스트는 완전히 제거됩니다.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: isDeployed ? Colors.orange : Colors.red,
-              ),
-              child: Text(isDeployed ? '회수' : '삭제'),
-            ),
-          ],
-        );
-      },
-    );
+    try {
+      // 로딩 표시
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
 
-    if (confirmed == true) {
-      debugPrint('🟣 사용자가 확인 버튼 클릭');
-      try {
-        // 로딩 표시
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
+      // PostService를 사용하여 포스트 삭제 또는 회수
+      final postService = PostService();
+      String successMessage;
 
-        // PostService를 사용하여 포스트 삭제 또는 회수
-        final postService = PostService();
-        String successMessage;
-
-        if (isDeployed) {
-          debugPrint('🟣 배포된 포스트 → recallPost() 호출');
-          await postService.recallPost(currentPost.postId);
-          successMessage = '포스트가 회수되었습니다.';
-          debugPrint('🟣 ✅ recallPost() 완료');
-        } else {
-          debugPrint('🟣 DRAFT 포스트 → deletePost() 호출');
-          await postService.deletePost(currentPost.postId);
-          successMessage = '포스트가 삭제되었습니다.';
-          debugPrint('🟣 ✅ deletePost() 완료');
-        }
-
-        // 로딩 다이얼로그 닫기
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-
-        // 성공 메시지 표시
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(successMessage),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // 이전 화면으로 돌아가기
-          Navigator.of(context).pop(true);
-        }
-
-        debugPrint('🟣 성공 메시지 표시 및 화면 닫기 완료');
-        debugPrint('🟣🟣🟣 [post_detail_screen] _deletePost() 종료 (성공) 🟣🟣🟣');
-        debugPrint('');
-      } catch (e) {
-        debugPrint('🔴 [post_detail_screen] 에러 발생: $e');
-        // 로딩 다이얼로그 닫기
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-
-        // 에러 메시지 표시
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${isDeployed ? '회수' : '삭제'} 실패: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        debugPrint('🟣🟣🟣 [post_detail_screen] _deletePost() 종료 (에러) 🟣🟣🟣');
-        debugPrint('');
+      if (isDeployed) {
+        debugPrint('🟣 배포된 포스트 → recallPost() 호출');
+        await postService.recallPost(currentPost.postId);
+        successMessage = '포스트가 회수되었습니다. 회수한 포스트는 내 포스트에서 확인할 수 있습니다.';
+        debugPrint('🟣 ✅ recallPost() 완료');
+      } else {
+        debugPrint('🟣 DRAFT 포스트 → deletePost() 호출');
+        await postService.deletePost(currentPost.postId);
+        successMessage = '포스트가 삭제되었습니다.';
+        debugPrint('🟣 ✅ deletePost() 완료');
       }
-    } else {
-      debugPrint('🟡 [post_detail_screen] 사용자가 취소 버튼 클릭');
-      debugPrint('🟣🟣🟣 [post_detail_screen] _deletePost() 종료 (취소) 🟣🟣🟣');
+
+      // 로딩 다이얼로그 닫기 (mounted 체크 후)
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+        
+        // 성공 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        // 잠시 후 화면 닫기 (메시지 표시 후)
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          Navigator.of(context).pop(); // 현재 화면 닫기
+        }
+      }
+
+      debugPrint('🟣 성공 메시지 표시 및 화면 닫기 완료');
+      debugPrint('🟣🟣🟣 [post_detail_screen] _deletePost() 종료 (성공) 🟣🟣🟣');
+      debugPrint('');
+    } catch (e) {
+      debugPrint('🔴 [post_detail_screen] 에러 발생: $e');
+      
+      // 로딩 다이얼로그 닫기
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+        
+        // 에러 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${isDeployed ? '회수' : '삭제'} 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      debugPrint('🟣🟣🟣 [post_detail_screen] _deletePost() 종료 (에러) 🟣🟣🟣');
       debugPrint('');
     }
   }

@@ -772,6 +772,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // 현재 일터 정보를 임시 컨트롤러에 복사
     final tempNameController = TextEditingController(text: _workplace?.name ?? '');
     final tempAddressController = TextEditingController(text: _workplace?.formattedAddress ?? _workplace?.address ?? '');
+    GeoPoint? tempLocation = _workplace?.location; // 기존 좌표 유지
 
     final result = await showDialog<bool>(
       context: context,
@@ -803,6 +804,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (searchResult != null) {
                   if (searchResult is Map<String, dynamic>) {
                     tempAddressController.text = searchResult['address'] ?? '';
+                    // ✅ 좌표 정보 저장
+                    if (searchResult['lat'] != null && searchResult['lon'] != null) {
+                      tempLocation = GeoPoint(
+                        double.parse(searchResult['lat'].toString()),
+                        double.parse(searchResult['lon'].toString()),
+                      );
+                      debugPrint('💼 일터 주소 좌표: ${tempLocation!.latitude}, ${tempLocation!.longitude}');
+                    }
                   } else {
                     tempAddressController.text = searchResult.toString();
                   }
@@ -834,18 +843,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (result == true) {
-      // 수정된 정보로 업데이트
+      debugPrint('');
+      debugPrint('💼💼💼 ========== 일터 수정 시작 ========== 💼💼💼');
+      debugPrint('💼 기존 일터 ID: ${_workplace!.id}');
+      debugPrint('💼 기존 이름: ${_workplace!.name}');
+      debugPrint('💼 기존 주소: ${_workplace!.address}');
+      debugPrint('💼 기존 좌표: ${_workplace!.location}');
+      debugPrint('');
+      debugPrint('💼 새 이름: ${tempNameController.text.trim()}');
+      debugPrint('💼 새 주소: ${tempAddressController.text.trim()}');
+      debugPrint('💼 새 좌표: $tempLocation');
+      debugPrint('');
+      
+      // 수정된 정보로 업데이트 (✅ location 필드 포함)
       final updatedPlace = _workplace!.copyWith(
         name: tempNameController.text.trim(),
         address: tempAddressController.text.trim(),
+        location: tempLocation, // ✅ 좌표 업데이트
         updatedAt: DateTime.now(),
       );
       
+      debugPrint('💼 copyWith 완료:');
+      debugPrint('   - id: ${updatedPlace.id}');
+      debugPrint('   - name: ${updatedPlace.name}');
+      debugPrint('   - address: ${updatedPlace.address}');
+      debugPrint('   - location: ${updatedPlace.location}');
+      
       try {
+        debugPrint('💼 Firestore 업데이트 시작...');
         await _placeService.updatePlace(updatedPlace.id, updatedPlace);
-        _showToast('일터 정보가 수정되었습니다');
+        debugPrint('✅ Firestore 업데이트 완료!');
+        _showToast('일터 정보가 수정되었습니다 (지도 마커도 업데이트됨)');
         await _loadWorkplaceInfo(); // 정보 새로고침
+        debugPrint('✅ 일터 업데이트 전체 완료: 이름=${updatedPlace.name}, 좌표=${updatedPlace.location}');
+        debugPrint('💼💼💼 ========================================== 💼💼💼');
+        debugPrint('');
       } catch (e) {
+        debugPrint('❌ Firestore 업데이트 실패: $e');
+        debugPrint('💼💼💼 ========================================== 💼💼💼');
+        debugPrint('');
         _showToast('일터 수정 중 오류가 발생했습니다: $e');
       }
     }

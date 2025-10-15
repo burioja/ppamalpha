@@ -414,11 +414,15 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildStep1() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const Text(
             '개인정보 입력',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -689,16 +693,21 @@ class _SignupScreenState extends State<SignupScreen> {
             ],
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildStep2() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const Text(
             '추가정보 입력',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -826,16 +835,21 @@ class _SignupScreenState extends State<SignupScreen> {
             ],
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildStep3() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const Text(
             '약관 동의',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -874,6 +888,7 @@ class _SignupScreenState extends State<SignupScreen> {
             false,
           ),
         ],
+        ),
       ),
     );
   }

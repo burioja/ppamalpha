@@ -117,6 +117,9 @@ class PostModel {
   // 배포자 인증 상태
   final bool isVerified; // 배포자가 인증된 사용자인지 여부
 
+  // 휴지통 시스템
+  final DateTime? deletedAt; // 휴지통으로 이동한 시각 (null이면 정상 상태)
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -152,6 +155,7 @@ class PostModel {
     this.recallReason,
     this.recalledAt,
     this.isVerified = false, // 기본값 false
+    this.deletedAt, // 휴지통 시스템
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -228,6 +232,9 @@ class PostModel {
           ? (data['recalledAt'] as Timestamp).toDate()
           : null,
       isVerified: data['isVerified'] ?? false,
+      deletedAt: data['deletedAt'] != null
+          ? (data['deletedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -266,6 +273,7 @@ class PostModel {
       'recallReason': recallReason,
       'recalledAt': recalledAt != null ? Timestamp.fromDate(recalledAt!) : null,
       'isVerified': isVerified,
+      'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
     };
   }
 
@@ -392,6 +400,7 @@ class PostModel {
     String? recallReason,
     DateTime? recalledAt,
     bool? isVerified,
+    DateTime? deletedAt,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -427,6 +436,7 @@ class PostModel {
       recallReason: recallReason ?? this.recallReason,
       recalledAt: recalledAt ?? this.recalledAt,
       isVerified: isVerified ?? this.isVerified,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 } 

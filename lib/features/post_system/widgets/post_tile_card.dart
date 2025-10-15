@@ -12,6 +12,8 @@ class PostTileCard extends StatefulWidget {
   final VoidCallback? onDelete;
   final bool showStatisticsButton;
   final VoidCallback? onStatistics;
+  final bool hideTextOverlay; // 받은 포스트용 - 제목/가격 숨김
+  final bool enableImageViewer; // 이미지 확대 뷰어 활성화
 
   const PostTileCard({
     super.key,
@@ -23,6 +25,8 @@ class PostTileCard extends StatefulWidget {
     this.onDelete,
     this.showStatisticsButton = false,
     this.onStatistics,
+    this.hideTextOverlay = false,
+    this.enableImageViewer = false,
   });
 
   @override
@@ -53,6 +57,12 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
   }
 
   void _handleTap() {
+    // 이미지 뷰어 활성화 모드일 때
+    if (widget.enableImageViewer) {
+      _showImageViewer();
+      return;
+    }
+    
     // 선택되지 않은 상태면 선택만 하고 (1번 탭)
     // 이미 선택된 상태면 onTap 호출 (2번 탭)
     if (!widget.isSelected) {
@@ -69,6 +79,34 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
         widget.onDoubleTap!();
       }
     }
+  }
+
+  void _showImageViewer() {
+    // 원본 이미지 URL 가져오기
+    final imageUrls = <String>[];
+    for (int i = 0; i < widget.post.mediaType.length; i++) {
+      if (widget.post.mediaType[i].toLowerCase() == 'image' && 
+          i < widget.post.mediaUrl.length) {
+        imageUrls.add(widget.post.mediaUrl[i]);
+      }
+    }
+
+    if (imageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미지가 없습니다')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ImageViewerScreen(
+          imageUrls: imageUrls,
+          initialIndex: 0,
+        ),
+      ),
+    );
   }
 
   @override
@@ -125,68 +163,73 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                 child: _buildImageWidget(),
               ),
               
-              // 삭제 버튼 (좌상단)
-              if (widget.showDeleteButton && widget.onDelete != null)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: GestureDetector(
-                    onTap: widget.onDelete,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.delete,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              
-              // 상태 배지 (우상단)
+              // 우상단 버튼 영역 (상태 배지 + 삭제 버튼)
               Positioned(
                 top: 8,
                 right: 8,
-                child: _buildStatusBadge(isDeleted, isCollected, isUsed),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // 삭제 버튼 (우상단)
+                    if (widget.showDeleteButton && widget.onDelete != null)
+                      GestureDetector(
+                        onTap: widget.onDelete,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.delete,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    // 상태 배지와 삭제 버튼 사이 간격
+                    if (widget.showDeleteButton && widget.onDelete != null)
+                      const SizedBox(height: 4),
+                    // 상태 배지
+                    _buildStatusBadge(isDeleted, isCollected, isUsed),
+                  ],
+                ),
               ),
               
-              // 하단 그라데이션 + 텍스트 오버레이
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.7),
-                      ],
+              // 하단 그라데이션 + 텍스트 오버레이 (hideTextOverlay가 false일 때만)
+              if (!widget.hideTextOverlay)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 제목
-                      widget.isSelected
-                          ? SizedBox(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 제목
+                        widget.isSelected
+                            ? SizedBox(
                               height: 20,
                               child: _ScrollingText(
-                                text: widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                                text: (widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)').replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -202,7 +245,7 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                               ),
                             )
                           : Text(
-                              widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)',
+                              (widget.post.title.isNotEmpty ? widget.post.title : '(제목 없음)').replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
@@ -214,110 +257,110 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
                                     blurRadius: 4,
                                   ),
                                 ],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                      const SizedBox(height: 6),
-                      
-                      // 하단 정보 (리워드와 통계/날짜)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // 리워드
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isUsed 
-                                    ? Colors.grey.withOpacity(0.8)
-                                    : const Color(0xFF4D4DFF).withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.monetization_on,
-                                    color: Colors.white,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    isUsed ? '사용완료' : '${NumberFormat('#,###').format(widget.post.reward)}원',
-                                    style: const TextStyle(
+                        const SizedBox(height: 6),
+                        
+                        // 하단 정보 (리워드와 통계/날짜)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // 리워드
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isUsed 
+                                      ? Colors.grey.withOpacity(0.8)
+                                      : const Color(0xFF4D4DFF).withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.monetization_on,
                                       color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
+                                      size: 12,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      isUsed ? '사용완료' : '${NumberFormat('#,###').format(widget.post.reward)}원',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          
-                          // 통계 버튼과 배포일
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 통계 버튼 (배포된 포스트만)
-                              if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
-                                GestureDetector(
-                                  onTap: widget.onStatistics,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.analytics,
-                                          size: 10,
-                                          color: Color(0xFF4D4DFF),
-                                        ),
-                                        SizedBox(width: 2),
-                                        Text(
-                                          '통계',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
+                            const SizedBox(width: 8),
+                            
+                            // 통계 버튼과 배포일
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 통계 버튼 (배포된 포스트만)
+                                if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
+                                  GestureDetector(
+                                    onTap: widget.onStatistics,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.9),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.analytics,
+                                            size: 10,
                                             color: Color(0xFF4D4DFF),
                                           ),
+                                          SizedBox(width: 2),
+                                          Text(
+                                            '통계',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF4D4DFF),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
+                                  const SizedBox(height: 2),
+                                // 배포일 (배포된 포스트만 표시)
+                                if (widget.post.isDeployed)
+                                  Text(
+                                    DateFormat('MM/dd').format(widget.post.createdAt),
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.white,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black45,
+                                          blurRadius: 2,
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              if (widget.showStatisticsButton && widget.post.isDeployed && widget.onStatistics != null)
-                                const SizedBox(height: 2),
-                              // 배포일 (배포된 포스트만 표시)
-                              if (widget.post.isDeployed)
-                                Text(
-                                  DateFormat('MM/dd').format(widget.post.createdAt),
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.white,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black45,
-                                        blurRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               
               // 사용된 포스트 전체 오버레이
               if (isUsed)
@@ -571,16 +614,137 @@ class _ScrollingTextState extends State<_ScrollingText> with SingleTickerProvide
   @override
   Widget build(BuildContext context) {
     return ClipRect(
-      child: SlideTransition(
-        position: _animation,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.text, style: widget.style),
-            const SizedBox(width: 20),
-            Text(widget.text, style: widget.style),
-          ],
+      child: OverflowBox(
+        maxWidth: double.infinity,
+        alignment: Alignment.centerLeft,
+        child: SlideTransition(
+          position: _animation,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.text, style: widget.style, overflow: TextOverflow.visible),
+              const SizedBox(width: 20),
+              Text(widget.text, style: widget.style, overflow: TextOverflow.visible),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// 이미지 확대 뷰어 화면
+class _ImageViewerScreen extends StatefulWidget {
+  final List<String> imageUrls;
+  final int initialIndex;
+
+  const _ImageViewerScreen({
+    required this.imageUrls,
+    this.initialIndex = 0,
+  });
+
+  @override
+  State<_ImageViewerScreen> createState() => _ImageViewerScreenState();
+}
+
+class _ImageViewerScreenState extends State<_ImageViewerScreen> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // 이미지 페이지 뷰
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            itemCount: widget.imageUrls.length,
+            itemBuilder: (context, index) {
+              return InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Center(
+                  child: Image.network(
+                    widget.imageUrls[index],
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(Icons.error, color: Colors.white, size: 50),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // 상단 닫기 버튼
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // 이미지 카운터
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // 닫기 버튼
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

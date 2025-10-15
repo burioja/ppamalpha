@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/data/marker_service.dart';
+import '../../../core/services/data/points_service.dart';
 import '../../map_system/services/fog_of_war/visit_tile_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../widgets/building_unit_selector.dart';
@@ -24,6 +26,7 @@ class PostDeployScreen extends StatefulWidget {
 
 class _PostDeployScreenState extends State<PostDeployScreen> {
   final PostService _postService = PostService();
+  final PointsService _pointsService = PointsService();
   final TextEditingController _quantityController = TextEditingController(text: '1');
   final TextEditingController _priceController = TextEditingController(text: '100');
   final TextEditingController _durationController = TextEditingController(text: '7');
@@ -34,6 +37,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   PostModel? _selectedPost;
   bool _isLoading = false;
   bool _isDeploying = false;
+  int _userPoints = 0; // 사용자 포인트
+  
+  // ✅ 실시간 리스너 관리
+  StreamSubscription<QuerySnapshot>? _postsSubscription;
 
   // 기간 관련 필드 추가
   int _selectedDuration = 7; // 기본 7일
@@ -50,11 +57,21 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   @override
+  void dispose() {
+    // ✅ 실시간 리스너 구독 취소
+    _postsSubscription?.cancel();
+    _quantityController.dispose();
+    _priceController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 화면이 다시 포커스를 받을 때 포스트 목록 새로고침
-    if (_selectedLocation != null) {
-      _loadUserPosts();
+    // 화면이 다시 포커스를 받을 때도 포스트 목록 새로고침
+    if (_selectedLocation != null && _postsSubscription == null) {
+      _setupPostsListener();
     }
   }
 
@@ -72,13 +89,116 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     debugPrint('건물명: $_buildingName');
     
     if (_selectedLocation != null) {
-      _loadUserPosts();
+      _setupPostsListener(); // ✅ 실시간 리스너 설정
+      _loadUserPoints(); // 포인트 로드
     } else {
       // 위치 정보가 없으면 로딩 상태 해제
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadUserPoints() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final userPoints = await _pointsService.getUserPoints(uid);
+        setState(() {
+          _userPoints = userPoints?.totalPoints ?? 0;
+        });
+        debugPrint('사용자 포인트: $_userPoints');
+      }
+    } catch (e) {
+      debugPrint('포인트 로드 오류: $e');
+    }
+  }
+
+  // ✅ 실시간 포스트 리스너 설정
+  void _setupPostsListener() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      debugPrint('❌ 사용자 미로그인 - 포스트 리스너 설정 불가');
+      return;
+    }
+
+    debugPrint('📡 포스트 실시간 리스너 설정 시작: $uid');
+    
+    // 기존 리스너 취소
+    _postsSubscription?.cancel();
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    // ✅ 실시간 스트림으로 변경
+    _postsSubscription = FirebaseFirestore.instance
+        .collection('posts')
+        .where('creatorId', isEqualTo: uid)
+        .snapshots()
+        .listen((snapshot) {
+      debugPrint('');
+      debugPrint('📡 포스트 변경 감지됨 - 타임스탬프: ${DateTime.now()}');
+      debugPrint('   전체 문서 개수: ${snapshot.docs.length}');
+      
+      // 모든 포스트의 상태 로깅
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final status = data['status'];
+        final deletedAt = data['deletedAt'];
+        final title = data['title'] ?? '제목없음';
+        debugPrint('   📄 ${doc.id}: $title | status=$status | deletedAt=${deletedAt != null ? '있음' : '없음'}');
+      }
+      
+      final allPosts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+      
+      // DELETED 상태 또는 deletedAt이 있는 포스트 제외 (DRAFT, DEPLOYED, RECALLED 모두 표시)
+      final deployablePosts = allPosts.where((post) {
+        // status가 DELETED이거나 deletedAt 필드가 있으면 제외
+        final data = snapshot.docs.firstWhere((doc) => doc.id == post.postId).data();
+        final deletedAt = data['deletedAt'];
+        final isDeleted = post.status == PostStatus.DELETED || deletedAt != null;
+        
+        if (isDeleted) {
+          debugPrint('   ⏭️ 제외: ${post.title} (status=${post.status}, deletedAt=${deletedAt != null})');
+        }
+        
+        return !isDeleted;
+      }).toList();
+      
+      debugPrint('   배포 가능한 포스트: ${deployablePosts.length}개');
+      debugPrint('   - DRAFT: ${deployablePosts.where((p) => p.status == PostStatus.DRAFT).length}개');
+      debugPrint('   - DEPLOYED: ${deployablePosts.where((p) => p.status == PostStatus.DEPLOYED).length}개');
+      debugPrint('   - RECALLED: ${deployablePosts.where((p) => p.status == PostStatus.RECALLED).length}개');
+      
+      final deletedCount = allPosts.length - deployablePosts.length;
+      debugPrint('   - 제외됨 (DELETED 또는 휴지통): ${deletedCount}개');
+
+      if (mounted) {
+        setState(() {
+          _userPosts = deployablePosts;
+          _isLoading = false;
+          
+          // ✅ 선택된 포스트가 삭제되었는지 확인
+          if (_selectedPost != null) {
+            final isSelectedPostDeleted = !deployablePosts.any((p) => p.postId == _selectedPost!.postId);
+            if (isSelectedPostDeleted) {
+              debugPrint('⚠️ 선택된 포스트가 삭제됨 - 선택 해제');
+              _selectedPost = null;
+            }
+          }
+        });
+      }
+    }, onError: (error) {
+      debugPrint('❌ 포스트 리스너 오류: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   Future<void> _loadUserPosts() async {
@@ -90,14 +210,25 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         debugPrint('사용자 ID: $uid');
-        // DRAFT와 DEPLOYED 포스트 모두 로드 (다회 배포 지원)
-        final allPosts = await _postService.getUserPosts(uid);
-        debugPrint('전체 포스트 로드 완료: ${allPosts.length}개');
+        
+        // ✅ Firestore에서 직접 조회하여 deletedAt 확인
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('posts')
+            .where('creatorId', isEqualTo: uid)
+            .get();
+        
+        debugPrint('전체 포스트 로드 완료: ${querySnapshot.docs.length}개');
 
-        // DELETED 상태만 제외 (DRAFT, DEPLOYED, RECALLED 모두 표시)
-        final deployablePosts = allPosts.where((post) {
-          return post.status != PostStatus.DELETED;
-        }).toList();
+        // DELETED 상태 또는 deletedAt이 있는 포스트 제외
+        final deployablePosts = querySnapshot.docs
+            .where((doc) {
+              final data = doc.data();
+              final deletedAt = data['deletedAt'];
+              final status = data['status'] as String?;
+              return status != 'DELETED' && deletedAt == null;
+            })
+            .map((doc) => PostModel.fromFirestore(doc))
+            .toList();
         
         debugPrint('배포 가능한 포스트: ${deployablePosts.length}개 (DRAFT + DEPLOYED + RECALLED)');
         debugPrint('  - DRAFT: ${deployablePosts.where((p) => p.status == PostStatus.DRAFT).length}개');
@@ -130,22 +261,41 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   void _calculateTotal() {
+    debugPrint('');
+    debugPrint('🔄 _calculateTotal 호출됨');
     setState(() {});
   }
 
   void _onPostSelected(PostModel post) {
+    debugPrint('');
+    debugPrint('📝 포스트 선택됨:');
+    debugPrint('   포스트 제목: ${post.title}');
+    debugPrint('   포스트 리워드: ${post.reward}원');
+    
     setState(() {
       _selectedPost = post;
       // 선택된 포스트의 리워드(단가)를 가격 필드에 자동 설정
       _priceController.text = post.reward.toString();
     });
+    
+    debugPrint('   단가 필드 설정 후: "${_priceController.text}"');
     _calculateTotal();
   }
 
   double get _totalPrice {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
     final price = int.tryParse(_priceController.text) ?? 0;
-    return quantity * price.toDouble();
+    final total = quantity * price.toDouble();
+    
+    // 디버깅 로그
+    debugPrint('💰 총비용 계산:');
+    debugPrint('   수량 텍스트: "${_quantityController.text}"');
+    debugPrint('   단가 텍스트: "${_priceController.text}"');
+    debugPrint('   파싱된 수량: $quantity');
+    debugPrint('   파싱된 단가: $price');
+    debugPrint('   계산된 총비용: $total원');
+    
+    return total;
   }
 
   Future<void> _deployPostToLocation() async {
@@ -179,9 +329,28 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    // 3. 수량 검증
-    final quantity = int.tryParse(_quantityController.text);
-    if (quantity == null || quantity <= 0) {
+    // 3-1. 기간 검증 및 자동 조정
+    int duration = int.tryParse(_durationController.text) ?? 7;
+    if (duration > 30) {
+      setState(() {
+        _selectedDuration = 30;
+        _durationController.text = '30';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('포스트 배포 기간은 최대 30일입니다. 30일로 설정되었습니다.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      duration = 30;
+    } else {
+      _selectedDuration = duration;
+    }
+
+    // 3-2. 수량 검증
+    int quantity = int.tryParse(_quantityController.text) ?? 0;
+    if (quantity <= 0) {
       _showErrorDialog(
         title: '수량 입력 오류',
         message: '배포 수량은 1개 이상이어야 합니다.\n현재 입력: "${_quantityController.text}"',
@@ -190,10 +359,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    if (quantity > 1000) {
+    if (quantity > 1000000) {
       _showErrorDialog(
         title: '수량 제한 초과',
-        message: '한 번에 최대 1,000개까지만 배포할 수 있습니다.\n현재 입력: $quantity개',
+        message: '한 번에 최대 1,000,000개까지만 배포할 수 있습니다.\n현재 입력: $quantity개',
         action: '확인',
       );
       return;
@@ -210,8 +379,40 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
+    // 5. 총 비용 계산 및 포인트 검증
+    final totalCost = quantity * price;
+    if (totalCost > _userPoints) {
+      // 소지금 내에서 최대 수량 계산 (단가는 그대로)
+      final maxQuantity = (_userPoints / price).floor();
+      
+      if (maxQuantity <= 0) {
+        _showErrorDialog(
+          title: '포인트 부족',
+          message: '포인트가 부족합니다.\n현재 포인트: ${_userPoints}원\n필요 포인트: ${totalCost}원\n\n포인트를 충전해주세요.',
+          action: '확인',
+        );
+        return;
+      }
 
-    // 5. 위치 정보 검증
+      // 자동으로 수량 조정
+      setState(() {
+        _quantityController.text = maxQuantity.toString();
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('포인트가 부족하여 수량을 ${maxQuantity}개로 조정했습니다.\n(현재 포인트: ${_userPoints}원)'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      
+      // 조정된 수량으로 재설정
+      quantity = maxQuantity;
+    }
+
+
+    // 6. 위치 정보 검증
     if (_selectedLocation == null) {
       _showErrorDialog(
         title: '위치 정보 없음',
@@ -221,12 +422,12 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       return;
     }
 
-    // 6. 총 비용 계산 및 확인
-    final totalCost = quantity * price;
-    if (totalCost > 10000000) {
+    // 7. 고액 배포 확인
+    final finalTotalCost = quantity * price;
+    if (finalTotalCost > 10000000) {
       final confirmed = await _showConfirmDialog(
         title: '고액 배포 확인',
-        message: '총 ${totalCost.toStringAsFixed(0)}원을 배포하시겠습니까?\n수량: $quantity개 × 단가: $price원',
+        message: '총 ${finalTotalCost.toStringAsFixed(0)}원을 배포하시겠습니까?\n수량: $quantity개 × 단가: $price원',
         confirmText: '배포',
         cancelText: '취소',
       );
@@ -344,6 +545,14 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: '새로고침',
+            onPressed: () {
+              debugPrint('🔄 수동 새로고침 버튼 클릭');
+              _setupPostsListener(); // 리스너 재설정 (강제 새로고침)
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.palette),
             tooltip: '디자인 프리뷰',
@@ -605,7 +814,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        post.title,
+                        post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -898,7 +1107,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                       
                       // 제목 (한 줄)
                       Text(
-                        post.title,
+                        post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -1079,7 +1288,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                   children: [
                     // 제목
                     Text(
-                      post.title,
+                      post.title.replaceAll(' 관련 포스트', '').replaceAll('관련 포스트', ''),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -1685,11 +1894,4 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    _priceController.dispose();
-    _durationController.dispose();
-    super.dispose();
-  }
 }

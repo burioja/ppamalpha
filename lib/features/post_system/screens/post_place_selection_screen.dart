@@ -64,7 +64,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = '플레이스를 불러오는데 실패했습니다: $e';
+          _error = '배포자를 불러오는데 실패했습니다: $e';
           _isLoading = false;
         });
       }
@@ -101,8 +101,8 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       _mapController!.fitCamera(
         CameraFit.bounds(
           bounds: _initialBounds!,
-          padding: const EdgeInsets.all(80),
-          maxZoom: 15.0,
+          padding: const EdgeInsets.all(50),
+          maxZoom: 17.0,
         ),
       );
     }
@@ -115,6 +115,58 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
   IconData _getCategoryIcon(String? category) {
     // 모든 플레이스 아이콘을 가방 아이콘으로 통일
     return Icons.work;
+  }
+
+  Future<void> _deletePlace(PlaceModel place) async {
+    // 확인 다이얼로그 표시
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('배포자 삭제'),
+        content: Text('${place.name}을(를) 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _placeService.deletePlace(place.id);
+      if (mounted) {
+        // 선택된 배포자가 삭제되었다면 선택 해제
+        if (_selectedPlaceId == place.id) {
+          setState(() {
+            _selectedPlaceId = null;
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${place.name}이(가) 삭제되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadUserPlaces(); // 목록 새로고침
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPlaceCard(PlaceModel place) {
@@ -210,6 +262,15 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                             ],
                           ),
                         ),
+                        // 삭제 버튼
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          color: Colors.red[400],
+                          onPressed: () => _deletePlace(place),
+                          tooltip: '배포자 삭제',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -300,7 +361,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
         color: Colors.grey[200],
         child: Center(
           child: Text(
-            '위치 정보가 있는 플레이스가 없습니다',
+            '위치 정보가 있는 배포자가 없습니다',
             style: TextStyle(color: Colors.grey[600]),
           ),
         ),
@@ -342,18 +403,18 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: center,
-              initialZoom: 13.0,
+              initialZoom: 10.0,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate, // 회전만 비활성화
               ),
               onMapReady: () {
-                // Auto-fit to bounds when map is ready
+                // Auto-fit to bounds when map is ready - 모든 배포자가 한눈에 보이도록
                 if (_mapController != null) {
                   _mapController!.fitCamera(
                     CameraFit.bounds(
                       bounds: bounds,
-                      padding: const EdgeInsets.all(80), // 패딩 증가 (50 → 80)
-                      maxZoom: 15.0, // 최대 줌 제한 (충분한 줌아웃 허용)
+                      padding: const EdgeInsets.all(50), // 적절한 패딩
+                      maxZoom: 17.0, // 최대 줌 레벨 확대
                     ),
                   );
                 }
@@ -470,7 +531,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('플레이스 선택'),
+        title: const Text('배포자 선택'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -506,7 +567,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                           Icon(Icons.work_outline, size: 64, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           Text(
-                            '등록된 플레이스가 없습니다',
+                            '등록된 배포자가 없습니다',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey[600],
@@ -516,7 +577,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                           ElevatedButton.icon(
                             onPressed: _navigateToCreatePlace,
                             icon: const Icon(Icons.add),
-                            label: const Text('플레이스 만들기'),
+                            label: const Text('배포자 만들기'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).primaryColor,
                               foregroundColor: Colors.white,
@@ -546,7 +607,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        '총 ${_userPlaces.length}개의 플레이스',
+                                        '총 ${_userPlaces.length}개의 배포자',
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: Colors.grey[600],
@@ -555,7 +616,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                                       TextButton.icon(
                                         onPressed: _navigateToCreatePlace,
                                         icon: const Icon(Icons.add),
-                                        label: const Text('새 플레이스'),
+                                        label: const Text('새 배포자'),
                                       ),
                                     ],
                                   ),
@@ -572,7 +633,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
           ? FloatingActionButton.extended(
               onPressed: _navigateToCreatePlace,
               icon: const Icon(Icons.add),
-              label: const Text('플레이스 추가'),
+              label: const Text('배포자 추가'),
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
             )

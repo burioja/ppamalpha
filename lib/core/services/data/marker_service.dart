@@ -100,6 +100,8 @@ class MarkerService {
         final tileId = TileUtils.getKm1TileId(deployLocation.latitude, deployLocation.longitude);
 
         // 4. 마커 데이터 생성
+        // ✅ 해결책 5: 클라이언트에서 즉시 필드 설정 (서버 타임스탬프 지연 방지)
+        final now = DateTime.now().toUtc();
         final markerData = <String, dynamic>{
           'postId': postId,
           'title': post.title,
@@ -109,12 +111,12 @@ class MarkerService {
           'collectedQuantity': 0,
           'collectionRate': 0.0,
           'creatorId': post.creatorId,
-          'createdAt': Timestamp.fromDate(DateTime.now()),
-          'createdAtServer': FieldValue.serverTimestamp(),
+          'createdAt': Timestamp.fromDate(now),  // ✅ 클라이언트 타임스탬프 (즉시 쿼리 가능)
+          'createdAtServer': FieldValue.serverTimestamp(),  // 서버 타임스탬프 (보조용)
           'expiresAt': Timestamp.fromDate(deployExpiresAt),
           'isActive': true,
           'collectedBy': [],
-          'tileId': tileId,
+          'tileId': tileId,  // ✅ 클라이언트에서 계산 (즉시 쿼리 가능)
           'quantity': quantity, // 호환성 유지
         };
 

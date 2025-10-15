@@ -109,7 +109,7 @@ class MapMarkerService {
     return _firestore
         .collection('markers')
         .where('isActive', isEqualTo: true)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)  // ✅ 해결책 1: 로컬 쓰기 직후 문서도 즉시 표시
         .asyncMap((snapshot) async {
       final markers = <MapMarkerData>[];
       
