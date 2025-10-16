@@ -1782,7 +1782,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       );
 
       // 포스트를 휴지통으로 이동
-      await _postService.moveToTrash(post.postId);
+      // TODO: moveToTrash 메소드 구현 필요
+      // await _postService.moveToTrash(post.postId);
+      
+      // 임시로 상태만 변경
+      await _postService.updatePostStatus(post.postId, PostStatus.DELETED);
 
       // 로딩 다이얼로그 닫기
       if (mounted) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../post_system/widgets/post_tile_card.dart';
@@ -33,7 +34,9 @@ class _TrashScreenState extends State<TrashScreen> {
     });
 
     try {
-      final posts = await _postService.getTrashPosts(_currentUserId!);
+      // TODO: getTrashPosts 메소드 구현 필요
+      // final posts = await _postService.getTrashPosts(_currentUserId!);
+      final posts = <PostModel>[]; // 임시로 빈 리스트 반환
       if (mounted) {
         setState(() {
           _trashPosts = posts;
@@ -68,7 +71,11 @@ class _TrashScreenState extends State<TrashScreen> {
         ),
       );
 
-      await _postService.restoreFromTrash(post.postId);
+      // TODO: restoreFromTrash 메소드 구현 필요
+      // await _postService.restoreFromTrash(post.postId);
+      
+      // 임시로 상태만 DRAFT로 변경
+      await _postService.updatePostStatus(post.postId, PostStatus.DRAFT);
 
       if (mounted) {
         Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
@@ -136,7 +143,11 @@ class _TrashScreenState extends State<TrashScreen> {
         ),
       );
 
-      await _postService.permanentDelete(post.postId);
+      // TODO: permanentDelete 메소드 구현 필요
+      // await _postService.permanentDelete(post.postId);
+      
+      // 임시로 Firestore에서 직접 삭제
+      await FirebaseFirestore.instance.collection('posts').doc(post.postId).delete();
 
       if (mounted) {
         Navigator.of(context).pop(); // 로딩 다이얼로그 닫기

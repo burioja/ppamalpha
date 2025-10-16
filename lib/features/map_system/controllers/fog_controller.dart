@@ -5,9 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/external/osm_fog_service.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
-import '../services/location/nominatim_service.dart';
-import '../../../utils/tile_utils.dart';
 import '../../../core/services/location/nominatim_service.dart';
+import '../../../utils/tile_utils.dart';
 
 /// Fog of War 관련 로직을 관리하는 컨트롤러
 class FogController {
@@ -61,7 +60,7 @@ class FogController {
   static Future<(LatLng?, List<LatLng>)> loadUserLocations() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return (null, []);
+      if (user == null) return (null, <LatLng>[]);
 
       // 사용자 프로필에서 집주소 가져오기
       final userDoc = await FirebaseFirestore.instance
@@ -69,7 +68,7 @@ class FogController {
           .doc(user.uid)
           .get();
 
-      if (!userDoc.exists) return (null, []);
+      if (!userDoc.exists) return (null, <LatLng>[]);
 
       final userData = userDoc.data();
       LatLng? homeLocation;
@@ -152,7 +151,7 @@ class FogController {
       return (homeLocation, workLocations);
     } catch (e) {
       debugPrint('사용자 위치 로드 실패: $e');
-      return (null, []);
+      return (null, <LatLng>[]);
     }
   }
 

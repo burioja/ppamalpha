@@ -1,112 +1,93 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:vibration/vibration.dart';
-import 'dart:async';
-import 'dart:math';
-
-// Core imports
-import '../../../core/models/marker/marker_model.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../../core/models/user/user_model.dart';
+import '../providers/map_filter_provider.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/location/nominatim_service.dart';
-
-// Handler imports
-import '../handlers/map_fog_handler.dart';
-import '../handlers/map_marker_handler.dart';
-import '../handlers/map_post_handler.dart';
-import '../handlers/map_location_handler.dart';
-import '../handlers/map_filter_handler.dart';
-import '../handlers/map_ui_helper.dart';
-
-// Widget imports
-import '../widgets/map_filter_dialog_widget.dart';
-import '../widgets/map_longpress_menu_widget.dart';
+import '../../../core/services/data/marker_service.dart' as core_marker;
+import '../../../core/services/data/user_service.dart';
+import '../../../core/constants/app_constants.dart';
+import '../services/markers/marker_service.dart';
+import '../../../core/models/marker/marker_model.dart';
+import '../widgets/marker_layer_widget.dart';
 import '../widgets/map_marker_detail_widget.dart';
-import '../widgets/map_main_widget.dart';
+import '../widgets/map_longpress_menu_widget.dart';
+import '../widgets/map_filter_bar_widget.dart';
+import '../widgets/map_user_location_markers_widget.dart';
+import '../widgets/map_location_buttons_widget.dart';
+import '../utils/client_cluster.dart';
+import '../widgets/cluster_widgets.dart';
+import '../../post_system/controllers/post_deployment_controller.dart';
+import '../../../core/services/osm_geocoding_service.dart';
+import '../../post_system/widgets/address_search_dialog.dart';
+import '../services/external/osm_fog_service.dart';
+import '../services/fog_of_war/visit_tile_service.dart';
+import '../widgets/unified_fog_overlay_widget.dart';
+import '../../../core/services/location/nominatim_service.dart';
+import '../../../core/services/location/location_service.dart';
+import '../../../utils/tile_utils.dart';
+import '../../../core/models/map/fog_level.dart';
+import '../models/receipt_item.dart';
+import '../widgets/receive_carousel.dart';
+import 'package:vibration/vibration.dart';
+import 'package:audioplayers/audioplayers.dart' as audio;
 
-/// 리팩토링된 지도 화면 (1,200줄 이하)
+// ✨ 리팩토링된 Controller & State
+import '../controllers/fog_controller.dart';
+import '../controllers/location_controller.dart';
+import '../controllers/marker_controller.dart';
+import '../controllers/post_controller.dart' as map_post;
+import '../state/map_state.dart';
+import '../widgets/map_filter_dialog.dart';
+import '../models/marker_item.dart';
+
+/// 리팩토링된 MapScreen - Clean Architecture 적용
+/// 
+/// 기존 4,939줄 → 목표 500줄 이하
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final Function(String)? onAddressChanged;
+  final VoidCallback? onNavigateToInbox;
+  
+  const MapScreen({
+    super.key,
+    this.onAddressChanged,
+    this.onNavigateToInbox,
+  });
+  
+  static final GlobalKey<_MapScreenState> mapKey = GlobalKey<_MapScreenState>();
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  _MapScreenState createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // ==================== 핵심 상태 변수 ====================
-  MapController? _mapController;
-  LatLng? _currentPosition;
-  double _currentZoom = 15.0;
-  bool _isLoading = false;
-  String? _errorMessage;
+  // ✨ 상태 관리 객체
+  late final MapState _state;
   
-  // 마커 및 포스트
-  List<MarkerModel> _markers = [];
-  List<PostModel> _posts = [];
-  int _receivablePostCount = 0;
+  // 리스너 구독
+  StreamSubscription<DocumentSnapshot>? _workplaceSubscription;
   
-  // Fog of War
-  List<CircleMarker> _ringCircles = [];
-  List<Polygon> _grayPolygons = [];
-  LatLng? _homeLocation;
-  List<LatLng> _workLocations = [];
-  
-  // UI 상태
-  bool _isPremiumUser = false;
-  String _userType = 'free';
-  LatLng? _longPressedLatLng;
-  bool _isReceiving = false;
-  
-  // Mock 모드
-  bool _isMockModeEnabled = false;
-  LatLng? _mockPosition;
-  String _mockAddress = '';
-  bool _isMockControllerVisible = false;
-  LatLng? _originalGpsPosition;
-  int _currentWorkplaceIndex = 0;
-  
-  // 필터
-  String _selectedCategory = 'all';
-  double _maxDistance = 1000.0;
-  int _minReward = 0;
-  bool _showCouponsOnly = false;
-  bool _showMyPostsOnly = false;
-  bool _showUrgentOnly = false;
-  bool _showVerifiedOnly = false;
-  bool _showUnverifiedOnly = false;
-  
-  // 타이머
-  Timer? _mapMoveTimer;
-  Timer? _clusterDebounceTimer;
-  
-  // ==================== Handler 인스턴스 ====================
-  late final MapFogHandler _fogHandler;
-  late final MapMarkerHandler _markerHandler;
-  late final MapPostHandler _postHandler;
-  late final MapLocationHandler _locationHandler;
-  late final MapFilterHandler _filterHandler;
-  late final MapUIHelper _uiHelper;
-
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
+    _state = MapState();
+    _state.mapController = MapController();
     
-    // Handler 초기화
-    _fogHandler = MapFogHandler();
-    _markerHandler = MapMarkerHandler();
-    _postHandler = MapPostHandler();
-    _locationHandler = MapLocationHandler();
-    _filterHandler = MapFilterHandler();
-    _uiHelper = MapUIHelper();
-    
-    _initializeLocation();
-    _loadCustomMarker();
-    _loadUserLocations();
+    _initializeApp();
+  }
+  
+  /// 앱 초기화
+  Future<void> _initializeApp() async {
+    await _loadCustomMarker();
+    await _initializeLocation();
     _setupUserDataListener();
     _setupMarkerListener();
     _updateReceivablePosts();
@@ -114,408 +95,598 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
-    _mapMoveTimer?.cancel();
-    _clusterDebounceTimer?.cancel();
+    _state.dispose();
+    _workplaceSubscription?.cancel();
     super.dispose();
   }
 
-  // ==================== 초기화 메서드들 ====================
+  // ==================== 초기화 ====================
   
   Future<void> _initializeLocation() async {
-    final error = await _locationHandler.initializeLocation();
-    if (error != null && mounted) {
-      setState(() => _errorMessage = error);
+    final permission = await LocationController.checkAndRequestPermission();
+    
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        setState(() {
+          _state.errorMessage = LocationController.getPermissionErrorMessage(permission);
+        });
+      }
       return;
     }
+
     await _getCurrentLocation();
   }
 
   Future<void> _getCurrentLocation() async {
-    await _locationHandler.getCurrentLocation();
-    if (_locationHandler.currentPosition != null && mounted) {
-      setState(() {
-        _currentPosition = _locationHandler.currentPosition;
-        _errorMessage = _locationHandler.errorMessage;
-      });
-      _createCurrentLocationMarker(_locationHandler.currentPosition!);
-      _updateCurrentAddress();
-      _checkPremiumStatus();
-      _setupPostStreamListener();
-      _updatePostsBasedOnFogLevel();
+    final position = await LocationController.getCurrentLocation(
+      isMockMode: _state.isMockModeEnabled,
+      mockPosition: _state.mockPosition,
+    );
+    
+    if (position == null) {
+      if (mounted) {
+        setState(() {
+          _state.errorMessage = '현재 위치를 가져올 수 없습니다';
+        });
+      }
+      return;
     }
+
+    final previousPosition = _state.currentPosition;
+
+    if (mounted) {
+      setState(() {
+        _state.currentPosition = position;
+        _state.errorMessage = null;
+      });
+    }
+
+    // Fog of War 재구성
+    _rebuildFogWithUserLocations(position);
+    
+    // 주소 업데이트
+    await _updateCurrentAddress();
+    
+    // 타일 방문 기록
+    final tileId = await LocationController.updateTileVisit(position);
+    _state.addFogLevel1Tile(tileId);
+    
+    // 회색 영역 업데이트
+    await _updateGrayAreasWithPreviousPosition(previousPosition);
+    
+    // 프리미엄 상태 확인
+    await _checkPremiumStatus();
+    
+    // 포스트 스트림 설정
+    _setupPostStreamListener();
+    
+    // 마커 조회
+    await _updatePostsBasedOnFogLevel();
+    
+    // 현재 위치 마커
+    _createCurrentLocationMarker(position);
+    
+    // 지도 중심 이동
+    _state.mapController?.move(position, _state.currentZoom);
   }
 
   void _createCurrentLocationMarker(LatLng position) {
-    // 현재 위치 마커 생성 로직
-    _updateMapState();
-  }
-
-  void _updateMapState() {
-    if (_currentPosition != null) {
-      _rebuildFogWithUserLocations(_currentPosition!);
-    }
-  }
-
-  void _rebuildFogWithUserLocations(LatLng currentPosition) {
-    _fogHandler.rebuildFogWithUserLocations(
-      currentPosition: currentPosition,
-      homeLocation: _homeLocation,
-      workLocations: _workLocations,
-    );
-    
+    final marker = LocationController.createCurrentLocationMarker(position);
     if (mounted) {
       setState(() {
-        _ringCircles = _fogHandler.ringCircles;
-      });
-    }
-  }
-
-  Future<void> _loadUserLocations() async {
-    try {
-      final (home, work) = await _fogHandler.loadUserLocations();
-      
-      if (mounted) {
-        setState(() {
-          _homeLocation = home;
-          _workLocations = work;
-        });
-      }
-
-      await _loadVisitedLocations();
-
-      if (_currentPosition != null) {
-        _rebuildFogWithUserLocations(_currentPosition!);
-      }
-    } catch (e) {
-      debugPrint('사용자 위치 로드 실패: $e');
-    }
-  }
-
-  Future<void> _loadVisitedLocations() async {
-    await _fogHandler.loadVisitedLocations();
-    
-    if (mounted) {
-      setState(() {
-        _grayPolygons = _fogHandler.grayPolygons;
+        _state.currentMarkers = [marker];
       });
     }
   }
 
   Future<void> _updateCurrentAddress() async {
-    if (_currentPosition != null) {
-      try {
-        final address = await NominatimService.reverseGeocode(_currentPosition!);
-        // 주소 업데이트 로직
-      } catch (e) {
-        debugPrint('주소 업데이트 실패: $e');
-      }
+    if (_state.currentPosition == null) return;
+    
+    final address = await LocationController.getAddressFromLatLng(
+      _state.currentPosition!,
+    );
+    
+    if (mounted) {
+      setState(() {
+        _state.currentAddress = address;
+      });
+    }
+    
+    widget.onAddressChanged?.call(address);
+  }
+
+  // ==================== Fog of War ====================
+  
+  void _rebuildFogWithUserLocations(LatLng currentPosition) {
+    final result = FogController.rebuildFogWithUserLocations(
+      currentPosition: currentPosition,
+      homeLocation: _state.homeLocation,
+      workLocations: _state.workLocations,
+    );
+    
+    if (mounted) {
+      setState(() {
+        _state.ringCircles = result.$2;
+      });
     }
   }
 
-  void _loadCustomMarker() {
-    // 커스텀 마커 로드 로직
+  Future<void> _loadUserLocations() async {
+    final result = await FogController.loadUserLocations();
+    
+    if (mounted) {
+      setState(() {
+        _state.homeLocation = result.$1;
+        _state.workLocations = result.$2;
+      });
+    }
+
+    await _loadVisitedLocations();
+
+    if (_state.currentPosition != null) {
+      _rebuildFogWithUserLocations(_state.currentPosition!);
+    }
   }
 
+  Future<void> _loadVisitedLocations() async {
+    final grayPolygons = await FogController.loadVisitedLocations();
+    
+    if (mounted) {
+      setState(() {
+        _state.grayPolygons = grayPolygons;
+      });
+    }
+  }
+
+  Future<void> _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
+    final grayPolygons = await FogController.updateGrayAreasWithPreviousPosition(
+      previousPosition,
+    );
+    
+    if (mounted) {
+      setState(() {
+        _state.grayPolygons = grayPolygons;
+      });
+    }
+  }
+
+  // ==================== 사용자 데이터 리스너 ====================
+  
   void _setupUserDataListener() {
-    // 사용자 데이터 리스너 설정
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final userModel = UserModel.fromFirestore(snapshot);
+        if (mounted) {
+          setState(() {
+            _state.updatePremiumStatus(
+              userModel.userType == UserType.superSite,
+              userModel.userType,
+            );
+          });
+        }
+        
+        final data = snapshot.data();
+        final workplaceId = data?['workplaceId'] as String?;
+        if (workplaceId != null && workplaceId.isNotEmpty) {
+          _setupWorkplaceListener(workplaceId);
+        }
+        
+        _loadUserLocations();
+      }
+    });
   }
 
-  void _setupMarkerListener() {
-    // 마커 리스너 설정
+  void _setupWorkplaceListener(String workplaceId) {
+    _workplaceSubscription?.cancel();
+    
+    _workplaceSubscription = FirebaseFirestore.instance
+        .collection('places')
+        .doc(workplaceId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        _loadUserLocations();
+      }
+    });
   }
 
   Future<void> _checkPremiumStatus() async {
-    // 프리미엄 상태 확인
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final isPremium = userData?['isPremium'] ?? false;
+
+        if (mounted) {
+          setState(() {
+            _state.updatePremiumStatus(
+              isPremium,
+              UserType.normal, // TODO: userType 확인
+            );
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('프리미엄 상태 확인 실패: $e');
+    }
+  }
+
+  // ==================== 마커 관련 ====================
+  
+  void _setupMarkerListener() {
+    if (_state.currentPosition == null) return;
+    debugPrint('마커 리스너 설정 완료');
   }
 
   void _setupPostStreamListener() {
-    // 포스트 스트림 리스너 설정
-  }
-
-  Future<void> _loadPosts({bool forceRefresh = false}) async {
-    // 포스트 로드 로직
-  }
-
-  // ==================== 지도 이벤트 처리 ====================
-
-  void _onMapMoved(MapEvent event) {
-    if (event is MapEventMove || event is MapEventMoveStart || event is MapEventMoveEnd) {
-      _mapMoveTimer?.cancel();
-      _mapMoveTimer = Timer(const Duration(milliseconds: 500), () {
-        _handleMapMoveComplete();
-      });
-    }
-  }
-
-  Future<void> _handleMapMoveComplete() async {
-    if (_mapController != null) {
-      final center = _mapController!.camera.center;
-      final zoom = _mapController!.camera.zoom;
-      
-      setState(() {
-        _currentZoom = zoom;
-      });
-      
-      await _updateFogOfWar();
-    }
-  }
-
-  Future<void> _updateFogOfWar() async {
-    if (_currentPosition != null) {
-      // Load user locations and rebuild fog
-      final (homeLocation, workLocations) = await _fogHandler.loadUserLocations();
-      _fogHandler.rebuildFogWithUserLocations(
-        currentPosition: _currentPosition!,
-        homeLocation: homeLocation,
-        workLocations: workLocations,
-      );
-      
-      if (mounted) {
-        setState(() {
-          _grayPolygons = _fogHandler.grayPolygons;
-        });
-      }
-    }
-  }
-
-  void _onMapReady() {
-    if (_currentPosition != null) {
-      _mapController?.move(_currentPosition!, _currentZoom);
-    }
-  }
-
-  // ==================== 포스트 관리 ====================
-
-  Future<void> _updatePostsBasedOnFogLevel() async {
-    LatLng? effectivePosition;
-    if (_isMockModeEnabled && _mockPosition != null) {
-      effectivePosition = _mockPosition;
-    } else {
-      effectivePosition = _currentPosition;
-    }
-    
-    if (effectivePosition == null) {
-      MapUIHelper.showLocationPermissionDialog(
-        context,
-        onRetry: _getCurrentLocation,
-      );
-      return;
-    }
-    
-    _postHandler.setFilters(
-      couponsOnly: _showCouponsOnly,
-      myPostsOnly: _showMyPostsOnly,
-      minRewardValue: _minReward.toDouble(),
-      urgentOnly: _showUrgentOnly,
-      verifiedOnly: _showVerifiedOnly,
-      unverifiedOnly: _showUnverifiedOnly,
-    );
-    _postHandler.setUserType(_userType);
-
-    final filteredMarkers = await _postHandler.updatePostsBasedOnFogLevel(
-      effectivePosition: effectivePosition,
-      homeLocation: _homeLocation,
-      workLocations: _workLocations,
-    );
-
-    if (mounted) {
-      setState(() {
-        _markers = filteredMarkers;
-        _posts = _postHandler.posts;
-        _isLoading = _postHandler.isLoading;
-        _errorMessage = _postHandler.errorMessage;
-        _updateMarkers();
-      });
-    }
+    if (_state.currentPosition == null) return;
+    // TODO: 실시간 마커 스트림 구현
   }
 
   void _updateMarkers() {
-    _markerHandler.setMarkers(_markers);
-    _markerHandler.updateMarkers(onRebuild: _rebuildClusters);
+    _state.visibleMarkerModels = MarkerController.convertToClusterModels(_state.markers);
+    _rebuildClusters();
     _updateReceivablePosts();
   }
 
   void _rebuildClusters() {
-    // 클러스터 재구성 로직
-  }
-
-  Future<void> _updateReceivablePosts() async {
-    // TODO: Implement calculateReceivablePosts method
-    // For now, set count to 0
-    final count = 0;
+    final clusteredMarkers = MarkerController.buildClusteredMarkers(
+      markers: _state.markers,
+      visibleMarkerModels: _state.visibleMarkerModels,
+      mapCenter: _state.mapCenter,
+      mapZoom: _state.mapZoom,
+      viewSize: _state.lastMapSize,
+      onTapSingle: _onTapSingleMarker,
+      onTapCluster: _zoomIntoCluster,
+    );
     
     if (mounted) {
       setState(() {
-        _receivablePostCount = count;
+        _state.clusteredMarkers = clusteredMarkers;
       });
     }
   }
 
-  // ==================== 마커 상호작용 ====================
-
-  void _showMarkerDetails(MarkerModel marker) async {
-    debugPrint('[MARKER_TAP] markerId: ${marker.markerId}, postId: ${marker.postId}');
-
-    if (_currentPosition == null) {
-      MapUIHelper.showToast(context, '위치 정보를 가져올 수 없습니다');
-      return;
+  void _onTapSingleMarker(ClusterMarkerModel marker) {
+    final originalMarker = MarkerController.findOriginalMarker(marker, _state.markers);
+    if (originalMarker != null) {
+      _showMarkerDetails(originalMarker);
     }
+  }
 
-    showMapMarkerDetail(
+  void _zoomIntoCluster(ClusterOrMarker cluster) {
+    final targetZoom = MarkerController.calculateClusterZoomTarget(_state.mapZoom);
+    _state.mapController?.move(cluster.representative!.position, targetZoom);
+  }
+
+  void _showMarkerDetails(MarkerModel marker) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    
+    showModalBottomSheet(
       context: context,
-      marker: marker,
-      currentPosition: _currentPosition!,
-      currentUserId: FirebaseAuth.instance.currentUser?.uid,
-      onCollect: () => _collectPostFromMarker(marker),
-      onRemove: () => _removeMarker(marker),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => MapMarkerDetailWidget(
+        marker: marker,
+        currentPosition: _state.currentPosition ?? const LatLng(0, 0),
+        currentUserId: currentUserId,
+        onCollect: () {
+          Navigator.pop(context);
+          _collectMarker(marker);
+        },
+        onRemove: () {
+          Navigator.pop(context);
+          _removeMarker(marker);
+        },
+      ),
     );
   }
 
-  Future<void> _collectPostFromMarker(MarkerModel marker) async {
-    // TODO: Implement collectPostFromMarker method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('포스트 수집 기능을 구현 중입니다')),
-    );
+  Future<void> _collectMarker(MarkerModel marker) async {
+    // TODO: PostService.collectPost 구현
+    debugPrint('마커 수집: ${marker.title}');
   }
 
   Future<void> _removeMarker(MarkerModel marker) async {
-    // TODO: Implement removeMarker method
-    // For now, just remove from local list
-    if (mounted) {
-      setState(() {
-        _markers.removeWhere((m) => m.markerId == marker.markerId);
-      });
-    }
+    // TODO: PostService.recallMarker 구현
+    debugPrint('마커 회수: ${marker.markerId}');
   }
 
-  // ==================== 포스트 수령 ====================
-
-  Future<void> _receiveNearbyPosts() async {
-    if (_currentPosition == null) return;
-    
-    setState(() => _isReceiving = true);
-    
-    try {
-      // TODO: Implement receiveNearbyPosts method
-      // For now, return null
-      final results = null;
-      
-      if (results != null) {
-        final (receivedCount, failedCount) = results;
-        
-        if (mounted) {
-          setState(() {
-            // TODO: Update markers from post handler
-            // _markers = _postHandler.markers;
-            // _receivablePostCount = _postHandler.receivablePostCount;
-          });
-          _updateMarkers();
-          _updateReceivablePosts();
-        }
-      }
-    } finally {
-      setState(() => _isReceiving = false);
-    }
-  }
-
-  Future<void> _playReceiveEffects(int count) async {
-    try {
-      if (await Vibration.hasVibrator() ?? false) {
-        Vibration.vibrate(duration: 100);
-      }
-      // 사운드 재생 로직
-    } catch (e) {
-      debugPrint('효과음 재생 실패: $e');
-    }
-  }
-
-  Future<void> _showPostReceivedCarousel(List<PostModel> posts) async {
-    // 캐러셀 표시 로직
-  }
-
-  // ==================== 필터 관리 ====================
-
-  void _showFilterDialog() {
-    showMapFilterDialog(
-      context: context,
-      selectedCategory: _selectedCategory,
-      maxDistance: _maxDistance,
-      minReward: _minReward,
-      isPremiumUser: _isPremiumUser,
-      onCategoryChanged: (value) => setState(() => _selectedCategory = value),
-      onMinRewardChanged: (value) => setState(() => _minReward = value),
-      onReset: _resetFilters,
-      onApply: _updateMarkers,
+  // ==================== UI 빌드 ====================
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          _buildMap(),
+          if (_state.isLoading) _buildLoadingOverlay(),
+          if (_state.errorMessage != null) _buildErrorMessage(),
+          _buildFilterBar(),
+          MapLocationButtonsWidget(
+            homeLocation: _state.homeLocation,
+            workLocations: _state.workLocations,
+            onMoveToHome: _moveToHome,
+            onMoveToWorkplace: _moveToWorkplace,
+            onMoveToCurrentLocation: _moveToCurrentLocation,
+          ),
+        ],
+      ),
+      floatingActionButton: _buildReceiveFab(),
     );
   }
 
-  void _resetFilters() {
-    _filterHandler.resetFilters();
-    setState(() {
-      _selectedCategory = _filterHandler.selectedCategory;
-      _maxDistance = _filterHandler.maxDistance;
-      _minReward = _filterHandler.minReward;
-      _showCouponsOnly = _filterHandler.showCouponsOnly;
-      _showMyPostsOnly = _filterHandler.showMyPostsOnly;
-      _showUrgentOnly = _filterHandler.showUrgentOnly;
-      _showVerifiedOnly = _filterHandler.showVerifiedOnly;
-      _showUnverifiedOnly = _filterHandler.showUnverifiedOnly;
-    });
-    _updateMarkers();
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: _state.mapController,
+      options: MapOptions(
+        initialCenter: _state.mapCenter,
+        initialZoom: _state.currentZoom,
+        onMapEvent: _onMapMoved,
+        onLongPress: (_, point) => _onMapLongPress(point),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.ppamalpha.app',
+        ),
+        
+        // Fog Overlay
+        if (_state.mapController != null)
+        UnifiedFogOverlayWidget(
+          mapController: _state.mapController!,
+          level1Centers: [
+            if (_state.currentPosition != null) _state.currentPosition!,
+            if (_state.homeLocation != null) _state.homeLocation!,
+            ..._state.workLocations,
+          ],
+          level2CentersRaw: _state.grayPolygons.isNotEmpty 
+            ? _state.grayPolygons.map((polygon) {
+                if (polygon.points.isEmpty) return const LatLng(0, 0);
+                double sumLat = 0, sumLng = 0;
+                for (final point in polygon.points) {
+                  sumLat += point.latitude;
+                  sumLng += point.longitude;
+                }
+                return LatLng(
+                  sumLat / polygon.points.length,
+                  sumLng / polygon.points.length,
+                );
+              }).toList()
+            : [],
+          radiusMeters: 1000.0,
+          fogColor: Colors.black.withOpacity(1.0),
+          grayColor: Colors.grey.withOpacity(0.33),
+        ),
+        
+        // 집/일터 마커 레이어
+        MapUserLocationMarkersWidget(
+          homeLocation: _state.homeLocation,
+          workLocations: _state.workLocations,
+        ),
+        
+        // 마커 레이어
+        MarkerLayer(markers: _state.clusteredMarkers),
+        
+        // 현재 위치 마커
+        MarkerLayer(markers: _state.currentMarkers),
+      ],
+    );
   }
 
-  // ==================== 위치 이동 ====================
-
-  void _moveToHome() {
-    final result = _locationHandler.moveToHome(currentZoom: _currentZoom);
-    if (result != null) {
-      final (location, zoom) = result;
-      _mapController?.move(location, zoom);
-    }
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Colors.black26,
+      child: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
   }
 
-  void _moveToWorkplace() {
-    final result = _locationHandler.moveToWorkplace(currentZoom: _currentZoom);
-    if (result != null) {
-      final (location, zoom, newIndex) = result;
-      _mapController?.move(location, zoom);
-      setState(() {
-        _currentWorkplaceIndex = newIndex;
-      });
-    }
+  Widget _buildErrorMessage() {
+    return Positioned(
+      top: 100,
+      left: 20,
+      right: 20,
+      child: Card(
+        color: Colors.red[100],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            _state.errorMessage!,
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      ),
+    );
   }
 
-  // ==================== 롱프레스 처리 ====================
+  Widget _buildFilterBar() {
+    return Consumer<MapFilterProvider>(
+      builder: (context, filterProvider, child) {
+        return MapFilterBarWidget(
+          showMyPostsOnly: _state.showMyPostsOnly,
+          showCouponsOnly: _state.showCouponsOnly,
+          showUrgentOnly: filterProvider.showUrgentOnly,
+          showVerifiedOnly: filterProvider.showVerifiedOnly,
+          showUnverifiedOnly: filterProvider.showUnverifiedOnly,
+          onMyPostsChanged: (selected) {
+            setState(() {
+              _state.showMyPostsOnly = selected;
+              if (selected) {
+                _state.showCouponsOnly = false;
+                filterProvider.setUrgentOnly(false);
+              }
+            });
+            _updateMarkers();
+          },
+          onCouponsChanged: (selected) {
+            setState(() {
+              _state.showCouponsOnly = selected;
+              if (selected) {
+                _state.showMyPostsOnly = false;
+                filterProvider.setUrgentOnly(false);
+              }
+            });
+            _updateMarkers();
+          },
+          onUrgentChanged: (selected) {
+            filterProvider.setUrgentOnly(selected);
+            if (selected) {
+              setState(() {
+                _state.showMyPostsOnly = false;
+                _state.showCouponsOnly = false;
+              });
+            }
+            _updateMarkers();
+          },
+          onVerifiedChanged: (selected) {
+            filterProvider.setVerifiedOnly(selected);
+            _updateMarkers();
+          },
+          onUnverifiedChanged: (selected) {
+            filterProvider.setUnverifiedOnly(selected);
+            _updateMarkers();
+          },
+        );
+      },
+    );
+  }
 
-  Future<void> _handleLongPress(LatLng point) async {
-    LatLng? referencePosition;
-    if (_isMockModeEnabled && _mockPosition != null) {
-      referencePosition = _mockPosition;
-    } else {
-      referencePosition = _currentPosition;
-    }
+  Widget _buildControls() {
+    return Positioned(
+      top: 50,
+      right: 16,
+      child: Column(
+        children: [
+          _buildFilterButton(),
+          const SizedBox(height: 8),
+          _buildLocationButton(),
+          const SizedBox(height: 8),
+          _buildMockModeButton(),
+        ],
+      ),
+    );
+  }
 
-    if (referencePosition == null) {
-      MapUIHelper.showToast(context, '현재 위치를 확인할 수 없습니다');
-      return;
-    }
+  Widget _buildFilterButton() {
+    return FloatingActionButton(
+      heroTag: 'filter',
+      mini: true,
+      onPressed: _showFilterDialog,
+      child: const Icon(Icons.filter_list),
+    );
+  }
 
-    final canDeploy = await _checkDeploymentPermission(point, referencePosition);
+  Widget _buildLocationButton() {
+    return FloatingActionButton(
+      heroTag: 'location',
+      mini: true,
+      onPressed: _moveToCurrentLocation,
+      child: const Icon(Icons.my_location),
+    );
+  }
+
+  Widget _buildMockModeButton() {
+    if (!kDebugMode) return const SizedBox.shrink();
     
-    if (canDeploy) {
-      setState(() {
-        _longPressedLatLng = point;
-      });
-      _showLongPressMenu();
-    } else {
-      MapUIHelper.showToast(context, '이 위치에는 포스트를 배포할 수 없습니다');
+    return FloatingActionButton(
+      heroTag: 'mock',
+      mini: true,
+      onPressed: _toggleMockMode,
+      backgroundColor: _state.isMockModeEnabled ? Colors.orange : Colors.grey,
+      child: const Icon(Icons.developer_mode),
+    );
+  }
+
+  Widget _buildReceiveFab() {
+    if (_state.receivablePostCount == 0) return const SizedBox.shrink();
+    
+    return FloatingActionButton.extended(
+      onPressed: _handleReceivePosts,
+      icon: const Icon(Icons.card_giftcard),
+      label: Text('수령하기 (${_state.receivablePostCount})'),
+      backgroundColor: Colors.green,
+    );
+  }
+
+  // ==================== 이벤트 핸들러 ====================
+  
+  void _onMapMoved(MapEvent event) {
+    _updateMapState();
+    
+    if (event is MapEventMove || event is MapEventMoveStart) {
+      _state.mapMoveTimer?.cancel();
+      _state.mapMoveTimer = Timer(
+        const Duration(milliseconds: 500),
+        _handleMapMoveComplete,
+      );
+      
+      _updateReceivablePosts();
     }
   }
 
-  Future<bool> _checkDeploymentPermission(LatLng point, LatLng referencePosition) async {
-    // 배포 권한 확인 로직
-    return true;
+  void _updateMapState() {
+    if (_state.mapController != null) {
+      final camera = _state.mapController!.camera;
+      setState(() {
+        _state.mapCenter = camera.center;
+        _state.mapZoom = camera.zoom;
+        _state.lastMapSize = MediaQuery.of(context).size;
+      });
+      
+      _state.clusterDebounceTimer?.cancel();
+      _state.clusterDebounceTimer = Timer(
+        const Duration(milliseconds: 32),
+        _rebuildClusters,
+      );
+    }
+  }
+
+  Future<void> _handleMapMoveComplete() async {
+    if (_state.isUpdatingPosts) return;
+    
+    final currentCenter = _state.mapController?.camera.center;
+    if (currentCenter == null) return;
+    
+    // TODO: 캐시 로직 추가
+    
+    setState(() => _state.isUpdatingPosts = true);
+    
+    try {
+      await _updatePostsBasedOnFogLevel();
+      _updateReceivablePosts();
+      _state.lastMapCenter = currentCenter;
+    } catch (e) {
+      debugPrint('마커 업데이트 실패: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _state.isUpdatingPosts = false);
+      }
+    }
+  }
+
+  void _onMapLongPress(LatLng point) {
+    setState(() {
+      _state.longPressedLatLng = point;
+    });
+    _showLongPressMenu();
   }
 
   void _showLongPressMenu() {
@@ -523,129 +694,115 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       onDeployHere: _navigateToPostPlace,
       onDeployAddress: _navigateToPostAddress,
-      onDeployBusiness: null,
     );
   }
 
-  // ==================== 네비게이션 ====================
-
-  Future<void> _navigateToPostPlace() async {
-    // 포스트 배포 화면으로 이동
+  void _navigateToPostPlace() {
+    if (_state.longPressedLatLng != null) {
+      Navigator.pushNamed(
+        context,
+        '/post-place',
+        arguments: {'location': _state.longPressedLatLng},
+      );
+    }
   }
 
-  Future<void> _navigateToPostAddress() async {
-    // 주소 기반 포스트 배포 화면으로 이동
+  void _navigateToPostAddress() {
+    if (_state.longPressedLatLng != null) {
+      Navigator.pushNamed(
+        context,
+        '/post-place',
+        arguments: {'location': _state.longPressedLatLng, 'useAddress': true},
+      );
+    }
   }
 
-  Future<void> _navigateToPostBusiness() async {
-    // 업종 기반 포스트 배포 화면으로 이동
+  // ==================== 액션 ====================
+  
+  void _showFilterDialog() {
+    final filterProvider = context.read<MapFilterProvider>();
+    
+    MapFilterDialog.show(
+      context: context,
+      selectedCategory: filterProvider.selectedCategory,
+      maxDistance: filterProvider.maxDistance,
+      minReward: filterProvider.minReward,
+      isPremiumUser: _state.isPremiumUser,
+      onReset: () {
+        filterProvider.resetFilters();
+        _updateMarkers();
+      },
+      onApply: () {
+        _updateMarkers();
+        Navigator.pop(context);
+      },
+      onCategoryChanged: (category) {
+        filterProvider.setCategory(category);
+      },
+      onMinRewardChanged: (reward) {
+        filterProvider.setMinReward(reward);
+      },
+    );
   }
 
-  // ==================== Mock 모드 ====================
+  void _moveToHome() {
+    if (_state.homeLocation != null && _state.mapController != null) {
+      _state.mapController!.move(_state.homeLocation!, _state.currentZoom);
+    }
+  }
+
+  void _moveToWorkplace() {
+    if (_state.workLocations.isNotEmpty && _state.mapController != null) {
+      final targetLocation = _state.workLocations[_state.currentWorkplaceIndex];
+      _state.mapController!.move(targetLocation, _state.currentZoom);
+      
+      // 다음 일터로 순환
+      setState(() {
+        _state.currentWorkplaceIndex = 
+            (_state.currentWorkplaceIndex + 1) % _state.workLocations.length;
+      });
+    }
+  }
+
+  void _moveToCurrentLocation() {
+    if (_state.currentPosition != null && _state.mapController != null) {
+      _state.mapController!.move(_state.currentPosition!, 14.0);
+    }
+  }
 
   void _toggleMockMode() {
-    // TODO: Implement toggleMockMode method
-    // For now, just toggle the state
     setState(() {
-      _isMockModeEnabled = !_isMockModeEnabled;
+      _state.isMockModeEnabled = !_state.isMockModeEnabled;
+      _state.isMockControllerVisible = _state.isMockModeEnabled;
     });
   }
 
-  Future<void> _setMockPosition(LatLng position) async {
-    // TODO: Implement setMockPosition method
-    // For now, just update the position
-    setState(() {
-      _mockPosition = position;
-      _isMockModeEnabled = true;
-      _isMockControllerVisible = true;
-    });
+  Future<void> _handleReceivePosts() async {
+    // TODO: 수령 로직 구현
+    debugPrint('포스트 수령: ${_state.receivablePostCount}개');
   }
 
-  void _moveMockPosition(String direction) async {
-    // TODO: Implement moveMockPosition method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Mock 위치 이동 기능을 구현 중입니다')),
-    );
+  // ==================== 헬퍼 메서드 ====================
+  
+  Future<void> _loadCustomMarker() async {
+    // TODO: 커스텀 마커 로드
   }
 
-  // ==================== 미확인 포스트 ====================
-
-  Future<void> _showUnconfirmedPostsDialog() async {
-    // TODO: Implement showUnconfirmedPostsDialog method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('미확인 포스트 기능을 구현 중입니다')),
-    );
+  Future<void> _updatePostsBasedOnFogLevel() async {
+    // TODO: Fog 레벨 기반 포스트 업데이트
+    if (mounted) {
+      setState(() => _state.isLoading = false);
+    }
   }
 
-  Future<void> _confirmUnconfirmedPost({
-    required String collectionId,
-    required String userId,
-    required String postId,
-    required String creatorId,
-    required int reward,
-    required String title,
-  }) async {
-    // 미확인 포스트 확인 로직
+  void _updateReceivablePosts() {
+    // TODO: 수령 가능 포스트 계산
+    setState(() => _state.receivablePostCount = 0);
   }
 
-  Future<void> _deleteUnconfirmedPost({
-    required String collectionId,
-    required String userId,
-  }) async {
-    // 미확인 포스트 삭제 로직
-  }
-
-  // ==================== 빌드 메서드 ====================
-
-  @override
-  Widget build(BuildContext context) {
-    return MapMainWidget(
-      mapController: _mapController!,
-      currentPosition: _currentPosition,
-      currentZoom: _currentZoom,
-      markers: _markers,
-      posts: _posts,
-      isLoading: _isLoading,
-      errorMessage: _errorMessage,
-      isPremiumUser: _isPremiumUser,
-      userType: _userType,
-      longPressedLatLng: _longPressedLatLng,
-      isMockModeEnabled: _isMockModeEnabled,
-      mockPosition: _mockPosition,
-      isMockControllerVisible: _isMockControllerVisible,
-      ringCircles: _ringCircles,
-      grayPolygons: _grayPolygons,
-      homeLocation: _homeLocation,
-      workLocations: _workLocations,
-      currentWorkplaceIndex: _currentWorkplaceIndex,
-      receivablePostCount: _receivablePostCount,
-      fogHandler: _fogHandler,
-      markerHandler: _markerHandler,
-      postHandler: _postHandler,
-      locationHandler: _locationHandler,
-      filterHandler: _filterHandler,
-      onMapReady: _onMapReady,
-      onMapMoved: _onMapMoved,
-      onTap: (tapPosition, point) {
-        setState(() {
-          _longPressedLatLng = null;
-        });
-      },
-      onLongPress: (tapPosition, point) => _handleLongPress(point),
-      onSecondaryTapDown: (tapPosition, point) {
-        setState(() {
-          _longPressedLatLng = point;
-        });
-      },
-      onFilterPressed: _showFilterDialog,
-      onHomePressed: _moveToHome,
-      onWorkplacePressed: _moveToWorkplace,
-      onReceivePressed: _receiveNearbyPosts,
-      onMockToggle: _toggleMockMode,
-      onMockPositionSet: _setMockPosition,
-      onMockMove: _moveMockPosition,
-    );
+  double _calculateDistance(LatLng from, LatLng to) {
+    return LocationController.calculateDistance(from, to);
   }
 }
+
+

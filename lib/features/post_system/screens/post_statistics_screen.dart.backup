@@ -1,0 +1,195 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'post_statistics_charts.dart';
+import 'post_statistics_tabs.dart';
+import 'post_statistics_helpers.dart';
+
+class PostStatisticsScreen extends StatefulWidget {
+  final String postId;
+  final String postTitle;
+
+  const PostStatisticsScreen({
+    super.key,
+    required this.postId,
+    required this.postTitle,
+  });
+
+  @override
+  State<PostStatisticsScreen> createState() => _PostStatisticsScreenState();
+}
+
+class _PostStatisticsScreenState extends State<PostStatisticsScreen>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+  
+  // 데이터 상태
+  Map<String, dynamic>? _overallData;
+  Map<String, dynamic>? _collectorData;
+  Map<String, dynamic>? _timeData;
+  Map<String, dynamic>? _performanceData;
+  
+  // 로딩 상태
+  bool _isLoading = true;
+  String? _errorMessage;
+  
+  // 필터 상태
+  String _selectedDateRange = '30일';
+  String _selectedMetric = '수집 수';
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _loadAllData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // 모든 데이터 로드
+  Future<void> _loadAllData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final futures = await Future.wait([
+        PostStatisticsHelpers.getOverallAnalysisData(widget.postId),
+        PostStatisticsHelpers.getCollectorAnalysisData(widget.postId),
+        PostStatisticsHelpers.getTimeAnalysisData(widget.postId),
+        PostStatisticsHelpers.getPerformanceAnalysisData(widget.postId),
+      ]);
+
+      setState(() {
+        _overallData = futures[0];
+        _collectorData = futures[1];
+        _timeData = futures[2];
+        _performanceData = futures[3];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = PostStatisticsHelpers.getErrorMessage(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        backgroundColor: Colors.blue[600],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          widget.postTitle,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadAllData,
+            tooltip: '새로고침',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.filter_list),
+            tooltip: '필터',
+            onSelected: (value) {
+              setState(() {
+                if (value.startsWith('range:')) {
+                  _selectedDateRange = value.substring(6);
+                } else if (value.startsWith('metric:')) {
+                  _selectedMetric = value.substring(7);
+                }
+              });
+              _loadAllData();
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'range:7일',
+                child: Text('7일'),
+              ),
+              const PopupMenuItem(
+                value: 'range:30일',
+                child: Text('30일'),
+              ),
+              const PopupMenuItem(
+                value: 'range:90일',
+                child: Text('90일'),
+              ),
+              const PopupMenuItem(
+                value: 'range:1년',
+                child: Text('1년'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'metric:수집 수',
+                child: Text('수집 수'),
+              ),
+              const PopupMenuItem(
+                value: 'metric:수집자 수',
+                child: Text('수집자 수'),
+              ),
+              const PopupMenuItem(
+                value: 'metric:효율성',
+                child: Text('효율성'),
+              ),
+            ],
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+          ),
+          tabs: const [
+            Tab(text: '전체 분석'),
+            Tab(text: '수집자 분석'),
+            Tab(text: '시간 분석'),
+            Tab(text: '성과 분석'),
+          ],
+        ),
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return PostStatisticsHelpers.buildLoadingWidget();
+    }
+
+    if (_errorMessage != null) {
+      return PostStatisticsHelpers.buildErrorWidget(
+        _errorMessage!,
+        _loadAllData,
+      );
+    }
+
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        PostStatisticsTabs.buildOverallAnalysisTab(_overallData),
+        PostStatisticsTabs.buildCollectorAnalysisTab(_collectorData),
+        PostStatisticsTabs.buildTimeAnalysisTab(_timeData),
+        PostStatisticsTabs.buildPerformanceAnalysisTab(_performanceData),
+      ],
+    );
+  }
+}

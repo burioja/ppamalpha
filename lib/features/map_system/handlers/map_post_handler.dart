@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/models/marker/marker_model.dart';
+import '../../../core/models/user/user_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/data/marker_service.dart';
 import '../../../utils/tile_utils.dart';
@@ -28,7 +29,7 @@ class MapPostHandler {
   bool showUnverifiedOnly = false;
 
   // 사용자 타입
-  String userType = 'life'; // 'life' or 'work'
+  UserType userType = UserType.normal; // normal or superSite
 
   /// 포스트 업데이트 (Fog Level 기반)
   Future<List<MarkerModel>> updatePostsBasedOnFogLevel({
@@ -76,28 +77,26 @@ class MapPostHandler {
 
       // TODO: Implement marker fetching methods
       // For now, return empty lists
-      final normalMarkers = <Map<String, dynamic>>[];
-      final superMarkers = <Map<String, dynamic>>[];
+      final normalMarkers = <MarkerModel>[];
+      final superMarkers = <MarkerModel>[];
 
       debugPrint('📍 서버 응답:');
       debugPrint('  - 일반 마커: ${normalMarkers.length}개');
       debugPrint('  - 슈퍼마커: ${superMarkers.length}개');
 
       // 마커 합치기 및 중복 제거
-      final allMarkers = <MapMarkerServiceFile.MapMarkerData>[];
+      final allMarkers = <MarkerModel>[];
       final seenMarkerIds = <String>{};
 
       for (final marker in [...normalMarkers, ...superMarkers]) {
-        if (!seenMarkerIds.contains(marker.id)) {
+        if (!seenMarkerIds.contains(marker.markerId)) {
           allMarkers.add(marker);
-          seenMarkerIds.add(marker.id);
+          seenMarkerIds.add(marker.markerId);
         }
       }
 
-      // MarkerData -> MarkerModel 변환
-      final uniqueMarkers = allMarkers.map((markerData) =>
-          MapMarkerServiceFile.MarkerService.convertToMarkerModel(markerData)
-      ).toList();
+      // 이미 변환된 MarkerModel 사용
+      final uniqueMarkers = allMarkers;
 
       // 이미 수령한 포스트 필터링
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -223,13 +222,10 @@ class MapPostHandler {
         return;
       }
 
-      // 현재 위치 기준 근처 마커 조회
-      final nearbyMarkers = await MapMarkerServiceFile.MarkerService.getMarkers(
-        location: currentPosition,
-        radiusInKm: 0.1, // 100m 이내
-        additionalCenters: [],
-        filters: {},
-        pageSize: 100,
+      // 현재 위치 기준 근처 마커 조회 (100m 이내)
+      final nearbyMarkers = await MarkerService.getMarkersInArea(
+        center: currentPosition,
+        radiusKm: 0.1, // 100m = 0.1km
       );
 
       // 이미 수령한 포스트 제외
@@ -261,13 +257,10 @@ class MapPostHandler {
     try {
       debugPrint('🎁 근처 포스트 일괄 수령 시작');
 
-      // 근처 마커 조회
-      final nearbyMarkers = await MapMarkerServiceFile.MarkerService.getMarkers(
-        location: currentPosition,
-        radiusInKm: 0.1,
-        additionalCenters: [],
-        filters: {},
-        pageSize: 100,
+      // 근처 마커 조회 (100m 이내)
+      final nearbyMarkers = await MarkerService.getMarkersInArea(
+        center: currentPosition,
+        radiusKm: 0.1, // 100m = 0.1km
       );
 
       debugPrint('📍 근처 마커: ${nearbyMarkers.length}개');
@@ -296,21 +289,19 @@ class MapPostHandler {
         if (postId == null || postId.isEmpty) continue;
 
         try {
-          final success = await PostService().collectPost(
+          await PostService().collectPost(
             postId: postId,
             userId: userId,
           );
 
-          if (success) {
-            // 포스트 정보 가져오기
-            final postDoc = await FirebaseFirestore.instance
-                .collection('posts')
-                .doc(postId)
-                .get();
+          // 포스트 정보 가져오기
+          final postDoc = await FirebaseFirestore.instance
+              .collection('posts')
+              .doc(postId)
+              .get();
 
-            if (postDoc.exists) {
-              receivedPosts.add(PostModel.fromFirestore(postDoc));
-            }
+          if (postDoc.exists) {
+            receivedPosts.add(PostModel.fromFirestore(postDoc));
           }
         } catch (e) {
           debugPrint('❌ 포스트 수집 실패: $e');
@@ -332,11 +323,11 @@ class MapPostHandler {
     LatLng? homeLocation,
     required List<LatLng> workLocations,
   }) {
-    final maxRadius = MapMarkerServiceFile.MarkerService.getMarkerDisplayRadius(userType, false);
+    final maxRadius = MarkerService.getMarkerDisplayRadius(userType, false);
 
     // 현재 위치 주변 확인
     if (currentPosition != null) {
-      final distance = MapMarkerServiceFile.MarkerService.calculateDistance(currentPosition, point);
+      final distance = MarkerService.calculateDistance(currentPosition, point);
       if (distance <= maxRadius) return true;
     }
 
@@ -387,7 +378,7 @@ class MapPostHandler {
   }
 
   /// 사용자 타입 설정
-  void setUserType(String type) {
+  void setUserType(UserType type) {
     userType = type;
   }
 }

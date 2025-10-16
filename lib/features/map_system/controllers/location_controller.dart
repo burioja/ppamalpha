@@ -79,10 +79,7 @@ class LocationController {
   /// 좌표로 주소 가져오기
   static Future<String> getAddressFromLatLng(LatLng position) async {
     try {
-      final address = await NominatimService.reverseGeocode(
-        position.latitude,
-        position.longitude,
-      );
+      final address = await NominatimService.reverseGeocode(position);
       
       if (address != null && address.isNotEmpty) {
         debugPrint('✅ 주소 변환 성공: $address');

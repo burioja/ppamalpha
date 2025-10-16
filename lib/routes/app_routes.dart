@@ -99,16 +99,9 @@ class AppRoutes {
     settings: (context) => const SettingsScreen(),
     points: (context) => const PointsScreen(),
     postPlace: (context) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final place = args?['place'] as PlaceModel?;
-      
-      if (place == null) {
-        return const Scaffold(
-          body: Center(child: Text('플레이스 정보를 찾을 수 없습니다.')),
-        );
-      }
-      
-      return PostPlaceScreen(place: place);
+      // 롱프레스에서 전달된 location 파라미터를 PostPlaceScreen으로 전달
+      // PostPlaceScreen은 place 파라미터를 받지 않음
+      return const PostPlaceScreen();
     },
     postPlaceSelection: (context) => const PostPlaceSelectionScreen(),
 
@@ -158,13 +151,14 @@ class AppRoutes {
     createPlace: (context) => const CreatePlaceScreen(),
     createPlaceDesignDemo: (context) => const CreatePlaceDesignDemo(),
     editPlace: (context) {
-      final place = ModalRoute.of(context)?.settings.arguments as PlaceModel?;
-      if (place == null) {
+      final placeId = ModalRoute.of(context)?.settings.arguments as String?;
+      if (placeId == null) {
         return const Scaffold(
-          body: Center(child: Text('플레이스 정보를 찾을 수 없습니다.')),
+          body: Center(child: Text('플레이스 ID를 찾을 수 없습니다.')),
         );
       }
-      return EditPlaceScreen(place: place);
+      // EditPlaceScreen은 placeId 파라미터를 받음
+      return EditPlaceScreen(placeId: placeId);
     },
     placeDetail: (context) {
       final placeId = ModalRoute.of(context)?.settings.arguments as String?;

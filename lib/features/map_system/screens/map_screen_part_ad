@@ -1,0 +1,1290 @@
+                Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          // 내 포스트 필터
+                          _buildFilterChip(
+                            label: '내 포스트',
+                    selected: _showMyPostsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showMyPostsOnly = selected;
+                                if (selected) {
+                                  _showCouponsOnly = false;
+                                  _showUrgentOnly = false;
+                                }
+                      });
+                      _updatePostsBasedOnFogLevel();
+                    },
+                            selectedColor: Colors.blue,
+                            icon: Icons.person,
+                          ),
+                          const SizedBox(width: 6),
+                          
+                // 쿠폰 필터
+                          _buildFilterChip(
+                            label: '쿠폰',
+                    selected: _showCouponsOnly,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showCouponsOnly = selected;
+                                if (selected) {
+                                  _showMyPostsOnly = false;
+                                  _showUrgentOnly = false;
+                                }
+                      });
+                      _updatePostsBasedOnFogLevel();
+                    },
+                            selectedColor: Colors.green,
+                            icon: Icons.card_giftcard,
+                          ),
+                          const SizedBox(width: 6),
+                          
+                          // 마감임박 필터
+                          _buildFilterChip(
+                            label: '마감임박',
+                            selected: _showUrgentOnly,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showUrgentOnly = selected;
+                                if (selected) {
+                                  _showMyPostsOnly = false;
+                                  _showCouponsOnly = false;
+                                }
+                              });
+                              _updatePostsBasedOnFogLevel();
+                            },
+                            selectedColor: Colors.orange,
+                            icon: Icons.access_time_filled,
+                          ),
+                          const SizedBox(width: 6),
+                          
+                          // 인증 필터
+                          _buildFilterChip(
+                            label: '인증',
+                            selected: _showVerifiedOnly,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showVerifiedOnly = selected;
+                                if (selected) _showUnverifiedOnly = false; // 둘 중 하나만
+                              });
+                              _updatePostsBasedOnFogLevel();
+                            },
+                            selectedColor: Colors.blue,
+                            icon: Icons.verified,
+                          ),
+                          const SizedBox(width: 6),
+                          
+                          // 미인증 필터
+                          _buildFilterChip(
+                            label: '미인증',
+                            selected: _showUnverifiedOnly,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showUnverifiedOnly = selected;
+                                if (selected) _showVerifiedOnly = false; // 둘 중 하나만
+                              });
+                              _updatePostsBasedOnFogLevel();
+                            },
+                            selectedColor: Colors.grey,
+                            icon: Icons.work_outline,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                   const SizedBox(width: 8),
+                  
+                // 필터 초기화 버튼
+                Container(
+                  decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+               ),
+                  child: IconButton(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.refresh, color: Colors.grey),
+                      iconSize: 18,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                  ),
+                ),
+              ],
+              ),
+            ),
+          ),
+          // Mock 위치 토글 버튼 (우상단)
+          Positioned(
+            top: 10,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _isMockModeEnabled ? Colors.purple : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: _toggleMockMode,
+                icon: Icon(
+                  Icons.location_searching,
+                  color: _isMockModeEnabled ? Colors.white : Colors.purple,
+                ),
+                iconSize: 20,
+              ),
+            ),
+          ),
+          // 위치 이동 버튼들 (우하단)
+          Positioned(
+            bottom: 80,
+            right: 16,
+            child: Column(
+              children: [
+                // 집 버튼
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _homeLocation != null ? _moveToHome : null,
+                    icon: Icon(
+                      Icons.home, 
+                      color: _homeLocation != null ? Colors.green : Colors.grey,
+                    ),
+                    iconSize: 24,
+                  ),
+                ),
+                // 일터 버튼
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _workLocations.isNotEmpty ? _moveToWorkplace : null,
+                    icon: Icon(
+                      Icons.work, 
+                      color: _workLocations.isNotEmpty ? Colors.orange : Colors.grey,
+                    ),
+                    iconSize: 24,
+                  ),
+                ),
+                // 현재 위치 버튼
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: () async {
+                      try {
+                        await _getCurrentLocation();
+                      } catch (e) {
+                        print('현위치 버튼 오류: $e');
+                      }
+                    },
+                    icon: const Icon(Icons.my_location, color: Colors.blue),
+                    iconSize: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Mock 위치 화살표 컨트롤러 (왼쪽하단)
+          if (_isMockControllerVisible)
+            Positioned(
+              bottom: 80,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 제목과 닫기 버튼
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: const BoxDecoration(
+                        color: Colors.purple,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.location_searching, color: Colors.white, size: 16),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Mock 위치',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _hideMockController,
+                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 화살표 컨트롤러
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        children: [
+                          // 위쪽 화살표
+                          GestureDetector(
+                            onTap: () => _moveMockPosition('up'),
+                            child: Container(
+                              width: 40,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Icon(Icons.keyboard_arrow_up, color: Colors.grey),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // 좌우 화살표
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: () => _moveMockPosition('left'),
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: const Icon(Icons.keyboard_arrow_left, color: Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              // 중앙 위치 표시
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                                ),
+                                child: const Icon(Icons.my_location, color: Colors.purple, size: 16),
+                              ),
+                              const SizedBox(width: 2),
+                              GestureDetector(
+                                onTap: () => _moveMockPosition('right'),
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: const Icon(Icons.keyboard_arrow_right, color: Colors.grey),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          // 아래쪽 화살표
+                          GestureDetector(
+                            onTap: () => _moveMockPosition('down'),
+                            child: Container(
+                              width: 40,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 현재 위치 정보 (클릭하여 직접 입력 가능)
+                    if (_mockPosition != null)
+                      GestureDetector(
+                        onTap: _showMockPositionInputDialog,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(12),
+                              bottomRight: Radius.circular(12),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '위도: ${_mockPosition!.latitude.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit, size: 10, color: Colors.grey),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '경도: ${_mockPosition!.longitude.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit, size: 10, color: Colors.grey),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          // 미확인 포스트 아이콘 (좌하단)
+          Positioned(
+            left: 16,
+            bottom: 32,
+            child: StreamBuilder<int>(
+              stream: PostService().getUnconfirmedPostCountStream(
+                FirebaseAuth.instance.currentUser?.uid ?? '',
+              ),
+              builder: (context, snapshot) {
+                final unconfirmedCount = snapshot.data ?? 0;
+                
+                if (unconfirmedCount == 0) {
+                  return SizedBox.shrink(); // 미확인 포스트가 없으면 숨김
+                }
+                
+                return Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(28),
+                  child: InkWell(
+                    onTap: () async {
+                      await _showUnconfirmedPostsDialog();
+                    },
+                    borderRadius: BorderRadius.circular(28),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: Colors.orange, width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.receipt_long, color: Colors.orange, size: 24),
+                          SizedBox(width: 6),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$unconfirmedCount',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      // 포스트 수령 FAB
+      floatingActionButton: _buildReceiveFab(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  // 수령 가능한 포스트 개수 업데이트 (마커 기준)
+  Future<void> _updateReceivablePosts() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // 현재 화면에 표시된 마커들 중에서 200m 이내인 것들을 계산
+      int receivableCount = 0;
+      
+      for (final marker in _markers) {
+        // 현재 위치가 null이면 건너뛰기
+        if (_currentPosition == null) continue;
+        
+        // 마커와 현재 위치 간의 거리 계산
+        final distance = _calculateDistance(_currentPosition!, marker.position);
+        
+        // 200m 이내이고, 본인이 배포한 마커가 아닌 경우
+        if (distance <= 200 && marker.creatorId != user.uid) {
+          receivableCount++;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _receivablePostCount = receivableCount;
+        });
+      }
+      
+      print('📍 수령 가능 마커 개수: $receivableCount개 (200m 이내)');
+    } catch (e) {
+      print('수령 가능 포스트 조회 실패: $e');
+      // 에러 발생 시에도 UI 업데이트
+      if (mounted) {
+        setState(() {
+          _receivablePostCount = 0;
+        });
+      }
+    }
+  }
+
+  // 수령 FAB 위젯
+  Widget _buildReceiveFab() {
+    // 받을 게 없으면 아예 숨김
+    if (_receivablePostCount <= 0 && !_isReceiving) {
+      return const SizedBox.shrink();
+    }
+    
+    final enabled = _receivablePostCount > 0 && !_isReceiving;
+    
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Container(
+          height: 48, // 높이 줄임 (기본 56에서 48로)
+        child: FloatingActionButton.extended(
+          onPressed: enabled ? _receiveNearbyPosts : null,
+          backgroundColor: enabled ? Colors.blue : Colors.grey,
+          label: _isReceiving 
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text('수령 중...', style: TextStyle(color: Colors.white)),
+                  ],
+                )
+              : Text(
+                  enabled ? '모두 수령 ($_receivablePostCount개)' : '포스트 받기',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+          icon: _isReceiving ? null : Icon(Icons.download, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 주변 마커에서 포스트 수령 처리 (마커 기준)
+  Future<void> _receiveNearbyPosts() async {
+    setState(() => _isReceiving = true);
+    
+    // 스코프 밖에 변수 선언 (finally 블록에서 접근 가능)
+    final actuallyReceived = <ReceiptItem>[];
+    final failedToReceive = <String>[];
+    final nearbyMarkers = <MarkerModel>[];
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      
+      // 1. 현재 위치에서 200m 이내의 마커들 찾기
+      
+      for (final marker in _markers) {
+        if (_currentPosition == null) continue;
+        
+        // 마커와 현재 위치 간의 거리 계산
+        final distance = _calculateDistance(_currentPosition!, marker.position);
+        
+        // 200m 이내이고, 본인이 배포한 마커가 아닌 경우
+        if (distance <= 200 && marker.creatorId != user.uid) {
+          nearbyMarkers.add(marker);
+        }
+      }
+
+      if (nearbyMarkers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('200m 이내에 수령 가능한 마커가 없습니다'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // 2. 수령 처리 (PostService 사용하여 수량 차감 포함)
+
+      for (final marker in nearbyMarkers) {
+        try {
+          // 🔍 수령 시도 전 데이터 확인 (개별 클릭과 동일한 검증 로직)
+          print('[BATCH_COLLECT_DEBUG] 수령 시도:');
+          print('  - markerId: "${marker.markerId}"');
+          print('  - 현재 postId: "${marker.postId}"');
+          print('  - postId == markerId: ${marker.postId == marker.markerId}');
+
+          String actualPostId = marker.postId;
+          
+          // 🚨 CRITICAL FIX: markerId로 실제 마커를 조회해서 올바른 postId 가져오기
+          if (marker.postId == marker.markerId || marker.postId.isEmpty) {
+            print('[BATCH_COLLECT_FIX] postId가 잘못됨. markerId로 실제 마커 조회 중...');
+
+            try {
+              final markerDoc = await FirebaseFirestore.instance
+                  .collection('markers')
+                  .doc(marker.markerId)
+                  .get();
+
+              if (markerDoc.exists && markerDoc.data() != null) {
+                final markerData = markerDoc.data()!;
+                final realPostId = markerData['postId'] as String?;
+
+                print('[BATCH_COLLECT_FIX] 실제 마커 데이터에서 postId 발견: "$realPostId"');
+
+                if (realPostId != null && realPostId.isNotEmpty && realPostId != marker.markerId) {
+                  actualPostId = realPostId;
+                  print('[BATCH_COLLECT_FIX] 올바른 postId로 수령 진행: $actualPostId');
+                } else {
+                  throw Exception('마커에서 유효한 postId를 찾을 수 없습니다');
+                }
+              } else {
+                throw Exception('마커 문서를 찾을 수 없습니다: ${marker.markerId}');
+              }
+            } catch (e) {
+              print('[BATCH_COLLECT_FIX] 마커 조회 실패: $e');
+              failedToReceive.add('${marker.title} (마커 정보 오류: $e)');
+              continue; // 다음 마커로 진행
+            }
+          } else {
+            print('[BATCH_COLLECT_DEBUG] 기존 postId 사용: ${marker.postId}');
+          }
+
+          // 🔥 PostService를 통한 실제 포스트 수령 (수량 차감 포함)
+          await PostService().collectPost(
+            postId: actualPostId,
+            userId: user.uid,
+          );
+
+          // 수령 기록을 receipts 컬렉션에도 저장
+          final ref = FirebaseFirestore.instance
+              .collection('receipts')
+              .doc(user.uid)
+              .collection('items')
+              .doc(marker.markerId);
+
+            // 포스트 이미지 가져오기
+            String postImageUrl = '';
+            try {
+              final postDoc = await FirebaseFirestore.instance
+                  .collection('posts')
+                  .doc(marker.postId)
+                  .get();
+              if (postDoc.exists) {
+                postImageUrl = postDoc.data()?['imageUrl'] ?? '';
+              }
+            } catch (e) {
+              print('포스트 이미지 조회 실패: $e');
+            }
+
+          await ref.set({
+              'markerId': marker.markerId,
+              'imageUrl': postImageUrl,
+              'title': marker.title,
+              'receivedAt': FieldValue.serverTimestamp(),
+              'confirmed': false,
+              'statusBadge': '미션 중',
+            });
+            
+            actuallyReceived.add(ReceiptItem(
+              markerId: marker.markerId,
+              imageUrl: postImageUrl,
+              title: marker.title,
+              receivedAt: DateTime.now(),
+              confirmed: false,
+              statusBadge: '미션 중',
+            ));
+        } catch (e) {
+          // 개별 수령 실패
+          failedToReceive.add('${marker.title} (수령 실패: ${e.toString()})');
+        }
+      }
+
+      if (actuallyReceived.isNotEmpty) {
+        // 3. 효과음/진동
+        await _playReceiveEffects(actuallyReceived.length);
+
+        // 4. 캐러셀 팝업으로 수령한 포스트들 표시
+        final receivedPosts = <PostModel>[];
+        for (final receipt in actuallyReceived) {
+          // ReceiptItem에서 PostModel로 변환
+          final post = PostModel(
+            postId: receipt.markerId,
+            title: receipt.title,
+            description: '수령 완료',
+            reward: 0, // 실제 reward는 PostService에서 처리됨
+            creatorId: '',
+            creatorName: '',
+            createdAt: DateTime.now(),
+            defaultExpiresAt: DateTime.now().add(Duration(days: 1)),
+            targetAge: [],
+            targetGender: 'all',
+            targetInterest: [],
+            targetPurchaseHistory: [],
+            mediaType: [],
+            mediaUrl: receipt.imageUrl.isNotEmpty ? [receipt.imageUrl] : [],
+            canRespond: false,
+            canForward: false,
+            canRequestReward: false,
+            canUse: false,
+          );
+          receivedPosts.add(post);
+        }
+        await _showPostReceivedCarousel(receivedPosts);
+      } else if (failedToReceive.isNotEmpty) {
+        // 수령할 수 있는 포스트가 없는 경우
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('수령할 수 있는 마커가 없습니다 (${failedToReceive.length}개 실패)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('마커 수령 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('마커 수령에 실패했습니다: $e')),
+      );
+    } finally {
+      setState(() => _isReceiving = false);
+      
+      // 수령 완료 후 즉시 마커 새로고침
+      print('🔄 배치 수령 완료 - 마커 목록 새로고침 시작');
+      
+      // 1. 로컬에서 수령한 포스트의 모든 마커 즉시 제거 (UI 반응성)
+      if (actuallyReceived.isNotEmpty) {
+        setState(() {
+          // 수령한 포스트 ID들 수집
+          final collectedPostIds = <String>{};
+          for (final receipt in actuallyReceived) {
+            // markerId로 원본 마커 찾기
+            final originalMarker = nearbyMarkers.firstWhere(
+              (m) => m.markerId == receipt.markerId,
+              orElse: () => nearbyMarkers.first,
+            );
+            collectedPostIds.add(originalMarker.postId);
+          }
+          
+          // 수령한 포스트들의 모든 마커 제거 (같은 postId를 가진 다른 마커들도 함께)
+          final removedCount = _markers.where((m) => collectedPostIds.contains(m.postId)).length;
+          _markers.removeWhere((m) => collectedPostIds.contains(m.postId));
+          print('🗑️ 수령한 포스트들의 모든 마커 제거: ${removedCount}개');
+          print('   - 수령한 포스트 IDs: $collectedPostIds');
+          
+          _updateMarkers(); // 클러스터 재계산
+        });
+      }
+      
+      // 2. 서버에서 실제 마커 상태 확인 및 동기화
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _updatePostsBasedOnFogLevel(); // 마커 목록 새로고침
+      _updateReceivablePosts(); // 개수 업데이트
+      
+      print('✅ 배치 마커 새로고침 완료');
+    }
+  }
+
+  // 수령 효과음/진동
+  Future<void> _playReceiveEffects(int count) async {
+    try {
+      // 진동
+      if (await Vibration.hasVibrator() ?? false) {
+        Vibration.vibrate(duration: 100);
+      }
+
+      // 사운드 (count만큼 반복)
+      final player = audio.AudioPlayer();
+      await player.setSource(audio.AssetSource('sounds/receive.mp3'));
+      
+      for (int i = 0; i < count; i++) {
+        await player.resume();
+        await Future.delayed(const Duration(milliseconds: 250));
+        await player.stop();
+        if (i < count - 1) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      }
+      
+      await player.dispose();
+    } catch (e) {
+      print('효과음 재생 실패: $e');
+    }
+  }
+
+  /// 미확인 포스트 다이얼로그 표시
+  Future<void> _showUnconfirmedPostsDialog() async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      // 미확인 포스트 목록 조회
+      final postService = PostService();
+      final unconfirmedPosts = await postService.getUnconfirmedPosts(currentUserId);
+
+      if (unconfirmedPosts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('미확인 포스트가 없습니다')),
+        );
+        return;
+      }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          height: MediaQuery.of(context).size.height * 0.9,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // 헤더
+              Container(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long, color: Colors.orange, size: 24),
+                    SizedBox(width: 8),
+                    Text(
+                      '미확인 포스트 (${unconfirmedPosts.length}개)',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[800],
+                      ),
+                    ),
+                    Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 캐러셀 영역
+              Expanded(
+                child: PageView.builder(
+                  itemCount: unconfirmedPosts.length,
+                  itemBuilder: (context, index) {
+                    final post = unconfirmedPosts[index];
+                    final title = post['postTitle'] ?? 'Unknown Title';
+                    final collectedAt = post['collectedAt'] as Timestamp?;
+                    final reward = post['reward'] ?? 0;
+                    final collectionId = post['collectionId'] as String;
+                    final postId = post['postId'] as String;
+                    final creatorId = post['postCreatorId'] ?? '';
+                    final imageUrls = post['imageUrls'] as List<dynamic>? ?? [];
+                    final thumbnailUrls = post['thumbnailUrls'] as List<dynamic>? ?? [];
+                    
+                    // 표시할 이미지 URL (썸네일 우선, 없으면 원본, 둘 다 없으면 null)
+                    final displayImageUrl = thumbnailUrls.isNotEmpty 
+                        ? thumbnailUrls.first as String?
+                        : (imageUrls.isNotEmpty ? imageUrls.first as String? : null);
+
+                    return GestureDetector(
+                      onTap: () async {
+                        // 터치하여 확인
+                        await _confirmUnconfirmedPost(
+                          collectionId: collectionId,
+                          userId: currentUserId,
+                          postId: postId,
+                          creatorId: creatorId,
+                          reward: reward,
+                          title: title,
+                        );
+                      },
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 상태 배지
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '터치하여 확인',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Spacer(),
+                                if (unconfirmedPosts.length > 1)
+                                  Text(
+                                    '${index + 1}/${unconfirmedPosts.length} 👈 스와이프',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            
+                            SizedBox(height: 20),
+                            
+                            // 포스트 제목
+                            Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            
+                            SizedBox(height: 12),
+                            
+                            // 수령일 정보
+                            if (collectedAt != null) ...[
+                              Row(
+                                children: [
+                                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '수령일: ${_formatDate(collectedAt.toDate())}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                            
+                            // 포스트 이미지 (중앙에 크게)
+                            if (displayImageUrl != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  displayImageUrl,
+                                  width: double.infinity,
+                                  height: 300,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 200,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 48,
+                                        color: Colors.grey[400],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                            ] else ...[
+                              // 이미지가 없으면 큰 카드 형태로 텍스트 표시
+                              Container(
+                                height: 200,
+                                padding: EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.orange[200]!),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.card_giftcard,
+                                        size: 64,
+                                        color: Colors.orange[400],
+                                      ),
+                                      SizedBox(height: 12),
+                                      Text(
+                                        title,
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                            
+                            // 포인트 정보
+                            Container(
+                              padding: EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.green[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.green[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.monetization_on, color: Colors.green, size: 24),
+                                  SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '포인트 지급',
+                                        style: TextStyle(
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        '+${reward}포인트',
+                                        style: TextStyle(
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            SizedBox(height: 16),
+                            
+                            // 확인 안내
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[50],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.touch_app, size: 16, color: Colors.orange[700]),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '이 영역을 터치하면 확인하고 포인트를 받습니다',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.orange[700],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              
+              // 페이지 인디케이터
+              if (unconfirmedPosts.length > 1)
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(unconfirmedPosts.length, (index) {
+                      return Container(
+                        width: 8,
+                        height: 8,
+                        margin: EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.orange,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              
+              // 하단 버튼
+              Container(
+                padding: EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text('나중에 확인하기'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    } catch (e) {
+      debugPrint('미확인 포스트 조회 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('미확인 포스트를 불러올 수 없습니다: $e')),
+      );
+    }
+  }
+
+  /// 미확인 포스트 확인 처리
+  Future<void> _confirmUnconfirmedPost({
+    required String collectionId,
+    required String userId,
+    required String postId,
+    required String creatorId,
+    required int reward,
+    required String title,
+  }) async {
+    try {
+      final postService = PostService();
+      
+      // 포스트 확인 처리
+      // await postService.confirmPost( // TODO: confirmPost 메소드 구현
+      //   collectionId: collectionId,
+      //   userId: userId,
+      //   postId: postId,
+      //   creatorId: creatorId,
+      //   reward: reward,
+      // );
+
+      // 성공 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $title 확인 완료! +${reward}포인트'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // 다이얼로그 새로고침을 위해 닫고 다시 열기
+      Navigator.pop(context);
+      await _showUnconfirmedPostsDialog();
+      
+    } catch (e) {
+      debugPrint('미확인 포스트 확인 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('포스트 확인에 실패했습니다: $e')),
+      );
+    }
+  }
+
+  /// 미확인 포스트 삭제 처리 (보상 없이 제거)
+  Future<void> _deleteUnconfirmedPost({
+    required String collectionId,
+    required String title,
+  }) async {
+    // 삭제 확인 다이얼로그
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('포스트 삭제'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('이 포스트를 삭제하시겠습니까?'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ 주의',
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• 삭제하면 보상을 받을 수 없습니다\n• 이 작업은 되돌릴 수 없습니다',
+                    style: TextStyle(
+                      color: Colors.red[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // post_collections에서 삭제 (보상 없음)
+      await FirebaseFirestore.instance
+          .collection('post_collections')
+          .doc(collectionId)
+          .delete();
+
+      debugPrint('✅ 미확인 포스트 삭제 성공: $collectionId');
+
+      // 성공 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🗑️ $title 삭제되었습니다'),
+          backgroundColor: Colors.grey[700],
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // 다이얼로그 새로고침을 위해 닫고 다시 열기
+      Navigator.pop(context);
+      await _showUnconfirmedPostsDialog();
+      
+    } catch (e) {
+      debugPrint('❌ 미확인 포스트 삭제 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('포스트 삭제에 실패했습니다: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// 날짜 포맷팅 헬퍼 함수
+  String _formatDate(DateTime date) {
+    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+
+}
+ 
+ 

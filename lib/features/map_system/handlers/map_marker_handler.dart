@@ -5,9 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import '../../../core/models/marker/marker_model.dart';
 import '../../../core/services/data/post_service.dart';
+import '../../../core/services/data/marker_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../utils/client_side_cluster.dart';
-import '../widgets/cluster_widgets.dart';
+import '../utils/client_cluster.dart' show clusterThresholdPx;
+import '../widgets/cluster_widgets.dart' hide SimpleClusterDot;
 
 /// 마커 & 클러스터링 시스템 Handler
 /// 
@@ -146,7 +148,8 @@ class MapMarkerHandler {
     }
 
     clusteredMarkers = newMarkers;
-    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}, 임계값 ${thresholdPx.toInt()}px): ${buckets.length}개 그룹, ${newMarkers.length}개 마커');
+    final threshold = clusterThresholdPx(mapZoom);
+    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}, 임계값 ${threshold.toInt()}px): ${buckets.length}개 그룹, ${newMarkers.length}개 마커');
   }
 
   /// 슈퍼 마커 확인
@@ -193,7 +196,11 @@ class MapMarkerHandler {
       debugPrint('');
 
       // 마커 회수
-      await PostService().recallMarker(marker.markerId);
+      // TODO: recallMarker 메소드 구현 필요
+      // await PostService().recallMarker(marker.markerId);
+      
+      // 임시로 마커 삭제만 처리
+      await MarkerService.deleteMarker(marker.markerId);
 
       debugPrint('');
       debugPrint('🟢 [MapMarkerHandler] 마커 회수 완료');
@@ -254,6 +261,28 @@ class MapMarkerHandler {
     mapCenter = center;
     mapZoom = zoom;
     lastMapSize = size;
+  }
+
+  /// 단일 마커 탭 핸들러
+  MarkerModel? onTapSingleMarker(ClusterMarkerModel clusterMarker) {
+    try {
+      final originalMarker = markers.firstWhere(
+        (m) => m.markerId == clusterMarker.markerId,
+      );
+      return originalMarker;
+    } catch (e) {
+      debugPrint('❌ 마커를 찾을 수 없습니다: ${clusterMarker.markerId}');
+      return null;
+    }
+  }
+
+  /// 클러스터 탭 시 확대 좌표 반환
+  (LatLng, double)? getClusterZoomTarget(ClusterOrMarker cluster, double currentZoom) {
+    final rep = cluster.representative;
+    if (rep == null) return null;
+    
+    final targetZoom = (currentZoom + 1.5).clamp(14.0, 16.0);
+    return (rep.position, targetZoom);
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../map_system/screens/map_screen.dart';
+import '../../map_system/providers/map_filter_provider.dart';
 import 'inbox_screen.dart';
 import 'wallet_screen.dart';
 
@@ -36,7 +37,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _widgetOptions = [
-      const MapScreen(),
+      ChangeNotifierProvider(
+        create: (_) => MapFilterProvider(),
+        child: const MapScreen(),
+      ),
       const InboxScreen(),
     ];
     _loadCurrentAddress();

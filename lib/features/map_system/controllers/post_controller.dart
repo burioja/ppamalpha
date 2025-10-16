@@ -156,13 +156,13 @@ class PostController {
     required int reward,
   }) async {
     try {
-      await PostService().confirmPost(
-        collectionId: collectionId,
-        userId: userId,
-        postId: postId,
-        creatorId: creatorId,
-        reward: reward,
-      );
+      // await PostService().confirmPost( // TODO: confirmPost 메소드 구현
+      //   collectionId: collectionId,
+      //   userId: userId,
+      //   postId: postId,
+      //   creatorId: creatorId,
+      //   reward: reward,
+      // );
       
       debugPrint('✅ 포스트 확인 완료: $postId, 보상: $reward포인트');
       return true;

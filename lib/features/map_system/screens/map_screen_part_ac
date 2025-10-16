@@ -1,0 +1,1300 @@
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!, width: 2),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.touch_app, size: 24, color: Colors.orange[700]),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '이 영역을 터치하면\n포인트를 받고 확인됩니다',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.arrow_upward, size: 28, color: Colors.orange[700]),
+                ],
+              ),
+            ),
+          ] else ...[
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green[200]!, width: 2),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, size: 24, color: Colors.green[700]),
+                  SizedBox(width: 12),
+                  Text(
+                    '확인 완료!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+    void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+            children: [
+            // 핸들 바
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // 제목
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Text(
+                '필터 설정',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            // 필터 내용
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+            children: [
+                    const SizedBox(height: 20),
+                    // 일반/쿠폰 토글
+                    Row(
+                      children: [
+                        const Text('포스트 타입:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(
+          child: GestureDetector(
+                                  onTap: () => setState(() => _selectedCategory = 'all'),
+            child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                                      color: _selectedCategory == 'all' ? Colors.blue : Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '전체',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _selectedCategory = 'coupon'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                                      color: _selectedCategory == 'coupon' ? Colors.blue : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                                    child: const Text(
+                                      '쿠폰만',
+                  textAlign: TextAlign.center,
+                                      style: TextStyle(
+                color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+                ),
+              ),
+            ],
+          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+                    // 거리 표시 (유료/무료에 따라)
+                    Row(
+                      children: [
+                        const Text('검색 반경:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isPremiumUser ? Colors.amber[50] : Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _isPremiumUser ? Colors.amber[200]! : Colors.blue[200]!),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_maxDistance.toInt()}m',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isPremiumUser ? Colors.amber[800] : Colors.blue,
+                                ),
+                              ),
+                              if (_isPremiumUser) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber[600],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    'PRO',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+                    // 리워드 슬라이더
+                    Row(
+                      children: [
+                        const Text('최소 리워드:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text('${_minReward}원', 
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              Slider(
+                                value: _minReward.toDouble(),
+                                min: 0,
+                                max: 10000,
+                                divisions: 100,
+                                onChanged: (value) {
+    setState(() {
+                                    _minReward = value.toInt();
+                                  });
+                                },
+            ),
+          ],
+        ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+                    // 정렬 옵션
+                    Row(
+          children: [
+                        const Text('정렬:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() {}),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '가까운순',
+                                      textAlign: TextAlign.center,
+              style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() {}),
+                                  child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                                    child: const Text(
+                                      '최신순',
+                  textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+                ),
+              ),
+            ],
+          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 하단 버튼들
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                onPressed: () {
+                        Navigator.pop(context);
+                        _resetFilters();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('초기화'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                onPressed: () {
+                        Navigator.pop(context);
+                        _updateMarkers();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('적용'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  void _resetFilters() {
+    setState(() {
+      _selectedCategory = 'all';
+      _maxDistance = _isPremiumUser ? 3000.0 : 1000.0; // 유료: 3km, 무료: 1km
+      _minReward = 0;
+      _showCouponsOnly = false;
+      _showMyPostsOnly = false;
+      _showUrgentOnly = false;
+      _showVerifiedOnly = false; // 인증 필터 초기화
+      _showUnverifiedOnly = false; // 미인증 필터 초기화
+    });
+    _updateMarkers();
+  }
+
+  // 필터 칩 빌더 헬퍼 함수
+  Widget _buildFilterChip({
+    required String label,
+    required bool selected,
+    required Function(bool) onSelected,
+    required Color selectedColor,
+    IconData? icon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: selected ? [
+          BoxShadow(
+            color: selectedColor.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ] : null,
+      ),
+      child: FilterChip(
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: selected ? Colors.white : selectedColor,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: selected ? Colors.white : selectedColor,
+              ),
+            ),
+          ],
+        ),
+        selected: selected,
+        onSelected: onSelected,
+        selectedColor: selectedColor,
+        checkmarkColor: Colors.white,
+        backgroundColor: Colors.white,
+        side: BorderSide(
+          color: selected ? selectedColor : Colors.grey.shade300,
+          width: selected ? 2 : 1,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      ),
+    );
+  }
+
+  Future<void> _navigateToPostPlace() async {
+    if (_longPressedLatLng == null) return;
+
+    // 현재위치, 집, 일터 주변에서 배포 가능한지 확인
+    final canDeploy = _canLongPressAtLocation(_longPressedLatLng!);
+
+    if (!canDeploy) {
+      // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
+      return;
+    }
+
+    // PostDeploymentController를 사용한 위치 기반 포스트 배포
+    final success = await PostDeploymentController.deployPostFromLocation(context, _longPressedLatLng!);
+
+    // 포스트 배포 완료 후 처리
+    if (success) {
+      print('포스트 배포 완료');
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await _updatePostsBasedOnFogLevel();
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } else {
+      // 배포를 취소한 경우 롱프레스 위치 초기화
+      setState(() {
+        _longPressedLatLng = null;
+      });
+    }
+  }
+
+  Future<void> _navigateToPostAddress() async {
+    if (_longPressedLatLng == null) return;
+
+    try {
+      // 1. OSM에서 건물명 조회
+      print('🌐 OSM에서 건물명 조회 중...');
+      final buildingName = await OSMGeocodingService.getBuildingName(_longPressedLatLng!);
+      
+      if (buildingName == null) {
+        _showToast('건물명을 찾을 수 없습니다.');
+        return;
+      }
+      
+      print('✅ 건물명 조회 성공: $buildingName');
+      
+      // 2. 건물명 확인 팝업
+      final isCorrect = await _showBuildingNameConfirmation(buildingName);
+      
+      if (isCorrect) {
+        // 3. 포스트 배포 화면으로 이동 (주소 모드)
+        _navigateToPostDeploy('address', buildingName);
+    } else {
+        // 4. 주소 검색 팝업
+        final selectedAddress = await _showAddressSearchDialog();
+        if (selectedAddress != null) {
+          _navigateToPostDeploy('address', selectedAddress['display_name']);
+        }
+      }
+    } catch (e) {
+      print('❌ 주소 배포 오류: $e');
+      _showToast('주소 정보를 가져오는 중 오류가 발생했습니다.');
+    }
+  }
+
+  /// 건물명 확인 팝업
+  Future<bool> _showBuildingNameConfirmation(String buildingName) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('위치 확인'),
+        content: Text('$buildingName이 맞습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('아니오'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('예'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  /// 주소 검색 팝업
+  Future<Map<String, dynamic>?> _showAddressSearchDialog() async {
+    return await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const AddressSearchDialog(),
+    );
+  }
+
+  /// 포스트 배포 화면으로 네비게이션
+  Future<void> _navigateToPostDeploy(String type, String buildingName) async {
+    final result = await Navigator.pushNamed(
+      context,
+      '/post-deploy',
+      arguments: {
+        'location': _longPressedLatLng!,
+        'type': type,
+        'buildingName': buildingName,
+      },
+    );
+
+    if (result != null && mounted) {
+      // 배포 완료 후 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null;
+      });
+      
+      print('🚀 배포 완료 - 즉시 마커 조회 시작');
+      
+      // ✅ 해결책 2: 포그/타일/캐시 파생값 재빌드
+      if (_currentPosition != null) {
+        final currentTileId = TileUtils.getKm1TileId(
+          _currentPosition!.latitude, 
+          _currentPosition!.longitude
+        );
+        _rebuildFogWithUserLocations(_currentPosition!);
+        _setLevel1TileLocally(currentTileId);
+        print('✅ 포그/타일 상태 재빌드 완료');
+      }
+      
+      // ✅ 해결책 3: 1단계 타일 캐시 초기화 (새 마커 쿼리 보장)
+      _clearFogLevel1Cache();
+      print('✅ 1단계 타일 캐시 초기화 완료');
+      
+      // ✅ 해결책 4: 강제 fetch
+      await _updatePostsBasedOnFogLevel();
+      print('✅ 마커 조회 완료');
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } else {
+      // 취소한 경우
+      setState(() {
+        _longPressedLatLng = null;
+      });
+    }
+  }
+
+  /// 토스트 메시지 표시
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _navigateToPostBusiness() async {
+    if (_longPressedLatLng == null) return;
+
+    // PostDeploymentController를 사용한 카테고리 기반 포스트 배포
+    final success = await PostDeploymentController.deployPostFromCategory(context, _longPressedLatLng!);
+
+    // 포스트 배포 완료 후 처리
+    if (success) {
+      print('포스트 배포 완료');
+      // 🚀 배포 완료 후 즉시 마커 새로고침
+      setState(() {
+        _isLoading = true;
+        _longPressedLatLng = null; // 팝업용 변수만 초기화
+      });
+      
+      // 마커 즉시 업데이트
+      await _updatePostsBasedOnFogLevel();
+      
+      // 데이터베이스 반영을 위해 충분한 시간 대기 후 다시 한 번 업데이트
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await _updatePostsBasedOnFogLevel();
+      
+      // 마지막으로 한 번 더 업데이트 (확실하게)
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await _updatePostsBasedOnFogLevel();
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } else {
+      // 배포를 취소한 경우 롱프레스 위치 초기화
+      setState(() {
+        _longPressedLatLng = null;
+      });
+    }
+  }
+
+  void _showLongPressMenu() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.4,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 핸들 바
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // 제목
+              const Text(
+                '포스트 배포',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              // 설명
+              const Text(
+                '이 위치에 포스트를 배포하세요',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // 메뉴 옵션들
+              Expanded(
+                child: Column(
+                  children: [
+                    // 이 위치에 뿌리기
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _navigateToPostPlace();
+                        },
+                        icon: const Icon(Icons.location_on, color: Colors.white),
+                        label: const Text(
+                          '이 위치에 뿌리기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4D4DFF),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 이 주소에 뿌리기
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _navigateToPostAddress();
+                        },
+                        icon: const Icon(Icons.home, color: Colors.white),
+                        label: const Text(
+                          '이 주소에 뿌리기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 근처 업종에 뿌리기 (작업중)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton.icon(
+                        onPressed: null, // 비활성화
+                        icon: const Icon(Icons.business, color: Colors.white),
+                        label: const Text(
+                          '근처 업종에 뿌리기 (작업중)',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey, // 회색으로 변경
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+  void _onMapReady() {
+    // 현재 위치로 지도 이동
+    if (_currentPosition != null) {
+      _mapController?.move(_currentPosition!, _currentZoom);
+    }
+  }
+
+  // 집으로 이동
+  void _moveToHome() {
+    if (_homeLocation != null) {
+      _mapController?.move(_homeLocation!, _currentZoom);
+    }
+  }
+
+  // 일터로 이동 (순차적으로)
+  void _moveToWorkplace() {
+    if (_workLocations.isNotEmpty) {
+      final targetLocation = _workLocations[_currentWorkplaceIndex];
+      _mapController?.move(targetLocation, _currentZoom);
+      
+      // 다음 일터로 인덱스 이동 (순환)
+      setState(() {
+        _currentWorkplaceIndex = (_currentWorkplaceIndex + 1) % _workLocations.length;
+      });
+    }
+  }
+
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadius = 6371000; // 지구 반지름 (미터)
+    
+    final double dLat = _degreesToRadians(point2.latitude - point1.latitude);
+    final double dLon = _degreesToRadians(point2.longitude - point1.longitude);
+    
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        sin(_degreesToRadians(point1.latitude)) * sin(_degreesToRadians(point2.latitude)) * 
+        sin(dLon / 2) * sin(dLon / 2);
+    final double c = 2 * asin(sqrt(a));
+    
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180);
+  }
+
+  // Mock 위치 관련 메서드들
+  void _toggleMockMode() {
+    setState(() {
+      _isMockModeEnabled = !_isMockModeEnabled;
+      if (_isMockModeEnabled) {
+        _isMockControllerVisible = true;
+        // 원래 GPS 위치 백업
+        _originalGpsPosition = _currentPosition;
+        // Mock 위치가 없으면 현재 GPS 위치를 기본값으로 설정
+        if (_mockPosition == null && _currentPosition != null) {
+          _mockPosition = _currentPosition;
+        }
+      } else {
+        _isMockControllerVisible = false;
+        // Mock 모드 비활성화 시 원래 GPS 위치로 복원
+        if (_originalGpsPosition != null) {
+          _currentPosition = _originalGpsPosition;
+          _mapController?.move(_originalGpsPosition!, _currentZoom);
+          _createCurrentLocationMarker(_originalGpsPosition!);
+          _updateCurrentAddress();
+          _updatePostsBasedOnFogLevel();
+        }
+      }
+    });
+  }
+
+  Future<void> _setMockPosition(LatLng position) async {
+    // 이전 Mock 위치 저장 (회색 영역 표시용)
+    final previousPosition = _mockPosition;
+    
+    setState(() {
+      _mockPosition = position;
+      // Mock 모드에서는 실제 위치도 업데이트 (실제 기능처럼 동작)
+      if (_isMockModeEnabled) {
+        _currentPosition = position;
+      }
+    });
+
+    // Mock 위치로 지도 중심 이동 (현재 줌 레벨 유지)
+    final currentZoom = _mapController?.camera.zoom ?? _currentZoom;
+    _mapController?.move(position, currentZoom);
+    
+    // Mock 위치 마커 생성
+    _createCurrentLocationMarker(position);
+    
+    // 주소 업데이트 (Mock 위치 기준)
+    _updateMockAddress(position);
+    
+    // 타일 방문 기록 업데이트 (실제 기능처럼 동작)
+    final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
+    print('🎭 Mock 위치 타일 방문 기록 업데이트: $tileId');
+    await VisitTileService.updateCurrentTileVisit(tileId);
+    _setLevel1TileLocally(tileId);
+    
+    // 포그 오브 워 재구성 (실제 기능처럼 동작)
+    _rebuildFogWithUserLocations(position);
+    
+    // 회색 영역 업데이트 (이전 위치 포함)
+    _updateGrayAreasWithPreviousPosition(previousPosition);
+    
+    // 마커 업데이트
+    _updatePostsBasedOnFogLevel();
+  }
+
+  Future<void> _updateMockAddress(LatLng position) async {
+    try {
+      final address = await NominatimService.reverseGeocode(position);
+      setState(() {
+        _currentAddress = address;
+      });
+      widget.onAddressChanged?.call(address);
+    } catch (e) {
+      setState(() {
+        _currentAddress = '주소 변환 실패';
+      });
+    }
+  }
+
+  // 화살표 방향에 따른 Mock 위치 이동
+  void _moveMockPosition(String direction) async {
+    if (_mockPosition == null) return;
+
+    const double moveDistance = 0.000225; // 약 25m 이동
+    LatLng newPosition;
+    
+    switch (direction) {
+      case 'up':
+        newPosition = LatLng(_mockPosition!.latitude + moveDistance, _mockPosition!.longitude);
+        break;
+      case 'down':
+        newPosition = LatLng(_mockPosition!.latitude - moveDistance, _mockPosition!.longitude);
+        break;
+      case 'left':
+        newPosition = LatLng(_mockPosition!.latitude, _mockPosition!.longitude - moveDistance);
+        break;
+      case 'right':
+        newPosition = LatLng(_mockPosition!.latitude, _mockPosition!.longitude + moveDistance);
+        break;
+      default:
+        return;
+    }
+    
+    await _setMockPosition(newPosition);
+  }
+
+  void _hideMockController() {
+    setState(() {
+      _isMockControllerVisible = false;
+    });
+  }
+
+  Future<void> _showMockPositionInputDialog() async {
+    final latController = TextEditingController(
+      text: _mockPosition?.latitude.toStringAsFixed(6) ?? '',
+    );
+    final lngController = TextEditingController(
+      text: _mockPosition?.longitude.toStringAsFixed(6) ?? '',
+    );
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mock 위치 직접 입력'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: latController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              decoration: const InputDecoration(
+                labelText: '위도 (Latitude)',
+                hintText: '37.5665',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: lngController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              decoration: const InputDecoration(
+                labelText: '경도 (Longitude)',
+                hintText: '126.9780',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '예시: 서울시청 (37.5665, 126.9780)',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: const Text('이동'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      try {
+        final lat = double.parse(latController.text);
+        final lng = double.parse(lngController.text);
+        
+        // 유효 범위 체크 (대략적인 한국 범위)
+        if (lat < 33.0 || lat > 39.0 || lng < 124.0 || lng > 132.0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('한국 범위 내의 좌표를 입력해주세요')),
+          );
+          return;
+        }
+
+        final newPosition = LatLng(lat, lng);
+        await _setMockPosition(newPosition);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Mock 위치 이동: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('올바른 숫자를 입력해주세요')),
+        );
+      }
+    }
+
+    latController.dispose();
+    lngController.dispose();
+  }
+
+  // 통합된 회색 영역 업데이트 (DB에서 최신 방문 기록 로드)
+  void _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
+    try {
+      // DB에서 최신 방문 기록 로드 (서버 강제 읽기)
+      final visitedPositions = await _loadVisitedPositionsFromDB();
+      
+      // 이전 위치도 추가 (즉시 반영용)
+      if (previousPosition != null) {
+        visitedPositions.add(previousPosition);
+        print('🎯 이전 위치를 회색 영역으로 추가: ${previousPosition.latitude}, ${previousPosition.longitude}');
+      }
+      
+      // 새로운 회색 영역 생성
+      final grayPolygons = OSMFogService.createGrayAreas(visitedPositions);
+      
+      setState(() {
+        _grayPolygons = grayPolygons;
+      });
+      
+      print('✅ 회색 영역 업데이트 완료: ${visitedPositions.length}개 위치');
+    } catch (e) {
+      print('❌ 회색 영역 업데이트 실패: $e');
+    }
+  }
+
+  // DB에서 최신 방문 기록 로드 (서버 강제 읽기)
+  Future<List<LatLng>> _loadVisitedPositionsFromDB() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
+
+      // 30일 이내 방문 기록 가져오기 (서버 강제 읽기)
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      
+      final visitedTiles = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('visited_tiles')
+          .where('lastVisitTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
+          .get(const GetOptions(source: Source.server)); // 서버 강제 읽기
+
+      final visitedPositions = <LatLng>[];
+      
+      for (final doc in visitedTiles.docs) {
+        final tileId = doc.id;
+        // 타일 ID에서 좌표 추출
+        final position = _extractPositionFromTileId(tileId);
+        if (position != null) {
+          visitedPositions.add(position);
+        }
+      }
+
+      print('🔍 DB에서 로드된 방문 위치 개수: ${visitedPositions.length}');
+      return visitedPositions;
+    } catch (e) {
+      print('❌ DB에서 방문 위치 로드 실패: $e');
+      return [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _workplaceSubscription?.cancel(); // ✅ 일터 리스너 구독 취소
+    _mapMoveTimer?.cancel(); // 타이머 정리
+    _clusterDebounceTimer?.cancel(); // 클러스터 디바운스 타이머 정리
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          GestureDetector(
+            onSecondaryTapDown: (TapDownDetails details) {
+              final RenderBox renderBox = context.findRenderObject() as RenderBox;
+              final localPosition = renderBox.globalToLocal(details.globalPosition);
+              final mapWidth = renderBox.size.width;
+              final mapHeight = renderBox.size.height;
+              final latRatio = localPosition.dy / mapHeight;
+              final lngRatio = localPosition.dx / mapWidth;
+              final lat = _currentPosition!.latitude + (0.01 * (0.5 - latRatio));
+              final lng = _currentPosition!.longitude + (0.01 * (lngRatio - 0.5));
+              setState(() {
+                _longPressedLatLng = LatLng(lat, lng);
+              });
+            },
+            child: FlutterMap(
+              mapController: _mapController,
+        options: MapOptions(
+                initialCenter: _currentPosition ?? const LatLng(37.5665, 126.9780), // 서울 기본값
+                initialZoom: _currentZoom,
+                minZoom: 14.0,  // 최소 줌 레벨 (줌 아웃 한계)
+                maxZoom: 17.0,  // 최대 줌 레벨 (줌 인 한계)
+          onMapReady: _onMapReady,
+                onMapEvent: _onMapMoved, // 🚀 지도 이동 감지
+                onTap: (tapPosition, point) {
+                  setState(() {
+                    _longPressedLatLng = null;
+                  });
+                },
+                onLongPress: (tapPosition, point) async {
+                  // Mock 모드에서는 Mock 위치를 기준으로, 아니면 실제 GPS 위치를 기준으로 확인
+                  LatLng? referencePosition;
+                  if (_isMockModeEnabled && _mockPosition != null) {
+                    referencePosition = _mockPosition;
+                  } else {
+                    referencePosition = _currentPosition;
+                  }
+
+                  // 기준 위치 확인
+                  if (referencePosition == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('현재 위치를 확인할 수 없습니다')),
+                    );
+                    return;
+                  }
+
+                  // 현재위치, 집, 일터 주변에서 롱프레스 가능한지 확인
+                  final canLongPress = _canLongPressAtLocation(point);
+
+                  if (!canLongPress) {
+                    // 거리 초과 시 아무 동작도 하지 않음 (사용자 경험 개선)
+                    return;
+                  }
+
+                  // 롱프레스 위치 저장
+                  _longPressedLatLng = point;
+                  
+                  // 바로 배포 메뉴 표시 (포그레벨 확인 생략)
+                  _showLongPressMenu();
+                },
+              ),
+        children: [
+                // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
+                TileLayer(
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  userAgentPackageName: 'com.ppamalpha.app',
+                  minZoom: 14.0,  // 타일 서버 최소 줌
+                  maxZoom: 17.0,  // 타일 서버 최대 줌
+                ),
+                // 통합 포그 오버레이 (검정 → 펀칭 → 회색)
+                UnifiedFogOverlayWidget(
+                  mapController: _mapController!,
+                  level1Centers: [
+                    if (_currentPosition != null) _currentPosition!,
+                    if (_homeLocation != null) _homeLocation!,
+                    ..._workLocations,
+                  ],
+                  level2CentersRaw: _grayPolygons.isNotEmpty 
+                    ? _grayPolygons.map((polygon) {
+                        // 폴리곤의 중심점 계산
+                        if (polygon.points.isEmpty) return const LatLng(0, 0);
+                        double sumLat = 0, sumLng = 0;
+                        for (final point in polygon.points) {
+                          sumLat += point.latitude;
+                          sumLng += point.longitude;
+                        }
+                        return LatLng(
+                          sumLat / polygon.points.length,
+                          sumLng / polygon.points.length,
+                        );
+                      }).toList()
+                    : [],
+                  radiusMeters: 1000.0,
+                  fogColor: Colors.black.withOpacity(1.0),
+                  grayColor: Colors.grey.withOpacity(0.33),
+                ),
+                // 1km 경계선 (제거됨 - 파란색 원 테두리 없음)
+                // CircleLayer(circles: _ringCircles),
+                // 사용자 위치 마커들
+                MarkerLayer(
+                  markers: [
+                    // 집 위치 마커
+                    if (_homeLocation != null)
+                      Marker(
+                        point: _homeLocation!,
+             child: Container(
+               decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.home,
+                 color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    // 일터 위치 마커들
+                    ..._workLocations.map((workLocation) => Marker(
+                      point: workLocation,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.work,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    )),
+                  ],
+                ),
+                // 현재 위치 마커
+                MarkerLayer(markers: _currentMarkers),
+                // Firebase 마커들 (포스트 + 사용자 생성 마커)
+                MarkerLayer(markers: _clusteredMarkers),
+                      ],
+                    ),
+          ),
+          // 로딩 인디케이터
+          if (_isLoading)
+            Positioned(
+              top: 50,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('마커를 불러오는 중...'),
+                  ],
+                ),
+              ),
+            ),
+          // 에러 메시지
+          if (_errorMessage != null)
+           Positioned(
+              top: 50,
+              left: 16,
+              right: 16,
+             child: Container(
+                padding: const EdgeInsets.all(16),
+               decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          // 로딩 인디케이터
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
+          // 필터 버튼들 (상단) - 개선된 디자인
+          Positioned(
+            top: 10,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+               child: Row(
+                 children: [
+                  // 필터 아이콘
+                  Icon(Icons.tune, color: Colors.blue[600], size: 18),
+                  const SizedBox(width: 8),
+                  
+                  // 필터 버튼들

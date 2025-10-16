@@ -119,7 +119,7 @@ class MapMainWidget extends StatelessWidget {
   Widget _buildMainMap(BuildContext context) {
     return GestureDetector(
       onSecondaryTapDown: (details) => onSecondaryTapDown(
-        TapPosition(global: details.globalPosition, relative: details.localPosition),
+        TapPosition(details.globalPosition, details.localPosition),
         _calculatePositionFromTap(context, details.globalPosition),
       ),
       child: FlutterMap(
