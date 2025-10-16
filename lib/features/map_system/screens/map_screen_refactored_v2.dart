@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_firestore/firebase_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:vibration/vibration.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -131,17 +130,22 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    await _locationHandler.getCurrentLocation();
-    if (_locationHandler.currentPosition != null && mounted) {
-      setState(() {
-        _currentPosition = _locationHandler.currentPosition;
-        _errorMessage = _locationHandler.errorMessage;
-      });
-      _createCurrentLocationMarker(_locationHandler.currentPosition!);
-      _updateCurrentAddress();
-      _checkPremiumStatus();
-      _setupPostStreamListener();
-      _updatePostsBasedOnFogLevel();
+    final result = await _locationHandler.getCurrentLocation();
+    if (result != null && mounted) {
+      final (position, error) = result;
+      if (position != null) {
+        setState(() {
+          _currentPosition = position;
+          _errorMessage = null;
+        });
+        _createCurrentLocationMarker(position);
+        _updateCurrentAddress();
+        _checkPremiumStatus();
+        _setupPostStreamListener();
+        _updatePostsBasedOnFogLevel();
+      } else if (error != null) {
+        setState(() => _errorMessage = error);
+      }
     }
   }
 
@@ -204,7 +208,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _updateCurrentAddress() async {
     if (_currentPosition != null) {
       try {
-        final address = await NominatimService.reverseGeocode(_currentPosition!);
+        final address = await NominatimService().reverseGeocode(_currentPosition!);
         // 주소 업데이트 로직
       } catch (e) {
         debugPrint('주소 업데이트 실패: $e');
@@ -262,13 +266,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _updateFogOfWar() async {
     if (_currentPosition != null) {
-      // Load user locations and rebuild fog
-      final (homeLocation, workLocations) = await _fogHandler.loadUserLocations();
-      _fogHandler.rebuildFogWithUserLocations(
-        currentPosition: _currentPosition!,
-        homeLocation: homeLocation,
-        workLocations: workLocations,
-      );
+      await _fogHandler.updateFogOfWar(_currentPosition!);
       
       if (mounted) {
         setState(() {
@@ -340,9 +338,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _updateReceivablePosts() async {
-    // TODO: Implement calculateReceivablePosts method
-    // For now, set count to 0
-    final count = 0;
+    final count = await _postHandler.calculateReceivablePosts(_currentPosition, _markers);
     
     if (mounted) {
       setState(() {
@@ -372,20 +368,29 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _collectPostFromMarker(MarkerModel marker) async {
-    // TODO: Implement collectPostFromMarker method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('포스트 수집 기능을 구현 중입니다')),
-    );
+    final result = await _postHandler.collectPostFromMarker(marker, context);
+    
+    if (result != null && mounted) {
+      final (success, newMarkers) = result;
+      if (success) {
+        setState(() {
+          _markers = newMarkers;
+        });
+        _updateMarkers();
+        _updateReceivablePosts();
+      }
+    }
   }
 
   Future<void> _removeMarker(MarkerModel marker) async {
-    // TODO: Implement removeMarker method
-    // For now, just remove from local list
-    if (mounted) {
+    final success = await _postHandler.removeMarker(marker);
+    
+    if (success && mounted) {
       setState(() {
         _markers.removeWhere((m) => m.markerId == marker.markerId);
       });
+      _updateMarkers();
+      _updateReceivablePosts();
     }
   }
 
@@ -397,18 +402,21 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _isReceiving = true);
     
     try {
-      // TODO: Implement receiveNearbyPosts method
-      // For now, return null
-      final results = null;
+      final results = await _postHandler.receiveNearbyPosts(
+        currentPosition: _currentPosition!,
+        markers: _markers,
+        context: context,
+        onReceiveEffects: _playReceiveEffects,
+        onShowCarousel: _showPostReceivedCarousel,
+      );
       
       if (results != null) {
         final (receivedCount, failedCount) = results;
         
         if (mounted) {
           setState(() {
-            // TODO: Update markers from post handler
-            // _markers = _postHandler.markers;
-            // _receivablePostCount = _postHandler.receivablePostCount;
+            _markers = _postHandler.markers;
+            _receivablePostCount = _postHandler.receivablePostCount;
           });
           _updateMarkers();
           _updateReceivablePosts();
@@ -544,38 +552,60 @@ class _MapScreenState extends State<MapScreen> {
   // ==================== Mock 모드 ====================
 
   void _toggleMockMode() {
-    // TODO: Implement toggleMockMode method
-    // For now, just toggle the state
-    setState(() {
-      _isMockModeEnabled = !_isMockModeEnabled;
-    });
+    _locationHandler.toggleMockMode(
+      onStateChanged: (isEnabled, isVisible) {
+        if (mounted) {
+          setState(() {
+            _isMockModeEnabled = isEnabled;
+            _isMockControllerVisible = isVisible;
+          });
+        }
+      },
+    );
   }
 
   Future<void> _setMockPosition(LatLng position) async {
-    // TODO: Implement setMockPosition method
-    // For now, just update the position
-    setState(() {
-      _mockPosition = position;
-      _isMockModeEnabled = true;
-      _isMockControllerVisible = true;
-    });
+    await _locationHandler.setMockPosition(
+      position: position,
+      onPositionChanged: (newPosition, address) {
+        if (mounted) {
+          setState(() {
+            _mockPosition = newPosition;
+            _mockAddress = address;
+            _isMockModeEnabled = true;
+            _isMockControllerVisible = true;
+          });
+        }
+      },
+    );
   }
 
   void _moveMockPosition(String direction) async {
-    // TODO: Implement moveMockPosition method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Mock 위치 이동 기능을 구현 중입니다')),
+    final result = await _locationHandler.moveMockPosition(
+      direction: direction,
+      currentPosition: _mockPosition,
     );
+    
+    if (result != null && mounted) {
+      final (newPosition, address) = result;
+      setState(() {
+        _mockPosition = newPosition;
+        _mockAddress = address;
+      });
+    }
   }
 
   // ==================== 미확인 포스트 ====================
 
   Future<void> _showUnconfirmedPostsDialog() async {
-    // TODO: Implement showUnconfirmedPostsDialog method
-    // For now, just show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('미확인 포스트 기능을 구현 중입니다')),
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    await _uiHelper.showUnconfirmedPostsDialog(
+      context: context,
+      userId: currentUserId,
+      onConfirm: _confirmUnconfirmedPost,
+      onDelete: _deleteUnconfirmedPost,
     );
   }
 
@@ -649,3 +679,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
+
+// Vibration import (필요한 경우)
+import 'package:vibration/vibration.dart';
