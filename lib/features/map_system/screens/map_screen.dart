@@ -418,13 +418,8 @@ class _MapScreenState extends State<MapScreen> {
           if (_state.isLoading) _buildLoadingOverlay(),
           if (_state.errorMessage != null) _buildErrorMessage(),
           _buildFilterBar(),
-          MapLocationButtonsWidget(
-            homeLocation: _state.homeLocation,
-            workLocations: _state.workLocations,
-            onMoveToHome: _moveToHome,
-            onMoveToWorkplace: _moveToWorkplace,
-            onMoveToCurrentLocation: _moveToCurrentLocation,
-          ),
+          _buildLocationButtons(),
+          _buildMockController(),
         ],
       ),
       floatingActionButton: _buildReceiveFab(),
@@ -517,38 +512,203 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Widget _buildTopHeader() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 60,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue[600]!, Colors.blue[800]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                // 위치 정보
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _state.currentAddress ?? '위치를 확인하는 중...',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // 포인트 정보
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.account_balance_wallet,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_state.userPoints ?? 0}P',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 검색 버튼
+                IconButton(
+                  onPressed: () {
+                    // TODO: 검색 기능 구현
+                  },
+                  icon: const Icon(
+                    Icons.search,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                // DEBUG 라벨 (개발 모드에서만)
+                if (kDebugMode)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'DEBUG',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterBar() {
-    return Consumer<MapFilterProvider>(
+    return Positioned(
+      top: 16,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 50,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Consumer<MapFilterProvider>(
       builder: (context, filterProvider, child) {
-        return MapFilterBarWidget(
-          showMyPostsOnly: _state.showMyPostsOnly,
-          showCouponsOnly: _state.showCouponsOnly,
-          showUrgentOnly: filterProvider.showUrgentOnly,
-          showVerifiedOnly: filterProvider.showVerifiedOnly,
-          showUnverifiedOnly: filterProvider.showUnverifiedOnly,
-          onMyPostsChanged: (selected) {
+            return Row(
+              children: [
+                // 필터 아이콘
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
+                    ),
+                  ),
+                  child: IconButton(
+                    onPressed: _showFilterDialog,
+                    icon: const Icon(Icons.filter_list, color: Colors.grey),
+                    iconSize: 20,
+                  ),
+                ),
+                // 필터 버튼들
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip(
+                          icon: Icons.person,
+                          label: '내 포스트',
+                          isSelected: _state.showMyPostsOnly,
+                          onTap: () {
             setState(() {
-              _state.showMyPostsOnly = selected;
-              if (selected) {
+                              _state.showMyPostsOnly = !_state.showMyPostsOnly;
+                              if (_state.showMyPostsOnly) {
                 _state.showCouponsOnly = false;
                 filterProvider.setUrgentOnly(false);
               }
             });
             _updateMarkers();
           },
-          onCouponsChanged: (selected) {
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.card_giftcard,
+                          label: '쿠폰',
+                          isSelected: _state.showCouponsOnly,
+                          onTap: () {
             setState(() {
-              _state.showCouponsOnly = selected;
-              if (selected) {
+                              _state.showCouponsOnly = !_state.showCouponsOnly;
+                              if (_state.showCouponsOnly) {
                 _state.showMyPostsOnly = false;
                 filterProvider.setUrgentOnly(false);
               }
             });
             _updateMarkers();
           },
-          onUrgentChanged: (selected) {
-            filterProvider.setUrgentOnly(selected);
-            if (selected) {
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.access_time,
+                          label: '마감임박',
+                          isSelected: filterProvider.showUrgentOnly,
+                          onTap: () {
+                            filterProvider.setUrgentOnly(!filterProvider.showUrgentOnly);
+                            if (filterProvider.showUrgentOnly) {
               setState(() {
                 _state.showMyPostsOnly = false;
                 _state.showCouponsOnly = false;
@@ -556,62 +716,449 @@ class _MapScreenState extends State<MapScreen> {
             }
             _updateMarkers();
           },
-          onVerifiedChanged: (selected) {
-            filterProvider.setVerifiedOnly(selected);
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.verified,
+                          label: '인증',
+                          isSelected: filterProvider.showVerifiedOnly,
+                          onTap: () {
+                            filterProvider.setVerifiedOnly(!filterProvider.showVerifiedOnly);
             _updateMarkers();
           },
-          onUnverifiedChanged: (selected) {
-            filterProvider.setUnverifiedOnly(selected);
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.work_outline,
+                          label: '미인증',
+                          isSelected: filterProvider.showUnverifiedOnly,
+                          onTap: () {
+                            filterProvider.setUnverifiedOnly(!filterProvider.showUnverifiedOnly);
             _updateMarkers();
           },
-        );
-      },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // 추가 옵션 버튼
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.purple[50],
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      // TODO: 추가 옵션 구현
+                    },
+                    icon: Icon(
+                      Icons.more_horiz,
+                      color: Colors.purple[600],
+                    ),
+                    iconSize: 20,
+                  ),
+                ),
+                // 필터 초기화 버튼
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.refresh, color: Colors.grey),
+                    iconSize: 18,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildFilterChip({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[50] : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected 
+            ? Border.all(color: Colors.blue[300]!, width: 1)
+            : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.blue[600] : Colors.grey[600],
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? Colors.blue[600] : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationButtons() {
     return Positioned(
-      top: 50,
+      bottom: 100,
       right: 16,
       child: Column(
         children: [
-          _buildFilterButton(),
-          const SizedBox(height: 8),
-          _buildLocationButton(),
-          const SizedBox(height: 8),
-          _buildMockModeButton(),
+          // 집 버튼
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _state.homeLocation != null ? _moveToHome : null,
+              icon: Icon(
+                Icons.home, 
+                color: _state.homeLocation != null ? Colors.green : Colors.grey,
+              ),
+              iconSize: 24,
+            ),
+          ),
+          // 일터 버튼
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _state.workLocations.isNotEmpty ? _moveToWorkplace : null,
+              icon: Icon(
+                Icons.work, 
+                color: _state.workLocations.isNotEmpty ? Colors.orange : Colors.grey,
+              ),
+              iconSize: 24,
+            ),
+          ),
+          // 현재 위치 버튼
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _moveToCurrentLocation,
+              icon: const Icon(Icons.my_location, color: Colors.blue),
+              iconSize: 24,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterButton() {
-    return FloatingActionButton(
-      heroTag: 'filter',
-      mini: true,
-      onPressed: _showFilterDialog,
-      child: const Icon(Icons.filter_list),
-    );
-  }
-
-  Widget _buildLocationButton() {
-    return FloatingActionButton(
-      heroTag: 'location',
-      mini: true,
-      onPressed: _moveToCurrentLocation,
-      child: const Icon(Icons.my_location),
-    );
-  }
-
-  Widget _buildMockModeButton() {
-    if (!kDebugMode) return const SizedBox.shrink();
+  Widget _buildMockController() {
+    if (!_state.isMockControllerVisible) return const SizedBox.shrink();
     
-    return FloatingActionButton(
-      heroTag: 'mock',
-      mini: true,
-      onPressed: _toggleMockMode,
-      backgroundColor: _state.isMockModeEnabled ? Colors.orange : Colors.grey,
-      child: const Icon(Icons.developer_mode),
+    return Positioned(
+      bottom: 100,
+      left: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 제목과 닫기 버튼
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Colors.purple,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_searching, color: Colors.white, size: 16),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Mock 위치',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _state.isMockControllerVisible = false;
+                      });
+                    },
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
+                ],
+              ),
+            ),
+            // 화살표 컨트롤러
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  // 위쪽 화살표
+                  GestureDetector(
+                    onTap: () => _moveMockPosition('up'),
+                    child: Container(
+                      width: 40,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: const Icon(Icons.keyboard_arrow_up, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // 좌우 화살표
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _moveMockPosition('left'),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: const Icon(Icons.keyboard_arrow_left, color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      // 중앙 위치 표시
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                        ),
+                        child: const Icon(Icons.my_location, color: Colors.purple, size: 16),
+                      ),
+                      const SizedBox(width: 2),
+                      GestureDetector(
+                        onTap: () => _moveMockPosition('right'),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: const Icon(Icons.keyboard_arrow_right, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  // 아래쪽 화살표
+                  GestureDetector(
+                    onTap: () => _moveMockPosition('down'),
+                    child: Container(
+                      width: 40,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 현재 위치 정보
+            if (_state.mockPosition != null)
+              GestureDetector(
+                onTap: _showMockPositionInputDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '위도: ${_state.mockPosition!.latitude.toStringAsFixed(4)}',
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 10, color: Colors.grey),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '경도: ${_state.mockPosition!.longitude.toStringAsFixed(4)}',
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 10, color: Colors.grey),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                icon: Icons.map,
+                label: 'Map',
+                isSelected: true,
+                onTap: () {
+                  // 현재 화면이므로 아무것도 하지 않음
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.inbox,
+                label: 'Inbox',
+                isSelected: false,
+                onTap: () {
+                  widget.onNavigateToInbox?.call();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[50] : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.blue[600] : Colors.grey[600],
+              size: 20,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.blue[600] : Colors.grey[600],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -701,8 +1248,11 @@ class _MapScreenState extends State<MapScreen> {
     if (_state.longPressedLatLng != null) {
       Navigator.pushNamed(
         context,
-        '/post-place',
-        arguments: {'location': _state.longPressedLatLng},
+        '/post-deploy',
+        arguments: {
+          'location': _state.longPressedLatLng,
+          'type': 'location',
+        },
       );
     }
   }
@@ -711,13 +1261,26 @@ class _MapScreenState extends State<MapScreen> {
     if (_state.longPressedLatLng != null) {
       Navigator.pushNamed(
         context,
-        '/post-place',
-        arguments: {'location': _state.longPressedLatLng, 'useAddress': true},
+        '/post-deploy',
+        arguments: {
+          'location': _state.longPressedLatLng,
+          'type': 'address',
+        },
       );
     }
   }
 
   // ==================== 액션 ====================
+  
+  void _resetFilters() {
+    final filterProvider = context.read<MapFilterProvider>();
+    filterProvider.resetFilters();
+    setState(() {
+      _state.showMyPostsOnly = false;
+      _state.showCouponsOnly = false;
+    });
+    _updateMarkers();
+  }
   
   void _showFilterDialog() {
     final filterProvider = context.read<MapFilterProvider>();
@@ -775,6 +1338,83 @@ class _MapScreenState extends State<MapScreen> {
       _state.isMockModeEnabled = !_state.isMockModeEnabled;
       _state.isMockControllerVisible = _state.isMockModeEnabled;
     });
+  }
+
+  void _moveMockPosition(String direction) {
+    if (_state.mockPosition == null) return;
+    
+    const double step = 0.001; // 약 100m 정도
+    double newLat = _state.mockPosition!.latitude;
+    double newLng = _state.mockPosition!.longitude;
+    
+    switch (direction) {
+      case 'up':
+        newLat += step;
+        break;
+      case 'down':
+        newLat -= step;
+        break;
+      case 'left':
+        newLng -= step;
+        break;
+      case 'right':
+        newLng += step;
+        break;
+    }
+    
+    setState(() {
+      _state.mockPosition = LatLng(newLat, newLng);
+    });
+    
+    // TODO: Mock 위치 업데이트 로직
+  }
+
+  void _showMockPositionInputDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mock 위치 설정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: '위도',
+                hintText: '37.5665',
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              onChanged: (value) {
+                // TODO: 위도 입력 처리
+              },
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: '경도',
+                hintText: '126.9780',
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              onChanged: (value) {
+                // TODO: 경도 입력 처리
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Mock 위치 적용
+            },
+            child: const Text('적용'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleReceivePosts() async {

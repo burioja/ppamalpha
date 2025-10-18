@@ -315,30 +315,45 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(48),
         child: AppBar(
-          backgroundColor: Colors.blue[600],
-          foregroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           elevation: 0,
           automaticallyImplyLeading: false,
-          flexibleSpace: SafeArea(
-            child: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue[600]!, Colors.purple[600]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.normal,
-              ),
-              tabs: const [
-                Tab(text: '내 포스트'),
-                Tab(text: '받은 포스트'),
-                Tab(text: '통계'),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
               ],
+            ),
+            child: SafeArea(
+              child: TabBar(
+                controller: _tabController,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                ),
+                tabs: const [
+                  Tab(text: '내 포스트'),
+                  Tab(text: '받은 포스트'),
+                  Tab(text: '통계'),
+                ],
+              ),
             ),
           ),
         ),

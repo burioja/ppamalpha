@@ -33,9 +33,12 @@ class MapState {
   MapController? mapController;
   LatLng? currentPosition;
   double currentZoom = 14.0;
-  String currentAddress = '위치 불러오는 중...';
+  String? currentAddress;
   LatLng? longPressedLatLng;
   Widget? customMarkerIcon;
+  
+  // ==================== 사용자 정보 ====================
+  int? userPoints;
 
   // ==================== 포스트 관련 ====================
   List<PostModel> posts = [];
