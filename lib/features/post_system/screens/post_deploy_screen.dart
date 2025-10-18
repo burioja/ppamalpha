@@ -87,7 +87,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         .snapshots()
         .listen((snapshot) {
       if (mounted) {
-        setState(() {
+    setState(() {
           _userPosts = snapshot.docs
               .map((doc) => PostModel.fromFirestore(doc))
               .toList();
@@ -103,9 +103,9 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       
       final pointsModel = await _pointsService.getUserPoints(user.uid);
       if (mounted) {
-        setState(() {
+      setState(() {
           _userPoints = pointsModel?.totalPoints ?? 0;
-        });
+      });
       }
     } catch (e) {
       debugPrint('포인트 로드 실패: $e');
@@ -304,10 +304,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedPost = post;
-        });
-      },
+                setState(() {
+                  _selectedPost = post;
+                });
+              },
       child: Container(
         width: 160,
         margin: const EdgeInsets.only(right: 12),
@@ -407,8 +407,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -603,9 +603,9 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isDeploying = false;
-        });
+      setState(() {
+        _isDeploying = false;
+      });
       }
     }
   }

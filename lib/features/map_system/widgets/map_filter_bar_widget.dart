@@ -1,150 +1,202 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/map_filter_provider.dart';
+import '../widgets/map_filter_dialog.dart';
 
 /// 지도 상단 필터 바 위젯
 class MapFilterBarWidget extends StatelessWidget {
   final bool showMyPostsOnly;
   final bool showCouponsOnly;
-  final bool showUrgentOnly;
-  final bool showVerifiedOnly;
-  final bool showUnverifiedOnly;
+  final VoidCallback onUpdateMarkers;
+  final VoidCallback onShowFilterDialog;
   final Function(bool) onMyPostsChanged;
   final Function(bool) onCouponsChanged;
-  final Function(bool) onUrgentChanged;
-  final Function(bool) onVerifiedChanged;
-  final Function(bool) onUnverifiedChanged;
 
   const MapFilterBarWidget({
     super.key,
     required this.showMyPostsOnly,
     required this.showCouponsOnly,
-    required this.showUrgentOnly,
-    required this.showVerifiedOnly,
-    required this.showUnverifiedOnly,
+    required this.onUpdateMarkers,
+    required this.onShowFilterDialog,
     required this.onMyPostsChanged,
     required this.onCouponsChanged,
-    required this.onUrgentChanged,
-    required this.onVerifiedChanged,
-    required this.onUnverifiedChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: 10,
-      left: 16,
-      right: 16,
+      top: 16,
+      left: 0,
+      right: 0,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        height: 50,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Row(
-          children: [
-            // 필터 아이콘
-            Icon(Icons.tune, color: Colors.blue[600], size: 18),
-            const SizedBox(width: 8),
-            
-            // 필터 버튼들
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    // 내 포스트 필터
-                    _buildFilterChip(
-                      label: '내 포스트',
-                      selected: showMyPostsOnly,
-                      onSelected: onMyPostsChanged,
-                      selectedColor: Colors.blue,
-                      icon: Icons.person,
+        child: Consumer<MapFilterProvider>(
+          builder: (context, filterProvider, child) {
+            return Row(
+              children: [
+                // 필터 아이콘
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
                     ),
-                    const SizedBox(width: 6),
-                    
-                    // 쿠폰 필터
-                    _buildFilterChip(
-                      label: '쿠폰',
-                      selected: showCouponsOnly,
-                      onSelected: onCouponsChanged,
-                      selectedColor: Colors.green,
-                      icon: Icons.card_giftcard,
-                    ),
-                    const SizedBox(width: 6),
-                    
-                    // 마감임박 필터
-                    _buildFilterChip(
-                      label: '마감임박',
-                      selected: showUrgentOnly,
-                      onSelected: onUrgentChanged,
-                      selectedColor: Colors.orange,
-                      icon: Icons.timer,
-                    ),
-                    const SizedBox(width: 6),
-                    
-                    // 인증 필터
-                    _buildFilterChip(
-                      label: '인증',
-                      selected: showVerifiedOnly,
-                      onSelected: onVerifiedChanged,
-                      selectedColor: Colors.purple,
-                      icon: Icons.verified,
-                    ),
-                    const SizedBox(width: 6),
-                    
-                    // 미인증 필터
-                    _buildFilterChip(
-                      label: '미인증',
-                      selected: showUnverifiedOnly,
-                      onSelected: onUnverifiedChanged,
-                      selectedColor: Colors.red,
-                      icon: Icons.warning,
-                    ),
-                  ],
+                  ),
+                  child: IconButton(
+                    onPressed: onShowFilterDialog,
+                    icon: const Icon(Icons.filter_list, color: Colors.grey),
+                    iconSize: 20,
+                  ),
                 ),
-              ),
-            ),
-          ],
+                // 필터 버튼들
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip(
+                          icon: Icons.person,
+                          label: '내 포스트',
+                          isSelected: showMyPostsOnly,
+                          onTap: () {
+                            onMyPostsChanged(!showMyPostsOnly);
+                            onUpdateMarkers();
+                          },
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.card_giftcard,
+                          label: '쿠폰',
+                          isSelected: showCouponsOnly,
+                          onTap: () {
+                            onCouponsChanged(!showCouponsOnly);
+                            onUpdateMarkers();
+                          },
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.access_time,
+                          label: '마감임박',
+                          isSelected: filterProvider.showUrgentOnly,
+                          onTap: () {
+                            filterProvider.setUrgentOnly(!filterProvider.showUrgentOnly);
+                            if (filterProvider.showUrgentOnly) {
+                              // 다른 필터들 해제 로직은 상위에서 처리
+                            }
+                            onUpdateMarkers();
+                          },
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.verified,
+                          label: '인증',
+                          isSelected: filterProvider.showVerifiedOnly,
+                          onTap: () {
+                            filterProvider.setVerifiedOnly(!filterProvider.showVerifiedOnly);
+                            onUpdateMarkers();
+                          },
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.work_outline,
+                          label: '미인증',
+                          isSelected: filterProvider.showUnverifiedOnly,
+                          onTap: () {
+                            filterProvider.setUnverifiedOnly(!filterProvider.showUnverifiedOnly);
+                            onUpdateMarkers();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // 추가 옵션 버튼
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.purple[50],
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      // TODO: 추가 옵션 구현
+                    },
+                    icon: Icon(
+                      Icons.more_horiz,
+                      color: Colors.purple[600],
+                    ),
+                    iconSize: 20,
+                  ),
+                ),
+                // 필터 초기화 버튼
+                Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      filterProvider.resetFilters();
+                      onUpdateMarkers();
+                    },
+                    icon: const Icon(Icons.refresh, color: Colors.grey),
+                    iconSize: 18,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
   Widget _buildFilterChip({
-    required String label,
-    required bool selected,
-    required Function(bool) onSelected,
-    required Color selectedColor,
     required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
   }) {
     return GestureDetector(
-      onTap: () => onSelected(!selected),
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? selectedColor : Colors.grey[200],
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? Colors.blue[50] : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected 
+              ? Border.all(color: Colors.blue[300]!, width: 1)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 14,
-              color: selected ? Colors.white : Colors.grey[600],
+              size: 16,
+              color: isSelected ? Colors.blue[600] : Colors.grey[600],
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: selected ? Colors.white : Colors.grey[700],
+                color: isSelected ? Colors.blue[600] : Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
             ),
