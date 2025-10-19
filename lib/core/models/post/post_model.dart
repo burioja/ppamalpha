@@ -9,6 +9,13 @@ enum PostStatus {
   DELETED,   // 삭제됨
 }
 
+// 포스트 배포 타입 열거형
+enum DeploymentType {
+  STREET,      // 거리배포 - 마커 생성, 근접 수령
+  MAILBOX,     // 우편함배포 - 집/일터 사용자 자동 수령
+  BILLBOARD,   // 광고보드배포 - 광고보드 클릭 시 전체 수령
+}
+
 // 포스트 상태 확장 메서드
 extension PostStatusExtension on PostStatus {
   String get name {
@@ -52,6 +59,55 @@ extension PostStatusExtension on PostStatus {
         return PostStatus.DELETED;
       default:
         return PostStatus.DRAFT;
+    }
+  }
+}
+
+// 배포 타입 확장 메서드
+extension DeploymentTypeExtension on DeploymentType {
+  String get name {
+    switch (this) {
+      case DeploymentType.STREET:
+        return '거리배포';
+      case DeploymentType.MAILBOX:
+        return '우편함배포';
+      case DeploymentType.BILLBOARD:
+        return '광고보드배포';
+    }
+  }
+
+  String get value {
+    switch (this) {
+      case DeploymentType.STREET:
+        return 'street';
+      case DeploymentType.MAILBOX:
+        return 'mailbox';
+      case DeploymentType.BILLBOARD:
+        return 'billboard';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case DeploymentType.STREET:
+        return '거리에 마커를 만들고 근접한 사용자가 수령';
+      case DeploymentType.MAILBOX:
+        return '집/일터가 선택 주소인 사용자가 자동 수령';
+      case DeploymentType.BILLBOARD:
+        return '광고보드 클릭 시 등록된 모든 포스트 수령';
+    }
+  }
+
+  static DeploymentType fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'street':
+        return DeploymentType.STREET;
+      case 'mailbox':
+        return DeploymentType.MAILBOX;
+      case 'billboard':
+        return DeploymentType.BILLBOARD;
+      default:
+        return DeploymentType.STREET; // 기본값
     }
   }
 }
@@ -120,6 +176,9 @@ class PostModel {
   // 휴지통 시스템
   final DateTime? deletedAt; // 휴지통으로 이동한 시각 (null이면 정상 상태)
 
+  // 배포 방식
+  final DeploymentType deploymentType; // 배포 타입 (거리/우편함/광고보드)
+
   PostModel({
     required this.postId,
     required this.creatorId,
@@ -156,6 +215,7 @@ class PostModel {
     this.recalledAt,
     this.isVerified = false, // 기본값 false
     this.deletedAt, // 휴지통 시스템
+    this.deploymentType = DeploymentType.STREET, // 기본값: 거리배포
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -235,6 +295,7 @@ class PostModel {
       deletedAt: data['deletedAt'] != null
           ? (data['deletedAt'] as Timestamp).toDate()
           : null,
+      deploymentType: DeploymentTypeExtension.fromString(data['deploymentType'] ?? 'street'),
     );
   }
 
@@ -274,6 +335,7 @@ class PostModel {
       'recalledAt': recalledAt != null ? Timestamp.fromDate(recalledAt!) : null,
       'isVerified': isVerified,
       'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
+      'deploymentType': deploymentType.value,
     };
   }
 
@@ -401,6 +463,7 @@ class PostModel {
     DateTime? recalledAt,
     bool? isVerified,
     DateTime? deletedAt,
+    DeploymentType? deploymentType,
   }) {
     return PostModel(
       postId: postId ?? this.postId,
@@ -437,6 +500,7 @@ class PostModel {
       recalledAt: recalledAt ?? this.recalledAt,
       isVerified: isVerified ?? this.isVerified,
       deletedAt: deletedAt ?? this.deletedAt,
+      deploymentType: deploymentType ?? this.deploymentType,
     );
   }
 } 

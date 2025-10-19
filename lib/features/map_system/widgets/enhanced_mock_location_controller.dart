@@ -13,7 +13,7 @@ class EnhancedMockLocationController extends StatefulWidget {
   final LatLng? currentPosition;
   final bool isMockModeEnabled;
   final bool isVisible;
-  final Function(LatLng) onPositionChanged;
+  final Future<void> Function(LatLng) onPositionChanged;
   final VoidCallback? onClose;
   
   const EnhancedMockLocationController({
@@ -224,7 +224,7 @@ class _EnhancedMockLocationControllerState
     );
   }
 
-  void _moveMockPosition(String direction) {
+  Future<void> _moveMockPosition(String direction) async {
     if (_mockPosition == null) return;
 
     const double moveDistance = 0.000225; // 약 25m 이동
@@ -263,7 +263,7 @@ class _EnhancedMockLocationControllerState
       _mockPosition = newPosition;
     });
 
-    widget.onPositionChanged(newPosition);
+    await widget.onPositionChanged(newPosition);
   }
 
   Future<void> _showPositionInputDialog() async {
@@ -337,7 +337,7 @@ class _EnhancedMockLocationControllerState
           setState(() {
             _mockPosition = newPosition;
           });
-          widget.onPositionChanged(newPosition);
+          await widget.onPositionChanged(newPosition);
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

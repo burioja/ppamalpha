@@ -49,8 +49,21 @@ class TileUtils {
     };
   }
 
-  /// 타일의 경계 좌표 가져오기
+  /// 타일의 경계 좌표 가져오기 (일반 타일 전용)
+  /// 1km 타일은 getKm1TileBounds() 사용!
   static Map<String, double> getTileBounds(String tileId) {
+    // 1km 타일 형식이면 전용 메서드로 리디렉션
+    if (tileId.startsWith('tile_')) {
+      final bounds = getKm1TileBounds(tileId);
+      return {
+        'north': bounds['maxLat']!,
+        'south': bounds['minLat']!,
+        'west': bounds['minLng']!,
+        'east': bounds['maxLng']!,
+      };
+    }
+    
+    // 일반 타일 형식 (X_Y_ZOOM) 처리
     final parts = tileId.split('_');
     if (parts.length != 3) {
       throw ArgumentError('잘못된 타일 ID 형식: $tileId');

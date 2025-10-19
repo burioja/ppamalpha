@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/repositories/tiles_repository.dart';
 import '../../../core/models/map/fog_level.dart';
 import '../../../utils/tile_utils.dart';
+import '../services/fog_of_war/visit_tile_service.dart';
 
 /// 타일(Fog of War) 상태 관리 Provider
 /// 
@@ -26,6 +28,9 @@ class TileProvider with ChangeNotifier {
   /// 최근 30일 방문 타일 ID 세트
   Set<String> _visited30Days = {};
   
+  /// 현재 Level 1인 타일들 (현재 위치, 집, 일터 주변 1km)
+  Set<String> _currentLevel1TileIds = {};
+  
   /// 이미지 캐시 통계
   Map<String, dynamic> _imageCacheStats = {
     'memoryCount': 0,
@@ -39,10 +44,19 @@ class TileProvider with ChangeNotifier {
   /// 에러 메시지
   String? _errorMessage;
 
+  // ==================== 이동 추적 ====================
+  
+  /// 직전 위치 (방문 확정용)
+  LatLng? _previousPosition;
+  
+  /// 직전 Level 1 타일들 (방문 확정용)
+  Set<String> _previousLevel1TileIds = {};
+
   // ==================== Getters ====================
   
   Map<String, FogLevel> get visitedTiles => Map.unmodifiable(_visitedTiles);
   Set<String> get visited30Days => Set.unmodifiable(_visited30Days);
+  Set<String> get currentLevel1TileIds => Set.unmodifiable(_currentLevel1TileIds);
   Map<String, dynamic> get imageCacheStats => Map.unmodifiable(_imageCacheStats);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -195,7 +209,18 @@ class TileProvider with ChangeNotifier {
 
   /// 특정 타일의 Fog Level 가져오기
   FogLevel getFogLevel(String tileId) {
-    return _visitedTiles[tileId] ?? FogLevel.black;
+    // 현재 Level 1 타일이면 clear
+    if (_currentLevel1TileIds.contains(tileId)) {
+      return FogLevel.clear;
+    }
+    
+    // 30일 방문 타일이면 gray
+    if (_visited30Days.contains(tileId)) {
+      return FogLevel.gray;
+    }
+    
+    // 나머지는 black
+    return FogLevel.black;
   }
 
   /// 위치의 Fog Level 가져오기
@@ -213,10 +238,151 @@ class TileProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 현재 위치 타일을 Level 1로 설정
+  /// 
+  /// Mock 위치 이동 시 사용
+  /// [tileId]: 현재 위치 타일 ID
+  void setCurrentTile(String tileId) {
+    _currentLevel1TileIds.clear(); // 이전 Level 1 타일 제거
+    _currentLevel1TileIds.add(tileId); // 새 타일만 Level 1로
+    
+    // visited30Days에도 추가 (방문 기록)
+    if (!_visited30Days.contains(tileId)) {
+      _visited30Days.add(tileId);
+    }
+    
+    notifyListeners();
+    debugPrint('🎯 현재 타일 Level 1로 설정: $tileId (이전 타일들은 Level 2로 전환)');
+  }
+  
+  /// 🎯 GPS 이동 콜백 (핵심 메서드)
+  /// 
+  /// "방문확정 → 레벨1 재계산" 순서 보장
+  /// 
+  /// [newPosition]: 새 GPS 위치
+  /// [homeLocation]: 집 위치
+  /// [workLocations]: 일터 위치들
+  Future<void> onLocationUpdate({
+    required LatLng newPosition,
+    LatLng? homeLocation,
+    List<LatLng> workLocations = const [],
+  }) async {
+    debugPrint('📍 onLocationUpdate 호출: ${newPosition.latitude}, ${newPosition.longitude}');
+    
+    final oldPosition = _previousPosition;
+    final oldLevel1Tiles = Set<String>.from(_currentLevel1TileIds);
+
+    debugPrint('🔍 이전 위치: ${oldPosition?.latitude}, ${oldPosition?.longitude}');
+    debugPrint('🔍 이전 L1 타일: ${oldLevel1Tiles.length}개');
+
+    // 1) 직전 Level 1을 방문 확정으로 업서트 (히스테리시스 적용)
+    if (oldPosition != null && _movedEnough(oldPosition, newPosition) && oldLevel1Tiles.isNotEmpty) {
+      debugPrint('✅ 히스테리시스 통과! 방문 확정 진행');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // 🎯 핵심: 직전 Level 1 타일들을 visited로 확정
+        await VisitTileService.upsertVisitedTiles(
+          userId: user.uid,
+          tileIds: oldLevel1Tiles.toList(),
+        );
+
+        // Optimistic update: gray에 바로 반영 → 체감 개선
+        _visited30Days.addAll(oldLevel1Tiles);
+        _previousLevel1TileIds = oldLevel1Tiles;
+        debugPrint('🔄 Optimistic update: ${oldLevel1Tiles.length}개 타일을 visited30Days에 추가 (총 ${_visited30Days.length}개)');
+      }
+    } else {
+      debugPrint('⏸️ 히스테리시스 미달: 방문 확정 스킵 (150m 미만 이동 또는 이전 위치 없음)');
+    }
+
+    // 2) 새 Level 1 재계산
+    _previousPosition = newPosition;
+    
+    final level1Tiles = <String>{};
+    
+    // 현재 위치 주변 타일
+    level1Tiles.add(TileUtils.getKm1TileId(
+      newPosition.latitude,
+      newPosition.longitude,
+    ));
+    
+    // 집 주변 타일
+    if (homeLocation != null) {
+      level1Tiles.add(TileUtils.getKm1TileId(
+        homeLocation.latitude,
+        homeLocation.longitude,
+      ));
+    }
+    
+    // 일터 주변 타일들
+    for (final work in workLocations) {
+      level1Tiles.add(TileUtils.getKm1TileId(
+        work.latitude,
+        work.longitude,
+      ));
+    }
+    
+    _currentLevel1TileIds = level1Tiles;
+    notifyListeners();
+    
+    debugPrint('🎯 위치 업데이트: Level 1 타일 ${level1Tiles.length}개');
+  }
+
+  /// 이동 거리 체크 (히스테리시스)
+  /// 
+  /// 150m 이상 이동 시만 방문 확정 (GPS 튐 완화)
+  bool _movedEnough(LatLng from, LatLng to) {
+    const Distance distance = Distance();
+    final meters = distance.as(LengthUnit.Meter, from, to);
+    debugPrint('📏 이동 거리: ${meters.toStringAsFixed(1)}m (임계값: 10m)');
+    return meters > 10.0; // 테스트용으로 150 → 10으로 낮춤
+  }
+
+  /// 현재 위치 주변 타일들을 Level 1로 설정
+  /// 
+  /// [currentPosition]: 현재 위치
+  /// [homeLocation]: 집 위치
+  /// [workLocations]: 일터 위치들
+  void updateLevel1Tiles({
+    required LatLng currentPosition,
+    LatLng? homeLocation,
+    List<LatLng> workLocations = const [],
+  }) {
+    final level1Tiles = <String>{};
+    
+    // 현재 위치 주변 타일
+    level1Tiles.add(TileUtils.getKm1TileId(
+      currentPosition.latitude,
+      currentPosition.longitude,
+    ));
+    
+    // 집 주변 타일
+    if (homeLocation != null) {
+      level1Tiles.add(TileUtils.getKm1TileId(
+        homeLocation.latitude,
+        homeLocation.longitude,
+      ));
+    }
+    
+    // 일터 주변 타일들
+    for (final work in workLocations) {
+      level1Tiles.add(TileUtils.getKm1TileId(
+        work.latitude,
+        work.longitude,
+      ));
+    }
+    
+    _currentLevel1TileIds = level1Tiles;
+    notifyListeners();
+    
+    debugPrint('🎯 Level 1 타일 업데이트: ${level1Tiles.length}개');
+  }
+
   /// 타일 상태 초기화
   void reset() {
     _visitedTiles.clear();
     _visited30Days.clear();
+    _currentLevel1TileIds.clear();
     _imageCacheStats = {
       'memoryCount': 0,
       'diskCount': 0,

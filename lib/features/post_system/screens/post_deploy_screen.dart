@@ -32,6 +32,7 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
 
   LatLng? _selectedLocation;
   String? _deployType;
+  DeploymentType _deploymentType = DeploymentType.STREET; // 배포 방식
   List<PostModel> _userPosts = [];
   PostModel? _selectedPost;
   bool _isLoading = false;
@@ -69,6 +70,12 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     _selectedLocation = args['location'] as LatLng?;
     _deployType = args['type'] as String? ?? 'location';
     _buildingName = args['buildingName'] as String?;
+    
+    // 배포 방식 파싱
+    final deploymentTypeStr = args['deploymentType'] as String?;
+    if (deploymentTypeStr != null) {
+      _deploymentType = DeploymentTypeExtension.fromString(deploymentTypeStr);
+    }
     
     if (_selectedLocation != null) {
       _setupPostsListener();
@@ -175,6 +182,8 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                 children: [
                   _buildLocationInfo(),
                   const SizedBox(height: 16),
+                  _buildDeploymentTypeInfo(),
+                  const SizedBox(height: 16),
                   _buildPostsToDeploy(),
                   const SizedBox(height: 16),
                   _buildDeploySettings(),
@@ -225,6 +234,63 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                       ),
                     ),
                   ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeploymentTypeInfo() {
+    Color typeColor;
+    IconData typeIcon;
+    
+    switch (_deploymentType) {
+      case DeploymentType.STREET:
+        typeColor = Colors.blue;
+        typeIcon = Icons.location_on;
+        break;
+      case DeploymentType.MAILBOX:
+        typeColor = Colors.green;
+        typeIcon = Icons.mail;
+        break;
+      case DeploymentType.BILLBOARD:
+        typeColor = Colors.orange;
+        typeIcon = Icons.campaign;
+        break;
+    }
+    
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(typeIcon, color: typeColor, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _deploymentType.name,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: typeColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _deploymentType.description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -580,13 +646,23 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     });
 
     try {
-      // TODO: 실제 배포 로직 구현
-      await Future.delayed(const Duration(seconds: 2)); // 임시 딜레이
+      // 배포 타입에 따라 다른 로직 수행
+      switch (_deploymentType) {
+        case DeploymentType.STREET:
+          await _deployStreetPost();
+          break;
+        case DeploymentType.MAILBOX:
+          await _deployMailboxPost();
+          break;
+        case DeploymentType.BILLBOARD:
+          await _deployBillboardPost();
+          break;
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('포스트가 성공적으로 배포되었습니다!'),
+          SnackBar(
+            content: Text('${_deploymentType.name} 성공!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -608,5 +684,52 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
       });
       }
     }
+  }
+
+  /// 거리배포 - 마커 생성
+  Future<void> _deployStreetPost() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('로그인이 필요합니다');
+
+    // 마커 생성 로직
+    final markerId = await MarkerDomainService.createMarker(
+      position: _selectedLocation!,
+      postId: _selectedPost!.postId,
+      creatorId: user.uid,
+      title: _selectedPost!.title,
+      reward: _selectedPost!.reward,
+      quantity: int.tryParse(_quantityController.text) ?? 1,
+      expiresAt: DateTime.now().add(Duration(days: _selectedDuration)),
+    );
+    
+    debugPrint('✅ 거리배포: 마커 생성 완료 (markerId: $markerId)');
+  }
+
+  /// 우편함배포 - 집/일터 사용자에게 자동 전송
+  Future<void> _deployMailboxPost() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('로그인이 필요합니다');
+
+    // 선택 위치 주변의 집/일터를 가진 사용자 찾기
+    // TODO: 집/일터 사용자 쿼리 및 미확인 포스트로 자동 전송
+    debugPrint('🏠 우편함배포: 집/일터 사용자 검색 중...');
+    
+    await Future.delayed(const Duration(seconds: 1)); // 임시
+    
+    debugPrint('✅ 우편함배포: 완료');
+  }
+
+  /// 광고보드배포 - 광고보드에 등록
+  Future<void> _deployBillboardPost() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('로그인이 필요합니다');
+
+    // 광고보드 등록 로직
+    // TODO: 광고보드 컬렉션에 포스트 등록
+    debugPrint('📢 광고보드배포: 광고보드 등록 중...');
+    
+    await Future.delayed(const Duration(seconds: 1)); // 임시
+    
+    debugPrint('✅ 광고보드배포: 완료');
   }
 }

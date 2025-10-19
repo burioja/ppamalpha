@@ -179,42 +179,8 @@ class FogService {
   }
 
   // ==================== 회색 영역 계산 ====================
-
-  /// 이전 위치 기반 회색 영역(Level 2) 폴리곤 생성
-  /// 
-  /// [previousPosition]: 이전 위치
-  /// Returns: 회색 영역 폴리곤 리스트
-  static List<Polygon> buildGrayAreaFromPreviousPosition(LatLng? previousPosition) {
-    if (previousPosition == null) return [];
-
-    final grayPolygons = <Polygon>[];
-    
-    // 타일 ID 계산
-    final tileId = TileUtils.getKm1TileId(
-      previousPosition.latitude,
-      previousPosition.longitude,
-    );
-
-    // 타일 경계 계산
-    final bounds = TileUtils.getTileBounds(tileId);
-
-    // 폴리곤 생성
-    final points = [
-      LatLng(bounds['south']!, bounds['west']!),
-      LatLng(bounds['north']!, bounds['west']!),
-      LatLng(bounds['north']!, bounds['east']!),
-      LatLng(bounds['south']!, bounds['east']!),
-    ];
-
-    grayPolygons.add(Polygon(
-      points: points,
-      color: const Color(0x55888888), // 반투명 회색
-      borderStrokeWidth: 0,
-    ));
-
-    debugPrint('🟦 회색 영역 생성: $tileId');
-    return grayPolygons;
-  }
+  // Polygon 생성 메서드들 제거됨
+  // UnifiedFogOverlayWidget이 visited30Days에서 직접 중심점 계산
 
   // ==================== Fog Level 계산 ====================
 

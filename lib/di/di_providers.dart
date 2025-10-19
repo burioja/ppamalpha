@@ -13,6 +13,7 @@ import '../features/map_system/providers/map_view_provider.dart';
 import '../features/map_system/providers/marker_provider.dart';
 import '../features/map_system/providers/tile_provider.dart';
 import '../features/map_system/providers/map_filter_provider.dart';
+import '../features/map_system/providers/mock_location_provider.dart';
 
 // Post Providers
 import '../features/post_system/providers/post_provider.dart';
@@ -59,6 +60,9 @@ class DIProviders {
         ),
         ChangeNotifierProvider(
           create: (_) => MapFilterProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => MockLocationProvider(),
         ),
       ];
 

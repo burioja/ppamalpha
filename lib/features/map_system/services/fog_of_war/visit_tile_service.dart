@@ -31,6 +31,36 @@ class VisitTileService {
     }
   }
 
+  /// A-2. 배치 방문 확정 업서트 (idempotent)
+  /// 
+  /// 직전 Level 1 타일들을 visited(30일)로 확정
+  static Future<void> upsertVisitedTiles({
+    required String userId,
+    required List<String> tileIds,
+  }) async {
+    if (tileIds.isEmpty) return;
+
+    try {
+      final batch = _fs.batch();
+      final col = _fs.collection('users').doc(userId).collection('visited_tiles');
+
+      for (final tileId in tileIds) {
+        final ref = col.doc(tileId);
+        batch.set(ref, {
+          'tileId': tileId,
+          'lastVisitTime': FieldValue.serverTimestamp(),
+          'visitCount': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+      }
+
+      await batch.commit();
+      debugPrint('✅ 방문 확정: ${tileIds.length}개 타일 → Firestore 업서트 완료');
+      debugPrint('📝 업서트된 타일들: ${tileIds.take(5).join(', ')}${tileIds.length > 5 ? '...' : ''}');
+    } catch (e) {
+      debugPrint('🔥 upsertVisitedTiles error: $e');
+    }
+  }
+
   /// B. 특정 타일의 포그 레벨 조회
   static Future<FogLevel> getFogLevelForTile(String tileId) async {
     final user = _auth.currentUser;

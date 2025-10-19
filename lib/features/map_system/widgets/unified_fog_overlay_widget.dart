@@ -88,9 +88,36 @@ class _UnifiedFogPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final camera = mapController.camera;
-    if (camera == null) return;
+    if (camera == null) {
+      debugPrint('🔥 paint: camera is null!');
+      return;
+    }
+
+    debugPrint('🎨 paint 호출: L1=${level1Centers.length}, L2=${level2Centers.length}');
 
     final layerBounds = Offset.zero & size;
+
+    // L1 Path 생성 (현위치, 집, 일터)
+    final l1Path = ui.Path();
+    for (final c in level1Centers) {
+      final cp = _toScreen(c, camera);
+      final r = _pixelsRadiusAt(c.latitude, radiusMeters, camera.zoom);
+      l1Path.addOval(ui.Rect.fromCircle(center: cp, radius: r));
+      debugPrint('  L1: center=$c, screen=$cp, radius=${r.toStringAsFixed(1)}px');
+    }
+
+    // L2 Path 생성 (visited30Days 타일들)
+    final l2Path = ui.Path();
+    for (final c in level2Centers) {
+      final cp = _toScreen(c, camera);
+      final r = _pixelsRadiusAt(c.latitude, radiusMeters, camera.zoom);
+      l2Path.addOval(ui.Rect.fromCircle(center: cp, radius: r));
+      debugPrint('  L2: center=$c, screen=$cp, radius=${r.toStringAsFixed(1)}px');
+    }
+
+    debugPrint('🎨 Path 생성 완료');
+
+    // ========== 10월 15일 방식: 하나의 saveLayer 안에서 모든 작업 ==========
     canvas.saveLayer(layerBounds, Paint());
 
     // 1) 전체 포그(검정) 칠하기
@@ -99,28 +126,18 @@ class _UnifiedFogPainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
     canvas.drawRect(layerBounds, fog);
+    debugPrint('  ✅ 1단계: 전체 검정 칠함');
 
     // 2) (L1 ∪ L2) 펀칭 → 지도 보이게
     final punch = Paint()
       ..blendMode = BlendMode.clear
       ..isAntiAlias = true;
 
-    final l1Path = ui.Path();
-    for (final c in level1Centers) {
-      final cp = _toScreen(c, camera);
-      final r = _pixelsRadiusAt(c.latitude, radiusMeters, camera.zoom);
-      l1Path.addOval(ui.Rect.fromCircle(center: cp, radius: r));
-    }
-
-    final l2Path = ui.Path();
-    for (final c in level2Centers) {
-      final cp = _toScreen(c, camera);
-      final r = _pixelsRadiusAt(c.latitude, radiusMeters, camera.zoom);
-      l2Path.addOval(ui.Rect.fromCircle(center: cp, radius: r));
-    }
-
-    final unionClear = ui.Path()..addPath(l1Path, Offset.zero)..addPath(l2Path, Offset.zero);
+    final unionClear = ui.Path()
+      ..addPath(l1Path, Offset.zero)
+      ..addPath(l2Path, Offset.zero);
     canvas.drawPath(unionClear, punch);
+    debugPrint('  ✅ 2단계: (L1 ∪ L2) 펀칭');
 
     // 3) 회색은 (L2 - L1)만 지도 위에 얹기 → L1 우선권 보장
     if (level2Centers.isNotEmpty) {
@@ -130,9 +147,12 @@ class _UnifiedFogPainter extends CustomPainter {
         ..style = PaintingStyle.fill
         ..isAntiAlias = true;
       canvas.drawPath(grayMinusL1, grayPaint);
+      debugPrint('  ✅ 3단계: L2-L1 회색 레이어');
     }
 
     canvas.restore();
+    
+    debugPrint('🎨 paint 완료!');
   }
 
   // Web Mercator: LatLng → 월드픽셀 → 화면픽셀

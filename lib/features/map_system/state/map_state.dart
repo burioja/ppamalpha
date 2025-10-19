@@ -11,8 +11,7 @@ import '../utils/client_cluster.dart';
 /// MapScreen의 모든 상태를 관리하는 클래스
 class MapState {
   // ==================== Fog of War 관련 ====================
-  List<Polygon> grayPolygons = [];
-  List<CircleMarker> ringCircles = [];
+  // grayPolygons, ringCircles 제거 - TileProvider + UnifiedFogOverlayWidget가 자동 처리
   List<Marker> currentMarkers = [];
 
   // ==================== 클러스터링 관련 ====================
@@ -43,6 +42,7 @@ class MapState {
   // ==================== 포스트 관련 ====================
   List<PostModel> posts = [];
   List<MarkerModel> markers = [];
+  MarkerModel? selectedMarker;
   bool isLoading = false;
   String? errorMessage;
 

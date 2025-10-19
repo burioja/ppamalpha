@@ -10,22 +10,29 @@ import 'package:provider/provider.dart';
 import '../../../core/models/user/user_model.dart';
 import '../providers/map_filter_provider.dart';
 import '../providers/tile_provider.dart' as fog_tile;
+import '../providers/mock_location_provider.dart';
+import '../providers/marker_provider.dart';
 import '../../../core/models/marker/marker_model.dart';
+import '../../../core/models/post/post_model.dart';
 import '../widgets/map_marker_detail_widget.dart';
 import '../widgets/map_longpress_menu_widget.dart';
 import '../widgets/map_filter_bar_widget.dart';
 import '../widgets/map_user_location_markers_widget.dart';
 import '../widgets/map_location_buttons_widget.dart';
-import '../widgets/mock_location_controller.dart';
+import '../widgets/enhanced_mock_location_controller.dart';
 import '../utils/client_cluster.dart';
 import '../widgets/unified_fog_overlay_widget.dart';
+import '../../../utils/tile_utils.dart';
 
 // ✨ 리팩토링된 Controller & State
 import '../services/fog/fog_service.dart';
+import '../services/markers/marker_app_service.dart';
 import '../controllers/location_controller.dart';
 import '../controllers/marker_controller.dart';
 import '../state/map_state.dart';
 import '../widgets/map_filter_dialog.dart';
+import '../../../core/services/data/marker_domain_service.dart';
+import '../../../core/models/post/post_model.dart';
 
 /// 리팩토링된 MapScreen - Clean Architecture 적용
 /// 
@@ -120,18 +127,17 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // Fog of War 재구성
-    _rebuildFogWithUserLocations(position);
-    
+    // 🎯 TileProvider의 핵심 메서드 호출
+    // "방문확정 → 레벨1 재계산" 순서 보장
+    final tileProvider = context.read<fog_tile.TileProvider>();
+    await tileProvider.onLocationUpdate(
+      newPosition: position,
+      homeLocation: _state.homeLocation,
+      workLocations: _state.workLocations,
+    );
+
     // 주소 업데이트
     await _updateCurrentAddress();
-    
-    // 타일 방문 기록
-    final tileId = await LocationController.updateTileVisit(position);
-    _state.addFogLevel1Tile(tileId);
-    
-    // 회색 영역 업데이트
-    await _updateGrayAreasWithPreviousPosition(previousPosition);
     
     // 프리미엄 상태 확인
     await _checkPremiumStatus();
@@ -175,20 +181,9 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // ==================== Fog of War ====================
-  
-  void _rebuildFogWithUserLocations(LatLng currentPosition) {
-    final result = FogService.rebuildFogWithUserLocations(
-      currentPosition: currentPosition,
-      homeLocation: _state.homeLocation,
-      workLocations: _state.workLocations,
-    );
-    
-    if (mounted) {
-      setState(() {
-        _state.ringCircles = result.$2;
-      });
-    }
-  }
+  // 
+  // Fog of War는 UnifiedFogOverlayWidget + TileProvider로 자동 관리됨
+  // 별도 메서드 불필요
 
   Future<void> _loadUserLocations() async {
     final result = await FogService.loadUserLocations();
@@ -200,33 +195,11 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    await _loadVisitedLocations();
-
-    if (_state.currentPosition != null) {
-      _rebuildFogWithUserLocations(_state.currentPosition!);
-    }
+    // Fog of War는 TileProvider + Consumer가 자동 관리
   }
 
-  Future<void> _loadVisitedLocations() async {
-    // TODO: 방문 위치 로드 로직 구현 필요
-    if (mounted) {
-      setState(() {
-        _state.grayPolygons = [];
-      });
-    }
-  }
-
-  Future<void> _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
-    final grayPolygons = FogService.buildGrayAreaFromPreviousPosition(
-      previousPosition,
-    );
-    
-    if (mounted) {
-      setState(() {
-        _state.grayPolygons = grayPolygons;
-      });
-    }
-  }
+  // _loadVisitedLocations() - 제거됨 (TileProvider가 자동 처리)
+  // _updateGrayAreasWithPreviousPosition() - 제거됨 (TileProvider가 자동 처리)
 
   // ==================== 사용자 데이터 리스너 ====================
   
@@ -316,9 +289,31 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateMarkers() {
-    _state.visibleMarkerModels = MarkerController.convertToClusterModels(_state.markers);
-    _rebuildClusters();
-    _updateReceivablePosts();
+    // MarkerProvider를 통해 Fog 레벨 기반 마커 조회
+    final markerProvider = context.read<MarkerProvider>();
+    final mockProvider = context.read<MockLocationProvider>();
+    
+    final effectivePosition = mockProvider.effectivePosition ?? _state.currentPosition;
+    
+    if (effectivePosition == null) {
+      debugPrint('❌ 위치 정보 없음');
+      return;
+    }
+    
+    markerProvider.refreshByFogLevel(
+      currentPosition: effectivePosition,
+      homeLocation: _state.homeLocation,
+      workLocations: _state.workLocations,
+      userType: _state.userType,
+      filters: {
+        'showCouponsOnly': _state.showCouponsOnly,
+        'myPostsOnly': _state.showMyPostsOnly,
+        'minReward': _state.minReward,
+        'showUrgentOnly': _state.showUrgentOnly,
+        'showVerifiedOnly': _state.showVerifiedOnly,
+        'showUnverifiedOnly': _state.showUnverifiedOnly,
+      },
+    );
   }
 
   void _rebuildClusters() {
@@ -429,6 +424,42 @@ class _MapScreenState extends State<MapScreen> {
               });
             },
           ),
+          // Mock 위치 토글 버튼 (필터바 밑)
+          Consumer<MockLocationProvider>(
+            builder: (context, mockProvider, _) {
+              return Positioned(
+                top: 75,
+                right: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: mockProvider.isMockModeEnabled 
+                        ? Colors.purple 
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      mockProvider.toggleMockMode();
+                    },
+                    icon: Icon(
+                      Icons.location_searching,
+                      color: mockProvider.isMockModeEnabled 
+                          ? Colors.white 
+                          : Colors.purple,
+                    ),
+                    iconSize: 20,
+                  ),
+                ),
+              );
+            },
+          ),
           MapLocationButtonsWidget(
             homeLocation: _state.homeLocation,
             workLocations: _state.workLocations,
@@ -436,13 +467,58 @@ class _MapScreenState extends State<MapScreen> {
             onMoveToWorkplace: _moveToWorkplace,
             onMoveToCurrentLocation: _moveToCurrentLocation,
           ),
-          MockLocationController(
-            currentPosition: _state.currentPosition,
-            onPositionChanged: (newPosition) {
-              setState(() {
-                _state.mockPosition = newPosition;
-              });
-              // TODO: Mock 위치 업데이트 로직
+          // Enhanced Mock Location Controller
+          Consumer<MockLocationProvider>(
+            builder: (context, mockProvider, _) {
+              return EnhancedMockLocationController(
+                currentPosition: mockProvider.effectivePosition ?? _state.currentPosition,
+                isMockModeEnabled: mockProvider.isMockModeEnabled,
+                isVisible: mockProvider.isControllerVisible,
+                onPositionChanged: (newPosition) async {
+                  // Mock 위치 Provider 업데이트
+                  mockProvider.setMockPosition(newPosition);
+                  
+                  // 현재 위치 상태 업데이트
+                  setState(() {
+                    _state.currentPosition = newPosition;
+                  });
+                  
+                  // 🎯 TileProvider의 핵심 메서드 호출
+                  // "방문확정 → 레벨1 재계산" 순서 보장
+                  try {
+                    debugPrint('🚀 TileProvider.onLocationUpdate 호출 시도...');
+                    final tileProvider = context.read<fog_tile.TileProvider>();
+                    debugPrint('✅ TileProvider 획득 성공');
+                    await tileProvider.onLocationUpdate(
+                      newPosition: newPosition,
+                      homeLocation: _state.homeLocation,
+                      workLocations: _state.workLocations,
+                    );
+                    debugPrint('✅ onLocationUpdate 완료');
+                  } catch (e, stackTrace) {
+                    debugPrint('🔥 TileProvider.onLocationUpdate 오류: $e');
+                    debugPrint('Stack trace: $stackTrace');
+                  }
+                  
+                  // 1. 현재 위치 마커 업데이트
+                  _createCurrentLocationMarker(newPosition);
+                  
+                  // 2. 지도 중심 이동
+                  final currentZoom = _state.mapController?.camera.zoom ?? _state.currentZoom;
+                  _state.mapController?.move(newPosition, currentZoom);
+                  
+                  // 3. 주소 업데이트
+                  await _updateCurrentAddress();
+                  
+                  // 4. 마커 업데이트
+                  _updateMarkers();
+                  
+                  debugPrint('🎭 Mock 위치 업데이트 완료: ${newPosition.latitude}, ${newPosition.longitude}');
+                },
+                onClose: () {
+                  mockProvider.hideController();
+                },
+              );
             },
           ),
         ],
@@ -469,30 +545,39 @@ class _MapScreenState extends State<MapScreen> {
         
         // Fog Overlay
         if (_state.mapController != null)
-        UnifiedFogOverlayWidget(
-          mapController: _state.mapController!,
-          level1Centers: [
-            if (_state.currentPosition != null) _state.currentPosition!,
-            if (_state.homeLocation != null) _state.homeLocation!,
-            ..._state.workLocations,
-          ],
-          level2CentersRaw: _state.grayPolygons.isNotEmpty 
-            ? _state.grayPolygons.map((polygon) {
-                if (polygon.points.isEmpty) return const LatLng(0, 0);
-                double sumLat = 0, sumLng = 0;
-                for (final point in polygon.points) {
-                  sumLat += point.latitude;
-                  sumLng += point.longitude;
-                }
-                return LatLng(
-                  sumLat / polygon.points.length,
-                  sumLng / polygon.points.length,
-                );
-              }).toList()
-            : [],
-          radiusMeters: 1000.0,
-          fogColor: Colors.black.withOpacity(1.0),
-          grayColor: Colors.grey.withOpacity(0.33),
+        Consumer<fog_tile.TileProvider>(
+          builder: (context, tileProvider, _) {
+            // visited30Days에서 직접 타일 중심점 계산
+            final level2Centers = <LatLng>[];
+            for (final tileId in tileProvider.visited30Days) {
+              try {
+                // 1km 타일 전용 메서드 사용!
+                final center = TileUtils.getKm1TileCenter(tileId);
+                level2Centers.add(center);
+              } catch (e) {
+                debugPrint('🔥 타일 중심점 계산 오류: $tileId - $e');
+              }
+            }
+            
+            final level1Centers = [
+              if (_state.currentPosition != null) _state.currentPosition!,
+              if (_state.homeLocation != null) _state.homeLocation!,
+              ..._state.workLocations,
+            ];
+            
+            debugPrint('🎯 Level 2 중심점: ${level2Centers.length}개 (visited30Days: ${tileProvider.visited30Days.length}개)');
+            debugPrint('🔍 L1 중심점: ${level1Centers.length}개');
+            debugPrint('📊 Fog 데이터: L1=${level1Centers.length} L2=${level2Centers.length} visited30Days=${tileProvider.visited30Days.length}');
+            
+            return UnifiedFogOverlayWidget(
+              mapController: _state.mapController!,
+              level1Centers: level1Centers,
+              level2CentersRaw: level2Centers,
+              radiusMeters: 1000.0,
+              fogColor: Colors.black.withOpacity(1.0),
+              grayColor: Colors.grey.withOpacity(0.33),
+            );
+          },
         ),
         
         // 집/일터 마커 레이어
@@ -501,8 +586,12 @@ class _MapScreenState extends State<MapScreen> {
           workLocations: _state.workLocations,
         ),
         
-        // 마커 레이어
-        MarkerLayer(markers: _state.clusteredMarkers),
+        // 마커 레이어 (Provider에서)
+        Consumer<MarkerProvider>(
+          builder: (context, markerProvider, _) {
+            return MarkerLayer(markers: _state.clusteredMarkers);
+          },
+        ),
         
         // 현재 위치 마커
         MarkerLayer(markers: _state.currentMarkers),
@@ -641,11 +730,125 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showLongPressMenu() {
-    showMapLongPressMenu(
+    _showDeploymentTypeSelectionDialog();
+  }
+
+  /// 배포 방식 선택 다이얼로그
+  void _showDeploymentTypeSelectionDialog() {
+    showDialog(
       context: context,
-      onDeployHere: _navigateToPostPlace,
-      onDeployAddress: _navigateToPostAddress,
+      builder: (context) => AlertDialog(
+        title: const Text('배포 방식 선택'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDeploymentTypeOption(
+              icon: Icons.location_on,
+              title: '거리배포',
+              description: '거리에 마커를 만들고 근접한 사용자가 수령',
+              color: Colors.blue,
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToPostDeploy(DeploymentType.STREET);
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDeploymentTypeOption(
+              icon: Icons.mail,
+              title: '우편함배포',
+              description: '집/일터가 선택 주소인 사용자가 자동 수령',
+              color: Colors.green,
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToPostDeploy(DeploymentType.MAILBOX);
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDeploymentTypeOption(
+              icon: Icons.campaign,
+              title: '광고보드배포',
+              description: '광고보드 클릭 시 등록된 모든 포스트 수령',
+              color: Colors.orange,
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToPostDeploy(DeploymentType.BILLBOARD);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+        ],
+      ),
     );
+  }
+
+  /// 배포 방식 옵션 위젯
+  Widget _buildDeploymentTypeOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(12),
+          color: color.withOpacity(0.05),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 배포 화면으로 네비게이션
+  void _navigateToPostDeploy(DeploymentType deploymentType) {
+    if (_state.longPressedLatLng != null) {
+      Navigator.pushNamed(
+        context,
+        '/post-deploy',
+        arguments: {
+          'location': _state.longPressedLatLng,
+          'deploymentType': deploymentType.value,
+        },
+      );
+    }
   }
 
   void _navigateToPostPlace() {
@@ -713,15 +916,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _updatePostsBasedOnFogLevel() async {
-    // TODO: Fog 레벨 기반 포스트 업데이트
-    if (mounted) {
-      setState(() => _state.isLoading = false);
-    }
+    _updateMarkers();
   }
 
   void _updateReceivablePosts() {
-    // TODO: 수령 가능 포스트 계산
-    setState(() => _state.receivablePostCount = 0);
+    final receivable = _state.markers.where((m) {
+      return m.remainingQuantity > 0 && m.isActive;
+    }).length;
+    
+    setState(() {
+      _state.receivablePostCount = receivable;
+    });
   }
 }
 
