@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../../constants/app_constants.dart';
+import '../map/fog_level.dart';
 
 /// 마커 모델 - 포스트에 접근하는 연결고리
 class MarkerModel {
@@ -11,6 +12,7 @@ class MarkerModel {
   final int quantity; // 수량 (호환성 유지, remainingQuantity와 동일)
   final int? reward; // 리워드 금액 (배포 시점 고정, 기존 마커 호환성을 위해 옵셔널)
   final bool? isSuperMarker; // 슈퍼마커 여부 (파생 저장, nullable 허용)
+  final bool isEventMarker; // 이벤트 마커 여부 (운영자만 배포)
   final String creatorId; // 마커 생성자
 
   // 🚀 Firebase 실제 데이터와 일치하는 새로운 필드들
@@ -39,6 +41,7 @@ class MarkerModel {
     required this.quantity,
     this.reward, // ✅ 옵셔널로 변경
     this.isSuperMarker,
+    this.isEventMarker = false, // 기본값: false (일반 마커)
     required this.creatorId,
     // 🚀 새로운 필드들
     required this.totalQuantity,
@@ -126,6 +129,7 @@ class MarkerModel {
       quantity: remainingQuantity, // quantity는 remainingQuantity와 동일
       reward: parseNullableInt(data['reward']), // ✅ 옵셔널 파싱
       isSuperMarker: data['isSuperMarker'] as bool?,
+      isEventMarker: data['isEventMarker'] as bool? ?? false,
       creatorId: data['creatorId'] ?? '',
       // 🚀 새로운 필드들
       totalQuantity: totalQuantity,
@@ -204,7 +208,30 @@ class MarkerModel {
       data['status'] = st;
     }
 
+    // 이벤트 마커 여부 저장
+    data['isEventMarker'] = isEventMarker;
+
     return data;
+  }
+
+  /// Fog 레벨에 따라 이 마커가 표시되어야 하는지 판단
+  /// 
+  /// - 이벤트 마커: 모든 레벨에서 표시
+  /// - Level 1 (clear): 모든 마커 표시
+  /// - Level 2 (gray): 슈퍼마커 + 이벤트 마커만
+  /// - Level 3 (black): 이벤트 마커만
+  bool shouldShowInFogLevel(FogLevel level) {
+    // 이벤트 마커는 항상 표시
+    if (isEventMarker) return true;
+    
+    // Level 1: 모든 마커 표시
+    if (level == FogLevel.clear) return true;
+    
+    // Level 2: 슈퍼마커만 표시
+    if (level == FogLevel.gray) return computedIsSuper;
+    
+    // Level 3: 표시 안함 (이벤트 마커는 위에서 이미 체크)
+    return false;
   }
 
   /// 마커 복사 (수량 변경)
@@ -216,6 +243,7 @@ class MarkerModel {
     int? quantity,
     int? reward,
     bool? isSuperMarker,
+    bool? isEventMarker,
     String? creatorId,
     // 🚀 새로운 필드들
     int? totalQuantity,
@@ -251,6 +279,7 @@ class MarkerModel {
       quantity: newValue, // quantity와 remainingQuantity 동일
       reward: reward ?? this.reward, // ✅ null 허용
       isSuperMarker: isSuperMarker ?? this.isSuperMarker,
+      isEventMarker: isEventMarker ?? this.isEventMarker,
       creatorId: creatorId ?? this.creatorId,
       // 🚀 새로운 필드들
       totalQuantity: totalQuantity ?? this.totalQuantity,

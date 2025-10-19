@@ -6,7 +6,7 @@ import '../../../core/models/post/post_model.dart';
 import '../../../core/models/marker/marker_model.dart';
 import '../../../core/models/user/user_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/data/marker_service.dart';
+import '../../../core/services/data/marker_domain_service.dart';
 import '../../../utils/tile_utils.dart';
 import '../services/fog_of_war/visit_tile_service.dart';
 
@@ -67,8 +67,8 @@ class MapPostHandler {
       final primaryCenter = centers.first;
       final additionalCenters = centers.skip(1).toList();
 
-      final normalRadiusKm = MarkerService.getMarkerDisplayRadius(userType, false) / 1000.0;
-      final superRadiusKm = MarkerService.getMarkerDisplayRadius(userType, true) / 1000.0;
+      final normalRadiusKm = MarkerDomainService.getMarkerDisplayRadius(userType, false) / 1000.0;
+      final superRadiusKm = MarkerDomainService.getMarkerDisplayRadius(userType, true) / 1000.0;
 
       debugPrint('🔍 서버 호출:');
       debugPrint('  - 주 중심점: ${primaryCenter.latitude}, ${primaryCenter.longitude}');
@@ -223,7 +223,7 @@ class MapPostHandler {
       }
 
       // 현재 위치 기준 근처 마커 조회 (100m 이내)
-      final nearbyMarkers = await MarkerService.getMarkersInArea(
+      final nearbyMarkers = await MarkerDomainService.getMarkersInArea(
         center: currentPosition,
         radiusKm: 0.1, // 100m = 0.1km
       );
@@ -258,7 +258,7 @@ class MapPostHandler {
       debugPrint('🎁 근처 포스트 일괄 수령 시작');
 
       // 근처 마커 조회 (100m 이내)
-      final nearbyMarkers = await MarkerService.getMarkersInArea(
+      final nearbyMarkers = await MarkerDomainService.getMarkersInArea(
         center: currentPosition,
         radiusKm: 0.1, // 100m = 0.1km
       );
@@ -323,23 +323,23 @@ class MapPostHandler {
     LatLng? homeLocation,
     required List<LatLng> workLocations,
   }) {
-    final maxRadius = MarkerService.getMarkerDisplayRadius(userType, false);
+    final maxRadius = MarkerDomainService.getMarkerDisplayRadius(userType, false);
 
     // 현재 위치 주변 확인
     if (currentPosition != null) {
-      final distance = MarkerService.calculateDistance(currentPosition, point);
+      final distance = MarkerDomainService.calculateDistance(currentPosition, point);
       if (distance <= maxRadius) return true;
     }
 
     // 집 주변 확인
     if (homeLocation != null) {
-      final distance = MarkerService.calculateDistance(homeLocation, point);
+      final distance = MarkerDomainService.calculateDistance(homeLocation, point);
       if (distance <= maxRadius) return true;
     }
 
     // 일터 주변 확인
     for (final workLocation in workLocations) {
-      final distance = MarkerService.calculateDistance(workLocation, point);
+      final distance = MarkerDomainService.calculateDistance(workLocation, point);
       if (distance <= maxRadius) return true;
     }
 

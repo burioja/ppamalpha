@@ -3,11 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'routes/app_routes.dart';
-import 'providers/user_provider.dart';
-import 'providers/search_provider.dart';
-import 'providers/screen_provider.dart';
-import 'providers/wallet_provider.dart';
-import 'features/map_system/providers/map_filter_provider.dart';
+import 'di/di_container.dart';
 import 'screens/auth/login_screen.dart';
 import 'features/user_dashboard/screens/main_screen.dart';
 
@@ -17,23 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<UserProvider>(
-          create: (_) => UserProvider(),
-        ),
-        ChangeNotifierProvider<SearchProvider>(
-          create: (_) => SearchProvider()
-        ),
-        ChangeNotifierProvider<ScreenProvider>(
-            create: (_) => ScreenProvider()
-        ),
-        ChangeNotifierProvider(
-            create: (_) => WalletProvider()
-        ),
-        ChangeNotifierProvider<MapFilterProvider>(
-          create: (_) => MapFilterProvider(),
-        ),
-      ],
+      providers: DIProviders.getProviders(),
       child: MaterialApp(
         scrollBehavior: const MaterialScrollBehavior().copyWith(
           dragDevices: {

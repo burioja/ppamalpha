@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/post/post_model.dart';
 import '../../../core/models/marker/marker_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/data/marker_service.dart' as core_marker;
+import '../../../core/services/data/marker_domain_service.dart' as core_marker;
 
 /// 포스트 관련 로직을 관리하는 컨트롤러
 class PostController {
@@ -55,7 +55,7 @@ class PostController {
   }) async {
     try {
       // 거리 확인 (200m 이내)
-      final canCollect = core_marker.MarkerService.canCollectMarker(
+      final canCollect = core_marker.MarkerDomainService.canCollectMarker(
         currentPosition,
         LatLng(marker.position.latitude, marker.position.longitude),
       );

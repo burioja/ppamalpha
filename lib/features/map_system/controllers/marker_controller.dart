@@ -4,10 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/marker/marker_model.dart';
-import '../utils/client_cluster.dart';
 import '../widgets/cluster_widgets.dart';
+import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, buildClusters, latLngToScreenWebMercator;
 import '../../../core/constants/app_constants.dart';
-import '../../../core/services/data/marker_service.dart' as core_marker;
+import '../../../core/services/data/marker_domain_service.dart' as core_marker;
 
 /// 마커 관련 로직을 관리하는 컨트롤러
 class MarkerController {
@@ -41,7 +41,7 @@ class MarkerController {
       return [];
     }
 
-    final thresholdPx = clusterThresholdPx(mapZoom);
+    final thresholdPx = _getClusterThreshold(mapZoom);
     
     // LatLng -> 화면 좌표 변환 함수
     Offset latLngToScreen(LatLng ll) {
@@ -54,10 +54,10 @@ class MarkerController {
     }
     
     // 근접 클러스터링 수행
-    final buckets = buildProximityClusters(
+    final buckets = buildClusters(
       source: visibleMarkerModels,
       toScreen: latLngToScreen,
-      thresholdPx: thresholdPx,
+      cellPx: thresholdPx,
     );
 
     final resultMarkers = <Marker>[];
@@ -126,7 +126,7 @@ class MarkerController {
 
   /// 마커 수집 가능 여부 확인
   static bool canCollectMarker(LatLng userPosition, LatLng markerPosition) {
-    return core_marker.MarkerService.canCollectMarker(userPosition, markerPosition);
+    return core_marker.MarkerDomainService.canCollectMarker(userPosition, markerPosition);
   }
 
   /// 마커 회수 (삭제)
@@ -170,6 +170,14 @@ class MarkerController {
   /// 줌 레벨에 따른 클러스터 확대 타겟 줌 계산
   static double calculateClusterZoomTarget(double currentZoom) {
     return (currentZoom + 1.5).clamp(14.0, 16.0);
+  }
+
+  /// 줌 레벨에 따른 클러스터 임계값 계산
+  static double _getClusterThreshold(double zoom) {
+    if (zoom >= 16) return 30.0;
+    if (zoom >= 14) return 40.0;
+    if (zoom >= 12) return 50.0;
+    return 60.0;
   }
 }
 

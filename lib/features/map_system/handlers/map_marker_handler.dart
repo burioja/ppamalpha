@@ -5,11 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import '../../../core/models/marker/marker_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../../../core/services/data/marker_service.dart';
+import '../../../core/services/data/marker_domain_service.dart';
 import '../../../core/constants/app_constants.dart';
-import '../utils/client_side_cluster.dart';
-import '../utils/client_cluster.dart' show clusterThresholdPx;
-import '../widgets/cluster_widgets.dart' hide SimpleClusterDot;
+import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, clusterThresholdPx, buildClusters, latLngToScreenWebMercator;
+import '../widgets/cluster_widgets.dart';
 
 /// 마커 & 클러스터링 시스템 Handler
 /// 
@@ -148,8 +147,7 @@ class MapMarkerHandler {
     }
 
     clusteredMarkers = newMarkers;
-    final threshold = clusterThresholdPx(mapZoom);
-    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}, 임계값 ${threshold.toInt()}px): ${buckets.length}개 그룹, ${newMarkers.length}개 마커');
+    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}): ${buckets.length}개 그룹, ${newMarkers.length}개 마커');
   }
 
   /// 슈퍼 마커 확인
@@ -160,15 +158,6 @@ class MapMarkerHandler {
     );
     final markerReward = originalMarker.reward ?? 0;
     return markerReward >= AppConsts.superRewardThreshold;
-  }
-
-  /// 단일 마커 탭 처리
-  MarkerModel? onTapSingleMarker(ClusterMarkerModel marker) {
-    final originalMarker = markers.firstWhere(
-      (m) => m.markerId == marker.markerId,
-      orElse: () => throw Exception('Marker not found'),
-    );
-    return originalMarker;
   }
 
   /// 클러스터 탭 처리
@@ -200,7 +189,7 @@ class MapMarkerHandler {
       // await PostService().recallMarker(marker.markerId);
       
       // 임시로 마커 삭제만 처리
-      await MarkerService.deleteMarker(marker.markerId);
+      await MarkerDomainService.deleteMarker(marker.markerId);
 
       debugPrint('');
       debugPrint('🟢 [MapMarkerHandler] 마커 회수 완료');
@@ -264,7 +253,7 @@ class MapMarkerHandler {
   }
 
   /// 단일 마커 탭 핸들러
-  MarkerModel? onTapSingleMarker(ClusterMarkerModel clusterMarker) {
+  MarkerModel? handleMarkerTap(ClusterMarkerModel clusterMarker) {
     try {
       final originalMarker = markers.firstWhere(
         (m) => m.markerId == clusterMarker.markerId,

@@ -53,6 +53,7 @@ class MapState {
   int minReward = 0;
   bool showCouponsOnly = false;
   bool showMyPostsOnly = false;
+  bool showStampsOnly = false;
   bool showUrgentOnly = false;
   bool showVerifiedOnly = false;
   bool showUnverifiedOnly = false;
@@ -106,6 +107,7 @@ class MapState {
     minReward = 0;
     showCouponsOnly = false;
     showMyPostsOnly = false;
+    showStampsOnly = false;
     showUrgentOnly = false;
     showVerifiedOnly = false;
     showUnverifiedOnly = false;

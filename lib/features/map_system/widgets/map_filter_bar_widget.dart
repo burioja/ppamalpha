@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/map_filter_provider.dart';
-import '../widgets/map_filter_dialog.dart';
 
 /// 지도 상단 필터 바 위젯
 class MapFilterBarWidget extends StatelessWidget {
   final bool showMyPostsOnly;
   final bool showCouponsOnly;
+  final bool showStampsOnly;
   final VoidCallback onUpdateMarkers;
-  final VoidCallback onShowFilterDialog;
   final Function(bool) onMyPostsChanged;
   final Function(bool) onCouponsChanged;
+  final Function(bool) onStampsChanged;
 
   const MapFilterBarWidget({
     super.key,
     required this.showMyPostsOnly,
     required this.showCouponsOnly,
+    required this.showStampsOnly,
     required this.onUpdateMarkers,
-    required this.onShowFilterDialog,
     required this.onMyPostsChanged,
     required this.onCouponsChanged,
+    required this.onStampsChanged,
   });
 
   @override
@@ -46,22 +47,6 @@ class MapFilterBarWidget extends StatelessWidget {
           builder: (context, filterProvider, child) {
             return Row(
               children: [
-                // 필터 아이콘
-                Container(
-                  width: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      bottomLeft: Radius.circular(12),
-                    ),
-                  ),
-                  child: IconButton(
-                    onPressed: onShowFilterDialog,
-                    icon: const Icon(Icons.filter_list, color: Colors.grey),
-                    iconSize: 20,
-                  ),
-                ),
                 // 필터 버튼들
                 Expanded(
                   child: SingleChildScrollView(
@@ -83,6 +68,15 @@ class MapFilterBarWidget extends StatelessWidget {
                           isSelected: showCouponsOnly,
                           onTap: () {
                             onCouponsChanged(!showCouponsOnly);
+                            onUpdateMarkers();
+                          },
+                        ),
+                        _buildFilterChip(
+                          icon: Icons.stars,
+                          label: '스탬프',
+                          isSelected: showStampsOnly,
+                          onTap: () {
+                            onStampsChanged(!showStampsOnly);
                             onUpdateMarkers();
                           },
                         ),
@@ -118,27 +112,6 @@ class MapFilterBarWidget extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                ),
-                // 추가 옵션 버튼
-                Container(
-                  width: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.purple[50],
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      // TODO: 추가 옵션 구현
-                    },
-                    icon: Icon(
-                      Icons.more_horiz,
-                      color: Colors.purple[600],
-                    ),
-                    iconSize: 20,
                   ),
                 ),
                 // 필터 초기화 버튼

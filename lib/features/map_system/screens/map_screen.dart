@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../../core/models/user/user_model.dart';
 import '../providers/map_filter_provider.dart';
+import '../providers/tile_provider.dart' as fog_tile;
 import '../../../core/models/marker/marker_model.dart';
 import '../widgets/map_marker_detail_widget.dart';
 import '../widgets/map_longpress_menu_widget.dart';
@@ -20,7 +21,7 @@ import '../utils/client_cluster.dart';
 import '../widgets/unified_fog_overlay_widget.dart';
 
 // ✨ 리팩토링된 Controller & State
-import '../controllers/fog_controller.dart';
+import '../services/fog/fog_service.dart';
 import '../controllers/location_controller.dart';
 import '../controllers/marker_controller.dart';
 import '../state/map_state.dart';
@@ -176,7 +177,7 @@ class _MapScreenState extends State<MapScreen> {
   // ==================== Fog of War ====================
   
   void _rebuildFogWithUserLocations(LatLng currentPosition) {
-    final result = FogController.rebuildFogWithUserLocations(
+    final result = FogService.rebuildFogWithUserLocations(
       currentPosition: currentPosition,
       homeLocation: _state.homeLocation,
       workLocations: _state.workLocations,
@@ -190,7 +191,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _loadUserLocations() async {
-    final result = await FogController.loadUserLocations();
+    final result = await FogService.loadUserLocations();
     
     if (mounted) {
       setState(() {
@@ -207,17 +208,16 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _loadVisitedLocations() async {
-    final grayPolygons = await FogController.loadVisitedLocations();
-    
+    // TODO: 방문 위치 로드 로직 구현 필요
     if (mounted) {
       setState(() {
-        _state.grayPolygons = grayPolygons;
+        _state.grayPolygons = [];
       });
     }
   }
 
   Future<void> _updateGrayAreasWithPreviousPosition(LatLng? previousPosition) async {
-    final grayPolygons = await FogController.updateGrayAreasWithPreviousPosition(
+    final grayPolygons = FogService.buildGrayAreaFromPreviousPosition(
       previousPosition,
     );
     
@@ -397,15 +397,16 @@ class _MapScreenState extends State<MapScreen> {
           MapFilterBarWidget(
             showMyPostsOnly: _state.showMyPostsOnly,
             showCouponsOnly: _state.showCouponsOnly,
+            showStampsOnly: _state.showStampsOnly,
             onUpdateMarkers: () {
               _updateMarkers();
             },
-            onShowFilterDialog: _showFilterDialog,
             onMyPostsChanged: (value) {
               setState(() {
                 _state.showMyPostsOnly = value;
                 if (value) {
                   _state.showCouponsOnly = false;
+                  _state.showStampsOnly = false;
                 }
               });
             },
@@ -414,6 +415,16 @@ class _MapScreenState extends State<MapScreen> {
                 _state.showCouponsOnly = value;
                 if (value) {
                   _state.showMyPostsOnly = false;
+                  _state.showStampsOnly = false;
+                }
+              });
+            },
+            onStampsChanged: (value) {
+              setState(() {
+                _state.showStampsOnly = value;
+                if (value) {
+                  _state.showMyPostsOnly = false;
+                  _state.showCouponsOnly = false;
                 }
               });
             },
@@ -594,6 +605,35 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapLongPress(LatLng point) {
+    // Fog 레벨 체크
+    final tileProvider = context.read<fog_tile.TileProvider>();
+    
+    // Level 1 중심점들 (현재 위치, 집, 일터)
+    final level1Centers = <LatLng>[
+      if (_state.currentPosition != null) _state.currentPosition!,
+      if (_state.homeLocation != null) _state.homeLocation!,
+      ..._state.workLocations,
+    ];
+    
+    // 해당 위치의 Fog 레벨 계산
+    final fogLevel = FogService.calculateFogLevel(
+      position: point,
+      level1Centers: level1Centers,
+      level2TileIds: tileProvider.visited30Days,
+    );
+    
+    // Level 1에서만 포스트 배포 가능
+    if (!FogService.canLongPress(fogLevel)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('이 지역에서는 포스트를 배포할 수 없습니다'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    // 기존 로직
     setState(() {
       _state.longPressedLatLng = point;
     });
@@ -636,32 +676,6 @@ class _MapScreenState extends State<MapScreen> {
 
   // ==================== 액션 ====================
   
-  void _showFilterDialog() {
-    final filterProvider = context.read<MapFilterProvider>();
-    
-    MapFilterDialog.show(
-      context: context,
-      selectedCategory: filterProvider.selectedCategory,
-      maxDistance: filterProvider.maxDistance,
-      minReward: filterProvider.minReward,
-      isPremiumUser: _state.isPremiumUser,
-      onReset: () {
-        filterProvider.resetFilters();
-        _updateMarkers();
-      },
-      onApply: () {
-        _updateMarkers();
-        Navigator.pop(context);
-      },
-      onCategoryChanged: (category) {
-        filterProvider.setCategory(category);
-      },
-      onMinRewardChanged: (reward) {
-        filterProvider.setMinReward(reward);
-      },
-    );
-  }
-
   void _moveToHome() {
     if (_state.homeLocation != null && _state.mapController != null) {
       _state.mapController!.move(_state.homeLocation!, _state.currentZoom);
