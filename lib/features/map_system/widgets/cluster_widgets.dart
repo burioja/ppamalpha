@@ -11,8 +11,8 @@ class SimpleClusterDot extends StatelessWidget {
     return Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF4D4DFF), Color(0xFF8080FF)],  // 보라 → 밝은 보라
+        gradient: LinearGradient(
+          colors: _getClusterColors(count),
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -20,7 +20,7 @@ class SimpleClusterDot extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4D4DFF).withOpacity(0.4),
+            color: _getClusterColors(count).first.withOpacity(0.4),
             blurRadius: 8,
             spreadRadius: 2,
             offset: const Offset(0, 3),
@@ -37,6 +37,18 @@ class SimpleClusterDot extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Color> _getClusterColors(int count) {
+    if (count >= 20) {
+      return [const Color(0xFFFF4444), const Color(0xFFFF6666)]; // 빨강
+    } else if (count >= 10) {
+      return [const Color(0xFFFF8800), const Color(0xFFFFAA44)]; // 주황
+    } else if (count >= 5) {
+      return [const Color(0xFF4D4DFF), const Color(0xFF8080FF)]; // 보라
+    } else {
+      return [const Color(0xFF00AA44), const Color(0xFF44CC66)]; // 초록
+    }
   }
 }
 
@@ -97,13 +109,40 @@ class SingleMarkerWidget extends StatelessWidget {
             ),
           ],
         ),
-        child: ClipOval(
-          child: Image.asset(
-            imagePath,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-          ),
+        child: Stack(
+          children: [
+            ClipOval(
+              child: Image.asset(
+                imagePath,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+              ),
+            ),
+            
+            // 슈퍼 마커 표시
+            if (isSuper)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Colors.white, width: 2),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.star,
+                    color: Colors.white,
+                    size: 10,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

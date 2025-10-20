@@ -147,3 +147,4 @@ LatLng? _extractPositionFromTileId(String tileId) {
 - Before: 화면 밖 (중국 좌표) → 안 보임
 - After: 실제 방문 위치 → 정상 표시
 
+

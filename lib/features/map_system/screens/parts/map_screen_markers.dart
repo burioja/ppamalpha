@@ -4,8 +4,6 @@ part of '../map_screen.dart';
 
 /// 마커 업데이트
 void _updateMarkers() {
-  print('🔧 _updateMarkers 호출됨 - _markers 개수: ${_markers.length}');
-
   // MarkerModel을 새로운 클러스터링 시스템용으로 변환
   _visibleMarkerModels = _markers.map((marker) => ClusterMarkerModel(
     markerId: marker.markerId,
@@ -38,13 +36,10 @@ void _rebuildClusters() {
     return;
   }
 
-  final thresholdPx = clusterThresholdPx(_mapZoom);
-  
-  // 근접 클러스터링 수행
+  // 근접 클러스터링 수행 (고정 임계값 사용)
   final buckets = buildProximityClusters(
     source: _visibleMarkerModels,
     toScreen: _latLngToScreen,
-    thresholdPx: thresholdPx,
   );
 
   final markers = <Marker>[];
@@ -99,8 +94,6 @@ void _rebuildClusters() {
   setState(() {
     _clusteredMarkers = markers;
   });
-
-  print('🔧 근접 클러스터링 완료 (줌 ${_mapZoom.toStringAsFixed(1)}, 임계값 ${thresholdPx.toInt()}px): ${buckets.length}개 그룹, ${markers.length}개 마커');
 }
 
 /// 슈퍼 마커인지 확인

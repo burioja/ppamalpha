@@ -26,6 +26,7 @@ import '../features/user_dashboard/screens/trash_screen.dart';
 import '../features/post_system/screens/post_place_screen.dart';
 import '../features/post_system/screens/post_place_selection_screen.dart';
 import '../features/post_system/screens/post_detail_screen.dart';
+import '../features/post_system/screens/post_preview_screen.dart';
 import '../features/post_system/screens/post_edit_screen.dart';
 import '../features/post_system/screens/post_deploy_screen.dart';
 import '../features/post_system/screens/post_statistics_screen.dart';
@@ -62,6 +63,7 @@ class AppRoutes {
   static const String postPlace = '/post-place';
   static const String postPlaceSelection = '/post-place-selection';
   static const String postDetail = '/post-detail';
+  static const String postPreview = '/post-preview';
   static const String postEdit = '/post-edit';
   static const String postStatistics = '/post-statistics';
   static const String deploymentStatistics = '/deployment-statistics';
@@ -125,6 +127,18 @@ class AppRoutes {
       }
       
       return PostDetailScreen(post: post, isEditable: isEditable);
+    },
+    postPreview: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final post = args?['post'] as PostModel?;
+      
+      if (post == null) {
+        return const Scaffold(
+          body: Center(child: Text('포스트 정보를 찾을 수 없습니다.')),
+        );
+      }
+      
+      return PostPreviewScreen(post: post);
     },
     postEdit: (context) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;

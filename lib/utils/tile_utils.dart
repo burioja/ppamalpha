@@ -261,12 +261,6 @@ class TileUtils {
     // 3. 오차 계산 (1km 타일이므로 최대 0.5km 이내여야 함)
     final distance = _calculateDistance(lat, lng, center.latitude, center.longitude);
     
-    print('🔍 타일 변환 검증:');
-    print('  원본: $lat, $lng');
-    print('  타일ID: $tileId');
-    print('  복원: ${center.latitude}, ${center.longitude}');
-    print('  오차: ${distance.toStringAsFixed(1)}km');
-    
     // 오차가 1km 이내면 정상
     return distance <= 1.0;
   }

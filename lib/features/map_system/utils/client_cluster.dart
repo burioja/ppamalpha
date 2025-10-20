@@ -1,149 +1,118 @@
-// 클라이언트 클러스터링 (의존성 최소):
-// - flutter_map의 Marker 위젯만 사용
-// - plugin_api 사용 안 함 (버전 독립)
-// - 화면 픽셀 그리드 기반 O(N) 클러스터링
-
-import 'dart:math' as math;
+// 근접(픽셀 거리) 클러스터링 엔진
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
 
-// --- 프로젝트의 MarkerModel에 맞게 position, markerId만 쓰는 걸 가정 ---
+// 프로젝트의 모델에 맞게 최소 필드만 사용
 class ClusterMarkerModel {
   final String markerId;
   final LatLng position;
   const ClusterMarkerModel({required this.markerId, required this.position});
 }
 
-// 화면 좌표 변환 콜백 (맵 상태에서 주입해 사용)
+// LatLng -> 화면 좌표 변환 콜백 (맵 상태에서 주입)
 typedef ToScreenFn = Offset Function(LatLng);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1) 클러스터 엔진
-class _ClusterBucket {
-  final List<ClusterMarkerModel> items = [];
-  double sx = 0, sy = 0;
-  void add(ClusterMarkerModel m, Offset sp) { items.add(m); sx += sp.dx; sy += sp.dy; }
-  Offset get screenCenter => Offset(sx / items.length, sy / items.length);
-}
 
 class ClusterOrMarker {
   final bool isCluster;
   final ClusterMarkerModel? single;
   final List<ClusterMarkerModel>? items;
-  final Offset? screenCenter;
-  final ClusterMarkerModel? representative;
+  final Offset? screenCenter; // 화면좌표 중심(옵션)
+  final ClusterMarkerModel? representative; // 대표 마커(지도의 점)
 
   ClusterOrMarker.single(this.single)
       : isCluster = false, items = null, screenCenter = null, representative = null;
 
-  ClusterOrMarker.cluster({
-    required this.items,
-    required this.screenCenter,
-    required this.representative,
-  })  : isCluster = true, single = null;
+  ClusterOrMarker.cluster({required this.items, required this.screenCenter, required this.representative})
+      : isCluster = true, single = null;
 }
 
-/// 픽셀 그리드 기반 클러스터링 (cellPx: 같은 셀에 들어오면 한 클러스터)
-List<ClusterOrMarker> buildClusters({
+// 마커 겹침 기반 클러스터링 임계값 (픽셀)
+// 마커들이 이 거리 안에 있으면 자동으로 클러스터링됨
+double get clusterThresholdPx => 50.0; // 고정값: 50픽셀
+
+/// 근접(화면 픽셀 거리) 기반 클러스터링
+List<ClusterOrMarker> buildProximityClusters({
   required List<ClusterMarkerModel> source,
   required ToScreenFn toScreen,
-  double cellPx = 60, // 줌 낮을수록 80~100, 높을수록 40 권장
 }) {
-  final buckets = <String, _ClusterBucket>{};
+  // 고정 임계값 사용
+  final thresholdPx = clusterThresholdPx;
+  
+  // thresholdPx가 0이면 클러스터링 하지 않고 모든 마커를 개별로 반환
+  if (thresholdPx <= 0) {
+    return source.map((m) => ClusterOrMarker.single(m)).toList();
+  }
+
+  final cell = thresholdPx; // 그리드 셀 크기 = 임계거리
+  final grid = <String, List<int>>{}; // "gx:gy" -> cluster indices
+  final items = <_MutCluster>[];
+
+  int _newCluster(ClusterMarkerModel m, Offset sp) {
+    items.add(_MutCluster()..add(m, sp));
+    return items.length - 1;
+  }
 
   for (final m in source) {
     final sp = toScreen(m.position);
-    final gx = (sp.dx / cellPx).floor();
-    final gy = (sp.dy / cellPx).floor();
-    final key = '$gx:$gy';
-    (buckets[key] ??= _ClusterBucket()).add(m, sp);
-  }
+    final gx = (sp.dx / cell).floor();
+    final gy = (sp.dy / cell).floor();
 
-  final out = <ClusterOrMarker>[];
-  buckets.forEach((_, b) {
-    if (b.items.length == 1) {
-      out.add(ClusterOrMarker.single(b.items.first));
-    } else {
-      final rep = b.items.first; // 대표 1개 (간단/빠름)
-      out.add(ClusterOrMarker.cluster(
-        items: b.items,
-        screenCenter: b.screenCenter,
-        representative: rep,
-      ));
+    // 후보: 본 셀 + 8개 이웃 셀
+    int? bestIdx;
+    double bestD2 = 1e18;
+    for (int ix = gx - 1; ix <= gx + 1; ix++) {
+      for (int iy = gy - 1; iy <= gy + 1; iy++) {
+        final key = '$ix:$iy';
+        final list = grid[key];
+        if (list == null) continue;
+        for (final ci in list) {
+          final c = items[ci];
+          final center = c.screenCenter;
+          final dx = center.dx - sp.dx, dy = center.dy - sp.dy;
+          final d2 = dx*dx + dy*dy;
+          if (d2 <= (thresholdPx * thresholdPx) && d2 < bestD2) {
+            bestD2 = d2; bestIdx = ci;
+          }
+        }
+      }
     }
-  });
-  return out;
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2) FlutterMap Marker로 변환 (대표 아이템 위치 사용)
-typedef SingleMarkerBuilder = Widget Function(ClusterMarkerModel model);
-typedef ClusterMarkerBuilder = Widget Function(int count, ClusterMarkerModel representative);
-
-List<Marker> clustersToFlutterMarkers({
-  required List<ClusterOrMarker> buckets,
-  required SingleMarkerBuilder buildSingle,
-  required ClusterMarkerBuilder buildCluster,
-  double singleSize = 35,
-  double clusterSize = 36,
-}) {
-  final markers = <Marker>[];
-  for (final b in buckets) {
-    if (!b.isCluster) {
-      final m = b.single!;
-      markers.add(
-        Marker(
-          key: ValueKey('m_${m.markerId}'),
-          point: m.position,
-          width: singleSize,
-          height: singleSize,
-          child: buildSingle(m),
-        ),
-      );
+    if (bestIdx == null) {
+      final ci = _newCluster(m, sp);
+      (grid['$gx:$gy'] ??= <int>[]).add(ci);
     } else {
-      final rep = b.representative!;
-      markers.add(
-        Marker(
-          key: ValueKey('c_${rep.markerId}_${b.items!.length}'),
-          point: rep.position, // 대표 아이템 위치 사용 (실무적으로 충분)
-          width: clusterSize,
-          height: clusterSize,
-          child: buildCluster(b.items!.length, rep),
-        ),
-      );
+      items[bestIdx].add(m, sp);
+      // 그리드 인덱스 재배치는 생략(근사). 필요하면 업데이트 가능.
     }
   }
-  return markers;
+
+  // Out
+  return items.map((c) {
+    if (c.count == 1) {
+      return ClusterOrMarker.single(c.one!);
+    } else {
+      return ClusterOrMarker.cluster(
+        items: List.unmodifiable(c.list),
+        screenCenter: c.screenCenter,
+        representative: c.list.first, // 대표 하나
+      );
+    }
+  }).toList(growable: false);
+}
+
+class _MutCluster {
+  final list = <ClusterMarkerModel>[];
+  double sx = 0, sy = 0;
+  int count = 0;
+  void add(ClusterMarkerModel m, Offset sp) { list.add(m); sx += sp.dx; sy += sp.dy; count++; }
+  Offset get screenCenter => Offset(sx / count, sy / count);
+  ClusterMarkerModel? get one => list.isEmpty ? null : list.first;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3) (선택) 간단한 클러스터 도트 위젯
-class SimpleClusterDot extends StatelessWidget {
-  const SimpleClusterDot({super.key, required this.count});
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xAA000000),
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFFFFFFF), width: 2),
-      ),
-      child: Text(
-        '$count',
-        style: const TextStyle(color: Color(0xFFFFFFFF), fontSize: 13, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 4) (옵션) WebMercator 기반 LatLng→스크린 픽셀 변환 헬퍼
-// plugin_api 없이도 사용 가능. mapCenter/zoom/뷰 사이즈만 넘겨주면 됨.
+// WebMercator 기반 LatLng→스크린 픽셀 변환 헬퍼
 Offset latLngToScreenWebMercator(
   LatLng ll, {
   required LatLng mapCenter,

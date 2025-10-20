@@ -1,6 +1,8 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
+import './nominatim_service.dart';
 
 class LocationService {
   // 현재 위치 가져오기
@@ -124,12 +126,27 @@ class LocationService {
     try {
       Position? position = await getCurrentPosition();
       if (position != null) {
+        // Nominatim 서비스 사용 (더 안정적)
+        try {
+          final address = await NominatimService.reverseGeocode(
+            LatLng(position.latitude, position.longitude),
+          );
+          
+          // 주소 변환 실패 메시지가 아니면 성공
+          if (!address.contains('실패') && !address.contains('오류')) {
+            return address;
+          }
+        } catch (e) {
+          debugPrint('⚠️ Nominatim 서비스 실패, geocoding 패키지로 폴백: $e');
+        }
+        
+        // 폴백: geocoding 패키지 사용
         return await getAddressFromCoordinates(position.latitude, position.longitude);
       } else {
         return '위치를 가져올 수 없습니다.';
       }
     } catch (e) {
-      // 현재 위치 주소 변환 오류: $e
+      debugPrint('❌ 현재 위치 주소 변환 오류: $e');
       return '주소 변환 실패';
     }
   }

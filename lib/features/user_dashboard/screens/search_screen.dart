@@ -65,7 +65,7 @@ class _SearchScreenState extends State<SearchScreen> {
     try {
       final snapshot = await _firestore
           .collection('posts')
-          .where('ownerId', isEqualTo: _currentUserId)
+          .where('creatorId', isEqualTo: _currentUserId)  // ✅ creatorId로 수정
           .get();
 
       return snapshot.docs

@@ -7,7 +7,7 @@ import '../../../core/models/marker/marker_model.dart';
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/data/marker_domain_service.dart';
 import '../../../core/constants/app_constants.dart';
-import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, clusterThresholdPx, buildClusters, latLngToScreenWebMercator;
+import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, clusterThresholdPx, buildProximityClusters, latLngToScreenWebMercator;
 import '../widgets/cluster_widgets.dart';
 
 /// 마커 & 클러스터링 시스템 Handler

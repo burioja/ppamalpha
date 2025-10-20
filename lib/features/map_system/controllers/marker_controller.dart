@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/marker/marker_model.dart';
 import '../widgets/cluster_widgets.dart';
-import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, buildClusters, latLngToScreenWebMercator;
+import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, buildProximityClusters, latLngToScreenWebMercator;
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/data/marker_domain_service.dart' as core_marker;
 
@@ -40,8 +40,6 @@ class MarkerController {
     if (visibleMarkerModels.isEmpty) {
       return [];
     }
-
-    final thresholdPx = _getClusterThreshold(mapZoom);
     
     // LatLng -> 화면 좌표 변환 함수
     Offset latLngToScreen(LatLng ll) {
@@ -53,11 +51,10 @@ class MarkerController {
       );
     }
     
-    // 근접 클러스터링 수행
-    final buckets = buildClusters(
+    // 근접 클러스터링 수행 (고정 임계값 사용)
+    final buckets = buildProximityClusters(
       source: visibleMarkerModels,
       toScreen: latLngToScreen,
-      cellPx: thresholdPx,
     );
 
     final resultMarkers = <Marker>[];
@@ -109,7 +106,7 @@ class MarkerController {
       }
     }
 
-    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}, 임계값 ${thresholdPx.toInt()}px): ${buckets.length}개 그룹, ${resultMarkers.length}개 마커');
+    debugPrint('🔧 근접 클러스터링 완료 (줌 ${mapZoom.toStringAsFixed(1)}, 임계값 50px): ${buckets.length}개 그룹, ${resultMarkers.length}개 마커');
     return resultMarkers;
   }
 
@@ -170,14 +167,6 @@ class MarkerController {
   /// 줌 레벨에 따른 클러스터 확대 타겟 줌 계산
   static double calculateClusterZoomTarget(double currentZoom) {
     return (currentZoom + 1.5).clamp(14.0, 16.0);
-  }
-
-  /// 줌 레벨에 따른 클러스터 임계값 계산
-  static double _getClusterThreshold(double zoom) {
-    if (zoom >= 16) return 30.0;
-    if (zoom >= 14) return 40.0;
-    if (zoom >= 12) return 50.0;
-    return 60.0;
   }
 }
 

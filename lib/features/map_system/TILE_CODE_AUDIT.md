@@ -546,3 +546,4 @@ grep "_extractPositionFromTileId" ppamalpha/lib/**/*.dart
 2. 🗑️ **권장**: 미사용 파일 3개 삭제
 3. 🧹 **선택**: 미사용 함수들 정리
 
+

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../../core/models/marker/marker_model.dart';
 import '../../utils/client_cluster.dart';
-export '../../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, latLngToScreenWebMercator, buildClusters;
+export '../../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, latLngToScreenWebMercator, buildProximityClusters;
 
 /// 마커 클러스터링 서비스
 /// 
@@ -13,11 +13,8 @@ export '../../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarke
 /// - 순수 계산 로직만
 class MarkerClusteringService {
   /// 줌 레벨에 따른 클러스터 임계값 계산 (픽셀)
-  static double clusterThreshold(double zoom) {
-    if (zoom >= 16) return 30.0;
-    if (zoom >= 14) return 40.0;
-    if (zoom >= 12) return 50.0;
-    return 60.0;
+  static double clusterThreshold() {
+    return 50.0; // 고정값: 50픽셀
   }
 
   /// MarkerModel을 ClusterMarkerModel로 변환
@@ -53,8 +50,8 @@ class MarkerClusteringService {
     // MarkerModel을 ClusterMarkerModel로 변환
     final clusterModels = convertToClusterModels(markers);
     
-    // 임계값 계산
-    final thresholdPx = clusterThreshold(zoom);
+    // 고정 임계값 사용
+    final thresholdPx = clusterThreshold();
     
     // LatLng -> 화면 좌표 변환 함수
     Offset latLngToScreen(LatLng ll) {
@@ -66,11 +63,10 @@ class MarkerClusteringService {
       );
     }
     
-    // 근접 클러스터링 수행
-    final clusters = buildClusters(
+    // 근접 클러스터링 수행 (고정 임계값 사용)
+    final clusters = buildProximityClusters(
       source: clusterModels,
       toScreen: latLngToScreen,
-      cellPx: thresholdPx,
     );
 
     debugPrint(

@@ -21,7 +21,7 @@ class MapLocationButtonsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      bottom: 80,
+      bottom: 20,
       right: 16,
       child: Column(
         children: [

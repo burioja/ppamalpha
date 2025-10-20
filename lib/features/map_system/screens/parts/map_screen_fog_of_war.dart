@@ -7,11 +7,6 @@ void _rebuildFogWithUserLocations(LatLng currentPosition) {
   final allPositions = <LatLng>[currentPosition];
   final ringCircles = <CircleMarker>[];
 
-  print('포그 오브 워 재구성 시작');
-  print('현재 위치: ${currentPosition.latitude}, ${currentPosition.longitude}');
-  print('집 위치: ${_homeLocation?.latitude}, ${_homeLocation?.longitude}');
-  print('근무지 개수: ${_workLocations.length}');
-
   // 현재 위치
   ringCircles.add(OSMFogService.createRingCircle(currentPosition));
 
@@ -19,7 +14,6 @@ void _rebuildFogWithUserLocations(LatLng currentPosition) {
   if (_homeLocation != null) {
     allPositions.add(_homeLocation!);
     ringCircles.add(OSMFogService.createRingCircle(_homeLocation!));
-    print('집 위치 추가됨');
   }
 
   // 일터 위치들
@@ -27,18 +21,13 @@ void _rebuildFogWithUserLocations(LatLng currentPosition) {
     final workLocation = _workLocations[i];
     allPositions.add(workLocation);
     ringCircles.add(OSMFogService.createRingCircle(workLocation));
-    print('근무지 $i 추가됨: ${workLocation.latitude}, ${workLocation.longitude}');
   }
-
-  print('총 밝은 영역 개수: ${allPositions.length}');
 
   if (mounted) {
     setState(() {
       _ringCircles = ringCircles;
     });
   }
-
-  print('포그 오브 워 재구성 완료');
 }
 
 /// 사용자 위치(집, 일터) 로드
@@ -152,9 +141,7 @@ Future<void> _loadUserLocations() async {
 
     // 포그 오브 워 업데이트
     if (_currentPosition != null) {
-      print('포그 오브 워 업데이트 시작');
       _rebuildFogWithUserLocations(_currentPosition!);
-      print('포그 오브 워 업데이트 완료');
     }
   } catch (e) {
     debugPrint('사용자 위치 로드 실패: $e');
@@ -187,8 +174,6 @@ Future<void> _loadVisitedLocations() async {
         visitedPositions.add(position);
       }
     }
-
-    print('과거 방문 위치 개수: ${visitedPositions.length}');
     
     // 회색 영역 생성
     final grayPolygons = OSMFogService.createGrayAreas(visitedPositions);

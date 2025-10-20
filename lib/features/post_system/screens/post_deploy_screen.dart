@@ -90,15 +90,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     _postsSubscription?.cancel();
     _postsSubscription = FirebaseFirestore.instance
         .collection('posts')
-        .where('authorId', isEqualTo: user.uid)
+        .where('creatorId', isEqualTo: user.uid)  // ✅ creatorId로 수정
         .snapshots()
         .listen((snapshot) {
       if (mounted) {
-    setState(() {
+        setState(() {
           _userPosts = snapshot.docs
               .map((doc) => PostModel.fromFirestore(doc))
               .toList();
         });
+        
+        debugPrint('✅ 배포 화면 포스트 목록 업데이트: ${_userPosts.length}개');
       }
     });
   }
@@ -365,6 +367,97 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
     );
   }
 
+  /// 포스트 썸네일 위젯 생성
+  Widget _buildPostThumbnail(PostModel post) {
+    // 1. 썸네일 URL이 있으면 사용
+    if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty) {
+      return Image.network(
+        post.thumbnailUrl!.first,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildDefaultThumbnail(post);
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+            ),
+          );
+        },
+      );
+    }
+    
+    // 2. mediaUrl이 있으면 첫 번째 이미지 사용
+    if (post.mediaUrl != null && post.mediaUrl!.isNotEmpty) {
+      final firstMediaUrl = post.mediaUrl!.first;
+      if (firstMediaUrl.isNotEmpty) {
+        return Image.network(
+          firstMediaUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultThumbnail(post);
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+              ),
+            );
+          },
+        );
+      }
+    }
+    
+    // 3. 이미지가 없으면 기본 아이콘
+    return _buildDefaultThumbnail(post);
+  }
+
+  /// 기본 썸네일 (이미지 없을 때)
+  Widget _buildDefaultThumbnail(PostModel post) {
+    IconData icon;
+    Color color;
+    
+    // 미디어 타입에 따라 아이콘 변경
+    if (post.mediaType != null && post.mediaType!.isNotEmpty) {
+      final type = post.mediaType!.first.toLowerCase();
+      if (type.contains('audio') || type.contains('sound')) {
+        icon = Icons.audiotrack;
+        color = Colors.purple;
+      } else if (type.contains('video')) {
+        icon = Icons.videocam;
+        color = Colors.red;
+      } else if (type.contains('text')) {
+        icon = Icons.article;
+        color = Colors.blue;
+      } else {
+        icon = Icons.image;
+        color = Colors.orange;
+      }
+    } else {
+      icon = Icons.post_add;
+      color = Colors.grey;
+    }
+    
+    return Container(
+      color: color.withOpacity(0.1),
+      child: Center(
+        child: Icon(
+          icon,
+          size: 40,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPostCard(PostModel post) {
     final isSelected = _selectedPost?.postId == post.postId;
     
@@ -387,22 +480,17 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 포스트 이미지
-            Container(
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.orange[100],
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12),
-                ),
+            // 포스트 이미지 (썸네일)
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.image,
-                  size: 40,
-                  color: Colors.orange,
-                ),
+              child: Container(
+                height: 100,
+                width: double.infinity,
+                color: Colors.grey[100],
+                child: _buildPostThumbnail(post),
               ),
             ),
             // 포스트 정보
@@ -505,26 +593,70 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.green[200]!),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Icon(Icons.attach_money, color: Colors.green[600], size: 20),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '총 비용',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  // 포스트 가격 정보
+                  if (_selectedPost != null) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.sell, color: Colors.blue[600], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '포스트 가격',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_selectedPost!.reward}원',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[600],
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 8),
+                  ],
+                  
+                  // 총 비용
+                  Row(
+                    children: [
+                      Icon(Icons.attach_money, color: Colors.green[600], size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '총 비용',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_calculateTotalCost()}원',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[600],
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  Text(
-                    '${_calculateTotalCost()}원',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[600],
+                  
+                  // 계산식 표시
+                  if (_selectedPost != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '수량 ${int.tryParse(_quantityController.text) ?? 1} × ${_selectedPost!.reward}원',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -622,13 +754,32 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
   }
 
   int _calculateTotalCost() {
+    if (_selectedPost == null) return 0;
+    
     final quantity = int.tryParse(_quantityController.text) ?? 1;
-    final duration = int.tryParse(_durationController.text) ?? 7;
-    return quantity * duration * 10; // 기본 비용 계산
+    final postPrice = _selectedPost!.reward; // 포스트 작성 시 설정된 가격
+    
+    return quantity * postPrice; // 수량 × 포스트 가격
   }
 
-  void _createNewPost() {
-    Navigator.pushNamed(context, '/post-create');
+  Future<void> _createNewPost() async {
+    final result = await Navigator.pushNamed(context, '/post-place');
+    
+    // 포스트 생성 성공 시 데이터 새로고침
+    if (result == true && mounted) {
+      debugPrint('✅ 포스트 생성 완료 - 데이터 새로고침');
+      _refreshData();
+      
+      // 스낵바로 알림
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('포스트가 생성되었습니다. 목록에서 선택하세요.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   void _refreshData() {

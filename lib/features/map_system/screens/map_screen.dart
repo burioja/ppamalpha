@@ -21,7 +21,7 @@ import '../widgets/map_filter_bar_widget.dart';
 import '../widgets/map_user_location_markers_widget.dart';
 import '../widgets/map_location_buttons_widget.dart';
 import '../widgets/enhanced_mock_location_controller.dart';
-import '../utils/client_cluster.dart';
+import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, buildProximityClusters, latLngToScreenWebMercator;
 import '../widgets/unified_fog_overlay_widget.dart';
 import '../../../utils/tile_utils.dart';
 
@@ -290,7 +290,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateMarkers() {
-    // MarkerProvider를 통해 Fog 레벨 기반 마커 조회
+    // 기존 MarkerProvider 시스템 사용
     final markerProvider = context.read<MarkerProvider>();
     final mockProvider = context.read<MockLocationProvider>();
     
@@ -301,6 +301,7 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
     
+    // 기존 시스템으로 마커 업데이트
     markerProvider.refreshByFogLevel(
       currentPosition: effectivePosition,
       homeLocation: _state.homeLocation,
@@ -315,12 +316,34 @@ class _MapScreenState extends State<MapScreen> {
         'showUnverifiedOnly': _state.showUnverifiedOnly,
       },
     );
+    
+    // 클러스터링도 함께 업데이트 (선택적)
+    _rebuildClusters();
+    
+    // 마커 업데이트 시 수령 가능 개수도 업데이트
+    _updateReceivablePosts();
   }
 
   void _rebuildClusters() {
+    // MarkerProvider에서 마커 정보 가져오기
+    final markerProvider = context.read<MarkerProvider>();
+    
+    if (markerProvider.rawMarkers.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _state.clusteredMarkers = [];
+        });
+      }
+      return;
+    }
+    
+    // 클러스터링 수행
     final clusteredMarkers = MarkerController.buildClusteredMarkers(
-      markers: _state.markers,
-      visibleMarkerModels: _state.visibleMarkerModels,
+      markers: markerProvider.rawMarkers,
+      visibleMarkerModels: markerProvider.rawMarkers.map((m) => ClusterMarkerModel(
+        markerId: m.markerId,
+        position: m.position,
+      )).toList(),
       mapCenter: _state.mapCenter,
       mapZoom: _state.mapZoom,
       viewSize: _state.lastMapSize,
@@ -336,7 +359,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onTapSingleMarker(ClusterMarkerModel marker) {
-    final originalMarker = MarkerController.findOriginalMarker(marker, _state.markers);
+    final markerProvider = context.read<MarkerProvider>();
+    final originalMarker = MarkerController.findOriginalMarker(marker, markerProvider.rawMarkers);
     if (originalMarker != null) {
       _showMarkerDetails(originalMarker);
     }
@@ -534,6 +558,8 @@ class _MapScreenState extends State<MapScreen> {
       options: MapOptions(
         initialCenter: _state.mapCenter,
         initialZoom: _state.currentZoom,
+        minZoom: 10.0,
+        maxZoom: 18.0,
         onMapEvent: _onMapMoved,
         onLongPress: (_, point) => _onMapLongPress(point),
       ),
@@ -620,13 +646,14 @@ class _MapScreenState extends State<MapScreen> {
           workLocations: _state.workLocations,
         ),
         
-        // 마커 레이어 (Provider에서)
+        // 마커 레이어 (기존 시스템 + 클러스터링)
         Consumer<MarkerProvider>(
           builder: (context, markerProvider, _) {
-            debugPrint('🎨 MarkerLayer 렌더링: ${markerProvider.rawMarkers.length}개 마커');
+            // 기존 마커와 클러스터링된 마커를 모두 표시
+            final allMarkers = <Marker>[];
             
-            // ✅ MarkerProvider의 마커를 직접 사용
-            final markers = markerProvider.rawMarkers.map((marker) {
+            // 기존 마커들 추가
+            allMarkers.addAll(markerProvider.rawMarkers.map((marker) {
               final isSuper = (marker.reward ?? 0) >= 10000;
               return Marker(
                 key: ValueKey(marker.markerId),
@@ -657,9 +684,12 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               );
-            }).toList();
+            }));
             
-            return MarkerLayer(markers: markers);
+            // 클러스터링된 마커들도 추가 (있는 경우)
+            allMarkers.addAll(_state.clusteredMarkers);
+            
+            return MarkerLayer(markers: allMarkers);
           },
         ),
         
@@ -990,7 +1020,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _updateReceivablePosts() {
-    final receivable = _state.markers.where((m) {
+    final markerProvider = context.read<MarkerProvider>();
+    final receivable = markerProvider.rawMarkers.where((m) {
       return m.remainingQuantity > 0 && m.isActive;
     }).length;
     
