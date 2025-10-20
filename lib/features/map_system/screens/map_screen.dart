@@ -556,13 +556,15 @@ class _MapScreenState extends State<MapScreen> {
                 // 1km 타일 전용 메서드 사용!
                 final center = TileUtils.getKm1TileCenter(tileId);
                 
-                // ✅ 현재 위치에서 50km 이내의 타일만 포함 (화면 밖 타일 제외)
+                // ✅ 현재 위치에서 500km 이내의 타일만 포함 (한반도 전체 커버)
                 if (_state.currentPosition != null) {
                   final distance = _calculateDistance(_state.currentPosition!, center);
-                  if (distance <= 50000) {  // 50km = 50000m
+                  if (distance <= 500000) {  // 500km = 500000m (한반도 전체)
                     level2Centers.add(center);
+                    debugPrint('  ✅ L2 타일 추가: ${center.latitude.toStringAsFixed(4)}, ${center.longitude.toStringAsFixed(4)} (거리: ${(distance/1000).toStringAsFixed(1)}km)');
                   } else {
                     filteredCount++;
+                    debugPrint('  ❌ L2 타일 제외: ${center.latitude.toStringAsFixed(4)}, ${center.longitude.toStringAsFixed(4)} (거리: ${(distance/1000).toStringAsFixed(1)}km)');
                   }
                 } else {
                   level2Centers.add(center);
@@ -585,6 +587,20 @@ class _MapScreenState extends State<MapScreen> {
             debugPrint('🎯 Level 2 중심점: ${level2Centers.length}개 (visited30Days: ${tileProvider.visited30Days.length}개)');
             debugPrint('🔍 L1 중심점: ${level1Centers.length}개');
             debugPrint('📊 Fog 데이터: L1=${level1Centers.length} L2=${level2Centers.length} visited30Days=${tileProvider.visited30Days.length}');
+            
+            // ✅ Level 2 좌표 상세 로그
+            if (level2Centers.isNotEmpty) {
+              debugPrint('📍 Level 2 좌표 상세:');
+              for (int i = 0; i < level2Centers.length && i < 5; i++) {
+                final center = level2Centers[i];
+                if (_state.currentPosition != null) {
+                  final dist = _calculateDistance(_state.currentPosition!, center);
+                  debugPrint('  [$i] ${center.latitude.toStringAsFixed(6)}, ${center.longitude.toStringAsFixed(6)} (거리: ${(dist/1000).toStringAsFixed(1)}km)');
+                }
+              }
+            } else {
+              debugPrint('⚠️ Level 2 중심점이 비어있음! (필터링됨: $filteredCount개)');
+            }
             
             return UnifiedFogOverlayWidget(
               mapController: _state.mapController!,
