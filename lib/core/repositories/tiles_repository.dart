@@ -35,7 +35,7 @@ class TilesRepository {
       final visitRef = _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles')
+          .collection('visited_tiles')
           .doc(tileId);
 
       // 이미 기록이 있는지 확인
@@ -77,8 +77,8 @@ class TilesRepository {
       final snapshot = await _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles')
-          .where('lastVisitedAt', isGreaterThanOrEqualTo: thirtyDaysAgo)
+          .collection('visited_tiles')
+          .where('lastVisitTime', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
           .get();
 
       return snapshot.docs.map((doc) => doc.id).toSet();
@@ -99,7 +99,7 @@ class TilesRepository {
       final snapshot = await _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles')
+          .collection('visited_tiles')
           .get();
 
       return snapshot.docs.map((doc) => doc.id).toSet();
@@ -123,7 +123,7 @@ class TilesRepository {
       final doc = await _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles')
+          .collection('visited_tiles')
           .doc(tileId)
           .get();
 
@@ -149,7 +149,7 @@ class TilesRepository {
       final collectionRef = _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles');
+          .collection('visited_tiles');
 
       for (final tileId in tileIds) {
         final docRef = collectionRef.doc(tileId);
@@ -185,7 +185,7 @@ class TilesRepository {
       final collectionRef = _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles');
+          .collection('visited_tiles');
 
       // 배치로 존재 여부 확인
       for (final tileId in tileIds) {
@@ -213,8 +213,8 @@ class TilesRepository {
       final snapshot = await _firestore
           .collection('users')
           .doc(user.uid)
-          .collection('visitedTiles')
-          .where('lastVisitedAt', isLessThan: ninetyDaysAgo)
+          .collection('visited_tiles')
+          .where('lastVisitTime', isLessThan: Timestamp.fromDate(ninetyDaysAgo))
           .get();
 
       final batch = _firestore.batch();
