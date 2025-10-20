@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -262,12 +263,6 @@ class MapMarkerService {
           .limit(pageSize)                             // 제한 증가
           .get();
 
-      
-      // 쿼리 결과 샘플 로그 (처음 5개)
-      for (var i = 0; i < snapshot.docs.length && i < 5; i++) {
-        final doc = snapshot.docs[i];
-        final data = doc.data() as Map<String, dynamic>?;
-      }
 
       // 필터링 통계 변수
       int totalCount = snapshot.docs.length;
@@ -400,8 +395,6 @@ class MapMarkerService {
           continue;
         }
       }
-
-      // 필터링 결과 요약
 
       return markers;
     } catch (e) {

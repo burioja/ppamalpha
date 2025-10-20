@@ -36,6 +36,7 @@ import '../state/map_state.dart';
 import '../widgets/map_filter_dialog.dart';
 import '../../../core/services/data/marker_domain_service.dart';
 import '../../../core/models/post/post_model.dart';
+import '../handlers/map_receive_handler.dart';
 
 // Part 파일들
 
@@ -970,7 +971,21 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _handleReceivePosts() async {
-    // TODO: 수령 로직 구현
+    if (_state.currentPosition == null) return;
+    
+    setState(() => _state.isReceiving = true);
+    
+    await MapReceiveHandler.handleReceiveAll(
+      context: context,
+      currentPosition: _state.currentPosition!,
+      markers: _markers,
+      onComplete: () {
+        // 수령 완료 후 마커 새로고침
+        _updateMarkers();
+      },
+    );
+    
+    setState(() => _state.isReceiving = false);
   }
 
   // ==================== 헬퍼 메서드 ====================

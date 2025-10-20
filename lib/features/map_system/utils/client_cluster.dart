@@ -30,7 +30,7 @@ class ClusterOrMarker {
 
 // 마커 겹침 기반 클러스터링 임계값 (픽셀)
 // 마커들이 이 거리 안에 있으면 자동으로 클러스터링됨
-double get clusterThresholdPx => 50.0; // 고정값: 50픽셀
+double get clusterThresholdPx => 30.0; // 고정값: 30픽셀
 
 /// 근접(화면 픽셀 거리) 기반 클러스터링
 List<ClusterOrMarker> buildProximityClusters({

@@ -54,30 +54,29 @@ class MarkerClusteringHelper {
         final marker = bucket.single!;
         final isSuper = _isSuperMarker(marker, markers);
         final imagePath = isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png';
-        final imageSize = isSuper ? 36.0 : 31.0;
 
         resultMarkers.add(
           Marker(
             key: ValueKey('single_${marker.markerId}'),
             point: marker.position,
-            width: 35,
-            height: 35,
+            width: 30,
+            height: 30,
             child: GestureDetector(
               onTap: () => onTapSingle(marker),
               child: Image.asset(
                 imagePath,
-                width: imageSize,
-                height: imageSize,
+                width: 30,
+                height: 30,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    width: imageSize,
-                    height: imageSize,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: isSuper ? Colors.orange : Colors.blue,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.place, color: Colors.white, size: 20),
+                    child: const Icon(Icons.place, color: Colors.white, size: 18),
                   );
                 },
               ),
@@ -91,8 +90,8 @@ class MarkerClusteringHelper {
           Marker(
             key: ValueKey('cluster_${rep.markerId}_${bucket.items!.length}'),
             point: rep.position,
-            width: 40,
-            height: 40,
+            width: 30,
+            height: 30,
             child: GestureDetector(
               onTap: () => onTapCluster(bucket),
               child: SimpleClusterDot(count: bucket.items!.length),
