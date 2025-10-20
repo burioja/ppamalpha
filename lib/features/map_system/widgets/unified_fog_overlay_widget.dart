@@ -111,35 +111,33 @@ class _UnifiedFogPainter extends CustomPainter {
       l2Path.addOval(ui.Rect.fromCircle(center: cp, radius: r));
     }
 
-    // ========== 10월 15일 방식: 하나의 saveLayer 안에서 모든 작업 ==========
+    // ========== 🎯 개선된 방식: L1 펀칭을 제일 마지막에 ==========
     canvas.saveLayer(layerBounds, Paint());
 
-    // 1) 전체 포그(검정) 칠하기
+    // 1️⃣ 전체 포그(검정) 칠하기 (Level 3)
     final fog = Paint()
       ..color = fogColor
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
     canvas.drawRect(layerBounds, fog);
 
-    // 2) (L1 ∪ L2) 펀칭 → 지도 보이게
+    // 2️⃣ L2 먼저 펀칭 → 지도 보이게
     final punch = Paint()
       ..blendMode = BlendMode.clear
       ..isAntiAlias = true;
+    canvas.drawPath(l2Path, punch);
 
-    final unionClear = ui.Path()
-      ..addPath(l1Path, Offset.zero)
-      ..addPath(l2Path, Offset.zero);
-    canvas.drawPath(unionClear, punch);
-
-    // 3) 회색은 (L2 - L1)만 지도 위에 얹기 → L1 우선권 보장
+    // 3️⃣ L2 영역에 회색 오버레이
     if (level2Centers.isNotEmpty) {
-      final grayMinusL1 = ui.Path.combine(ui.PathOperation.difference, l2Path, l1Path);
       final grayPaint = Paint()
         ..color = grayColor
         ..style = PaintingStyle.fill
         ..isAntiAlias = true;
-      canvas.drawPath(grayMinusL1, grayPaint);
+      canvas.drawPath(l2Path, grayPaint);
     }
+
+    // 4️⃣ L1 펀칭 (제일 마지막) → L1 절대 우선권 보장
+    canvas.drawPath(l1Path, punch);
 
     canvas.restore();
   }
