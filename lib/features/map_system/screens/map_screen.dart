@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' show Distance, LengthUnit;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -32,7 +33,6 @@ import '../controllers/marker_controller.dart';
 import '../state/map_state.dart';
 import '../widgets/map_filter_dialog.dart';
 import '../../../core/services/data/marker_domain_service.dart';
-import '../../../core/services/data/marker_service.dart';
 import '../../../core/models/post/post_model.dart';
 
 /// 리팩토링된 MapScreen - Clean Architecture 적용
@@ -558,7 +558,7 @@ class _MapScreenState extends State<MapScreen> {
                 
                 // ✅ 현재 위치에서 50km 이내의 타일만 포함 (화면 밖 타일 제외)
                 if (_state.currentPosition != null) {
-                  final distance = MarkerService.calculateDistance(_state.currentPosition!, center);
+                  final distance = _calculateDistance(_state.currentPosition!, center);
                   if (distance <= 50000) {  // 50km = 50000m
                     level2Centers.add(center);
                   } else {
@@ -606,10 +606,10 @@ class _MapScreenState extends State<MapScreen> {
         // 마커 레이어 (Provider에서)
         Consumer<MarkerProvider>(
           builder: (context, markerProvider, _) {
-            debugPrint('🎨 MarkerLayer 렌더링: ${markerProvider.markers.length}개 마커');
+            debugPrint('🎨 MarkerLayer 렌더링: ${markerProvider.rawMarkers.length}개 마커');
             
             // ✅ MarkerProvider의 마커를 직접 사용
-            final markers = markerProvider.markers.map((marker) {
+            final markers = markerProvider.rawMarkers.map((marker) {
               final isSuper = (marker.reward ?? 0) >= 10000;
               return Marker(
                 key: ValueKey(marker.markerId),
@@ -980,6 +980,14 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _state.receivablePostCount = receivable;
     });
+  }
+  
+  // ==================== Helper Methods ====================
+  
+  /// 두 좌표 간의 거리 계산 (미터 단위)
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Meter, point1, point2);
   }
 }
 
