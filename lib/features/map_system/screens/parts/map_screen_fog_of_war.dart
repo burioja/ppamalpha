@@ -207,24 +207,10 @@ Future<void> _loadVisitedLocations() async {
 /// 타일 ID에서 좌표 추출하는 헬퍼 메서드
 LatLng? _extractPositionFromTileId(String tileId) {
   try {
-    if (tileId.startsWith('tile_')) {
-      // 1km 근사 그리드 형식: tile_lat_lng
-      final parts = tileId.split('_');
-      if (parts.length == 3) {
-        final tileLat = int.tryParse(parts[1]);
-        final tileLng = int.tryParse(parts[2]);
-        if (tileLat != null && tileLng != null) {
-          const double tileSize = 0.009;
-          return LatLng(
-            tileLat * tileSize + (tileSize / 2),
-            tileLng * tileSize + (tileSize / 2),
-          );
-        }
-      }
-    }
-    return null;
+    // ✅ TileUtils의 표준 메서드 사용 (중복 로직 제거)
+    return TileUtils.getKm1TileCenter(tileId);
   } catch (e) {
-    print('타일 ID에서 좌표 추출 실패: $e');
+    debugPrint('타일 ID 변환 실패: $tileId - $e');
     return null;
   }
 }

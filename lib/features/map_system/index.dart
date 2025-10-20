@@ -4,9 +4,7 @@ export 'screens/map_screen.dart';
 
 // Services
 export 'services/markers/marker_app_service.dart';
-export 'services/fog_of_war/fog_of_war_manager.dart';
-export 'services/fog_of_war/fog_tile_service.dart';
-export 'services/fog_of_war/visit_manager.dart';
+// ✅ 미사용 exports 삭제됨 (fog_of_war_manager, fog_tile_service, visit_manager)
 export 'services/tiles/tile_cache_manager.dart';
 export 'services/external/osm_fog_service.dart';
 
