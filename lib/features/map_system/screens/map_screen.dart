@@ -32,6 +32,7 @@ import '../controllers/marker_controller.dart';
 import '../state/map_state.dart';
 import '../widgets/map_filter_dialog.dart';
 import '../../../core/services/data/marker_domain_service.dart';
+import '../../../core/services/data/marker_service.dart';
 import '../../../core/models/post/post_model.dart';
 
 /// 리팩토링된 MapScreen - Clean Architecture 적용
@@ -549,14 +550,30 @@ class _MapScreenState extends State<MapScreen> {
           builder: (context, tileProvider, _) {
             // visited30Days에서 직접 타일 중심점 계산
             final level2Centers = <LatLng>[];
+            int filteredCount = 0;
             for (final tileId in tileProvider.visited30Days) {
               try {
                 // 1km 타일 전용 메서드 사용!
                 final center = TileUtils.getKm1TileCenter(tileId);
-                level2Centers.add(center);
+                
+                // ✅ 현재 위치에서 50km 이내의 타일만 포함 (화면 밖 타일 제외)
+                if (_state.currentPosition != null) {
+                  final distance = MarkerService.calculateDistance(_state.currentPosition!, center);
+                  if (distance <= 50000) {  // 50km = 50000m
+                    level2Centers.add(center);
+                  } else {
+                    filteredCount++;
+                  }
+                } else {
+                  level2Centers.add(center);
+                }
               } catch (e) {
                 debugPrint('🔥 타일 중심점 계산 오류: $tileId - $e');
               }
+            }
+            
+            if (filteredCount > 0) {
+              debugPrint('🚫 거리 필터링: ${filteredCount}개 타일 제외 (50km 이상)');
             }
             
             final level1Centers = [
@@ -589,7 +606,43 @@ class _MapScreenState extends State<MapScreen> {
         // 마커 레이어 (Provider에서)
         Consumer<MarkerProvider>(
           builder: (context, markerProvider, _) {
-            return MarkerLayer(markers: _state.clusteredMarkers);
+            debugPrint('🎨 MarkerLayer 렌더링: ${markerProvider.markers.length}개 마커');
+            
+            // ✅ MarkerProvider의 마커를 직접 사용
+            final markers = markerProvider.markers.map((marker) {
+              final isSuper = (marker.reward ?? 0) >= 10000;
+              return Marker(
+                key: ValueKey(marker.markerId),
+                point: marker.position,
+                width: 40,
+                height: 40,
+                child: GestureDetector(
+                  onTap: () => _showMarkerDetails(marker),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png',
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: isSuper ? Colors.orange : Colors.blue,
+                            child: Icon(Icons.place, color: Colors.white, size: 20),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList();
+            
+            return MarkerLayer(markers: markers);
           },
         ),
         
