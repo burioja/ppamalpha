@@ -32,12 +32,9 @@ import '../features/post_system/screens/post_deploy_screen.dart';
 import '../features/post_system/screens/post_statistics_screen.dart';
 import '../features/post_system/screens/deployment_statistics_dashboard_screen.dart';
 import '../features/post_system/screens/my_posts_statistics_dashboard_screen.dart';
-import '../features/post_system/screens/post_deploy_design_demo.dart';
-import '../features/post_system/screens/post_place_screen_design_demo.dart';
 
 // Place System
 import '../features/place_system/screens/create_place_screen.dart';
-import '../features/place_system/screens/create_place_design_demo.dart';
 import '../features/place_system/screens/edit_place_screen.dart';
 import '../features/place_system/screens/place_detail_screen.dart';
 import '../features/place_system/screens/place_image_viewer_screen.dart';
@@ -72,7 +69,6 @@ class AppRoutes {
   static const String locationPicker = '/location-picker';
   static const String postDeploy = '/post-deploy';
   static const String createPlace = '/create-place';
-  static const String createPlaceDesignDemo = '/create-place-design-demo';
   static const String editPlace = '/edit-place';
   static const String placeDetail = '/place-detail';
   static const String placeSearch = '/place-search';
@@ -84,10 +80,6 @@ class AppRoutes {
   static const String adminCleanup = '/admin-cleanup';
   static const String store = '/store';
   static const String trash = '/trash';
-  
-  // Design demo routes
-  static const String postDeployDesignDemo = '/post-deploy-design-demo';
-  static const String postPlaceDesignDemo = '/post-place-design-demo';
 
   static Map<String, WidgetBuilder> get routes => {
     login: (context) => const LoginScreen(),
@@ -163,7 +155,6 @@ class AppRoutes {
     deploymentStatistics: (context) => const DeploymentStatisticsDashboardScreen(),
     myPostsStatistics: (context) => const MyPostsStatisticsDashboardScreen(),
     createPlace: (context) => const CreatePlaceScreen(),
-    createPlaceDesignDemo: (context) => const CreatePlaceDesignDemo(),
     editPlace: (context) {
       final placeId = ModalRoute.of(context)?.settings.arguments as String?;
       if (placeId == null) {
@@ -203,9 +194,5 @@ class AppRoutes {
     store: (context) => const StoreScreen(),
     trash: (context) => const TrashScreen(),
     adminCleanup: (context) => const AdminCleanupScreen(),
-    
-    // Design demo
-    postDeployDesignDemo: (context) => const PostDeployDesignDemo(),
-    postPlaceDesignDemo: (context) => const PostPlaceScreenDesignDemo(),
   };
 } 
