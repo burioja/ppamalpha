@@ -180,26 +180,30 @@ class TileUtils {
 
   /// 위도, 경도를 1km 타일 ID로 변환 (Fog of War용) - 정확한 계산
   static String getKm1TileId(double latitude, double longitude) {
-    final tileSize = _getKm1TileSizeForLatitude(latitude);
-    final tileLat = (latitude / tileSize).floor();
-    final tileLng = (longitude / tileSize).floor();
+    // ✅ 수정: 1000을 곱해서 정수로 저장
+    // 예: 37.5665 → 37566, 126.9780 → 126978
+    final tileLat = (latitude * 1000).floor();
+    final tileLng = (longitude * 1000).floor();
     return 'tile_${tileLat}_${tileLng}';
   }
 
   /// 1km 타일 ID를 타일 중심점으로 변환 - 정확한 계산
   static LatLng getKm1TileCenter(String tileId) {
     final parts = tileId.split('_');
+    if (parts.length != 3) {
+      throw ArgumentError('잘못된 1km 타일 ID 형식: $tileId (예: tile_12345_67890)');
+    }
+    
     final tileLat = int.parse(parts[1]);
     final tileLng = int.parse(parts[2]);
     
-    // 타일 중심점의 위도를 기준으로 정확한 타일 크기 계산
-    final centerLat = tileLat * _getKm1TileSizeForLatitude(tileLat * 0.009); // 대략적 중심점
-    final tileSize = _getKm1TileSizeForLatitude(centerLat);
+    // ✅ 수정: tileLat/tileLng는 이미 1000을 곱한 값
+    // 예: tile_37566_126978 → 37.566°, 126.978°
+    // 1000으로 나누고 0.0005를 더해서 타일 중심점 반환
+    final latitude = tileLat / 1000.0 + 0.0005;   // 타일 중심 (약 55m)
+    final longitude = tileLng / 1000.0 + 0.0005;  // 타일 중심 (약 40m)
     
-    return LatLng(
-      tileLat * tileSize + (tileSize / 2),
-      tileLng * tileSize + (tileSize / 2),
-    );
+    return LatLng(latitude, longitude);
   }
 
   /// 1km 타일 ID에서 위도, 경도 범위 계산 - 정확한 계산
@@ -208,15 +212,16 @@ class TileUtils {
     final tileLat = int.parse(parts[1]);
     final tileLng = int.parse(parts[2]);
     
-    // 타일 중심점의 위도를 기준으로 정확한 타일 크기 계산
-    final centerLat = tileLat * _getKm1TileSizeForLatitude(tileLat * 0.009); // 대략적 중심점
-    final tileSize = _getKm1TileSizeForLatitude(centerLat);
+    // ✅ 수정: 1000으로 나눠서 도 단위로 복원
+    final latitude = tileLat / 1000.0;
+    final longitude = tileLng / 1000.0;
     
+    // 타일은 0.001도 단위 (약 1km)
     return {
-      'minLat': tileLat * tileSize,
-      'maxLat': (tileLat + 1) * tileSize,
-      'minLng': tileLng * tileSize,
-      'maxLng': (tileLng + 1) * tileSize,
+      'minLat': latitude,
+      'maxLat': latitude + 0.001,
+      'minLng': longitude,
+      'maxLng': longitude + 0.001,
     };
   }
 
@@ -243,6 +248,27 @@ class TileUtils {
     const double earthCircumference = 40075017.0; // 지구 둘레 (미터)
     final double latRad = latitude * pi / 180.0;
     return earthCircumference * cos(latRad) / pow(2.0, _zoomLevel);
+  }
+  
+  /// 1km 타일 시스템 검증 (양방향 변환 테스트)
+  static bool validateKm1TileConversion(double lat, double lng) {
+    // 1. 좌표 → 타일 ID
+    final tileId = getKm1TileId(lat, lng);
+    
+    // 2. 타일 ID → 좌표
+    final center = getKm1TileCenter(tileId);
+    
+    // 3. 오차 계산 (1km 타일이므로 최대 0.5km 이내여야 함)
+    final distance = _calculateDistance(lat, lng, center.latitude, center.longitude);
+    
+    print('🔍 타일 변환 검증:');
+    print('  원본: $lat, $lng');
+    print('  타일ID: $tileId');
+    print('  복원: ${center.latitude}, ${center.longitude}');
+    print('  오차: ${distance.toStringAsFixed(1)}km');
+    
+    // 오차가 1km 이내면 정상
+    return distance <= 1.0;
   }
 
   /// 두 지점 간 거리 계산 (킬로미터)

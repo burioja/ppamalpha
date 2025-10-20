@@ -556,15 +556,16 @@ class _MapScreenState extends State<MapScreen> {
                 // 1km 타일 전용 메서드 사용!
                 final center = TileUtils.getKm1TileCenter(tileId);
                 
-                // ✅ 현재 위치에서 500km 이내의 타일만 포함 (한반도 전체 커버)
+                // ✅ 현재 위치에서 50km 이내의 타일만 포함 (타일 변환 수정 완료)
                 if (_state.currentPosition != null) {
                   final distance = _calculateDistance(_state.currentPosition!, center);
-                  if (distance <= 500000) {  // 500km = 500000m (한반도 전체)
+                  if (distance <= 50000) {  // 50km = 50000m
                     level2Centers.add(center);
-                    debugPrint('  ✅ L2 타일 추가: ${center.latitude.toStringAsFixed(4)}, ${center.longitude.toStringAsFixed(4)} (거리: ${(distance/1000).toStringAsFixed(1)}km)');
+                    if (level2Centers.length <= 10) {  // 처음 10개만 로그
+                      debugPrint('  ✅ L2 타일 추가: ${center.latitude.toStringAsFixed(6)}, ${center.longitude.toStringAsFixed(6)} (거리: ${(distance/1000).toStringAsFixed(2)}km)');
+                    }
                   } else {
                     filteredCount++;
-                    debugPrint('  ❌ L2 타일 제외: ${center.latitude.toStringAsFixed(4)}, ${center.longitude.toStringAsFixed(4)} (거리: ${(distance/1000).toStringAsFixed(1)}km)');
                   }
                 } else {
                   level2Centers.add(center);
