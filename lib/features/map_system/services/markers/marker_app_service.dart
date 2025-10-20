@@ -126,13 +126,11 @@ class MapMarkerService {
           // 🔥 수량이 0인 마커는 건너뛰기 (이미 isActive가 false로 설정됨)
           final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
           if (remainingQuantity <= 0) {
-            print('⚠️ 수량이 0인 마커 건너뛰기: ${doc.id}');
             continue;
           }
           
           // location이 null인 마커는 건너뛰기
           if (locationData == null) {
-            print('⚠️ location이 null인 마커 건너뛰기: ${doc.id}');
             continue;
           }
         
@@ -199,7 +197,6 @@ class MapMarkerService {
           
           markers.add(marker);
         } catch (e) {
-          print('마커 파싱 오류: $e');
         }
       }
       
@@ -218,22 +215,9 @@ class MapMarkerService {
     try {
       final user = _auth.currentUser;
       if (user == null) {
-        print('🔴 [MARKER_DEBUG] 사용자 미로그인');
         return [];
       }
 
-      print('');
-      print('🔵🔵🔵 ========== getMarkers() 시작 ========== 🔵🔵🔵');
-      print('🔵 사용자 UID: ${user.uid}');
-      print('🔵 중심 위치: ${location.latitude}, ${location.longitude}');
-      print('🔵 검색 반경: ${radiusInKm}km');
-      print('🔵 적용된 필터: $filters');
-      print('🔵 myPostsOnly: ${filters['myPostsOnly']}');
-      print('🔵 showCouponsOnly: ${filters['showCouponsOnly']}');
-      print('🔵 minReward: ${filters['minReward']}');
-      print('🔵 showUrgentOnly: ${filters['showUrgentOnly']}');
-      print('🔵 showVerifiedOnly: ${filters['showVerifiedOnly']}');
-      print('🔵 showUnverifiedOnly: ${filters['showUnverifiedOnly']}');
 
       // markers 컬렉션에서 직접 조회 (서버 필터 추가)
       final now = Timestamp.now();
@@ -243,27 +227,18 @@ class MapMarkerService {
           .where('expiresAt', isGreaterThan: now);     // ✅ 만료 제외 (서버 필터)
 
       // 서버사이드 필터링 적용
-      print('');
-      print('🔴🔴🔴 ========== 필터 적용 체크 ========== 🔴🔴🔴');
-      print('🔴 filters[\'myPostsOnly\'] 값: ${filters['myPostsOnly']}');
-      print('🔴 filters[\'myPostsOnly\'] == true: ${filters['myPostsOnly'] == true}');
-      print('🔴 user != null: ${user != null}');
       
       if (filters['myPostsOnly'] == true && user != null) {
         query = query.where('creatorId', isEqualTo: user.uid);
-        print('✅ 서버사이드 필터 적용됨: 내 포스트만 조회 (creatorId: ${user.uid})');
       } else {
-        print('⚠️ 내 포스트 필터 적용 안 됨');
       }
 
       if (filters['showCouponsOnly'] == true) {
         query = query.where('isCoupon', isEqualTo: true);
-        print('🔍 서버사이드 필터: 쿠폰만 조회');
       }
 
       if (filters['minReward'] != null && filters['minReward'] > 0) {
         query = query.where('reward', isGreaterThanOrEqualTo: filters['minReward']);
-        print('🔍 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
       }
 
       if (filters['showUrgentOnly'] == true) {
@@ -271,48 +246,28 @@ class MapMarkerService {
         final tomorrow = DateTime.now().add(const Duration(days: 1));
         final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
         query = query.where('expiresAt', isLessThan: tomorrowTimestamp);
-        print('🔍 서버사이드 필터: 마감임박 (24시간 이내 만료)');
       }
 
       // 인증 필터 (서버사이드)
-      print('🔴 filters[\'showVerifiedOnly\'] 값: ${filters['showVerifiedOnly']}');
-      print('🔴 filters[\'showVerifiedOnly\'] == true: ${filters['showVerifiedOnly'] == true}');
-      print('🔴 filters[\'showUnverifiedOnly\'] 값: ${filters['showUnverifiedOnly']}');
-      print('🔴 filters[\'showUnverifiedOnly\'] == true: ${filters['showUnverifiedOnly'] == true}');
       
       if (filters['showVerifiedOnly'] == true) {
         query = query.where('isVerified', isEqualTo: true);
-        print('✅ 서버사이드 필터 적용됨: 인증 포스트만 조회');
       } else if (filters['showUnverifiedOnly'] == true) {
         query = query.where('isVerified', isEqualTo: false);
-        print('✅ 서버사이드 필터 적용됨: 미인증 포스트만 조회');
       } else {
-        print('⚠️ 인증 필터 적용 안 됨');
       }
-      print('🔴🔴🔴 ====================================== 🔴🔴🔴');
-      print('');
 
       final snapshot = await query
           .orderBy('expiresAt')                        // ✅ 범위 필드 먼저 정렬
           .limit(pageSize)                             // 제한 증가
           .get();
 
-      print('🔵 Firebase 쿼리 결과: ${snapshot.docs.length}개 마커');
       
       // 쿼리 결과 샘플 로그 (처음 5개)
       for (var i = 0; i < snapshot.docs.length && i < 5; i++) {
         final doc = snapshot.docs[i];
         final data = doc.data() as Map<String, dynamic>?;
-        print('');
-        print('🔍 [쿼리 결과 샘플 ${i+1}/${snapshot.docs.length}] markerId: ${doc.id}');
-        print('   📌 title: ${data?['title']}');
-        print('   👤 creatorId: ${data?['creatorId']}');
-        print('   🔐 isVerified: ${data?['isVerified']} (타입: ${data?['isVerified'].runtimeType})');
-        print('   🎫 isCoupon: ${data?['isCoupon']}');
-        print('   📦 remainingQuantity: ${data?['remainingQuantity']}');
-        print('   📋 postId: ${data?['postId']}');
       }
-      print('');
 
       // 필터링 통계 변수
       int totalCount = snapshot.docs.length;
@@ -442,29 +397,14 @@ class MapMarkerService {
           
           markers.add(marker);
         } catch (e) {
-          print('마커 변환 오류: $e');
           continue;
         }
       }
 
       // 필터링 결과 요약
-      print('');
-      print('📊 ========== 필터링 결과 요약 ========== 📊');
-      print('📊 총 쿼리된 마커: $totalCount개');
-      print('📊 제외된 마커:');
-      print('   - 회수됨 (RECALLED): $recalledCount개');
-      print('   - 수량 소진: $noQuantityCount개');
-      print('   - 위치 정보 없음: $noLocationCount개');
-      print('   - 이미 수령함: $alreadyCollectedCount개');
-      print('   - 거리 범위 밖: $outOfRangeCount개');
-      print('   - 포그 레벨 필터링: $fogLevelFilteredCount개');
-      print('📊 최종 반환 마커: $finalCount개');
-      print('🔵🔵🔵 ========== getMarkers() 종료 ========== 🔵🔵🔵');
-      print('');
 
       return markers;
     } catch (e) {
-      print('❌ 마커 조회 오류: $e');
       return [];
     }
   }
@@ -492,17 +432,14 @@ class MapMarkerService {
       // 서버사이드 필터링 적용 (슈퍼마커용)
       if (filters['myPostsOnly'] == true && user != null) {
         query = query.where('creatorId', isEqualTo: user.uid);
-        print('🔍 슈퍼마커 서버사이드 필터: 내 포스트만 조회 (creatorId: ${user.uid})');
       }
 
       if (filters['showCouponsOnly'] == true) {
         query = query.where('isCoupon', isEqualTo: true);
-        print('🔍 슈퍼마커 서버사이드 필터: 쿠폰만 조회');
       }
 
       if (filters['minReward'] != null && filters['minReward'] > 0) {
         query = query.where('reward', isGreaterThanOrEqualTo: filters['minReward']);
-        print('🔍 슈퍼마커 서버사이드 필터: 최소 리워드 ${filters['minReward']}원 이상');
       }
 
       if (filters['showUrgentOnly'] == true) {
@@ -510,16 +447,13 @@ class MapMarkerService {
         final tomorrow = DateTime.now().add(const Duration(days: 1));
         final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
         query = query.where('expiresAt', isLessThan: tomorrowTimestamp);
-        print('🔍 슈퍼마커 서버사이드 필터: 마감임박 (24시간 이내 만료)');
       }
 
       // 인증 필터 (서버사이드)
       if (filters['showVerifiedOnly'] == true) {
         query = query.where('isVerified', isEqualTo: true);
-        print('🔍 슈퍼마커 서버사이드 필터: 인증 포스트만 조회');
       } else if (filters['showUnverifiedOnly'] == true) {
         query = query.where('isVerified', isEqualTo: false);
-        print('🔍 슈퍼마커 서버사이드 필터: 미인증 포스트만 조회');
       }
 
       final snapshot = await query
@@ -537,14 +471,12 @@ class MapMarkerService {
           // 🔥 회수된 슈퍼마커는 건너뛰기
           final status = data['status'] as String?;
           if (status == 'RECALLED') {
-            print('🔴 회수된 슈퍼마커 건너뛰기: ${doc.id}');
             continue;
           }
 
           // 🔥 수량이 0인 슈퍼마커는 건너뛰기 (이미 isActive가 false로 설정됨)
           final remainingQuantity = (data['remainingQuantity'] as num?)?.toInt() ?? 0;
           if (remainingQuantity <= 0) {
-            print('⚠️ 수량이 0인 슈퍼마커 건너뛰기: ${doc.id}');
             continue;
           }
           
@@ -557,7 +489,6 @@ class MapMarkerService {
           if (creatorId != user.uid) {
             final collectedBy = List<String>.from(data['collectedBy'] ?? []);
             if (collectedBy.contains(user.uid)) {
-              print('🚫 이미 수령한 슈퍼마커 제외: ${doc.id}');
               continue;
             }
           }
@@ -607,14 +538,12 @@ class MapMarkerService {
           
           markers.add(marker);
         } catch (e) {
-          print('슈퍼마커 변환 오류: $e');
           continue;
         }
       }
       
       return markers;
     } catch (e) {
-      print('슈퍼마커 조회 오류: $e');
       return [];
     }
   }
@@ -633,7 +562,6 @@ class MapMarkerService {
       
       return fogLevel1Tiles;
     } catch (e) {
-      print('❌ 포그레벨 1단계 타일 계산 실패: $e');
       return [];
     }
   }
@@ -664,12 +592,6 @@ class MapMarkerService {
     final isTargetMarker = markerData.id == 'TQTIS4RPfirWBK6qHoqu';
 
     if (isTargetMarker) {
-      print('');
-      print('🟠🟠🟠 [convertToMarkerModel] 타겟 마커 변환 시작 🟠🟠🟠');
-      print('🟠 markerData.id: ${markerData.id}');
-      print('🟠 markerData.data[\'postId\']: "${markerData.data['postId']}"');
-      print('🟠 markerData.data[\'postId\'] == null: ${markerData.data['postId'] == null}');
-      print('🟠 markerData.data 전체: ${markerData.data}');
     }
 
     // ✅ 옵셔널 안전 파싱 함수
@@ -685,9 +607,6 @@ class MapMarkerService {
     final finalPostId = postIdFromData ?? markerData.id;
 
     if (isTargetMarker) {
-      print('🟠 postIdFromData: "$postIdFromData"');
-      print('🟠 finalPostId (사용될 값): "$finalPostId"');
-      print('🟠 폴백 사용됨: ${postIdFromData == null}');
     }
 
     // ✅ quantity와 remainingQuantity는 항상 동일하게 설정
@@ -720,9 +639,6 @@ class MapMarkerService {
     );
 
     if (isTargetMarker) {
-      print('🟠 생성된 MarkerModel.postId: "${result.postId}"');
-      print('🟠🟠🟠 [convertToMarkerModel] 타겟 마커 변환 완료 🟠🟠🟠');
-      print('');
     }
 
     return result;
@@ -739,13 +655,6 @@ class MapMarkerService {
     DateTime? expiresAt,
   }) async {
     try {
-      print('🚀 Map 마커 생성 시작:');
-      print('📋 Post ID: $postId');
-      print('📝 제목: $title');
-      print('👤 생성자: $creatorId');
-      print('📍 위치: ${position.latitude}, ${position.longitude}');
-      print('📦 수량: $quantity');
-      print('⏰ 만료일: $expiresAt');
 
       final tileId = TileUtils.getKm1TileId(position.latitude, position.longitude);
       
@@ -773,18 +682,9 @@ class MapMarkerService {
 
       final docRef = await _firestore.collection('markers').add(markerData);
 
-      print('✅ Map 마커 생성 완료!');
-      print('📋 Post ID: $postId');
-      print('📌 Marker ID: ${docRef.id}');
-      print('💰 Reward: ${reward ?? 0}원');
-      print('🎯 [MAP_MARKER_CREATED] PostID: $postId | MarkerID: ${docRef.id} | Title: $title');
 
       return docRef.id;
     } catch (e) {
-      print('❌ Map 마커 생성 실패:');
-      print('📋 Post ID: $postId');
-      print('💥 Error: $e');
-      print('🚨 [MAP_MARKER_FAILED] PostID: $postId | Error: $e');
       rethrow;
     }
   }
@@ -793,9 +693,7 @@ class MapMarkerService {
   static Future<void> deleteMarker(String markerId) async {
     try {
       await _firestore.collection('markers').doc(markerId).delete();
-      print('✅ 마커 삭제 완료: $markerId');
     } catch (e) {
-      print('❌ 마커 삭제 실패: $e');
       rethrow;
     }
   }
@@ -818,22 +716,16 @@ class MapMarkerService {
 
       final data = result.data;
       if (data == null) {
-        print('수령 가능 포스트 조회 결과가 null입니다');
         return [];
       }
 
       return List<Map<String, dynamic>>.from(data);
     } catch (e) {
-      print('수령 가능 포스트 조회 실패: $e');
-      print('위치: lat=$lat, lng=$lng, radius=$radius, uid=$uid');
       
       // 에러 타입별 상세 로그
       if (e.toString().contains('unauthenticated')) {
-        print('사용자 인증 오류');
       } else if (e.toString().contains('unavailable')) {
-        print('Firebase Functions 서비스 불가');
       } else if (e.toString().contains('timeout')) {
-        print('요청 시간 초과');
       }
       
       return [];

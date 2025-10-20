@@ -49,11 +49,9 @@ class MockLocationProvider extends ChangeNotifier {
       if (_mockPosition == null && _currentGpsPosition != null) {
         _mockPosition = _currentGpsPosition;
       }
-      debugPrint('🎭 Mock 모드 활성화 - Mock 위치: $_mockPosition');
     } else {
       // Mock 모드 비활성화
       _isControllerVisible = false;
-      debugPrint('🎭 Mock 모드 비활성화 - GPS 위치로 복원: $_originalGpsPosition');
     }
 
     notifyListeners();
@@ -65,7 +63,6 @@ class MockLocationProvider extends ChangeNotifier {
     _previousMockPosition = _mockPosition;
 
     _mockPosition = position;
-    debugPrint('🎭 Mock 위치 설정: ${position.latitude}, ${position.longitude}');
 
     notifyListeners();
   }

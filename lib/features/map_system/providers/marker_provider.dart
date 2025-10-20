@@ -276,8 +276,6 @@ class MarkerProvider with ChangeNotifier {
       final primaryCenter = centers.first;
       final additionalCenters = centers.skip(1).toList();
 
-      debugPrint('🔍 Fog 기반 마커 조회: 일반(${normalRadiusKm}km), 슈퍼(${superRadiusKm}km)');
-
       // 병렬 조회
       final futures = await Future.wait([
         MapMarkerService.getMarkers(
@@ -327,9 +325,8 @@ class MarkerProvider with ChangeNotifier {
               .map((doc) => doc.data()['postId'] as String)
               .toSet();
 
-          debugPrint('📦 이미 수령: ${collectedPostIds.length}개');
         } catch (e) {
-          debugPrint('❌ 수령 기록 조회 실패: $e');
+          // 수령 기록 조회 실패
         }
       }
 
@@ -337,8 +334,6 @@ class MarkerProvider with ChangeNotifier {
       _rawMarkers = uniqueMarkers.where((m) =>
         !collectedPostIds.contains(m.postId)
       ).toList();
-
-      debugPrint('✅ 최종 마커: ${_rawMarkers.length}개');
 
       // 포스트 정보 조회
       final postIds = _rawMarkers.map((m) => m.postId).toSet().toList();
@@ -359,9 +354,8 @@ class MarkerProvider with ChangeNotifier {
             }
           }
 
-          debugPrint('📄 포스트: ${_posts.length}개');
         } catch (e) {
-          debugPrint('❌ 포스트 조회 실패: $e');
+          // 포스트 조회 실패
         }
       }
 

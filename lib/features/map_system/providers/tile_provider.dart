@@ -61,6 +61,20 @@ class TileProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   int get totalVisitedTiles => _visitedTiles.length;
+  
+  /// Level 1 타일들의 중심점 리스트 (Fog 렌더링용)
+  List<LatLng> get level1Centers {
+    final centers = <LatLng>[];
+    for (final tileId in _currentLevel1TileIds) {
+      try {
+        final center = TileUtils.getKm1TileCenter(tileId);
+        centers.add(center);
+      } catch (e) {
+        // 타일 중심점 계산 실패
+      }
+    }
+    return centers;
+  }
 
   // ==================== Constructor ====================
   
@@ -93,12 +107,10 @@ class TileProvider with ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
       
-      debugPrint('✅ 타일 로드 완료: ${allTiles.length}개 (최근 30일: ${recent30Days.length}개)');
     } catch (e) {
       _errorMessage = '타일 로드 실패: $e';
       _isLoading = false;
       notifyListeners();
-      debugPrint('❌ 타일 로드 실패: $e');
     }
   }
 
@@ -126,10 +138,8 @@ class TileProvider with ChangeNotifier {
         _visited30Days.add(tileId);
         notifyListeners();
         
-        debugPrint('✅ 타일 방문 기록: $tileId');
       }
     } catch (e) {
-      debugPrint('❌ 타일 방문 기록 실패: $e');
     }
     
     return tileId;
@@ -153,9 +163,7 @@ class TileProvider with ChangeNotifier {
       }
       
       notifyListeners();
-      debugPrint('✅ 배치 타일 방문 기록: ${tileIds.length}개');
     } catch (e) {
-      debugPrint('❌ 배치 타일 방문 기록 실패: $e');
     }
   }
 
@@ -183,9 +191,7 @@ class TileProvider with ChangeNotifier {
       }
       
       notifyListeners();
-      debugPrint('✅ 타일 프리패치 완료: ${result.length}개');
     } catch (e) {
-      debugPrint('❌ 타일 프리패치 실패: $e');
     }
   }
 
@@ -199,10 +205,8 @@ class TileProvider with ChangeNotifier {
         await _loadVisitedTiles();
       }
       
-      debugPrint('✅ 오래된 타일 정리: $count개');
       return count;
     } catch (e) {
-      debugPrint('❌ 타일 정리 실패: $e');
       return 0;
     }
   }
@@ -252,7 +256,6 @@ class TileProvider with ChangeNotifier {
     }
     
     notifyListeners();
-    debugPrint('🎯 현재 타일 Level 1로 설정: $tileId (이전 타일들은 Level 2로 전환)');
   }
   
   /// 🎯 GPS 이동 콜백 (핵심 메서드)
@@ -267,17 +270,13 @@ class TileProvider with ChangeNotifier {
     LatLng? homeLocation,
     List<LatLng> workLocations = const [],
   }) async {
-    debugPrint('📍 onLocationUpdate 호출: ${newPosition.latitude}, ${newPosition.longitude}');
     
     final oldPosition = _previousPosition;
     final oldLevel1Tiles = Set<String>.from(_currentLevel1TileIds);
 
-    debugPrint('🔍 이전 위치: ${oldPosition?.latitude}, ${oldPosition?.longitude}');
-    debugPrint('🔍 이전 L1 타일: ${oldLevel1Tiles.length}개');
 
     // 1) 직전 Level 1을 방문 확정으로 업서트 (히스테리시스 적용)
     if (oldPosition != null && _movedEnough(oldPosition, newPosition) && oldLevel1Tiles.isNotEmpty) {
-      debugPrint('✅ 히스테리시스 통과! 방문 확정 진행');
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         // 🎯 핵심: 직전 Level 1 타일들을 visited로 확정
@@ -289,10 +288,8 @@ class TileProvider with ChangeNotifier {
         // Optimistic update: gray에 바로 반영 → 체감 개선
         _visited30Days.addAll(oldLevel1Tiles);
         _previousLevel1TileIds = oldLevel1Tiles;
-        debugPrint('🔄 Optimistic update: ${oldLevel1Tiles.length}개 타일을 visited30Days에 추가 (총 ${_visited30Days.length}개)');
       }
     } else {
-      debugPrint('⏸️ 히스테리시스 미달: 방문 확정 스킵 (150m 미만 이동 또는 이전 위치 없음)');
     }
 
     // 2) 새 Level 1 재계산
@@ -325,7 +322,6 @@ class TileProvider with ChangeNotifier {
     _currentLevel1TileIds = level1Tiles;
     notifyListeners();
     
-    debugPrint('🎯 위치 업데이트: Level 1 타일 ${level1Tiles.length}개');
   }
 
   /// 이동 거리 체크 (히스테리시스)
@@ -334,7 +330,6 @@ class TileProvider with ChangeNotifier {
   bool _movedEnough(LatLng from, LatLng to) {
     const Distance distance = Distance();
     final meters = distance.as(LengthUnit.Meter, from, to);
-    debugPrint('📏 이동 거리: ${meters.toStringAsFixed(1)}m (임계값: 10m)');
     return meters > 10.0; // 테스트용으로 150 → 10으로 낮춤
   }
 
@@ -375,7 +370,6 @@ class TileProvider with ChangeNotifier {
     _currentLevel1TileIds = level1Tiles;
     notifyListeners();
     
-    debugPrint('🎯 Level 1 타일 업데이트: ${level1Tiles.length}개');
   }
 
   /// 타일 상태 초기화

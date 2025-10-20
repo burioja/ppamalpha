@@ -23,6 +23,8 @@ import '../widgets/map_location_buttons_widget.dart';
 import '../widgets/enhanced_mock_location_controller.dart';
 import '../utils/client_cluster.dart' show ClusterMarkerModel, ClusterOrMarker, buildProximityClusters, latLngToScreenWebMercator;
 import '../widgets/unified_fog_overlay_widget.dart';
+import '../widgets/clustered_marker_layer_widget.dart';
+import '../helpers/marker_clustering_helper.dart';
 import '../../../utils/tile_utils.dart';
 
 // ✨ 리팩토링된 Controller & State
@@ -34,6 +36,8 @@ import '../state/map_state.dart';
 import '../widgets/map_filter_dialog.dart';
 import '../../../core/services/data/marker_domain_service.dart';
 import '../../../core/models/post/post_model.dart';
+
+// Part 파일들
 
 /// 리팩토링된 MapScreen - Clean Architecture 적용
 /// 
@@ -61,11 +65,21 @@ class _MapScreenState extends State<MapScreen> {
   // 리스너 구독
   StreamSubscription<DocumentSnapshot>? _workplaceSubscription;
   
+  // ==================== 마커 관련 변수 (map_screen_markers.dart에서 사용) ====================
+  List<MarkerModel> _markers = [];
+  List<ClusterMarkerModel> _visibleMarkerModels = [];
+  List<Marker> _clusteredMarkers = [];
+  Size _lastMapSize = const Size(0, 0);
+  LatLng _mapCenter = const LatLng(37.5665, 126.9780);
+  double _mapZoom = 14.0;
+  MapController? _mapController;
+  
   @override
   void initState() {
     super.initState();
     _state = MapState();
-    _state.mapController = MapController();
+    _mapController = MapController();
+    _state.mapController = _mapController;
     
     _initializeApp();
   }
@@ -273,7 +287,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     } catch (e) {
-      debugPrint('프리미엄 상태 확인 실패: $e');
+      // 프리미엄 상태 확인 실패
     }
   }
 
@@ -281,7 +295,6 @@ class _MapScreenState extends State<MapScreen> {
   
   void _setupMarkerListener() {
     if (_state.currentPosition == null) return;
-    debugPrint('마커 리스너 설정 완료');
   }
 
   void _setupPostStreamListener() {
@@ -289,7 +302,7 @@ class _MapScreenState extends State<MapScreen> {
     // TODO: 실시간 마커 스트림 구현
   }
 
-  void _updateMarkers() {
+  void _updateMarkers() async {
     // 기존 MarkerProvider 시스템 사용
     final markerProvider = context.read<MarkerProvider>();
     final mockProvider = context.read<MockLocationProvider>();
@@ -297,12 +310,11 @@ class _MapScreenState extends State<MapScreen> {
     final effectivePosition = mockProvider.effectivePosition ?? _state.currentPosition;
     
     if (effectivePosition == null) {
-      debugPrint('❌ 위치 정보 없음');
       return;
     }
     
-    // 기존 시스템으로 마커 업데이트
-    markerProvider.refreshByFogLevel(
+    // ✅ 먼저 마커 데이터를 비동기로 가져오기
+    await markerProvider.refreshByFogLevel(
       currentPosition: effectivePosition,
       homeLocation: _state.homeLocation,
       workLocations: _state.workLocations,
@@ -317,58 +329,62 @@ class _MapScreenState extends State<MapScreen> {
       },
     );
     
-    // 클러스터링도 함께 업데이트 (선택적)
-    _rebuildClusters();
-    
-    // 마커 업데이트 시 수령 가능 개수도 업데이트
-    _updateReceivablePosts();
+    // ✅ 데이터 로드 후 setState로 UI 업데이트
+    if (mounted) {
+      setState(() {
+        _markers = markerProvider.rawMarkers;
+        _state.markers = markerProvider.rawMarkers;
+      });
+      
+      // 클러스터링 업데이트
+      if (_markers.isNotEmpty) {
+        _visibleMarkerModels = MarkerClusteringHelper.convertToClusterModels(_markers);
+        _rebuildClusters();
+      }
+      
+      // 마커 업데이트 시 수령 가능 개수도 업데이트
+      _updateReceivablePosts();
+    }
   }
 
   void _rebuildClusters() {
-    // MarkerProvider에서 마커 정보 가져오기
-    final markerProvider = context.read<MarkerProvider>();
-    
-    if (markerProvider.rawMarkers.isEmpty) {
+    if (_visibleMarkerModels.isEmpty) {
       if (mounted) {
         setState(() {
-          _state.clusteredMarkers = [];
+          _clusteredMarkers = [];
         });
       }
       return;
     }
     
-    // 클러스터링 수행
-    final clusteredMarkers = MarkerController.buildClusteredMarkers(
-      markers: markerProvider.rawMarkers,
-      visibleMarkerModels: markerProvider.rawMarkers.map((m) => ClusterMarkerModel(
-        markerId: m.markerId,
-        position: m.position,
-      )).toList(),
-      mapCenter: _state.mapCenter,
-      mapZoom: _state.mapZoom,
-      viewSize: _state.lastMapSize,
+    // Helper를 사용한 클러스터링
+    final clustered = MarkerClusteringHelper.buildClusteredMarkers(
+      markers: _markers,
+      visibleMarkerModels: _visibleMarkerModels,
+      mapCenter: _mapCenter,
+      mapZoom: _mapZoom,
+      viewSize: _lastMapSize,
       onTapSingle: _onTapSingleMarker,
       onTapCluster: _zoomIntoCluster,
     );
     
     if (mounted) {
       setState(() {
-        _state.clusteredMarkers = clusteredMarkers;
+        _clusteredMarkers = clustered;
       });
     }
   }
 
   void _onTapSingleMarker(ClusterMarkerModel marker) {
-    final markerProvider = context.read<MarkerProvider>();
-    final originalMarker = MarkerController.findOriginalMarker(marker, markerProvider.rawMarkers);
+    final originalMarker = MarkerClusteringHelper.findOriginalMarker(marker, _markers);
     if (originalMarker != null) {
       _showMarkerDetails(originalMarker);
     }
   }
 
   void _zoomIntoCluster(ClusterOrMarker cluster) {
-    final targetZoom = MarkerController.calculateClusterZoomTarget(_state.mapZoom);
-    _state.mapController?.move(cluster.representative!.position, targetZoom);
+    final targetZoom = MarkerClusteringHelper.calculateClusterZoomTarget(_mapZoom);
+    _mapController?.move(cluster.representative!.position, targetZoom);
   }
 
   void _showMarkerDetails(MarkerModel marker) {
@@ -396,12 +412,10 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _collectMarker(MarkerModel marker) async {
     // TODO: PostService.collectPost 구현
-    debugPrint('마커 수집: ${marker.title}');
   }
 
   Future<void> _removeMarker(MarkerModel marker) async {
     // TODO: PostService.recallMarker 구현
-    debugPrint('마커 회수: ${marker.markerId}');
   }
 
   // ==================== UI 빌드 ====================
@@ -503,27 +517,22 @@ class _MapScreenState extends State<MapScreen> {
                   // Mock 위치 Provider 업데이트
                   mockProvider.setMockPosition(newPosition);
                   
-                  // 현재 위치 상태 업데이트
-                  setState(() {
-                    _state.currentPosition = newPosition;
-                  });
-                  
-                  // 🎯 TileProvider의 핵심 메서드 호출
-                  // "방문확정 → 레벨1 재계산" 순서 보장
+                  // 🎯 TileProvider 먼저 업데이트 (깜빡임 방지)
                   try {
-                    debugPrint('🚀 TileProvider.onLocationUpdate 호출 시도...');
                     final tileProvider = context.read<fog_tile.TileProvider>();
-                    debugPrint('✅ TileProvider 획득 성공');
                     await tileProvider.onLocationUpdate(
                       newPosition: newPosition,
                       homeLocation: _state.homeLocation,
                       workLocations: _state.workLocations,
                     );
-                    debugPrint('✅ onLocationUpdate 완료');
                   } catch (e, stackTrace) {
-                    debugPrint('🔥 TileProvider.onLocationUpdate 오류: $e');
-                    debugPrint('Stack trace: $stackTrace');
+                    // TileProvider 업데이트 오류
                   }
+                  
+                  // ✅ TileProvider 업데이트 완료 후 상태 업데이트
+                  setState(() {
+                    _state.currentPosition = newPosition;
+                  });
                   
                   // 1. 현재 위치 마커 업데이트
                   _createCurrentLocationMarker(newPosition);
@@ -537,8 +546,6 @@ class _MapScreenState extends State<MapScreen> {
                   
                   // 4. 마커 업데이트
                   _updateMarkers();
-                  
-                  debugPrint('🎭 Mock 위치 업데이트 완료: ${newPosition.latitude}, ${newPosition.longitude}');
                 },
                 onClose: () {
                   mockProvider.hideController();
@@ -546,9 +553,10 @@ class _MapScreenState extends State<MapScreen> {
               );
             },
           ),
+          // 모두 수령하기 버튼 (맵 최하단부 중앙)
+          _buildReceiveFab(),
         ],
       ),
-      floatingActionButton: _buildReceiveFab(),
     );
   }
 
@@ -587,9 +595,6 @@ class _MapScreenState extends State<MapScreen> {
                   final distance = _calculateDistance(_state.currentPosition!, center);
                   if (distance <= 50000) {  // 50km = 50000m
                     level2Centers.add(center);
-                    if (level2Centers.length <= 10) {  // 처음 10개만 로그
-                      debugPrint('  ✅ L2 타일 추가: ${center.latitude.toStringAsFixed(6)}, ${center.longitude.toStringAsFixed(6)} (거리: ${(distance/1000).toStringAsFixed(2)}km)');
-                    }
                   } else {
                     filteredCount++;
                   }
@@ -597,37 +602,12 @@ class _MapScreenState extends State<MapScreen> {
                   level2Centers.add(center);
                 }
               } catch (e) {
-                debugPrint('🔥 타일 중심점 계산 오류: $tileId - $e');
+                // 타일 중심점 계산 오류
               }
             }
             
-            if (filteredCount > 0) {
-              debugPrint('🚫 거리 필터링: ${filteredCount}개 타일 제외 (50km 이상)');
-            }
-            
-            final level1Centers = [
-              if (_state.currentPosition != null) _state.currentPosition!,
-              if (_state.homeLocation != null) _state.homeLocation!,
-              ..._state.workLocations,
-            ];
-            
-            debugPrint('🎯 Level 2 중심점: ${level2Centers.length}개 (visited30Days: ${tileProvider.visited30Days.length}개)');
-            debugPrint('🔍 L1 중심점: ${level1Centers.length}개');
-            debugPrint('📊 Fog 데이터: L1=${level1Centers.length} L2=${level2Centers.length} visited30Days=${tileProvider.visited30Days.length}');
-            
-            // ✅ Level 2 좌표 상세 로그
-            if (level2Centers.isNotEmpty) {
-              debugPrint('📍 Level 2 좌표 상세:');
-              for (int i = 0; i < level2Centers.length && i < 5; i++) {
-                final center = level2Centers[i];
-                if (_state.currentPosition != null) {
-                  final dist = _calculateDistance(_state.currentPosition!, center);
-                  debugPrint('  [$i] ${center.latitude.toStringAsFixed(6)}, ${center.longitude.toStringAsFixed(6)} (거리: ${(dist/1000).toStringAsFixed(1)}km)');
-                }
-              }
-            } else {
-              debugPrint('⚠️ Level 2 중심점이 비어있음! (필터링됨: $filteredCount개)');
-            }
+            // ✅ TileProvider에서 직접 Level 1 중심점 가져오기 (깜빡임 방지)
+            final level1Centers = tileProvider.level1Centers;
             
             return UnifiedFogOverlayWidget(
               mapController: _state.mapController!,
@@ -646,52 +626,8 @@ class _MapScreenState extends State<MapScreen> {
           workLocations: _state.workLocations,
         ),
         
-        // 마커 레이어 (기존 시스템 + 클러스터링)
-        Consumer<MarkerProvider>(
-          builder: (context, markerProvider, _) {
-            // 기존 마커와 클러스터링된 마커를 모두 표시
-            final allMarkers = <Marker>[];
-            
-            // 기존 마커들 추가
-            allMarkers.addAll(markerProvider.rawMarkers.map((marker) {
-              final isSuper = (marker.reward ?? 0) >= 10000;
-              return Marker(
-                key: ValueKey(marker.markerId),
-                point: marker.position,
-                width: 40,
-                height: 40,
-                child: GestureDetector(
-                  onTap: () => _showMarkerDetails(marker),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png',
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: isSuper ? Colors.orange : Colors.blue,
-                            child: Icon(Icons.place, color: Colors.white, size: 20),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }));
-            
-            // 클러스터링된 마커들도 추가 (있는 경우)
-            allMarkers.addAll(_state.clusteredMarkers);
-            
-            return MarkerLayer(markers: allMarkers);
-          },
-        ),
+        // 마커 레이어 (클러스터링된 마커 - 별도 위젯)
+        ClusteredMarkerLayerWidget(clusteredMarkers: _clusteredMarkers),
         
         // 현재 위치 마커
         MarkerLayer(markers: _state.currentMarkers),
@@ -729,11 +665,40 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildReceiveFab() {
     if (_state.receivablePostCount == 0) return const SizedBox.shrink();
     
-    return FloatingActionButton.extended(
-      onPressed: _handleReceivePosts,
-      icon: const Icon(Icons.card_giftcard),
-      label: Text('수령하기 (${_state.receivablePostCount})'),
-      backgroundColor: Colors.green,
+    return Positioned(
+      bottom: 16, // 맵 최하단부 (내 위치 버튼과 같은 높이)
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(25),
+          child: InkWell(
+            onTap: _handleReceivePosts,
+            borderRadius: BorderRadius.circular(25),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue[700]!, Colors.blue[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Text(
+                '모두 수령하기 (${_state.receivablePostCount})',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -760,6 +725,11 @@ class _MapScreenState extends State<MapScreen> {
         _state.mapCenter = camera.center;
         _state.mapZoom = camera.zoom;
         _state.lastMapSize = MediaQuery.of(context).size;
+        
+        // 클러스터링용 변수도 업데이트
+        _mapCenter = camera.center;
+        _mapZoom = camera.zoom;
+        _lastMapSize = MediaQuery.of(context).size;
       });
       
       _state.clusterDebounceTimer?.cancel();
@@ -785,7 +755,7 @@ class _MapScreenState extends State<MapScreen> {
       _updateReceivablePosts();
       _state.lastMapCenter = currentCenter;
     } catch (e) {
-      debugPrint('마커 업데이트 실패: $e');
+      // 마커 업데이트 실패
     } finally {
       if (mounted) {
         setState(() => _state.isUpdatingPosts = false);
@@ -837,8 +807,9 @@ class _MapScreenState extends State<MapScreen> {
   void _showDeploymentTypeSelectionDialog() {
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: const Text('배포 방식 선택'),
+        contentPadding: const EdgeInsets.all(16),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -876,12 +847,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-        ],
       ),
     );
   }
@@ -1006,7 +971,6 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _handleReceivePosts() async {
     // TODO: 수령 로직 구현
-    debugPrint('포스트 수령: ${_state.receivablePostCount}개');
   }
 
   // ==================== 헬퍼 메서드 ====================

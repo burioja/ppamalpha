@@ -17,6 +17,13 @@ import '../features/map_system/providers/mock_location_provider.dart';
 
 // Post Providers
 import '../features/post_system/providers/post_provider.dart';
+import '../features/post_system/providers/post_place_provider.dart';
+
+// User Dashboard Providers
+import '../features/user_dashboard/providers/inbox_provider.dart';
+
+// Place Providers
+import '../features/place_system/providers/create_place_provider.dart';
 
 /// DI - Provider 등록
 /// 
@@ -37,6 +44,9 @@ class DIProviders {
       
       // 사용자
       ...userProviders,
+      
+      // 플레이스
+      ...placeProviders,
     ];
   }
 
@@ -71,6 +81,12 @@ class DIProviders {
         ChangeNotifierProvider(
           create: (_) => PostProvider(),
         ),
+        ChangeNotifierProxyProvider<AuthProvider, PostPlaceProvider>(
+          create: (_) => PostPlaceProvider(currentUserId: null),
+          update: (_, auth, previous) => PostPlaceProvider(
+            currentUserId: auth.userId,
+          ),
+        ),
       ];
 
   /// 사용자 관련 Provider
@@ -86,6 +102,22 @@ class DIProviders {
         ),
         ChangeNotifierProvider(
           create: (_) => SearchProvider(),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, InboxProvider>(
+          create: (_) => InboxProvider(currentUserId: null),
+          update: (_, auth, previous) => InboxProvider(
+            currentUserId: auth.userId,
+          ),
+        ),
+      ];
+
+  /// 플레이스 관련 Provider
+  static List<SingleChildWidget> get placeProviders => [
+        ChangeNotifierProxyProvider<AuthProvider, CreatePlaceProvider>(
+          create: (_) => CreatePlaceProvider(currentUserId: null),
+          update: (_, auth, previous) => CreatePlaceProvider(
+            currentUserId: auth.userId,
+          ),
         ),
       ];
 }

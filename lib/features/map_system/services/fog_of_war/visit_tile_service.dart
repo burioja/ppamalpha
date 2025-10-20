@@ -27,7 +27,6 @@ class VisitTileService {
         'visitCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
     } catch (e) {
-      debugPrint('🔥 updateCurrentTileVisit error: $e');
     }
   }
 
@@ -54,10 +53,7 @@ class VisitTileService {
       }
 
       await batch.commit();
-      // debugPrint('✅ 방문 확정: ${tileIds.length}개 타일 → Firestore 업서트 완료');
-      // debugPrint('📝 업서트된 타일들: ${tileIds.take(5).join(', ')}${tileIds.length > 5 ? '...' : ''}');
     } catch (e) {
-      debugPrint('🔥 upsertVisitedTiles error: $e');
     }
   }
 
@@ -84,7 +80,6 @@ class VisitTileService {
       final days = DateTime.now().difference(lastVisit).inDays;
       return (days <= 30) ? FogLevel.gray : FogLevel.black;
     } catch (e) {
-      debugPrint('🔥 getFogLevelForTile error: $e');
       return FogLevel.black;
     }
   }
@@ -120,7 +115,6 @@ class VisitTileService {
       }
       return ids;
     } catch (e) {
-      debugPrint('🔥 getFogLevel1TileIdsCached error: $e');
       return [];
     }
   }

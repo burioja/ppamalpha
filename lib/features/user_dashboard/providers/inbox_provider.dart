@@ -1,258 +1,324 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../core/models/post/post_model.dart';
 import '../../../core/services/data/post_service.dart';
-import '../state/inbox_state.dart';
+import '../../../core/models/post/post_model.dart';
 
-/// 받은편지함 Provider
-/// 
-/// **책임**: 받은편지함 상태 관리, 포스트 로드/필터/정렬
-/// **원칙**: 얇은 액션만, Service 사용
+/// 인박스 화면의 상태 및 비즈니스 로직 관리
 class InboxProvider with ChangeNotifier {
-  final PostService _postService;
-  final InboxState _state = InboxState();
+  final PostService _postService = PostService();
+  final String? currentUserId;
 
-  // Getters
-  InboxState get state => _state;
-  List<PostModel> get allPosts => List.unmodifiable(_state.allPosts);
-  List<PostModel> get filteredPosts => List.unmodifiable(_state.filteredPosts);
-  List<PostModel> get draftPosts => List.unmodifiable(_state.cachedDraftPosts);
-  List<PostModel> get deployedPosts => List.unmodifiable(_state.cachedDeployedPosts);
-  bool get isLoading => _state.isLoading;
-  bool get hasMoreData => _state.hasMoreData;
+  InboxProvider({required this.currentUserId});
 
-  InboxProvider({PostService? postService})
-      : _postService = postService ?? PostService();
+  // ==================== 상태 변수들 ====================
+  
+  // 검색 및 필터링 상태
+  String searchQuery = '';
+  bool showFilters = false;
+  String statusFilter = 'all'; // all, active, inactive, deleted
+  String periodFilter = 'all'; // all, today, week, month
+  String sortBy = 'createdAt'; // createdAt, title, reward, expiresAt
+  String sortOrder = 'desc'; // asc, desc
+  
+  // 페이지네이션 상태
+  final List<PostModel> allPosts = [];
+  final List<PostModel> filteredPosts = [];
+  bool isLoading = false;
+  bool isLoadingMore = false;
+  bool hasMoreData = true;
+  DocumentSnapshot? lastDocument;
+  static const int pageSize = 20;
 
-  // ==================== 데이터 로드 ====================
+  // 내 포스트 캐싱
+  List<PostModel> cachedDraftPosts = [];
+  List<PostModel> cachedDeployedPosts = [];
+  bool myPostsLoaded = false;
 
-  /// 초기 데이터 로드
+  // 선택된 포스트 ID 추적 (터치 UX용)
+  String? selectedPostId;
+
+  // ==================== 데이터 로딩 ====================
+  
+  /// 초기 데이터 로딩
   Future<void> loadInitialData() async {
-    if (_state.isLoading) return;
+    if (isLoading || currentUserId == null) return;
 
-    _state.isLoading = true;
-    _state.allPosts.clear();
-    _state.filteredPosts.clear();
-    _state.lastDocument = null;
-    _state.hasMoreData = true;
-    _state.myPostsLoaded = false;
+    isLoading = true;
+    allPosts.clear();
+    filteredPosts.clear();
+    lastDocument = null;
+    hasMoreData = true;
+    myPostsLoaded = false;
     notifyListeners();
 
     try {
-      await _loadMoreData();
+      await loadMoreData();
     } finally {
-      _state.isLoading = false;
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// 추가 데이터 로드 (페이지네이션)
-  Future<void> _loadMoreData() async {
-    if (_state.isLoadingMore || !_state.hasMoreData) return;
+  /// 추가 데이터 로딩 (페이지네이션)
+  Future<void> loadMoreData() async {
+    if (isLoadingMore || !hasMoreData || currentUserId == null) return;
 
-    _state.isLoadingMore = true;
+    isLoadingMore = true;
     notifyListeners();
 
     try {
-      // TODO: PostService에 getPostsWithPagination 메서드 필요
-      final result = (posts: <PostModel>[], lastDocument: null);
-      // final result = await _postService.getPostsWithPagination(
-      //   limit: InboxState.pageSize,
-      //   lastDocument: _state.lastDocument,
-      // );
+      final newPosts = await _postService.getUserPosts(
+        currentUserId!,
+        limit: pageSize,
+        lastDocument: lastDocument,
+      );
 
-      if (result.posts.isEmpty) {
-        _state.hasMoreData = false;
+      if (newPosts.isNotEmpty) {
+        allPosts.addAll(newPosts);
+        hasMoreData = newPosts.length == pageSize;
       } else {
-        _state.allPosts.addAll(result.posts);
-        _state.lastDocument = result.lastDocument;
-        _applyFiltersAndSort();
+        hasMoreData = false;
       }
+
+      applyFiltersAndSorting();
     } catch (e) {
-      debugPrint('❌ 포스트 로드 실패: $e');
+      debugPrint('❌ 추가 데이터 로딩 실패: $e');
     } finally {
-      _state.isLoadingMore = false;
+      isLoadingMore = false;
       notifyListeners();
     }
   }
 
-  /// 내 포스트 로드
-  Future<void> loadMyPosts(String userId) async {
-    if (_state.myPostsLoaded) return;
+  /// 내 포스트 로딩 (캐시 활용)
+  Future<void> loadMyPosts() async {
+    if (myPostsLoaded || currentUserId == null) return;
 
     try {
-      final posts = await _postService.getUserPosts(userId);
-      
-      _state.cachedDraftPosts = posts
-          .where((p) => p.status == 'draft')
-          .toList();
-      
-      _state.cachedDeployedPosts = posts
-          .where((p) => p.status == 'deployed')
-          .toList();
-      
-      _state.myPostsLoaded = true;
+      // TODO: PostService.getUserPostsByStatus 구현 필요
+      // 임시로 빈 리스트 사용
+      final draftPosts = <PostModel>[];
+      final deployedPosts = <PostModel>[];
+
+      cachedDraftPosts = draftPosts;
+      cachedDeployedPosts = deployedPosts;
+      myPostsLoaded = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ 내 포스트 로드 실패: $e');
+      debugPrint('❌ 내 포스트 로딩 실패: $e');
     }
   }
 
-  /// 새로고침
-  Future<void> refresh() async {
-    _state.reset();
-    await loadInitialData();
-  }
-
-  // ==================== 필터 및 정렬 ====================
-
-  /// 검색어 설정
-  void setSearchQuery(String query) {
-    _state.searchQuery = query.trim();
-    _applyFiltersAndSort();
-    notifyListeners();
-  }
-
-  /// 상태 필터 설정
-  void setStatusFilter(String status) {
-    _state.statusFilter = status;
-    _applyFiltersAndSort();
-    notifyListeners();
-  }
-
-  /// 기간 필터 설정
-  void setPeriodFilter(String period) {
-    _state.periodFilter = period;
-    _applyFiltersAndSort();
-    notifyListeners();
-  }
-
-  /// 정렬 기준 설정
-  void setSortBy(String sortBy) {
-    _state.sortBy = sortBy;
-    _applyFiltersAndSort();
-    notifyListeners();
-  }
-
-  /// 정렬 순서 설정
-  void setSortOrder(String order) {
-    _state.sortOrder = order;
-    _applyFiltersAndSort();
+  // ==================== 필터링 및 정렬 ====================
+  
+  /// 검색 쿼리 업데이트
+  void updateSearchQuery(String query) {
+    searchQuery = query.trim();
+    applyFiltersAndSorting();
     notifyListeners();
   }
 
   /// 필터 표시 토글
   void toggleFilters() {
-    _state.showFilters = !_state.showFilters;
+    showFilters = !showFilters;
     notifyListeners();
+  }
+
+  /// 상태 필터 변경
+  void setStatusFilter(String value) {
+    statusFilter = value;
+    applyFiltersAndSorting();
+    notifyListeners();
+  }
+
+  /// 기간 필터 변경
+  void setPeriodFilter(String value) {
+    periodFilter = value;
+    applyFiltersAndSorting();
+    notifyListeners();
+  }
+
+  /// 정렬 기준 변경
+  void setSortBy(String value) {
+    sortBy = value;
+    applyFiltersAndSorting();
+    notifyListeners();
+  }
+
+  /// 정렬 순서 변경
+  void setSortOrder(String value) {
+    sortOrder = value;
+    applyFiltersAndSorting();
+    notifyListeners();
+  }
+
+  /// 필터링 및 정렬 적용
+  void applyFiltersAndSorting() {
+    filteredPosts.clear();
+    filteredPosts.addAll(filterAndSortPosts(allPosts));
+  }
+
+  /// 포스트 필터링 및 정렬
+  List<PostModel> filterAndSortPosts(List<PostModel> posts) {
+    var result = posts.where((post) {
+      // 검색 쿼리 필터
+      if (searchQuery.isNotEmpty) {
+        final query = searchQuery.toLowerCase();
+        if (!post.title.toLowerCase().contains(query) &&
+            !post.description.toLowerCase().contains(query)) {
+          return false;
+        }
+      }
+
+      // 상태 필터
+      if (statusFilter != 'all') {
+        final now = DateTime.now();
+        switch (statusFilter) {
+          case 'active':
+            if (post.status != PostStatus.DEPLOYED) return false;
+            if (post.expiresAt != null && post.expiresAt!.isBefore(now)) return false;
+            break;
+          case 'inactive':
+            if (post.status == PostStatus.DEPLOYED &&
+                post.expiresAt != null &&
+                post.expiresAt!.isAfter(now)) return false;
+            break;
+          case 'deleted':
+            if (post.status != PostStatus.DELETED) return false;
+            break;
+        }
+      }
+
+      // 기간 필터
+      if (periodFilter != 'all') {
+        final now = DateTime.now();
+        DateTime cutoffDate;
+        
+        switch (periodFilter) {
+          case 'today':
+            cutoffDate = DateTime(now.year, now.month, now.day);
+            break;
+          case 'week':
+            cutoffDate = now.subtract(const Duration(days: 7));
+            break;
+          case 'month':
+            cutoffDate = now.subtract(const Duration(days: 30));
+            break;
+          default:
+            cutoffDate = DateTime(2000);
+        }
+
+        if (post.createdAt.isBefore(cutoffDate)) return false;
+      }
+
+      return true;
+    }).toList();
+
+    // 정렬
+    result.sort((a, b) {
+      int comparison;
+      
+      switch (sortBy) {
+        case 'title':
+          comparison = a.title.compareTo(b.title);
+          break;
+        case 'reward':
+          comparison = a.reward.compareTo(b.reward);
+          break;
+        case 'expiresAt':
+          comparison = (a.expiresAt ?? DateTime.now()).compareTo(
+            b.expiresAt ?? DateTime.now()
+          );
+          break;
+        case 'createdAt':
+        default:
+          comparison = a.createdAt.compareTo(b.createdAt);
+          break;
+      }
+
+      return sortOrder == 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }
+
+  // ==================== 액션 ====================
+  
+  /// 포스트 ID 선택
+  void selectPost(String? postId) {
+    selectedPostId = postId;
+    notifyListeners();
+  }
+
+  /// 데이터 새로고침
+  Future<void> refreshData() async {
+    await loadInitialData();
+  }
+
+  /// 내 포스트 새로고침
+  Future<void> refreshMyPosts() async {
+    myPostsLoaded = false;
+    await loadMyPosts();
   }
 
   /// 필터 초기화
   void resetFilters() {
-    _state.resetFilters();
-    _applyFiltersAndSort();
+    searchQuery = '';
+    statusFilter = 'all';
+    periodFilter = 'all';
+    sortBy = 'createdAt';
+    sortOrder = 'desc';
+    applyFiltersAndSorting();
     notifyListeners();
   }
 
-  /// 필터 및 정렬 적용
-  void _applyFiltersAndSort() {
-    var posts = List<PostModel>.from(_state.allPosts);
-
-    // 검색어 필터
-    if (_state.searchQuery.isNotEmpty) {
-      posts = posts.where((post) {
-        final query = _state.searchQuery.toLowerCase();
-        return post.title.toLowerCase().contains(query) ||
-            post.description.toLowerCase().contains(query);
-      }).toList();
-    }
-
-    // 상태 필터
-    if (_state.statusFilter != 'all') {
-      posts = posts.where((post) {
-        return post.status == _state.statusFilter;
-      }).toList();
-    }
-
-    // 기간 필터
-    if (_state.periodFilter != 'all') {
-      final now = DateTime.now();
-      posts = posts.where((post) {
-        final createdAt = post.createdAt;
-        
-        switch (_state.periodFilter) {
-          case 'today':
-            return createdAt.isAfter(DateTime(now.year, now.month, now.day));
-          case 'week':
-            return createdAt.isAfter(now.subtract(const Duration(days: 7)));
-          case 'month':
-            return createdAt.isAfter(now.subtract(const Duration(days: 30)));
-          default:
-            return true;
-        }
-      }).toList();
-    }
-
-    // 정렬
-    posts.sort((a, b) {
-      int result = 0;
-      
-      switch (_state.sortBy) {
-        case 'title':
-          result = a.title.compareTo(b.title);
-          break;
-        case 'reward':
-          result = (a.reward ?? 0).compareTo(b.reward ?? 0);
-          break;
-        case 'expiresAt':
-          result = (a.defaultExpiresAt ?? DateTime(2099))
-              .compareTo(b.defaultExpiresAt ?? DateTime(2099));
-          break;
-        case 'createdAt':
-        default:
-          result = a.createdAt.compareTo(b.createdAt);
-          break;
-      }
-      
-      return _state.sortOrder == 'asc' ? result : -result;
-    });
-
-    _state.filteredPosts = posts;
-  }
-
-  // ==================== CRUD ====================
-
-  /// 포스트 삭제
-  Future<bool> deletePost(String postId) async {
+  // ==================== 포스트 액션 ====================
+  
+  /// 포스트 삭제 (휴지통으로 이동)
+  Future<void> deletePost(String postId) async {
     try {
-      // TODO: PostService에 deletePost 메서드 필요
-      // await _postService.deletePost(postId);
-      
-      // 로컬 상태 업데이트
-      _state.allPosts.removeWhere((p) => p.postId == postId);
-      _state.cachedDraftPosts.removeWhere((p) => p.postId == postId);
-      _state.cachedDeployedPosts.removeWhere((p) => p.postId == postId);
-      _applyFiltersAndSort();
-      notifyListeners();
-      
-      return true;
+      await _postService.updatePostStatus(postId, PostStatus.DELETED);
+      myPostsLoaded = false; // 캐시 무효화
+      await refreshMyPosts();
     } catch (e) {
       debugPrint('❌ 포스트 삭제 실패: $e');
-      return false;
+      rethrow;
     }
   }
 
-  /// 포스트 선택
-  void selectPost(String? postId) {
-    _state.selectedPostId = postId;
-    notifyListeners();
+  /// 수령한 포스트 삭제 (수집 기록 제거)
+  Future<void> deleteCollectedPost(String postId, String userId) async {
+    try {
+      final collectionId = '${postId}_$userId';
+      await FirebaseFirestore.instance
+          .collection('post_collections')
+          .doc(collectionId)
+          .delete();
+      await refreshData();
+    } catch (e) {
+      debugPrint('❌ 수집 기록 삭제 실패: $e');
+      rethrow;
+    }
   }
 
-  /// 탭 변경
-  void setTabIndex(int index) {
-    _state.currentTabIndex = index;
-    notifyListeners();
+  // ==================== Getter ====================
+  
+  /// 초안 포스트 목록
+  List<PostModel> get draftPosts => cachedDraftPosts;
+
+  /// 배포된 포스트 목록
+  List<PostModel> get deployedPosts => cachedDeployedPosts;
+
+  /// 필터링된 포스트 개수
+  int get filteredPostCount => filteredPosts.length;
+
+  /// 전체 포스트 개수
+  int get totalPostCount => allPosts.length;
+  
+  /// 크로스축 개수 계산 (그리드뷰용)
+  static int getCrossAxisCount(double width) {
+    if (width > 1200) return 4;
+    if (width > 800) return 3;
+    if (width > 600) return 2;
+    return 1;
   }
 }
-
