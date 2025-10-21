@@ -3,7 +3,10 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/services/data/user_service.dart';
 
 class SimpleClusterDot extends StatelessWidget {
-  const SimpleClusterDot({super.key, required this.count});
+  const SimpleClusterDot({
+    super.key, 
+    required this.count,
+  });
   final int count;
 
   @override
@@ -27,13 +30,13 @@ class SimpleClusterDot extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(6),
       child: Text(
         '$count',
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 14,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
+          height: 1.0,
         ),
       ),
     );
