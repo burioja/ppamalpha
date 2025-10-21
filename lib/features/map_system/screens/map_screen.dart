@@ -37,6 +37,9 @@ import '../widgets/map_filter_dialog.dart';
 import '../../../core/services/data/marker_domain_service.dart';
 import '../../../core/models/post/post_model.dart';
 import '../handlers/map_receive_handler.dart';
+import '../services/markers/receivable_post_filter_service.dart';
+import '../handlers/mailbox_deploy_handler.dart';
+import '../handlers/billboard_deploy_handler.dart';
 
 // Part 파일들
 
@@ -831,8 +834,25 @@ class _MapScreenState extends State<MapScreen> {
               description: '집/일터가 선택 주소인 사용자가 자동 수령',
               color: Colors.green,
               onTap: () {
+                // 데이터 먼저 복사
+                final location = _state.longPressedLatLng!;
+                final currentPos = _state.currentPosition;
+                final home = _state.homeLocation;
+                final works = _state.workLocations;
+                final type = _state.userType;
+                
+                // 배포 선택 다이얼로그 닫기
                 Navigator.pop(context);
-                _navigateToPostDeploy(DeploymentType.MAILBOX);
+                
+                // 우편함 배포 핸들러 호출 (다이얼로그 닫힌 후 새 context 사용)
+                MailboxDeployHandler.handleMailboxDeploy(
+                  context: this.context, // ✅ State의 context 사용
+                  location: location,
+                  currentPosition: currentPos,
+                  homeLocation: home,
+                  workLocations: works,
+                  userType: type,
+                );
               },
             ),
             const SizedBox(height: 12),
@@ -841,9 +861,13 @@ class _MapScreenState extends State<MapScreen> {
               title: '광고보드배포',
               description: '광고보드 클릭 시 등록된 모든 포스트 수령',
               color: Colors.orange,
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                _navigateToPostDeploy(DeploymentType.BILLBOARD);
+                // 광고보드 배포 핸들러 호출
+                await BillboardDeployHandler.handleBillboardDeploy(
+                  context: context,
+                  location: _state.longPressedLatLng!,
+                );
               },
             ),
           ],
@@ -998,15 +1022,26 @@ class _MapScreenState extends State<MapScreen> {
     _updateMarkers();
   }
 
-  void _updateReceivablePosts() {
+  void _updateReceivablePosts() async {
     final markerProvider = context.read<MarkerProvider>();
-    final receivable = markerProvider.rawMarkers.where((m) {
-      return m.remainingQuantity > 0 && m.isActive;
-    }).length;
     
-    setState(() {
-      _state.receivablePostCount = receivable;
-    });
+    // 타겟팅 + 필터 조건으로 수령 가능한 마커 필터링
+    final receivableMarkers = await ReceivablePostFilterService.filterReceivableMarkers(
+      markers: markerProvider.rawMarkers,
+      filters: {
+        'showCouponsOnly': _state.showCouponsOnly,
+        'showStampsOnly': _state.showStampsOnly,
+        'showUrgentOnly': false, // 수령에는 마감임박 필터 미적용
+        'showVerifiedOnly': _state.showVerifiedOnly,
+        'showUnverifiedOnly': _state.showUnverifiedOnly,
+      },
+    );
+    
+    if (mounted) {
+      setState(() {
+        _state.receivablePostCount = receivableMarkers.length;
+      });
+    }
   }
   
   // ==================== Helper Methods ====================

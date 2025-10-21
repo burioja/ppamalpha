@@ -335,6 +335,9 @@ class MarkerProvider with ChangeNotifier {
         !collectedPostIds.contains(m.postId)
       ).toList();
 
+      // 타겟팅 조건 필터링 적용 (나이/성별)
+      _rawMarkers = await _filterByTargeting(_rawMarkers);
+
       // 포스트 정보 조회
       final postIds = _rawMarkers.map((m) => m.postId).toSet().toList();
       _posts = [];
@@ -366,6 +369,166 @@ class MarkerProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       debugPrint('❌ Fog 기반 마커 조회 실패: $e');
+    }
+  }
+
+  /// 타겟팅 조건으로 마커 필터링 (나이/성별)
+  Future<List<MarkerModel>> _filterByTargeting(List<MarkerModel> markers) async {
+    if (markers.isEmpty) return markers;
+    
+    debugPrint('🎯 타겟팅 필터링 시작: 전체 마커 ${markers.length}개');
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint('⚠️ 로그인 안됨 - 필터링 스킵');
+        return markers;
+      }
+      
+      // 사용자 정보 조회
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      if (!userDoc.exists) {
+        debugPrint('⚠️ 사용자 문서 없음 - 필터링 스킵');
+        return markers;
+      }
+      
+      final userData = userDoc.data()!;
+      final userGender = userData['gender'] as String?;
+      final userBirth = userData['birthDate'] as String?;
+      
+      // 사용자 나이 계산
+      final userAge = _calculateAge(userBirth);
+      
+      debugPrint('👤 사용자 정보: 나이=$userAge, 성별=$userGender');
+      
+      final filtered = <MarkerModel>[];
+      
+      // 각 마커의 postId로 포스트 타겟팅 조건 확인
+      final postIds = markers.map((m) => m.postId).toSet().toList();
+      
+      if (postIds.isEmpty) return markers;
+      
+      // 포스트 정보 한번에 조회 (최대 30개씩)
+      for (int i = 0; i < postIds.length; i += 30) {
+        final batch = postIds.skip(i).take(30).toList();
+        
+        debugPrint('📦 배치 조회 중: ${i ~/ 30 + 1}/${(postIds.length / 30).ceil()} (${batch.length}개)');
+        
+        final postDocs = await FirebaseFirestore.instance
+            .collection('posts')
+            .where('postId', whereIn: batch)
+            .get();
+        
+        debugPrint('✅ 포스트 문서 조회 완료: ${postDocs.docs.length}개');
+        
+        final postTargeting = <String, Map<String, dynamic>>{};
+        for (final doc in postDocs.docs) {
+          final data = doc.data();
+          final postId = data['postId'] as String? ?? doc.id; // postId 필드 사용
+          postTargeting[postId] = {
+            'targetAge': data['targetAge'] ?? [],
+            'targetGender': data['targetGender'] ?? 'all',
+          };
+        }
+        
+        // 해당 배치의 마커 필터링
+        for (final marker in markers.where((m) => batch.contains(m.postId))) {
+          // ✅ 내가 배포한 포스트는 무조건 표시 (타겟팅 무시)
+          if (marker.creatorId == user.uid) {
+            debugPrint('  ✅ ${marker.postId}: 내 포스트 → 무조건 포함');
+            filtered.add(marker);
+            continue;
+          }
+          
+          final targeting = postTargeting[marker.postId];
+          if (targeting == null) {
+            // 타겟팅 정보 없으면 포함 (모든 사용자 대상)
+            debugPrint('  ✅ ${marker.postId}: 타겟팅 정보 없음 → 포함');
+            filtered.add(marker);
+            continue;
+          }
+          
+          bool passesTargeting = true;
+          String rejectReason = '';
+          
+          // 나이 타겟팅 확인
+          final targetAge = List<int>.from(targeting['targetAge'] ?? []);
+          if (targetAge.isNotEmpty && targetAge.length >= 2) {
+            if (userAge == null) {
+              // 사용자 나이 정보 없으면 타겟팅 포스트 제외
+              passesTargeting = false;
+              rejectReason = '사용자 나이 정보 없음';
+            } else if (userAge < targetAge[0] || userAge > targetAge[1]) {
+              // 나이 범위 벗어남
+              passesTargeting = false;
+              rejectReason = '나이 불일치 (타겟: ${targetAge[0]}-${targetAge[1]}, 사용자: $userAge)';
+            }
+          }
+          
+          // 성별 타겟팅 확인
+          if (passesTargeting) {
+            final targetGender = targeting['targetGender'] as String? ?? 'all';
+            // 'all' 또는 'both'이면 모두 허용
+            if (targetGender != 'all' && targetGender != 'both') {
+              if (userGender == null || targetGender != userGender) {
+                // 성별 조건 불일치
+                passesTargeting = false;
+                rejectReason = '성별 불일치 (타겟: $targetGender, 사용자: $userGender)';
+              }
+            }
+          }
+          
+          // 조건 통과한 마커만 추가
+          if (passesTargeting) {
+            debugPrint('  ✅ ${marker.postId}: 타겟팅 통과 → 포함');
+            filtered.add(marker);
+          } else {
+            debugPrint('  ❌ ${marker.postId}: $rejectReason → 제외');
+          }
+        }
+      }
+      
+      debugPrint('🎯 타겟팅 필터링 완료: ${markers.length}개 → ${filtered.length}개');
+      return filtered;
+    } catch (e) {
+      debugPrint('❌ 타겟팅 필터링 실패: $e');
+      return markers; // 에러 시 원본 반환
+    }
+  }
+  
+  /// 생년월일에서 나이 계산
+  int? _calculateAge(String? birth) {
+    if (birth == null || birth.isEmpty) return null;
+    
+    try {
+      DateTime birthDate;
+      
+      if (birth.contains('-')) {
+        birthDate = DateTime.parse(birth);
+      } else if (birth.length == 8) {
+        final year = int.parse(birth.substring(0, 4));
+        final month = int.parse(birth.substring(4, 6));
+        final day = int.parse(birth.substring(6, 8));
+        birthDate = DateTime(year, month, day);
+      } else {
+        return null;
+      }
+      
+      final now = DateTime.now();
+      int age = now.year - birthDate.year;
+      
+      if (now.month < birthDate.month || 
+          (now.month == birthDate.month && now.day < birthDate.day)) {
+        age--;
+      }
+      
+      return age;
+    } catch (e) {
+      return null;
     }
   }
 

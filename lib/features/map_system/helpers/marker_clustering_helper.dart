@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/marker/marker_model.dart';
 import '../utils/client_cluster.dart';
 import '../widgets/cluster_widgets.dart';
@@ -52,8 +53,21 @@ class MarkerClusteringHelper {
       if (!bucket.isCluster) {
         // 단일 마커
         final marker = bucket.single!;
+        final originalMarker = findOriginalMarker(marker, markers);
         final isSuper = _isSuperMarker(marker, markers);
+        final isMyPost = _isMyPost(originalMarker);
+        
         final imagePath = isSuper ? 'assets/images/ppam_super.png' : 'assets/images/ppam_work.png';
+        
+        // 테두리 색상: 내 포스트(빨강) > 슈퍼(amber) > 일반(파랑)
+        Color borderColor;
+        if (isMyPost) {
+          borderColor = Colors.red;
+        } else if (isSuper) {
+          borderColor = Colors.amber;
+        } else {
+          borderColor = Colors.blue;
+        }
 
         resultMarkers.add(
           Marker(
@@ -63,22 +77,40 @@ class MarkerClusteringHelper {
             height: 30,
             child: GestureDetector(
               onTap: () => onTapSingle(marker),
-              child: Image.asset(
-                imagePath,
-                width: 30,
-                height: 30,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: borderColor,
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: borderColor.withOpacity(0.4),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    imagePath,
                     width: 30,
                     height: 30,
-                    decoration: BoxDecoration(
-                      color: isSuper ? Colors.orange : Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.place, color: Colors.white, size: 18),
-                  );
-                },
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: isSuper ? Colors.orange : Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.place, color: Colors.white, size: 18),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ),
@@ -112,6 +144,14 @@ class MarkerClusteringHelper {
     );
     final markerReward = originalMarker.reward ?? 0;
     return markerReward >= AppConsts.superRewardThreshold;
+  }
+  
+  /// 내 포스트 여부 확인
+  static bool _isMyPost(MarkerModel? marker) {
+    if (marker == null) return false;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return false;
+    return marker.creatorId == currentUser.uid;
   }
 
   /// 원본 MarkerModel 찾기

@@ -34,6 +34,10 @@ class InboxProvider with ChangeNotifier {
   List<PostModel> cachedDeployedPosts = [];
   bool myPostsLoaded = false;
 
+  // 수령한 포스트
+  List<Map<String, dynamic>> collectedPosts = [];
+  bool collectedPostsLoaded = false;
+
   // 선택된 포스트 ID 추적 (터치 UX용)
   String? selectedPostId;
 
@@ -49,10 +53,14 @@ class InboxProvider with ChangeNotifier {
     lastDocument = null;
     hasMoreData = true;
     myPostsLoaded = false;
+    collectedPostsLoaded = false;
     notifyListeners();
 
     try {
-      await loadMoreData();
+      await Future.wait([
+        loadMoreData(),
+        loadCollectedPosts(), // 수령한 포스트도 로딩
+      ]);
     } finally {
       isLoading = false;
       notifyListeners();
@@ -94,17 +102,51 @@ class InboxProvider with ChangeNotifier {
     if (myPostsLoaded || currentUserId == null) return;
 
     try {
-      // TODO: PostService.getUserPostsByStatus 구현 필요
-      // 임시로 빈 리스트 사용
-      final draftPosts = <PostModel>[];
-      final deployedPosts = <PostModel>[];
-
-      cachedDraftPosts = draftPosts;
-      cachedDeployedPosts = deployedPosts;
+      // 내 포스트 전체 조회
+      final allMyPosts = await _postService.getUserPosts(currentUserId!, limit: 100);
+      
+      // 상태별로 분류
+      cachedDraftPosts = allMyPosts.where((p) => p.status == PostStatus.DRAFT).toList();
+      cachedDeployedPosts = allMyPosts.where((p) => p.status == PostStatus.DEPLOYED).toList();
+      
+      debugPrint('✅ 내 포스트 로딩 완료: 초안 ${cachedDraftPosts.length}개, 배포 ${cachedDeployedPosts.length}개');
+      
       myPostsLoaded = true;
       notifyListeners();
     } catch (e) {
       debugPrint('❌ 내 포스트 로딩 실패: $e');
+    }
+  }
+
+  /// 수령한 포스트 로딩 (확인된 포스트만)
+  Future<void> loadCollectedPosts() async {
+    if (collectedPostsLoaded || currentUserId == null) return;
+
+    try {
+      // post_collections에서 확인된 포스트만 조회
+      final collectionDocs = await FirebaseFirestore.instance
+          .collection('post_collections')
+          .doc(currentUserId!)
+          .collection('received')
+          .where('confirmed', isEqualTo: true) // ✅ 확인된 포스트만
+          .orderBy('collectedAt', descending: true)
+          .limit(100)
+          .get();
+      
+      collectedPosts = collectionDocs.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          ...data,
+        };
+      }).toList();
+      
+      debugPrint('✅ 수령한 포스트 (확인됨) 로딩 완료: ${collectedPosts.length}개');
+      
+      collectedPostsLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ 수령한 포스트 로딩 실패: $e');
     }
   }
 
@@ -258,6 +300,12 @@ class InboxProvider with ChangeNotifier {
   Future<void> refreshMyPosts() async {
     myPostsLoaded = false;
     await loadMyPosts();
+  }
+
+  /// 수령한 포스트 새로고침
+  Future<void> refreshCollectedPosts() async {
+    collectedPostsLoaded = false;
+    await loadCollectedPosts();
   }
 
   /// 필터 초기화

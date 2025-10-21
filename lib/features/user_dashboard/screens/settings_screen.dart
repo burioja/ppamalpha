@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../../../core/services/data/place_service.dart';
-import '../../../core/models/place/place_model.dart';
 import '../../../providers/user_provider.dart';
 import '../../../core/services/location/nominatim_service.dart';
 import '../../../core/services/data/user_service.dart';
 import '../../../utils/admin_point_grant.dart';
 import '../widgets/profile_header_card.dart';
 import '../widgets/info_section_card.dart';
-import '../widgets/settings_helpers.dart';
-import '../widgets/settings_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -50,13 +46,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _accountInfoExpanded = true;
   bool _workplaceInfoExpanded = true;
   bool _contentFilterExpanded = true;
-
-  // 로딩 상태
+  
+  // 워크플레이스 관련
+  final List<Map<String, String>> _workplaces = [];
+  final TextEditingController _workplaceNameController = TextEditingController();
+  final TextEditingController _workplaceAddressController = TextEditingController();
+  
   bool _isLoading = false;
-  bool _isSaving = false;
-
-  // 사용자 플레이스 목록
-  List<PlaceModel> _userPlaces = [];
 
   @override
   void initState() {
@@ -72,46 +68,237 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _secondAddressController.dispose();
     _accountController.dispose();
     _birthController.dispose();
+    _workplaceNameController.dispose();
+    _workplaceAddressController.dispose();
     super.dispose();
   }
 
   Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 사용자 기본 정보 로드
+      setState(() {
+        _userEmail = user.email ?? '';
+      });
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+
+        debugPrint('📄 사용자 데이터 로드: ${userData.keys.toList()}');
+        debugPrint('🖼️ profileImageUrl in Firestore: ${userData['profileImageUrl']}');
+
+        setState(() {
+          _nicknameController.text = userData['nickname'] ?? '';
+          _phoneController.text = userData['phone'] ?? '';
+          _addressController.text = userData['address'] ?? '';
+          _secondAddressController.text = userData['secondAddress'] ?? '';
+          _accountController.text = userData['account'] ?? '';
+          _birthController.text = userData['birthDate'] ?? '';
+          final genderValue = userData['gender'] as String?;
+          _selectedGender = (genderValue == 'male' || genderValue == 'female') ? genderValue : null;
+          _profileImageUrl = userData['profileImageUrl'];
+          debugPrint('💾 _profileImageUrl 설정됨: $_profileImageUrl');
+          _allowSexualContent = userData['allowSexualContent'] ?? false;
+          _allowViolentContent = userData['allowViolentContent'] ?? false;
+          _allowHateContent = userData['allowHateContent'] ?? false;
+
+          // 워크플레이스 로드
+          final workplaces = userData['workplaces'] as List<dynamic>?;
+          _workplaces.clear();
+          if (workplaces != null && workplaces.isNotEmpty) {
+            for (final workplace in workplaces) {
+              final workplaceMap = workplace as Map<String, dynamic>;
+              _workplaces.add({
+                'name': workplaceMap['name'] ?? '',
+                'address': workplaceMap['address'] ?? '',
+              });
+            }
+            print('로드된 근무지 개수: ${_workplaces.length}');
+          } else {
+            print('저장된 근무지가 없음');
+          }
+        });
+      }
+    } catch (e) {
+      _showToast('사용자 정보를 불러오는 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  Future<void> _saveUserData() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final userInfo = await SettingsHelpers.loadUserInfo();
-      if (userInfo != null) {
-        _nicknameController.text = userInfo['nickname'] ?? '';
-        _phoneController.text = userInfo['phone'] ?? '';
-        _addressController.text = userInfo['address'] ?? '';
-        _secondAddressController.text = userInfo['secondAddress'] ?? '';
-        _accountController.text = userInfo['account'] ?? '';
-        _birthController.text = userInfo['birth'] ?? '';
-        _selectedGender = userInfo['gender'];
-        _profileImageUrl = userInfo['profileImageUrl'];
-        _allowSexualContent = userInfo['allowSexualContent'] ?? false;
-        _allowViolentContent = userInfo['allowViolentContent'] ?? false;
-        _allowHateContent = userInfo['allowHateContent'] ?? false;
+      await _userService.updateUserProfile(
+        nickname: _nicknameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+        secondAddress: _secondAddressController.text.trim(),
+        account: _accountController.text.trim(),
+        birth: _birthController.text.trim(),
+        gender: _selectedGender,
+        profileImageUrl: _profileImageUrl,
+      );
+
+      // 워크플레이스 및 콘텐츠 필터는 별도 저장
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'allowSexualContent': _allowSexualContent,
+          'allowViolentContent': _allowViolentContent,
+          'allowHateContent': _allowHateContent,
+          'workplaces': _workplaces,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
 
-      final currentUser = _auth.currentUser;
-      if (currentUser != null) {
-        _userEmail = currentUser.email ?? '';
-      }
-
-      // 사용자 플레이스 목록 로드
-      final places = await SettingsHelpers.getUserPlaces();
-      setState(() {
-        _userPlaces = places;
-        _isLoading = false;
-      });
+      _showToast('개인정보가 성공적으로 저장되었습니다');
     } catch (e) {
+      print('사용자 데이터 저장 실패: $e');
+      _showToast('저장 중 오류가 발생했습니다: $e');
+    } finally {
       setState(() {
         _isLoading = false;
       });
-      SettingsHelpers.showErrorSnackBar(context, '데이터 로드 실패: $e');
+    }
+  }
+
+  Future<void> _saveWorkplacesOnly() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      print('근무지만 저장 시작');
+      print('저장할 근무지 개수: ${_workplaces.length}');
+      for (int i = 0; i < _workplaces.length; i++) {
+        print('근무지 $i: ${_workplaces[i]}');
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'workplaces': _workplaces,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('근무지 저장 완료');
+    } catch (e) {
+      print('근무지 저장 실패: $e');
+      _showToast('근무지 저장 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  Future<void> _pickAddress() async {
+    final result = await Navigator.pushNamed(context, '/address-search');
+    if (result != null) {
+      setState(() {
+        _addressController.text = result.toString();
+      });
+    }
+  }
+
+  Future<void> _pickWorkplaceAddress() async {
+    final result = await Navigator.pushNamed(context, '/address-search');
+    if (result != null) {
+      setState(() {
+        _workplaceAddressController.text = result.toString();
+      });
+    }
+  }
+
+  void _addWorkplace() async {
+    if (_workplaceNameController.text.trim().isEmpty || 
+        _workplaceAddressController.text.trim().isEmpty) {
+      _showToast('근무지명과 주소를 모두 입력해주세요');
+      return;
+    }
+
+    final workplaceName = _workplaceNameController.text.trim();
+    final workplaceAddress = _workplaceAddressController.text.trim();
+    
+    print('근무지 추가 시도: $workplaceName, $workplaceAddress');
+
+    // 근무지 추가
+    _workplaces.add({
+      'name': workplaceName,
+      'address': workplaceAddress,
+    });
+    
+    print('근무지 목록에 추가됨. 총 개수: ${_workplaces.length}');
+
+    // UI 업데이트
+    setState(() {
+      _workplaceNameController.clear();
+      _workplaceAddressController.clear();
+    });
+
+    // 근무지 추가 후 즉시 저장 (폼 검증 없이)
+    await _saveWorkplacesOnly();
+    _showToast('근무지가 추가되었습니다');
+  }
+
+  void _removeWorkplace(int index) async {
+    _workplaces.removeAt(index);
+    
+    // UI 업데이트
+    setState(() {});
+    
+    // 근무지 삭제 후 즉시 저장 (폼 검증 없이)
+    await _saveWorkplacesOnly();
+    _showToast('근무지가 삭제되었습니다');
+  }
+
+  Future<void> _logout() async {
+    await _auth.signOut();
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
+  }
+
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _onProfileUpdated() async {
+    debugPrint('📥 _onProfileUpdated 호출됨');
+    
+    // 이전 URL 저장
+    final previousUrl = _profileImageUrl;
+    debugPrint('📥 이전 profileImageUrl: $previousUrl');
+    
+    await _loadUserData();  // 데이터 다시 로드 (await 추가)
+    debugPrint('📊 _loadUserData 완료 - 새 profileImageUrl: $_profileImageUrl');
+    
+    // URL 변경 확인
+    if (previousUrl != _profileImageUrl) {
+      debugPrint('✅ profileImageUrl이 변경됨: $previousUrl → $_profileImageUrl');
+    } else {
+      debugPrint('⚠️ profileImageUrl이 변경되지 않음');
+    }
+    
+    if (mounted) {
+      setState(() {
+        _profileUpdateCounter++;  // 카운터 증가로 ProfileHeaderCard 강제 재빌드
+      });
+      debugPrint('🔄 setState 호출 완료 - _profileUpdateCounter: $_profileUpdateCounter');
+    } else {
+      debugPrint('⚠️ mounted가 false - setState 건너뜀');
     }
   }
 
@@ -120,441 +307,387 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        title: const Text("개인정보 설정"),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue[600]!, Colors.purple[600]!],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-        title: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            '설정',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.save,
-                color: _isSaving ? Colors.grey : Colors.white,
-              ),
-              onPressed: _isSaving ? null : _saveUserData,
-              tooltip: '저장',
-            ),
-          ),
-        ],
       ),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) {
-      return SettingsWidgets.buildLoadingWidget();
-    }
-
-    return Form(
-      key: _formKey,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 프로필 헤더
-            SettingsWidgets.buildProfileHeaderCard(
-              profileImageUrl: _profileImageUrl,
-              userEmail: _userEmail,
-              onImageTap: _changeProfileImage,
-            ),
-            const SizedBox(height: 24),
-
-            // 개인정보 섹션
-            SettingsWidgets.buildInfoSectionCard(
-              title: '개인정보',
-              icon: Icons.person,
-              color: Colors.blue,
-              isExpanded: _personalInfoExpanded,
-              onToggle: () {
-                setState(() {
-                  _personalInfoExpanded = !_personalInfoExpanded;
-                });
-              },
-              children: [
-                SettingsWidgets.buildFormField(
-                  label: '닉네임',
-                  hintText: '닉네임을 입력하세요',
-                  controller: _nicknameController,
-                  validator: SettingsHelpers.validateNickname,
-                ),
-                const SizedBox(height: 16),
-                SettingsWidgets.buildFormField(
-                  label: '전화번호',
-                  hintText: '전화번호를 입력하세요',
-                  controller: _phoneController,
-                  validator: SettingsHelpers.validatePhone,
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 16),
-                SettingsWidgets.buildFormField(
-                  label: '생년월일',
-                  hintText: 'YYYY-MM-DD 형식으로 입력하세요',
-                  controller: _birthController,
-                  validator: SettingsHelpers.validateBirth,
-                ),
-                const SizedBox(height: 16),
-                SettingsWidgets.buildGenderSelector(
-                  selectedGender: _selectedGender,
-                  onChanged: (gender) {
-                    setState(() {
-                      _selectedGender = gender;
-                    });
-                  },
-                ),
-              ],
-            ),
-
-            // 주소 정보 섹션
-            SettingsWidgets.buildInfoSectionCard(
-              title: '주소 정보',
-              icon: Icons.location_on,
-              color: Colors.green,
-              isExpanded: _addressInfoExpanded,
-              onToggle: () {
-                setState(() {
-                  _addressInfoExpanded = !_addressInfoExpanded;
-                });
-              },
-              children: [
-                Row(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Form(
+                key: _formKey,
+                child: Column(
                   children: [
-                    Expanded(
-                      child: SettingsWidgets.buildFormField(
-                        label: '주소',
-                        hintText: '주소를 입력하세요',
-                        controller: _addressController,
-                        validator: SettingsHelpers.validateAddress,
+                    // 프로필 헤더
+                    ProfileHeaderCard(
+                      key: ValueKey('profile_header_$_profileUpdateCounter'),
+                      profileImageUrl: _profileImageUrl,
+                      nickname: _nicknameController.text,
+                      email: _userEmail,
+                      onProfileUpdated: _onProfileUpdated,
+                    ),
+
+                    // 기본 정보 섹션
+                    InfoSectionCard(
+                      title: '기본 정보',
+                      icon: Icons.person,
+                      isCollapsible: true,
+                      isExpanded: _personalInfoExpanded,
+                      onToggle: () => setState(() => _personalInfoExpanded = !_personalInfoExpanded),
+                      children: [
+                        InfoField(
+                          label: '닉네임',
+                          isRequired: true,
+                          child: TextFormField(
+                            controller: _nicknameController,
+                            decoration: InputDecoration(
+                              hintText: '닉네임을 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return '닉네임을 입력해주세요';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        InfoField(
+                          label: '전화번호',
+                          child: TextFormField(
+                            controller: _phoneController,
+                            decoration: InputDecoration(
+                              hintText: '전화번호를 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ),
+                        InfoField(
+                          label: '생년월일',
+                          child: TextFormField(
+                            controller: _birthController,
+                            decoration: InputDecoration(
+                              hintText: 'YYYY-MM-DD 형식으로 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        InfoField(
+                          label: '성별',
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('남성'),
+                                  value: 'male',
+                                  groupValue: _selectedGender,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedGender = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('여성'),
+                                  value: 'female',
+                                  groupValue: _selectedGender,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedGender = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 주소 정보 섹션
+                    InfoSectionCard(
+                      title: '주소 정보',
+                      icon: Icons.location_on,
+                      isCollapsible: true,
+                      isExpanded: _addressInfoExpanded,
+                      onToggle: () => setState(() => _addressInfoExpanded = !_addressInfoExpanded),
+                      children: [
+                        InfoField(
+                          label: '주소',
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _addressController,
+                                  decoration: InputDecoration(
+                                    hintText: '주소를 입력해주세요',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: _pickAddress,
+                                child: const Icon(Icons.search),
+                              ),
+                            ],
+                          ),
+                        ),
+                        InfoField(
+                          label: '상세주소',
+                          child: TextFormField(
+                            controller: _secondAddressController,
+                            decoration: InputDecoration(
+                              hintText: '상세주소를 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 계좌 정보 섹션
+                    InfoSectionCard(
+                      title: '계좌 정보',
+                      icon: Icons.account_balance,
+                      isCollapsible: true,
+                      isExpanded: _accountInfoExpanded,
+                      onToggle: () => setState(() => _accountInfoExpanded = !_accountInfoExpanded),
+                      children: [
+                        InfoField(
+                          label: '계좌번호',
+                          child: TextFormField(
+                            controller: _accountController,
+                            decoration: InputDecoration(
+                              hintText: '계좌번호를 입력해주세요',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 근무지 정보 섹션
+                    InfoSectionCard(
+                      title: '근무지 정보',
+                      icon: Icons.work,
+                      isCollapsible: true,
+                      isExpanded: _workplaceInfoExpanded,
+                      onToggle: () => setState(() => _workplaceInfoExpanded = !_workplaceInfoExpanded),
+                      children: [
+                        // 근무지 추가 폼
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '새 근무지 추가',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _workplaceNameController,
+                                  decoration: InputDecoration(
+                                    labelText: '근무지명',
+                                    hintText: '근무지명을 입력해주세요',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _workplaceAddressController,
+                                        decoration: InputDecoration(
+                                          labelText: '주소',
+                                          hintText: '주소를 입력해주세요',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ElevatedButton(
+                                      onPressed: _pickWorkplaceAddress,
+                                      child: const Icon(Icons.search),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _addWorkplace,
+                                    child: const Text('근무지 추가'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // 기존 근무지 목록
+                        if (_workplaces.isNotEmpty) ...[
+                          const Text(
+                            '등록된 근무지',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...List.generate(_workplaces.length, (index) {
+                            final workplace = _workplaces[index];
+                            return Card(
+                              child: ListTile(
+                                title: Text(workplace['name'] ?? ''),
+                                subtitle: Text(workplace['address'] ?? ''),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _removeWorkplace(index),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ],
+                    ),
+
+                    // 콘텐츠 필터 섹션
+                    InfoSectionCard(
+                      title: '콘텐츠 필터',
+                      icon: Icons.filter_list,
+                      isCollapsible: true,
+                      isExpanded: _contentFilterExpanded,
+                      onToggle: () => setState(() => _contentFilterExpanded = !_contentFilterExpanded),
+                      children: [
+                        SwitchListTile(
+                          title: const Text('성인 콘텐츠 허용'),
+                          value: _allowSexualContent,
+                          onChanged: (value) {
+                            setState(() {
+                              _allowSexualContent = value;
+                            });
+                          },
+                        ),
+                        SwitchListTile(
+                          title: const Text('폭력 콘텐츠 허용'),
+                          value: _allowViolentContent,
+                          onChanged: (value) {
+                            setState(() {
+                              _allowViolentContent = value;
+                            });
+                          },
+                        ),
+                        SwitchListTile(
+                          title: const Text('혐오 콘텐츠 허용'),
+                          value: _allowHateContent,
+                          onChanged: (value) {
+                            setState(() {
+                              _allowHateContent = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // 저장 버튼
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _saveUserData,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: _isLoading
+                              ? const CircularProgressIndicator()
+                              : const Text('저장'),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _searchAddress,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+
+                    // 로그아웃 버튼
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _logout,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('로그아웃'),
+                        ),
                       ),
-                      child: const Icon(Icons.search, size: 18),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                SettingsWidgets.buildFormField(
-                  label: '상세주소',
-                  hintText: '상세주소를 입력하세요',
-                  controller: _secondAddressController,
-                ),
-              ],
-            ),
-
-            // 계좌 정보 섹션
-            SettingsWidgets.buildInfoSectionCard(
-              title: '계좌 정보',
-              icon: Icons.account_balance,
-              color: Colors.orange,
-              isExpanded: _accountInfoExpanded,
-              onToggle: () {
-                setState(() {
-                  _accountInfoExpanded = !_accountInfoExpanded;
-                });
-              },
-              children: [
-                SettingsWidgets.buildFormField(
-                  label: '계좌번호',
-                  hintText: '계좌번호를 입력하세요',
-                  controller: _accountController,
-                  validator: SettingsHelpers.validateAccount,
-                ),
-              ],
-            ),
-
-            // 플레이스 정보 섹션
-            SettingsWidgets.buildInfoSectionCard(
-              title: '내 플레이스',
-              icon: Icons.store,
-              color: Colors.purple,
-              isExpanded: _workplaceInfoExpanded,
-              onToggle: () {
-                setState(() {
-                  _workplaceInfoExpanded = !_workplaceInfoExpanded;
-                });
-              },
-              children: [
-                SettingsWidgets.buildPlaceList(
-                  places: _userPlaces,
-                  onDelete: _deletePlace,
-                ),
-                const SizedBox(height: 16),
-                SettingsWidgets.buildActionButton(
-                  text: '새 플레이스 추가',
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/create-place');
-                  },
-                  color: Colors.purple,
-                  icon: Icons.add,
-                ),
-              ],
-            ),
-
-            // 콘텐츠 필터 섹션
-            SettingsWidgets.buildInfoSectionCard(
-              title: '콘텐츠 필터',
-              icon: Icons.filter_list,
-              color: Colors.red,
-              isExpanded: _contentFilterExpanded,
-              onToggle: () {
-                setState(() {
-                  _contentFilterExpanded = !_contentFilterExpanded;
-                });
-              },
-              children: [
-                SettingsWidgets.buildContentFilter(
-                  allowSexualContent: _allowSexualContent,
-                  allowViolentContent: _allowViolentContent,
-                  allowHateContent: _allowHateContent,
-                  onSexualContentChanged: (value) {
-                    setState(() {
-                      _allowSexualContent = value;
-                    });
-                  },
-                  onViolentContentChanged: (value) {
-                    setState(() {
-                      _allowViolentContent = value;
-                    });
-                  },
-                  onHateContentChanged: (value) {
-                    setState(() {
-                      _allowHateContent = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // 관리자 기능 (개발용)
-            if (_userEmail.contains('admin')) ...[
-              SettingsWidgets.buildSectionHeader('관리자 기능', Icons.admin_panel_settings, Colors.red),
-              const SizedBox(height: 12),
-              SettingsWidgets.buildActionButton(
-                text: '포인트 부여',
-                onPressed: _showAdminPointDialog,
-                color: Colors.red,
-                icon: Icons.monetization_on,
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
+    );
+  }
+}
 
-            // 계정 관리
-            SettingsWidgets.buildSectionHeader('계정 관리', Icons.account_circle, Colors.grey),
-            const SizedBox(height: 12),
-            SettingsWidgets.buildDangerButton(
-              text: '로그아웃',
-              onPressed: _logout,
-              icon: Icons.logout,
+// InfoField 위젯 정의
+class InfoField extends StatelessWidget {
+  final String label;
+  final Widget child;
+  final bool isRequired;
+
+  const InfoField({
+    super.key,
+    required this.label,
+    required this.child,
+    this.isRequired = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label + (isRequired ? ' *' : ''),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: 8),
-            SettingsWidgets.buildDangerButton(
-              text: '계정 삭제',
-              onPressed: _deleteAccount,
-              icon: Icons.delete_forever,
-            ),
-            const SizedBox(height: 80),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
       ),
     );
-  }
-
-  Future<void> _changeProfileImage() async {
-    try {
-      final source = await SettingsHelpers.showImageSourceDialog(context);
-      if (source == null) return;
-
-      // 실제로는 이미지 선택 및 업로드 로직 구현
-      // 여기서는 간단한 예시
-      final imageUrl = await SettingsHelpers.uploadProfileImage('dummy_path');
-      if (imageUrl != null) {
-        setState(() {
-          _profileImageUrl = imageUrl;
-          _profileUpdateCounter++;
-        });
-        SettingsHelpers.showSuccessSnackBar(context, '프로필 이미지가 변경되었습니다');
-      }
-    } catch (e) {
-      SettingsHelpers.showErrorSnackBar(context, '프로필 이미지 변경 실패: $e');
-    }
-  }
-
-  Future<void> _searchAddress() async {
-    try {
-      final result = await SettingsHelpers.showAddressSearchDialog(context);
-      if (result != null) {
-        setState(() {
-          _addressController.text = result['display_name'] ?? '';
-        });
-      }
-    } catch (e) {
-      SettingsHelpers.showErrorSnackBar(context, '주소 검색 실패: $e');
-    }
-  }
-
-  Future<void> _deletePlace(PlaceModel place) async {
-    try {
-      final confirmed = await SettingsHelpers.showDeletePlaceDialog(context, place.name);
-      if (!confirmed) return;
-
-      SettingsHelpers.showLoadingDialog(context);
-
-      final success = await SettingsHelpers.deletePlace(place.id);
-      SettingsHelpers.hideLoadingDialog(context);
-
-      if (success) {
-        setState(() {
-          _userPlaces.removeWhere((p) => p.id == place.id);
-        });
-        SettingsHelpers.showSuccessSnackBar(context, '플레이스가 삭제되었습니다');
-      } else {
-        SettingsHelpers.showErrorSnackBar(context, '플레이스 삭제에 실패했습니다');
-      }
-    } catch (e) {
-      SettingsHelpers.hideLoadingDialog(context);
-      SettingsHelpers.showErrorSnackBar(context, '플레이스 삭제 실패: $e');
-    }
-  }
-
-  Future<void> _showAdminPointDialog() async {
-    await SettingsHelpers.showAdminPointDialog(context);
-  }
-
-  Future<void> _saveUserData() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    // 추가 유효성 검사
-    final validationErrors = SettingsHelpers.validateForm(
-      nickname: _nicknameController.text,
-      phone: _phoneController.text,
-      address: _addressController.text,
-      account: _accountController.text,
-      birth: _birthController.text,
-      gender: _selectedGender,
-    );
-
-    final hasErrors = validationErrors.values.any((error) => error != null);
-    if (hasErrors) {
-      final firstError = validationErrors.values.firstWhere((error) => error != null);
-      SettingsHelpers.showErrorSnackBar(context, firstError!);
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      final userData = {
-        'nickname': _nicknameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'secondAddress': _secondAddressController.text.trim(),
-        'account': _accountController.text.trim(),
-        'birth': _birthController.text.trim(),
-        'gender': _selectedGender,
-        'profileImageUrl': _profileImageUrl,
-        'allowSexualContent': _allowSexualContent,
-        'allowViolentContent': _allowViolentContent,
-        'allowHateContent': _allowHateContent,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final success = await SettingsHelpers.updateUserInfo(userData);
-      
-      if (success) {
-        SettingsHelpers.showSuccessSnackBar(context, '정보가 저장되었습니다');
-      } else {
-        SettingsHelpers.showErrorSnackBar(context, '정보 저장에 실패했습니다');
-      }
-    } catch (e) {
-      SettingsHelpers.showErrorSnackBar(context, '정보 저장 실패: $e');
-    } finally {
-      setState(() {
-        _isSaving = false;
-      });
-    }
-  }
-
-  Future<void> _logout() async {
-    try {
-      final confirmed = await SettingsHelpers.showLogoutDialog(context);
-      if (!confirmed) return;
-
-      await _auth.signOut();
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    } catch (e) {
-      SettingsHelpers.showErrorSnackBar(context, '로그아웃 실패: $e');
-    }
-  }
-
-  Future<void> _deleteAccount() async {
-    try {
-      final confirmed = await SettingsHelpers.showDeleteAccountDialog(context);
-      if (!confirmed) return;
-
-      SettingsHelpers.showLoadingDialog(context);
-
-      // 실제 계정 삭제 로직 구현
-      await Future.delayed(const Duration(seconds: 2)); // 시뮬레이션
-
-      SettingsHelpers.hideLoadingDialog(context);
-      
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    } catch (e) {
-      SettingsHelpers.hideLoadingDialog(context);
-      SettingsHelpers.showErrorSnackBar(context, '계정 삭제 실패: $e');
-    }
   }
 }
