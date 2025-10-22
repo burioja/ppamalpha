@@ -867,6 +867,10 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
+          onChanged: (value) {
+            // 수량이나 기간 변경 시 UI 업데이트
+            setState(() {});
+          },
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),

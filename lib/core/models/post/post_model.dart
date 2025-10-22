@@ -7,6 +7,7 @@ enum PostStatus {
   DEPLOYED,  // 배포됨 (수정 불가, 만료 시 자동 삭제)
   RECALLED,  // 회수됨 (재배포 불가)
   DELETED,   // 삭제됨
+  EXPIRED,   // 만료됨
 }
 
 // 포스트 배포 타입 열거형
@@ -28,6 +29,8 @@ extension PostStatusExtension on PostStatus {
         return '회수됨';
       case PostStatus.DELETED:
         return '삭제됨';
+      case PostStatus.EXPIRED:
+        return '만료됨';
     }
   }
 
@@ -41,6 +44,8 @@ extension PostStatusExtension on PostStatus {
         return 'recalled';
       case PostStatus.DELETED:
         return 'deleted';
+      case PostStatus.EXPIRED:
+        return 'expired';
     }
   }
 
@@ -54,9 +59,8 @@ extension PostStatusExtension on PostStatus {
         return PostStatus.RECALLED;
       case 'deleted':
         return PostStatus.DELETED;
-      // 기존 expired 데이터 호환성을 위해 deleted로 변환
       case 'expired':
-        return PostStatus.DELETED;
+        return PostStatus.EXPIRED;
       default:
         return PostStatus.DRAFT;
     }

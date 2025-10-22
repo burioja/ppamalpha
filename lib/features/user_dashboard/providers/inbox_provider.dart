@@ -35,7 +35,7 @@ class InboxProvider with ChangeNotifier {
   bool myPostsLoaded = false;
 
   // 수령한 포스트
-  List<Map<String, dynamic>> collectedPosts = [];
+  List<PostModel> collectedPosts = [];
   bool collectedPostsLoaded = false;
 
   // 선택된 포스트 ID 추적 (터치 UX용)
@@ -43,6 +43,136 @@ class InboxProvider with ChangeNotifier {
 
   // 사용자 포인트
   int? userBalance;
+
+  // 통계 데이터
+  Map<String, dynamic> statistics = {};
+  bool statisticsLoaded = false;
+
+  // ==================== 필터 및 검색 ====================
+  
+  /// 필터 표시 토글
+  void toggleFilters() {
+    showFilters = !showFilters;
+    notifyListeners();
+  }
+  
+  /// 검색어 적용
+  void applyFilters(String query) {
+    searchQuery = query.trim();
+    _applyFiltersAndSorting();
+  }
+  
+  /// 상태 필터 변경
+  void onStatusFilterChanged(String? value) {
+    if (value != null) {
+      statusFilter = value;
+      _applyFiltersAndSorting();
+    }
+  }
+  
+  /// 기간 필터 변경
+  void onPeriodFilterChanged(String? value) {
+    if (value != null) {
+      periodFilter = value;
+      _applyFiltersAndSorting();
+    }
+  }
+  
+  /// 정렬 기준 변경
+  void onSortByChanged(String? value) {
+    if (value != null) {
+      sortBy = value;
+      _applyFiltersAndSorting();
+    }
+  }
+  
+  /// 정렬 순서 변경
+  void onSortOrderChanged(String? value) {
+    if (value != null) {
+      sortOrder = value;
+      _applyFiltersAndSorting();
+    }
+  }
+  
+  /// 선택된 포스트 ID 설정
+  void setSelectedPostId(String? postId) {
+    selectedPostId = postId;
+    notifyListeners();
+  }
+  
+  /// 필터링 및 정렬 적용
+  void _applyFiltersAndSorting() {
+    filteredPosts.clear();
+    filteredPosts.addAll(_filterAndSortPosts(allPosts));
+    notifyListeners();
+  }
+  
+  /// 포스트 필터링 및 정렬
+  List<PostModel> _filterAndSortPosts(List<PostModel> posts) {
+    // 1단계: 필터링
+    List<PostModel> filtered = posts.where((post) {
+      // 검색어 필터링
+      if (searchQuery.isNotEmpty) {
+        final query = searchQuery.toLowerCase();
+        if (!post.title.toLowerCase().contains(query) && 
+            !post.description.toLowerCase().contains(query) &&
+            !post.creatorName.toLowerCase().contains(query)) {
+          return false;
+        }
+      }
+      
+      // 상태 필터링
+      if (statusFilter != 'all') {
+        switch (statusFilter) {
+          case 'active':
+            return post.status == PostStatus.DEPLOYED;
+          case 'inactive':
+            return post.status == PostStatus.DRAFT;
+          case 'deleted':
+            return post.status == PostStatus.DELETED;
+        }
+      }
+      
+      // 기간 필터링
+      if (periodFilter != 'all') {
+        final now = DateTime.now();
+        switch (periodFilter) {
+          case 'today':
+            return post.createdAt.isAfter(now.subtract(const Duration(days: 1)));
+          case 'week':
+            return post.createdAt.isAfter(now.subtract(const Duration(days: 7)));
+          case 'month':
+            return post.createdAt.isAfter(now.subtract(const Duration(days: 30)));
+        }
+      }
+      
+      return true;
+    }).toList();
+    
+    // 2단계: 정렬
+    filtered.sort((a, b) {
+      int comparison = 0;
+      
+      switch (sortBy) {
+        case 'createdAt':
+          comparison = a.createdAt.compareTo(b.createdAt);
+          break;
+        case 'title':
+          comparison = a.title.compareTo(b.title);
+          break;
+        case 'reward':
+          comparison = a.reward.compareTo(b.reward);
+          break;
+        case 'expiresAt':
+          comparison = a.defaultExpiresAt.compareTo(b.defaultExpiresAt);
+          break;
+      }
+      
+      return sortOrder == 'desc' ? -comparison : comparison;
+    });
+    
+    return filtered;
+  }
 
   // ==================== 데이터 로딩 ====================
   
@@ -64,6 +194,7 @@ class InboxProvider with ChangeNotifier {
         loadMoreData(),
         loadCollectedPosts(), // 수령한 포스트도 로딩
         loadUserBalance(), // 사용자 포인트 로딩
+        loadStatistics(), // 통계 데이터 로딩
       ]);
     } finally {
       isLoading = false;
@@ -162,12 +293,39 @@ class InboxProvider with ChangeNotifier {
           .limit(100)
           .get();
       
+      // 수집된 포스트 정보를 PostModel로 변환
       collectedPosts = collectionDocs.docs.map((doc) {
         final data = doc.data();
-        return {
-          'id': doc.id,
-          ...data,
-        };
+        return PostModel(
+          postId: data['postId'] ?? doc.id,
+          creatorId: data['creatorId'] ?? '',
+          creatorName: data['creatorName'] ?? '익명',
+          createdAt: (data['collectedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          reward: data['reward'] ?? 0,
+          defaultRadius: 1000,
+          defaultExpiresAt: DateTime.now().add(const Duration(days: 30)),
+          targetAge: const [20, 30],
+          targetGender: 'all',
+          targetInterest: const [],
+          targetPurchaseHistory: const [],
+          mediaType: const ['text'],
+          mediaUrl: const [],
+          thumbnailUrl: const [],
+          title: data['title'] ?? '받은 포스트',
+          description: data['description'] ?? '',
+          canRespond: false,
+          canForward: false,
+          canRequestReward: false,
+          canUse: true,
+          placeId: null,
+          status: PostStatus.DEPLOYED,
+          rawSnapshot: doc,
+          collectedAt: (data['collectedAt'] as Timestamp?)?.toDate(),
+          expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
+          isCoupon: data['isCoupon'] ?? false,
+          couponData: data['couponData'],
+          youtubeUrl: data['youtubeUrl'],
+        );
       }).toList();
       
       debugPrint('✅ 수령한 포스트 (확인됨) 로딩 완료: ${collectedPosts.length}개');
@@ -181,18 +339,6 @@ class InboxProvider with ChangeNotifier {
 
   // ==================== 필터링 및 정렬 ====================
   
-  /// 검색 쿼리 업데이트
-  void updateSearchQuery(String query) {
-    searchQuery = query.trim();
-    applyFiltersAndSorting();
-    notifyListeners();
-  }
-
-  /// 필터 표시 토글
-  void toggleFilters() {
-    showFilters = !showFilters;
-    notifyListeners();
-  }
 
   /// 상태 필터 변경
   void setStatusFilter(String value) {
@@ -325,6 +471,7 @@ class InboxProvider with ChangeNotifier {
     await Future.wait([
       loadInitialData(),
       loadUserBalance(),
+      loadStatistics(),
     ]);
   }
 
@@ -338,6 +485,46 @@ class InboxProvider with ChangeNotifier {
   Future<void> refreshCollectedPosts() async {
     collectedPostsLoaded = false;
     await loadCollectedPosts();
+  }
+
+  /// 통계 데이터 로딩
+  Future<void> loadStatistics() async {
+    if (statisticsLoaded || currentUserId == null) return;
+
+    try {
+      // 배포된 포스트 통계
+      final deployedPosts = await _postService.getUserPosts(currentUserId!, limit: 1000);
+      final activePosts = deployedPosts.where((p) => p.status == PostStatus.DEPLOYED).toList();
+      
+      // 수집 통계 (마커 데이터에서)
+      int totalCollections = 0;
+      int totalViews = 0;
+      
+      // TODO: 실제 마커 데이터에서 수집 수 계산
+      // 현재는 임시로 0으로 설정
+      
+      // 포인트 통계
+      final totalSpent = activePosts.fold<int>(0, (sum, post) => sum + post.reward);
+      final totalEarned = collectedPosts.fold<int>(0, (sum, post) => sum + post.reward);
+      
+      statistics = {
+        'totalDeployed': activePosts.length,
+        'totalCollections': totalCollections,
+        'totalViews': totalViews,
+        'collectionRate': activePosts.isNotEmpty ? (totalCollections / activePosts.length * 100).toStringAsFixed(1) : '0.0',
+        'totalSpent': totalSpent,
+        'totalEarned': totalEarned,
+        'netBalance': totalEarned - totalSpent,
+        'userBalance': userBalance ?? 0,
+      };
+      
+      debugPrint('✅ 통계 데이터 로딩 완료: $statistics');
+      
+      statisticsLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ 통계 데이터 로딩 실패: $e');
+    }
   }
 
   /// 필터 초기화
@@ -401,4 +588,30 @@ class InboxProvider with ChangeNotifier {
     if (width > 600) return 2;
     return 1;
   }
+
+  // ==================== 통계 Getter ====================
+  
+  /// 총 배포된 포스트 수
+  int get totalDeployed => statistics['totalDeployed'] ?? 0;
+  
+  /// 총 수집 수
+  int get totalCollections => statistics['totalCollections'] ?? 0;
+  
+  /// 총 조회 수
+  int get totalViews => statistics['totalViews'] ?? 0;
+  
+  /// 수집률 (%)
+  String get collectionRate => statistics['collectionRate'] ?? '0.0';
+  
+  /// 총 지출 포인트
+  int get totalSpent => statistics['totalSpent'] ?? 0;
+  
+  /// 총 획득 포인트
+  int get totalEarned => statistics['totalEarned'] ?? 0;
+  
+  /// 순수익 포인트
+  int get netBalance => statistics['netBalance'] ?? 0;
+  
+  /// 현재 포인트 잔액
+  int get currentBalance => statistics['userBalance'] ?? 0;
 }

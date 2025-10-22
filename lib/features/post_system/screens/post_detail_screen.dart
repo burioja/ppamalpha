@@ -324,6 +324,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         statusColor = Colors.red;
         statusText = '삭제됨';
         break;
+      case PostStatus.EXPIRED:
+        statusColor = Colors.grey;
+        statusText = '만료됨';
+        break;
     }
 
     return Padding(

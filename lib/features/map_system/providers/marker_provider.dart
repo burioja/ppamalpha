@@ -376,12 +376,9 @@ class MarkerProvider with ChangeNotifier {
   Future<List<MarkerModel>> _filterByTargeting(List<MarkerModel> markers) async {
     if (markers.isEmpty) return markers;
     
-    debugPrint('🎯 타겟팅 필터링 시작: 전체 마커 ${markers.length}개');
-    
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        debugPrint('⚠️ 로그인 안됨 - 필터링 스킵');
         return markers;
       }
       
@@ -392,7 +389,6 @@ class MarkerProvider with ChangeNotifier {
           .get();
       
       if (!userDoc.exists) {
-        debugPrint('⚠️ 사용자 문서 없음 - 필터링 스킵');
         return markers;
       }
       
@@ -447,7 +443,6 @@ class MarkerProvider with ChangeNotifier {
           final targeting = postTargeting[marker.postId];
           if (targeting == null) {
             // 타겟팅 정보 없으면 포함 (모든 사용자 대상)
-            debugPrint('  ✅ ${marker.postId}: 타겟팅 정보 없음 → 포함');
             filtered.add(marker);
             continue;
           }
@@ -484,18 +479,13 @@ class MarkerProvider with ChangeNotifier {
           
           // 조건 통과한 마커만 추가
           if (passesTargeting) {
-            debugPrint('  ✅ ${marker.postId}: 타겟팅 통과 → 포함');
             filtered.add(marker);
-          } else {
-            debugPrint('  ❌ ${marker.postId}: $rejectReason → 제외');
           }
         }
       }
       
-      debugPrint('🎯 타겟팅 필터링 완료: ${markers.length}개 → ${filtered.length}개');
       return filtered;
     } catch (e) {
-      debugPrint('❌ 타겟팅 필터링 실패: $e');
       return markers; // 에러 시 원본 반환
     }
   }

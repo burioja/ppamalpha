@@ -752,7 +752,7 @@ class _MapScreenState extends State<MapScreen> {
     if (_state.receivablePostCount == 0) return const SizedBox.shrink();
     
     return Positioned(
-      bottom: 16, // 맵 최하단부 (내 위치 버튼과 같은 높이)
+      bottom: 80, // 바텀 네비게이션 위로 이동
       left: 0,
       right: 0,
       child: Center(

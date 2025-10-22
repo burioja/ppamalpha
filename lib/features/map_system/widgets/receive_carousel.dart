@@ -42,9 +42,9 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.all(12),
+      insetPadding: const EdgeInsets.all(8),
       child: SizedBox(
-        height: 520,
+        height: MediaQuery.of(context).size.height * 0.9, // 전체 화면의 90%
         child: Column(
           children: [
             // 헤더
@@ -114,6 +114,7 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey.shade300,
                         foregroundColor: Colors.black,
+                        padding: EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: Text('나중에 확인하기'),
                     ),
@@ -127,6 +128,7 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: Text('모두 확인 완료'),
                     ),
@@ -144,27 +146,27 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
     return GestureDetector(
       onTap: () => _confirmPost(item.markerId),
       child: Container(
-        margin: const EdgeInsets.all(8),
+        margin: const EdgeInsets.all(4), // 여백 줄임
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade300, width: 2),
         ),
         child: Stack(
           children: [
-            // 포스트 이미지
+            // 포스트 이미지 - 전체 화면에 가깝게
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               child: Image.network(
                 item.imageUrl,
                 width: double.infinity,
                 height: double.infinity,
-                fit: BoxFit.cover,
+                fit: BoxFit.cover, // 이미지가 컨테이너를 꽉 채움
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
                     color: Colors.grey.shade200,
                     child: Icon(
                       Icons.image_not_supported,
-                      size: 64,
+                      size: 120, // 아이콘 크기 증가
                       color: Colors.grey.shade400,
                     ),
                   );
@@ -175,27 +177,34 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
             // 오버레이
             Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.black.withOpacity(0.2), // 투명도 줄임
               ),
             ),
             
             // 상태 배지
             Positioned(
-              top: 16,
-              right: 16,
+              top: 20,
+              right: 20,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: isConfirmed ? Colors.green : Colors.orange,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Text(
                   isConfirmed ? '미션달성' : '미션 중',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
               ),
@@ -205,16 +214,23 @@ class _ReceiveCarouselState extends State<ReceiveCarousel> {
             if (!isConfirmed)
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.black.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Text(
                     '터치하여 확인',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

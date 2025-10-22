@@ -446,6 +446,12 @@ class PostDetailUIWidgets {
         statusText = '삭제됨';
         statusDescription = '이 포스트는 삭제되었습니다.';
         break;
+      case PostStatus.EXPIRED:
+        statusColor = Colors.grey;
+        statusIcon = Icons.schedule;
+        statusText = '만료됨';
+        statusDescription = '이 포스트는 만료되었습니다.';
+        break;
     }
 
     return Container(

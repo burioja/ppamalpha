@@ -31,10 +31,8 @@ class UnconfirmedPostsButton extends StatelessWidget {
 
         return Positioned(
           bottom: 80, // 바텀 네비게이션으로부터 16px 위
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Material(
+          left: 16, // 왼쪽에 배치
+          child: Material(
               elevation: 6,
               borderRadius: BorderRadius.circular(25),
               child: InkWell(
@@ -61,17 +59,24 @@ class UnconfirmedPostsButton extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
-                        Icons.notifications_active,
+                        Icons.inbox,
                         color: Colors.white,
-                        size: 20,
+                        size: 24,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        '미확인 포스트 $unconfirmedCount개',
-                        style: const TextStyle(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
                           color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$unconfirmedCount',
+                          style: TextStyle(
+                            color: Colors.orange[600],
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -79,7 +84,6 @@ class UnconfirmedPostsButton extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         );
       },
     );

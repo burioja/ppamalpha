@@ -367,6 +367,8 @@ class PostEditHelpers {
         return '회수됨';
       case PostStatus.DELETED:
         return '삭제됨';
+      case PostStatus.EXPIRED:
+        return '만료됨';
     }
   }
 
@@ -381,6 +383,8 @@ class PostEditHelpers {
         return Colors.red;
       case PostStatus.DELETED:
         return Colors.grey;
+      case PostStatus.EXPIRED:
+        return Colors.grey[600]!;
     }
   }
 
@@ -395,6 +399,8 @@ class PostEditHelpers {
         return Icons.undo;
       case PostStatus.DELETED:
         return Icons.delete;
+      case PostStatus.EXPIRED:
+        return Icons.schedule;
     }
   }
 

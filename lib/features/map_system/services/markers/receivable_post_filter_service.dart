@@ -28,14 +28,12 @@ class ReceivablePostFilterService {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || currentPosition == null) {
-      debugPrint('  ❌ 사용자 또는 현재 위치 없음');
       return [];
     }
     
     // 사용자 정보 조회
     final userModel = await _getUserModel(user.uid);
     if (userModel == null) {
-      debugPrint('  ❌ 사용자 모델 조회 실패');
       return [];
     }
     
@@ -51,9 +49,8 @@ class ReceivablePostFilterService {
           .map((doc) => doc.data()['postId'] as String)
           .toSet();
       
-      debugPrint('  - 이미 수령한 포스트: ${collectedPostIds.length}개');
     } catch (e) {
-      debugPrint('  ⚠️ 수령 기록 조회 실패: $e');
+      // 수령 기록 조회 실패 시 빈 Set 사용
     }
     
     final receivable = <MarkerModel>[];
@@ -104,15 +101,6 @@ class ReceivablePostFilterService {
       
       receivable.add(marker);
     }
-    
-    debugPrint('  📊 필터링 결과:');
-    debugPrint('    - 거리 초과 (>200m): $distanceFilteredCount개');
-    debugPrint('    - 본인 포스트: $ownPostCount개');
-    debugPrint('    - 이미 수령함: $alreadyCollectedCount개');
-    debugPrint('    - 수량 없음: $noQuantityCount개');
-    debugPrint('    - 타겟팅 불일치: $targetingFailedCount개');
-    debugPrint('    - 필터 불일치: $filterFailedCount개');
-    debugPrint('    - ✅ 수령 가능: ${receivable.length}개');
     
     return receivable;
   }
