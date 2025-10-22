@@ -80,51 +80,74 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
   PreferredSize _buildAppBar(InboxProvider provider) {
     return PreferredSize(
-        preferredSize: const Size.fromHeight(48),
+        preferredSize: const Size.fromHeight(60),
         child: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.blue[600],
           elevation: 0,
           automaticallyImplyLeading: false,
-          flexibleSpace: Container(
+          flexibleSpace: SafeArea(
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.white),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '파이오락스',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_formatNumber(provider.userBalance ?? 0)}P',
+                          style: TextStyle(
+                            color: Colors.blue[600],
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.shopping_bag, color: Colors.white),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.search, color: Colors.white),
+                    ],
+                  ),
+                ),
+                // DEBUG 라벨
+                Positioned(
+                  top: 0,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue[600]!, Colors.purple[600]!],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'DEBUG',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-        ),
-        title: const Text(
-          '내 포스트함',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
           ),
-        ),
-        centerTitle: true,
-        actions: [
-          // 필터 토글 버튼
-          IconButton(
-            icon: Icon(
-              provider.showFilters ? Icons.filter_alt : Icons.filter_alt_outlined,
-              color: Colors.white,
-            ),
-            onPressed: () => provider.toggleFilters(),
-          ),
-          // 새로고침 버튼
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () => provider.refreshData(),
-          ),
-        ],
       ),
     );
   }
@@ -417,6 +440,48 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           ),
           const SizedBox(height: 12),
 
+          // 필터/정렬 바
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.grey, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  '${collectedPosts.length}개 표시 중',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.filter_list, color: Colors.grey, size: 20),
+                  onPressed: () => provider.toggleFilters(),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.sort, color: Colors.grey, size: 20),
+                  onPressed: () {
+                    // 정렬 기능
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // 필터 섹션
           if (provider.showFilters) _buildFiltersSection(provider),
           
@@ -443,29 +508,131 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
     return RefreshIndicator(
       onRefresh: () => provider.refreshCollectedPosts(),
-      child: ListView.builder(
+      child: GridView.builder(
         padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, // 3개씩 세로로 쌓기
+          childAspectRatio: 0.75, // 카드 비율 조정
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
         itemCount: collectedPosts.length,
         itemBuilder: (context, index) {
           final collection = collectedPosts[index];
           final postId = collection['postId'] as String?;
           final collectedAt = (collection['collectedAt'] as Timestamp?)?.toDate();
+          final reward = collection['reward'] as int? ?? 0;
+          final postTitle = collection['postTitle'] as String? ?? '포스트';
           
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: const Icon(Icons.check_circle, color: Colors.green),
-              title: Text('포스트 ID: ${postId ?? "알 수 없음"}'),
-              subtitle: Text(
-                '수령: ${collectedAt != null ? "${collectedAt.month}/${collectedAt.day} ${collectedAt.hour}:${collectedAt.minute.toString().padLeft(2, '0')}" : "알 수 없음"}',
+          return GestureDetector(
+            onTap: () {
+              // 포스트 상세 화면으로 이동
+              if (postId != null) {
+                Navigator.pushNamed(context, '/post-detail', arguments: postId);
+              }
+            },
+            child: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-              onTap: () {
-                // 포스트 상세 화면으로 이동
-                if (postId != null) {
-                  Navigator.pushNamed(context, '/post-detail', arguments: postId);
-                }
-              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.green[50]!,
+                      Colors.white,
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 상단 아이콘과 삭제 버튼
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.green[600],
+                          size: 16,
+                        ),
+                        Icon(
+                          Icons.delete_outline,
+                          color: Colors.grey[400],
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    
+                    // 포스트 이미지 영역 (플레이스홀더)
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.image,
+                          color: Colors.grey[400],
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    
+                    // 포스트 제목
+                    Text(
+                      postTitle.length > 8 ? '${postTitle.substring(0, 8)}...' : postTitle,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    
+                    // 보상 포인트 버튼
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.purple[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${reward}P',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple[700],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    
+                    // 수령 시간
+                    Text(
+                      collectedAt != null 
+                        ? '${collectedAt.month}/${collectedAt.day}'
+                        : '알 수 없음',
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -506,57 +673,155 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
             child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                  '배포 통계',
-                              style: TextStyle(
-                    fontSize: 20,
+                  // 상단 통계 카드 (예전 디자인)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.orange[400]!, Colors.red[400]!],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          // 총 배포
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Icon(Icons.rocket_launch, color: Colors.white, size: 24),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '$totalDeployed',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
                                 fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 16),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.2,
+                                const Text(
+                                  '총 배포',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // 구분선
+                          Container(
+                            width: 1,
+                            height: 60,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          // 총 수집
+                          Expanded(
+                            child: Column(
                     children: [
-                    InboxCommonWidgets.buildDetailStatCard(
-                      '총 배포',
-                      '$totalDeployed',
-                      Icons.rocket_launch,
-                      Colors.blue,
-                    ),
-                    InboxCommonWidgets.buildDetailStatCard(
-                      '활성 배포',
-                      '$activeDeployed',
-                      Icons.check_circle,
-                      Colors.green,
-                    ),
-                    InboxCommonWidgets.buildDetailStatCard(
-                      '총 리워드',
-                      '$totalReward',
-                      Icons.attach_money,
-                      Colors.orange,
-                    ),
-                    InboxCommonWidgets.buildDetailStatCard(
-                      '평균 리워드',
-                      totalDeployed > 0 ? '${(totalReward / totalDeployed).toStringAsFixed(0)}' : '0',
-                      Icons.analytics,
-                      Colors.purple,
+                                const Icon(Icons.download, color: Colors.white, size: 24),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '0',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  '총 수집',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, '/my-posts-statistics'),
-                  icon: const Icon(Icons.bar_chart),
-                  label: const Text('상세 통계 보기'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
+                          ),
+                          // 구분선
+                          Container(
+                            width: 1,
+                            height: 60,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          // 수집률
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Icon(Icons.trending_up, color: Colors.white, size: 24),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  '0%',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  '수집률',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 개별 통계 카드들
+                  _buildStatCard(
+                    '오늘 배포',
+                    '0',
+                    Icons.today,
+                    Colors.lightBlue,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildStatCard(
+                    '이번 주 배포',
+                    '$totalDeployed',
+                    Icons.date_range,
+                    Colors.green,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildStatCard(
+                    '배포된 포스트',
+                    '$totalDeployed',
+                    Icons.article,
+                    Colors.purple,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 상세 통계 보기 버튼
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.blue[600],
                       borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        // 상세 통계 화면으로 이동
+                      },
+                      icon: const Icon(Icons.bar_chart, color: Colors.white),
+                      label: const Text(
+                        '상세 통계 보기',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                             ),
                           ),
@@ -567,6 +832,54 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       },
     );
   }
+
+    Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Text(
+              '${value}개',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
   void _showPostDetailDialog(post, InboxProvider provider) {
     showDialog(
@@ -639,24 +952,32 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     if (confirmed == true && mounted) {
       try {
         await provider.deletePost(post.postId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
               content: Text('포스트를 휴지통으로 이동했습니다.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
               content: Text('삭제 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
+
+  /// 숫자 포맷팅 (천단위 콤마)
+  String _formatNumber(int number) {
+    return number.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
   }
 }

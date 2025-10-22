@@ -95,7 +95,7 @@ class PlaceService {
   }
 
   // 위치 기반 플레이스 조회 (반경 내)
-  Future<List<PlaceModel>> getPlacesByLocation(GeoPoint center, double radiusKm) async {
+  Future<List<PlaceModel>> getPlacesByLocation(GeoPoint center, double radiusM) async {
     try {
       // Firestore의 GeoPoint 쿼리 제한으로 인해 클라이언트에서 필터링
       QuerySnapshot querySnapshot = await _firestore
@@ -106,7 +106,7 @@ class PlaceService {
       List<PlaceModel> places = querySnapshot.docs
           .map((doc) => PlaceModel.fromFirestore(doc))
           .where((place) => place.hasLocation)
-          .where((place) => _isWithinRadius(center, place.location!, radiusKm))
+          .where((place) => _isWithinRadius(center, place.location!, radiusM))
           .toList();
 
       return places;
@@ -189,9 +189,9 @@ class PlaceService {
     }
   }
 
-  // 거리 계산 헬퍼 메서드
-  bool _isWithinRadius(GeoPoint center, GeoPoint point, double radiusKm) {
-    const double earthRadius = 6371; // 지구 반지름 (km)
+  // 거리 계산 헬퍼 메서드 (미터 단위)
+  bool _isWithinRadius(GeoPoint center, GeoPoint point, double radiusM) {
+    const double earthRadius = 6371000; // 지구 반지름 (미터)
     
     final double dLat = _degreesToRadians(point.latitude - center.latitude);
     final double dLon = _degreesToRadians(point.longitude - center.longitude);
@@ -201,8 +201,8 @@ class PlaceService {
         _sin(dLon / 2) * _sin(dLon / 2);
     final double c = 2 * _asin(_sqrt(a));
     
-    final double distance = earthRadius * c;
-    return distance <= radiusKm;
+    final double distance = earthRadius * c; // 미터 단위
+    return distance <= radiusM;
   }
 
   double _degreesToRadians(double degrees) {

@@ -66,19 +66,20 @@ class _MapMarkerDetailWidgetState extends State<MapMarkerDetailWidget> {
   }
 
   double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371000;
+    const double earthRadius = 6371000; // 미터
     final double dLat = _degreesToRadians(point2.latitude - point1.latitude);
     final double dLon = _degreesToRadians(point2.longitude - point1.longitude);
-    final double a = (dLat / 2).sin() * (dLat / 2).sin() +
-        point1.latitude.toRadians().cos() *
-            point2.latitude.toRadians().cos() *
-            (dLon / 2).sin() *
-            (dLon / 2).sin();
-    final double c = 2 * (a.sqrt()).asin() * 2;
+    
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(point1.latitude)) *
+        math.cos(_degreesToRadians(point2.latitude)) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadius * c;
   }
 
-  double _degreesToRadians(double degrees) => degrees * (3.14159265359 / 180);
+  double _degreesToRadians(double degrees) => degrees * (math.pi / 180);
 
   @override
   Widget build(BuildContext context) {

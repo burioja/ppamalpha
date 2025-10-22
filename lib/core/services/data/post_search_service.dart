@@ -11,7 +11,7 @@ class PostSearchService {
   /// 
   /// [centerLat] - 중심 위도
   /// [centerLng] - 중심 경도
-  /// [radiusKm] - 검색 반경 (km)
+  /// [radiusM] - 검색 반경 (미터)
   /// [fogLevel] - 포그레벨 (1: Clear, 2: Partial, 3: Dark)
   /// [rewardType] - 리워드 타입 ('normal', 'super', 'all')
   /// [limit] - 최대 결과 수
@@ -21,7 +21,7 @@ class PostSearchService {
   static Future<PostSearchResult> searchPosts({
     required double centerLat,
     required double centerLng,
-    required double radiusKm,
+    required double radiusM, // 미터 단위
     int? fogLevel,
     String rewardType = 'all',
     int limit = 100,
@@ -30,13 +30,13 @@ class PostSearchService {
     try {
       print('🔍 포스트 검색 시작:');
       print('  - 중심: ($centerLat, $centerLng)');
-      print('  - 반경: ${radiusKm}km');
+      print('  - 반경: ${radiusM}m');
       print('  - 포그레벨: $fogLevel');
       print('  - 리워드 타입: $rewardType');
       
-      // 1. S2 타일 커버링 계산
+      // 1. S2 타일 커버링 계산 (미터 단위로 직접 전달)
       final s2Cells = S2TileUtils.getS2CellsInRadius(
-        centerLat, centerLng, radiusKm, 12
+        centerLat, centerLng, radiusM, 12
       );
       
       print('  - S2 타일 개수: ${s2Cells.length}개');

@@ -103,13 +103,13 @@ class TileUtils {
   static List<String> getTilesInRadius(
     double centerLat,
     double centerLng,
-    double radiusKm,
+    double radiusM, // 미터 단위
   ) {
     final centerTileX = _longitudeToTileX(centerLng, _zoomLevel);
     final centerTileY = _latitudeToTileY(centerLat, _zoomLevel);
 
     // 반경을 타일 단위로 변환 (대략적)
-    final tileRadius = (radiusKm * 1000 / _getMetersPerTile(centerLat)).ceil();
+    final tileRadius = (radiusM / _getMetersPerTile(centerLat)).ceil();
 
     final List<String> tiles = [];
 
@@ -118,20 +118,36 @@ class TileUtils {
         final tileId = '${x}_${y}_$_zoomLevel';
         final tileCenter = getTileCenter(tileId);
 
-        final distance = _calculateDistance(
+        final distance = _calculateDistanceM(
           centerLat,
           centerLng,
           tileCenter['latitude']!,
           tileCenter['longitude']!,
         );
 
-        if (distance <= radiusKm) {
+        if (distance <= radiusM) {
           tiles.add(tileId);
         }
       }
     }
 
     return tiles;
+  }
+  
+  /// 두 지점 간의 거리 계산 (Haversine 공식, 미터 단위)
+  static double _calculateDistanceM(double lat1, double lng1, double lat2, double lng2) {
+    const double earthRadiusM = 6371000; // 지구 반지름 (미터)
+    
+    final dLat = (lat2 - lat1) * pi / 180.0;
+    final dLng = (lng2 - lng1) * pi / 180.0;
+    
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180.0) * cos(lat2 * pi / 180.0) *
+        sin(dLng / 2) * sin(dLng / 2);
+    
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    
+    return earthRadiusM * c;
   }
 
   /// 경도를 타일 X 좌표로 변환

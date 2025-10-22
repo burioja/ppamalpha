@@ -108,7 +108,7 @@ class MapMarkerService {
   /// 마커 스트림 가져오기 (markers 컬렉션에서 직접 조회)
   static Stream<List<MapMarkerData>> getMarkersStream({
     required LatLng location,
-    double radiusInKm = 1.0,
+    double radiusInM = 1000, // 미터 단위
     List<LatLng> additionalCenters = const [],
     Map<String, dynamic> filters = const {},
   }) {
@@ -147,7 +147,6 @@ class MapMarkerService {
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            final radiusInM = radiusInKm * 1000; // km를 m로 변환
             if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
@@ -174,7 +173,7 @@ class MapMarkerService {
           
           if (!shouldShow) {
             // 1km 밖의 마커는 포그레벨 체크
-            final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+            final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInM);
             if (!fogLevel1Tiles.contains(tileId)) continue;
           }
           
@@ -208,7 +207,7 @@ class MapMarkerService {
   /// 모든 마커 가져오기 (일반 + 슈퍼포스트 통합 조회)
   static Future<List<MapMarkerData>> getMarkers({
     required LatLng location,
-    double radiusInKm = 1.0,
+    double radiusInM = 1000, // 미터 단위
     List<LatLng> additionalCenters = const [],
     Map<String, dynamic> filters = const {},
     int pageSize = 1000, // 제한 증가 (영역 내에서만 조회하므로)
@@ -325,7 +324,6 @@ class MapMarkerService {
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            final radiusInM = radiusInKm * 1000; // km를 m로 변환
             if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
@@ -355,7 +353,7 @@ class MapMarkerService {
           
           if (!shouldShow) {
             // 1km 밖의 마커는 포그레벨 체크
-            final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInKm);
+            final fogLevel1Tiles = await _getFogLevel1Tiles(location, radiusInM);
             if (!fogLevel1Tiles.contains(tileId)) {
               fogLevelFilteredCount++;
               continue;
@@ -405,7 +403,7 @@ class MapMarkerService {
   /// 슈퍼마커만 가져오기 (서버 필터 사용)
   static Future<List<MapMarkerData>> getSuperMarkers({
     required LatLng location,
-    double radiusInKm = 1.0,
+    double radiusInM = 1000, // 미터 단위
     List<LatLng> additionalCenters = const [],
     Map<String, dynamic> filters = const {},
     int pageSize = 500, // 제한 증가
@@ -498,7 +496,6 @@ class MapMarkerService {
               center.latitude, center.longitude,
               position.latitude, position.longitude,
             );
-            final radiusInM = radiusInKm * 1000;
             if (distanceInM <= radiusInM) {
               withinRadius = true;
               break;
@@ -542,7 +539,7 @@ class MapMarkerService {
   }
 
   /// 포그레벨 1 타일 가져오기 (캐시 포함)
-  static Future<List<String>> _getFogLevel1Tiles(LatLng location, double radiusInKm) async {
+  static Future<List<String>> _getFogLevel1Tiles(LatLng location, double radiusInM) async {
     try {
       final surroundingTiles = TileUtils.getKm1SurroundingTiles(location.latitude, location.longitude);
       final fogLevelMap = await VisitTileService.getSurroundingTilesFogLevel(surroundingTiles);

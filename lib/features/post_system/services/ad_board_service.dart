@@ -154,5 +154,51 @@ class AdBoardService {
     );
     return posts.length;
   }
+
+  /// 광고보드 포스트 개수 스트림 (실시간 업데이트)
+  Stream<int> getReceivableCountStream({
+    required String countryCode,
+    String? regionCode,
+  }) {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return Stream.value(0);
+
+      // 기본 쿼리: 활성화 + 수량 있음 + 국가 일치
+      Query query = _firestore
+          .collection('ad_board_posts')
+          .where('isActive', isEqualTo: true)
+          .where('remainingQuantity', isGreaterThan: 0)
+          .where('countryCodes', arrayContains: countryCode)
+          .where('expiresAt', isGreaterThan: Timestamp.now());
+
+      return query.snapshots().asyncMap((snapshot) async {
+        int count = 0;
+        
+        for (final doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          
+          // 지역 코드 필터링 (선택적)
+          if (regionCode != null && regionCode.isNotEmpty) {
+            final regionCodes = List<String>.from(data['regionCodes'] ?? []);
+            if (regionCodes.isNotEmpty && !regionCodes.contains(regionCode)) {
+              continue;
+            }
+          }
+          
+          // 이미 수령했는지 확인
+          final alreadyCollected = await _hasCollected(user.uid, doc.id);
+          if (!alreadyCollected) {
+            count++;
+          }
+        }
+        
+        return count;
+      });
+    } catch (e) {
+      debugPrint('광고보드 포스트 개수 스트림 실패: $e');
+      return Stream.value(0);
+    }
+  }
 }
 

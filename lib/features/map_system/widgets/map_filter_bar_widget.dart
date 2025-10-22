@@ -57,6 +57,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.person,
                           label: '내 포스트',
                           isSelected: showMyPostsOnly,
+                          color: Colors.lightBlue,
                           onTap: () {
                             onMyPostsChanged(!showMyPostsOnly);
                             onUpdateMarkers();
@@ -66,6 +67,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.card_giftcard,
                           label: '쿠폰',
                           isSelected: showCouponsOnly,
+                          color: Colors.green,
                           onTap: () {
                             onCouponsChanged(!showCouponsOnly);
                             onUpdateMarkers();
@@ -75,6 +77,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.stars,
                           label: '스탬프',
                           isSelected: showStampsOnly,
+                          color: Colors.purple,
                           onTap: () {
                             onStampsChanged(!showStampsOnly);
                             onUpdateMarkers();
@@ -84,6 +87,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.access_time,
                           label: '마감임박',
                           isSelected: filterProvider.showUrgentOnly,
+                          color: Colors.orange,
                           onTap: () {
                             filterProvider.setUrgentOnly(!filterProvider.showUrgentOnly);
                             if (filterProvider.showUrgentOnly) {
@@ -96,6 +100,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.verified,
                           label: '인증',
                           isSelected: filterProvider.showVerifiedOnly,
+                          color: Colors.blue,
                           onTap: () {
                             filterProvider.setVerifiedOnly(!filterProvider.showVerifiedOnly);
                             onUpdateMarkers();
@@ -105,6 +110,7 @@ class MapFilterBarWidget extends StatelessWidget {
                           icon: Icons.work_outline,
                           label: '미인증',
                           isSelected: filterProvider.showUnverifiedOnly,
+                          color: Colors.grey,
                           onTap: () {
                             filterProvider.setUnverifiedOnly(!filterProvider.showUnverifiedOnly);
                             onUpdateMarkers();
@@ -142,6 +148,7 @@ class MapFilterBarWidget extends StatelessWidget {
     required IconData icon,
     required String label,
     required bool isSelected,
+    required Color color,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -150,10 +157,10 @@ class MapFilterBarWidget extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[50] : Colors.transparent,
+          color: isSelected ? color.withOpacity(0.1) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: isSelected 
-              ? Border.all(color: Colors.blue[300]!, width: 1)
+              ? Border.all(color: color.withOpacity(0.3), width: 1)
               : null,
         ),
         child: Row(
@@ -162,14 +169,14 @@ class MapFilterBarWidget extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color: isSelected ? Colors.blue[600] : Colors.grey[600],
+              color: isSelected ? color : color.withOpacity(0.7),
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: isSelected ? Colors.blue[600] : Colors.grey[600],
+                color: isSelected ? color : color.withOpacity(0.7),
                 fontWeight: FontWeight.w500,
               ),
             ),

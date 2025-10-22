@@ -67,13 +67,13 @@ class MapPostHandler {
       final primaryCenter = centers.first;
       final additionalCenters = centers.skip(1).toList();
 
-      final normalRadiusKm = MarkerDomainService.getMarkerDisplayRadius(userType, false) / 1000.0;
-      final superRadiusKm = MarkerDomainService.getMarkerDisplayRadius(userType, true) / 1000.0;
+      final normalRadiusM = MarkerDomainService.getMarkerDisplayRadius(userType, false).toDouble();
+      final superRadiusM = MarkerDomainService.getMarkerDisplayRadius(userType, true).toDouble();
 
       debugPrint('🔍 서버 호출:');
       debugPrint('  - 주 중심점: ${primaryCenter.latitude}, ${primaryCenter.longitude}');
-      debugPrint('  - 일반 포스트 반경: ${normalRadiusKm}km');
-      debugPrint('  - 슈퍼포스트 반경: ${superRadiusKm}km');
+      debugPrint('  - 일반 포스트 반경: ${normalRadiusM}m');
+      debugPrint('  - 슈퍼포스트 반경: ${superRadiusM}m');
 
       // TODO: Implement marker fetching methods
       // For now, return empty lists
@@ -222,10 +222,10 @@ class MapPostHandler {
         return;
       }
 
-      // 현재 위치 기준 근처 마커 조회 (100m 이내)
+      // 현재 위치 기준 근처 마커 조회 (200m 이내)
       final nearbyMarkers = await MarkerDomainService.getMarkersInArea(
         center: currentPosition,
-        radiusKm: 0.1, // 100m = 0.1km
+        radiusM: 200, // 200m
       );
 
       // 이미 수령한 포스트 제외
@@ -242,7 +242,7 @@ class MapPostHandler {
           .where((marker) => !collectedPostIds.contains(marker.postId))
           .length;
 
-      debugPrint('📦 수령 가능 포스트: $receivablePostsCount개');
+      debugPrint('📦 수령 가능 포스트 (200m 이내): $receivablePostsCount개');
     } catch (e) {
       debugPrint('❌ 수령 가능 포스트 개수 업데이트 실패: $e');
       receivablePostsCount = 0;
@@ -255,15 +255,15 @@ class MapPostHandler {
     required String userId,
   }) async {
     try {
-      debugPrint('🎁 근처 포스트 일괄 수령 시작');
+      debugPrint('🎁 근처 포스트 일괄 수령 시작 (200m 이내)');
 
-      // 근처 마커 조회 (100m 이내)
+      // 근처 마커 조회 (200m 이내)
       final nearbyMarkers = await MarkerDomainService.getMarkersInArea(
         center: currentPosition,
-        radiusKm: 0.1, // 100m = 0.1km
+        radiusM: 200, // 200m
       );
 
-      debugPrint('📍 근처 마커: ${nearbyMarkers.length}개');
+      debugPrint('📍 근처 마커 (200m 이내): ${nearbyMarkers.length}개');
 
       // 이미 수령한 포스트 확인
       final collectedSnapshot = await FirebaseFirestore.instance
@@ -279,7 +279,7 @@ class MapPostHandler {
       // For now, return empty list
       final receivableMarkers = <MarkerModel>[];
 
-      debugPrint('📦 수령 가능: ${receivableMarkers.length}개');
+      debugPrint('📦 수령 가능 (200m 이내): ${receivableMarkers.length}개');
 
       // 포스트 수집
       final receivedPosts = <PostModel>[];

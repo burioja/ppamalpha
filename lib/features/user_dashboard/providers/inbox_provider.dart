@@ -41,6 +41,9 @@ class InboxProvider with ChangeNotifier {
   // 선택된 포스트 ID 추적 (터치 UX용)
   String? selectedPostId;
 
+  // 사용자 포인트
+  int? userBalance;
+
   // ==================== 데이터 로딩 ====================
   
   /// 초기 데이터 로딩
@@ -60,10 +63,36 @@ class InboxProvider with ChangeNotifier {
       await Future.wait([
         loadMoreData(),
         loadCollectedPosts(), // 수령한 포스트도 로딩
+        loadUserBalance(), // 사용자 포인트 로딩
       ]);
     } finally {
       isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// 사용자 포인트 로딩
+  Future<void> loadUserBalance() async {
+    if (currentUserId == null) return;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId!)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        userBalance = data?['points'] as int? ?? 0;
+        debugPrint('✅ 사용자 포인트 로딩 완료: $userBalance P');
+      } else {
+        userBalance = 0;
+        debugPrint('⚠️ 사용자 문서를 찾을 수 없음');
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ 사용자 포인트 로딩 실패: $e');
+      userBalance = 0;
     }
   }
 
@@ -293,7 +322,10 @@ class InboxProvider with ChangeNotifier {
 
   /// 데이터 새로고침
   Future<void> refreshData() async {
-    await loadInitialData();
+    await Future.wait([
+      loadInitialData(),
+      loadUserBalance(),
+    ]);
   }
 
   /// 내 포스트 새로고침

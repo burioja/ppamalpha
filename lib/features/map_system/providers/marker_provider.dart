@@ -269,9 +269,9 @@ class MarkerProvider with ChangeNotifier {
       if (homeLocation != null) centers.add(homeLocation);
       centers.addAll(workLocations);
 
-      // 사용자 타입에 따른 반경
-      final normalRadiusKm = marker_domain_service.MarkerDomainService.getMarkerDisplayRadius(userType, false) / 1000.0;
-      final superRadiusKm = marker_domain_service.MarkerDomainService.getMarkerDisplayRadius(userType, true) / 1000.0;
+      // 사용자 타입에 따른 반경 (미터 단위)
+      final normalRadiusM = marker_domain_service.MarkerDomainService.getMarkerDisplayRadius(userType, false).toDouble();
+      final superRadiusM = marker_domain_service.MarkerDomainService.getMarkerDisplayRadius(userType, true).toDouble();
 
       final primaryCenter = centers.first;
       final additionalCenters = centers.skip(1).toList();
@@ -280,14 +280,14 @@ class MarkerProvider with ChangeNotifier {
       final futures = await Future.wait([
         MapMarkerService.getMarkers(
           location: primaryCenter,
-          radiusInKm: normalRadiusKm,
+          radiusInM: normalRadiusM,
           additionalCenters: additionalCenters,
           filters: filters,
           pageSize: 1000,
         ),
         MapMarkerService.getSuperMarkers(
           location: primaryCenter,
-          radiusInKm: superRadiusKm,
+          radiusInM: superRadiusM,
           additionalCenters: additionalCenters,
           filters: filters,
           pageSize: 500,

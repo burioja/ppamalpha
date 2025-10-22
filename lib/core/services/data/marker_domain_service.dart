@@ -308,7 +308,7 @@ class MarkerDomainService {
   /// 반경 내 마커 조회
   static Stream<List<MarkerModel>> getMarkersInRadius({
     required LatLng center,
-    required double radiusKm,
+    required double radiusM, // 미터 단위
   }) {
     return _firestore
         .collection('markers')
@@ -322,14 +322,14 @@ class MarkerDomainService {
         try {
           final marker = MarkerModel.fromFirestore(doc);
           
-          // 거리 계산
+          // 거리 계산 (미터 단위)
           final distance = calculateDistance(
             LatLng(center.latitude, center.longitude),
             LatLng(marker.position.latitude, marker.position.longitude),
           );
           
           // 반경 내에 있고 수량이 0보다 큰 마커만 포함 (remainingQuantity 기준)
-          if (distance <= radiusKm && marker.remainingQuantity > 0) {
+          if (distance <= radiusM && marker.remainingQuantity > 0) {
             markers.add(marker);
           }
         } catch (e) {
@@ -350,7 +350,7 @@ class MarkerDomainService {
         return distanceA.compareTo(distanceB);
       });
       
-      print('📍 반경 ${radiusKm}km 내 마커 ${markers.length}개 발견');
+      print('📍 반경 ${radiusM}m 내 마커 ${markers.length}개 발견');
       return markers;
     });
   }
@@ -479,7 +479,7 @@ class MarkerDomainService {
   /// 🚀 위치 기반 마커 조회 (포그 레벨 고려)
   static Future<List<MarkerModel>> getMarkersInArea({
     required LatLng center,
-    required double radiusKm,
+    required double radiusM, // 미터 단위
     int? fogLevel,
     bool? superOnly,
     String? currentUserId, // 현재 사용자 ID 추가
@@ -507,14 +507,14 @@ class MarkerDomainService {
         try {
           final marker = MarkerModel.fromFirestore(doc);
 
-          // 거리 계산
+          // 거리 계산 (미터 단위)
           final distance = calculateDistance(
             LatLng(center.latitude, center.longitude),
             LatLng(marker.position.latitude, marker.position.longitude),
           );
 
           // 반경 내에 있고 수량이 0보다 큰 마커만 포함
-          if (distance <= radiusKm && marker.remainingQuantity > 0) {
+          if (distance <= radiusM && marker.remainingQuantity > 0) {
             // 현재 사용자가 이미 수령한 마커는 제외 (단, 내가 배포한 마커는 예외)
             if (currentUserId != null) {
               final data = doc.data() as Map<String, dynamic>?;
@@ -548,7 +548,7 @@ class MarkerDomainService {
         return distanceA.compareTo(distanceB);
       });
 
-      print('📍 반경 ${radiusKm}km 내 마커 ${markers.length}개 발견 (fogLevel: $fogLevel)');
+      print('📍 반경 ${radiusM}m 내 마커 ${markers.length}개 발견 (fogLevel: $fogLevel)');
       return markers;
     } catch (e) {
       print('❌ 위치 기반 마커 조회 실패: $e');
@@ -559,7 +559,7 @@ class MarkerDomainService {
   /// 🚀 실시간 마커 스트림 (포그 레벨 고려)
   static Stream<List<MarkerModel>> getMarkersInAreaStream({
     required LatLng center,
-    required double radiusKm,
+    required double radiusM, // 미터 단위
     int? fogLevel,
     bool? superOnly,
     String? currentUserId, // 현재 사용자 ID 추가
@@ -567,7 +567,7 @@ class MarkerDomainService {
     return Stream.periodic(const Duration(seconds: 5)).asyncMap((_) async {
       return await getMarkersInArea(
         center: center,
-        radiusKm: radiusKm,
+        radiusM: radiusM,
         fogLevel: fogLevel,
         superOnly: superOnly,
         currentUserId: currentUserId,

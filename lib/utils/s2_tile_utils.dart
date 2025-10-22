@@ -34,33 +34,33 @@ class S2TileUtils {
   /// 
   /// [centerLat] - 중심 위도
   /// [centerLng] - 중심 경도
-  /// [radiusKm] - 반경 (km)
+  /// [radiusM] - 반경 (미터)
   /// [level] - S2 레벨
   /// 
   /// Returns: 반경 내의 S2 Cell ID 리스트
   static List<String> getS2CellsInRadius(
     double centerLat, 
     double centerLng, 
-    double radiusKm, 
+    double radiusM, // 미터 단위
     int level
   ) {
     final cells = <String>{};
     
     // 간단한 그리드 기반 커버링
     // 실제로는 S2 covering 알고리즘을 사용해야 함
-    final latStep = radiusKm / 111.0; // 1도 ≈ 111km
-    final lngStep = radiusKm / (111.0 * math.cos(centerLat * math.pi / 180.0));
+    final latStep = radiusM / 111000.0; // 1도 ≈ 111,000m
+    final lngStep = radiusM / (111000.0 * math.cos(centerLat * math.pi / 180.0));
     
-    final steps = math.max(1, (radiusKm / 0.1).ceil()); // 100m 간격
+    final steps = math.max(1, (radiusM / 100).ceil()); // 100m 간격
     
     for (int i = -steps; i <= steps; i++) {
       for (int j = -steps; j <= steps; j++) {
         final lat = centerLat + i * latStep / steps;
         final lng = centerLng + j * lngStep / steps;
         
-        // 거리 체크
-        final distance = calculateDistance(centerLat, centerLng, lat, lng);
-        if (distance <= radiusKm) {
+        // 거리 체크 (미터 단위)
+        final distance = calculateDistanceM(centerLat, centerLng, lat, lng);
+        if (distance <= radiusM) {
           final cellId = latLngToS2CellId(lat, lng, level);
           cells.add(cellId);
         }
@@ -70,8 +70,10 @@ class S2TileUtils {
     return cells.toList();
   }
   
-  /// 두 지점 간의 거리 계산 (Haversine 공식)
-  static double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+  /// 두 지점 간의 거리 계산 (Haversine 공식, 미터 단위)
+  static double calculateDistanceM(double lat1, double lng1, double lat2, double lng2) {
+    const double earthRadiusM = 6371000; // 지구 반지름 (미터)
+    
     final dLat = (lat2 - lat1) * math.pi / 180.0;
     final dLng = (lng2 - lng1) * math.pi / 180.0;
     
@@ -81,7 +83,7 @@ class S2TileUtils {
     
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     
-    return EARTH_RADIUS_KM * c;
+    return earthRadiusM * c;
   }
   
   /// Firestore IN 쿼리 제한 (30개)을 고려한 배치 처리

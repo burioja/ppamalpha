@@ -145,8 +145,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         address: _addressController.text.trim(),
         secondAddress: _secondAddressController.text.trim(),
         account: _accountController.text.trim(),
-        birth: _birthController.text.trim(),
-        gender: _selectedGender,
+        birth: _birthController.text.trim(), // 읽기 전용이지만 기존 값 유지
+        gender: _selectedGender, // 읽기 전용이지만 기존 값 유지
         profileImageUrl: _profileImageUrl,
       );
 
@@ -368,48 +368,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             keyboardType: TextInputType.phone,
                           ),
                         ),
-                        InfoField(
-                          label: '생년월일',
-                          child: TextFormField(
-                            controller: _birthController,
-                            decoration: InputDecoration(
-                              hintText: 'YYYY-MM-DD 형식으로 입력해주세요',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
+                        // 생년월일과 성별을 같은 행에 표시
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InfoField(
+                                label: '생년월일',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.lock, color: Colors.grey[600], size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _birthController.text.isEmpty ? '회원가입 시 입력한 생년월일' : _birthController.text,
+                                          style: TextStyle(
+                                            color: _birthController.text.isEmpty ? Colors.grey[600] : Colors.black87,
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        InfoField(
-                          label: '성별',
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('남성'),
-                                  value: 'male',
-                                  groupValue: _selectedGender,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedGender = value;
-                                    });
-                                  },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: InfoField(
+                                label: '성별',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.lock, color: Colors.grey[600], size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedGender == null 
+                                            ? '회원가입 시 입력한 성별'
+                                            : (_selectedGender == 'male' ? '남성' : '여성'),
+                                          style: TextStyle(
+                                            color: _selectedGender == null ? Colors.grey[600] : Colors.black87,
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('여성'),
-                                  value: 'female',
-                                  groupValue: _selectedGender,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedGender = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

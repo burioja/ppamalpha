@@ -26,6 +26,11 @@ import '../widgets/unified_fog_overlay_widget.dart';
 import '../widgets/clustered_marker_layer_widget.dart';
 import '../helpers/marker_clustering_helper.dart';
 import '../../../utils/tile_utils.dart';
+import '../../../core/services/data/post_collection_service.dart';
+import '../widgets/unconfirmed_posts_button.dart';
+import '../widgets/unconfirmed_posts_sheet.dart';
+import '../widgets/ad_board_button.dart';
+import '../widgets/ad_board_sheet.dart';
 
 // ✨ 리팩토링된 Controller & State
 import '../services/fog/fog_service.dart';
@@ -415,11 +420,78 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _collectMarker(MarkerModel marker) async {
-    // TODO: PostService.collectPost 구현
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('로그인이 필요합니다'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      // PostCollectionService 사용
+      final postCollectionService = PostCollectionService();
+      await postCollectionService.collectPost(
+        postId: marker.postId,
+        userId: userId,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('포스트를 수령했습니다!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        // 마커 새로고침
+        _updateMarkers();
+        _updateReceivablePosts();
+      }
+    } catch (e) {
+      debugPrint('❌ 포스트 수령 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('수령 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _removeMarker(MarkerModel marker) async {
-    // TODO: PostService.recallMarker 구현
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      final success = await MarkerController.removeMarker(marker.markerId, userId);
+      
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('포스트를 회수했습니다'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _updateMarkers();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('회수 실패'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ 포스트 회수 실패: $e');
+    }
   }
 
   // ==================== UI 빌드 ====================
@@ -559,6 +631,16 @@ class _MapScreenState extends State<MapScreen> {
           ),
           // 모두 수령하기 버튼 (맵 최하단부 중앙)
           _buildReceiveFab(),
+          
+          // 미확인 포스트 버튼 (바텀 네비게이션 위, 오른쪽)
+          UnconfirmedPostsButton(
+            onTap: _showUnconfirmedPosts,
+          ),
+          
+          // 광고보드 버튼 (바텀 네비게이션 위, 왼쪽)
+          AdBoardButton(
+            onTap: _showAdBoardPosts,
+          ),
         ],
       ),
     );
@@ -1012,6 +1094,39 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _state.isReceiving = false);
   }
 
+  void _showUnconfirmedPosts() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => UnconfirmedPostsSheet(
+        userId: userId,
+        onConfirmComplete: () {
+          // 확인 완료 후 마커 새로고침
+          _updateMarkers();
+          _updateReceivablePosts();
+        },
+      ),
+    );
+  }
+
+  void _showAdBoardPosts() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AdBoardSheet(
+        onCollectComplete: () {
+          _updateMarkers();
+          _updateReceivablePosts();
+        },
+      ),
+    );
+  }
+
   // ==================== 헬퍼 메서드 ====================
   
   Future<void> _loadCustomMarker() async {
@@ -1025,9 +1140,14 @@ class _MapScreenState extends State<MapScreen> {
   void _updateReceivablePosts() async {
     final markerProvider = context.read<MarkerProvider>();
     
-    // 타겟팅 + 필터 조건으로 수령 가능한 마커 필터링
+    debugPrint('🔍 수령 가능 마커 업데이트 시작');
+    debugPrint('  - 전체 마커 개수: ${markerProvider.rawMarkers.length}');
+    debugPrint('  - 현재 위치: ${_state.currentPosition}');
+    
+    // 현재 위치 기준 200m 이내 + 타겟팅 + 필터 조건으로 수령 가능한 마커 필터링
     final receivableMarkers = await ReceivablePostFilterService.filterReceivableMarkers(
       markers: markerProvider.rawMarkers,
+      currentPosition: _state.currentPosition,
       filters: {
         'showCouponsOnly': _state.showCouponsOnly,
         'showStampsOnly': _state.showStampsOnly,
@@ -1036,6 +1156,8 @@ class _MapScreenState extends State<MapScreen> {
         'showUnverifiedOnly': _state.showUnverifiedOnly,
       },
     );
+    
+    debugPrint('  - 수령 가능 마커: ${receivableMarkers.length}개');
     
     if (mounted) {
       setState(() {
