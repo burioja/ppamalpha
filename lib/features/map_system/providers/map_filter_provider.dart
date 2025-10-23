@@ -9,6 +9,7 @@ class MapFilterProvider with ChangeNotifier {
   bool _showUrgentOnly = false;
   bool _showVerifiedOnly = false;
   bool _showUnverifiedOnly = false;
+  bool _showStampsOnly = false; // 스탬프 필터 추가
 
   // Getters
   String get selectedCategory => _selectedCategory;
@@ -17,6 +18,7 @@ class MapFilterProvider with ChangeNotifier {
   bool get showUrgentOnly => _showUrgentOnly;
   bool get showVerifiedOnly => _showVerifiedOnly;
   bool get showUnverifiedOnly => _showUnverifiedOnly;
+  bool get showStampsOnly => _showStampsOnly; // 스탬프 필터 getter 추가
 
   // Setters
   void setCategory(String category) {
@@ -49,6 +51,11 @@ class MapFilterProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void setStampsOnly(bool value) {
+    _showStampsOnly = value;
+    notifyListeners();
+  }
+
   /// 필터 초기화
   void resetFilters() {
     _selectedCategory = 'all';
@@ -57,6 +64,7 @@ class MapFilterProvider with ChangeNotifier {
     _showUrgentOnly = false;
     _showVerifiedOnly = false;
     _showUnverifiedOnly = false;
+    _showStampsOnly = false; // 스탬프 필터 초기화
     notifyListeners();
   }
 
@@ -66,7 +74,8 @@ class MapFilterProvider with ChangeNotifier {
         _minReward > 0 ||
         _showUrgentOnly ||
         _showVerifiedOnly ||
-        _showUnverifiedOnly;
+        _showUnverifiedOnly ||
+        _showStampsOnly; // 스탬프 필터 추가
   }
 
   /// 필터 데이터 맵 반환
@@ -78,6 +87,7 @@ class MapFilterProvider with ChangeNotifier {
       'showUrgentOnly': _showUrgentOnly,
       'showVerifiedOnly': _showVerifiedOnly,
       'showUnverifiedOnly': _showUnverifiedOnly,
+      'showStampsOnly': _showStampsOnly, // 스탬프 필터 추가
     };
   }
 }

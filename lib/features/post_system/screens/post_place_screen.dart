@@ -383,15 +383,16 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('포스트 작성'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: Colors.blue[600],
+        foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         actions: [
           Container(
-            margin: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
             child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _createPost,
               icon: _isLoading
@@ -403,13 +404,13 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                   : const Icon(Icons.check, size: 18),
               label: const Text('완료'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4D4DFF),
+                backgroundColor: Colors.green[600],
                 foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 2,
               ),
             ),
           ),
@@ -497,22 +498,37 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // 하단 완료 버튼
-                      SizedBox(
+                      // 하단 완료 버튼 with enhanced styling
+                      Container(
                         width: double.infinity,
-                        height: 56,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.blue[600]!, Colors.purple[600]!],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
                         child: ElevatedButton.icon(
                           onPressed: _isLoading ? null : _createPost,
                           icon: _isLoading
                               ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
+                                  width: 24,
+                                  height: 24,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
+                                    strokeWidth: 3,
                                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                   ),
                                 )
-                              : const Icon(Icons.rocket_launch, color: Colors.white, size: 24),
+                              : const Icon(Icons.rocket_launch, color: Colors.white, size: 26),
                           label: Text(
                             _isLoading ? '포스트 생성 중...' : '포스트 생성하기',
                             style: const TextStyle(
@@ -523,12 +539,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4D4DFF),
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            elevation: 4,
-                            shadowColor: const Color(0xFF4D4DFF).withOpacity(0.4),
                           ),
                         ),
                       ),
@@ -643,45 +658,74 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(color: color.withOpacity(0.1), width: 1),
       ),
       child: Column(
         children: [
-          // 헤더
+          // 헤더 with enhanced styling
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
             child: Row(
               children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '설정',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          // 컨텐츠
+          // 컨텐츠 with enhanced styling
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               children: children,
             ),

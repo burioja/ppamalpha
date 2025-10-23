@@ -172,174 +172,287 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
   Widget _buildPlaceCard(PlaceModel place) {
     final isSelected = _selectedPlaceId == place.id;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: isSelected ? 8 : 2, // 선택시 그림자 강조
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isSelected
-          ? BorderSide(color: Colors.blue[700]!, width: 3) // 선택시 파란 테두리
-          : BorderSide.none,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: isSelected 
+                ? Colors.blue.withOpacity(0.3)
+                : Colors.black.withOpacity(0.1),
+            blurRadius: isSelected ? 12 : 6,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () => _onPlaceTap(place),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Place Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: place.imageUrls.isNotEmpty
-                      ? buildNetworkImage(
-                          place.thumbnailUrls.isNotEmpty
-                              ? place.thumbnailUrls.first
-                              : place.imageUrls.first,
-                        )
-                      : Container(
-                          width: 80,
-                          height: 80,
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.work, size: 40, color: Colors.grey),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Place Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Category Icon
-                        if (place.category != null && place.category!.isNotEmpty) ...[
-                          Icon(
-                            _getCategoryIcon(place.category),
-                            size: 18,
-                            color: Colors.blue[700],
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        // Place Name with Verification Badge
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  place.name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isSelected
+              ? BorderSide(color: Colors.blue[600]!, width: 3)
+              : BorderSide.none,
+        ),
+        child: InkWell(
+          onTap: () => _onPlaceTap(place),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: isSelected
+                  ? LinearGradient(
+                      colors: [Colors.blue[50]!, Colors.white],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+            ),
+            child: Row(
+              children: [
+                // Place Image with enhanced styling
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: place.imageUrls.isNotEmpty
+                          ? buildNetworkImage(
+                              place.thumbnailUrls.isNotEmpty
+                                  ? place.thumbnailUrls.first
+                                  : place.imageUrls.first,
+                            )
+                          : Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.blue[100]!, Colors.blue[200]!],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
                               ),
-                              // 인증 뱃지
-                              if (place.isVerified) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    '인증',
+                              child: const Icon(Icons.work, size: 40, color: Colors.blue),
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Place Info with enhanced styling
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          // Category Icon with background
+                          if (place.category != null && place.category!.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                _getCategoryIcon(place.category),
+                                size: 16,
+                                color: Colors.blue[700],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          // Place Name with enhanced styling
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    place.name,
                                     style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected ? Colors.blue[800] : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                // 인증 뱃지 with enhanced styling
+                                if (place.isVerified) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [Colors.blue[400]!, Colors.blue[600]!],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.blue.withOpacity(0.3),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.verified, size: 12, color: Colors.white),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          '인증',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          // 삭제 버튼 with enhanced styling
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.delete_outline, size: 20),
+                              color: Colors.red[400],
+                              onPressed: () => _deletePlace(place),
+                              tooltip: '배포자 삭제',
+                              padding: const EdgeInsets.all(8),
+                              constraints: const BoxConstraints(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Address with enhanced styling
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                place.address ?? '주소 없음',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Status indicators with enhanced styling
+                      Row(
+                        children: [
+                          // 활성 상태
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: place.isActive ? Colors.green[50] : Colors.red[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: place.isActive ? Colors.green[300]! : Colors.red[300]!,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  place.isActive ? Icons.check_circle : Icons.cancel,
+                                  size: 14,
+                                  color: place.isActive ? Colors.green[600] : Colors.red[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  place.isActive ? '활성' : '비활성',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: place.isActive ? Colors.green[700] : Colors.red[700],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // 인증 상태 (중복이지만 더 눈에 띄게)
+                          if (place.isVerified)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.blue[400]!, Colors.blue[600]!],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.verified, size: 12, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '인증됨',
+                                    style: TextStyle(
+                                      fontSize: 12,
                                       color: Colors.white,
-                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        // 삭제 버튼
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          color: Colors.red[400],
-                          onPressed: () => _deletePlace(place),
-                          tooltip: '배포자 삭제',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            place.address ?? '주소 없음',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
+                                ],
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        // 활성 상태
-                        Icon(
-                          place.isActive ? Icons.check_circle : Icons.cancel,
-                          size: 14,
-                          color: place.isActive ? Colors.green : Colors.red,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          place.isActive ? '활성' : '비활성',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: place.isActive ? Colors.green : Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // 인증 상태
-                        if (place.isVerified)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              children: const [
-                                Icon(Icons.verified, size: 12, color: Colors.white),
-                                SizedBox(width: 2),
-                                Text(
-                                  '인증',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              // Arrow Icon
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
-            ],
+                // Arrow Icon with enhanced styling
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.blue[100] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.chevron_right,
+                    color: isSelected ? Colors.blue[600] : Colors.grey[400],
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -532,9 +645,10 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('배포자 선택'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -564,27 +678,52 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.work_outline, size: 64, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
-                          Text(
-                            '등록된 배포자가 없습니다',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
+                          Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.work_outline, 
+                              size: 64, 
+                              color: Colors.blue[400],
                             ),
                           ),
                           const SizedBox(height: 24),
+                          Text(
+                            '등록된 배포자가 없습니다',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '새로운 배포자를 만들어 포스트를 배포해보세요',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 32),
                           ElevatedButton.icon(
                             onPressed: _navigateToCreatePlace,
                             icon: const Icon(Icons.add),
                             label: const Text('배포자 만들기'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).primaryColor,
+                              backgroundColor: Colors.blue[600],
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
+                                horizontal: 32,
+                                vertical: 16,
                               ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 4,
                             ),
                           ),
                         ],
@@ -634,8 +773,9 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
               onPressed: _navigateToCreatePlace,
               icon: const Icon(Icons.add),
               label: const Text('배포자 추가'),
-              backgroundColor: Theme.of(context).primaryColor,
+              backgroundColor: Colors.blue[600],
               foregroundColor: Colors.white,
+              elevation: 6,
             )
           : null,
     );
