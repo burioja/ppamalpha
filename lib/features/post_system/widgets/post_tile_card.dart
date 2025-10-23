@@ -457,27 +457,13 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
       debugPrint('   선택된 imageUrl: $imageUrl');
 
       if (imageUrl.isNotEmpty) {
-        // 이미지 타입 체크를 더 관대하게 변경
-        bool hasImageMedia = widget.post.mediaType.isNotEmpty &&
-            (widget.post.mediaType.any((type) => type.toLowerCase().contains('image')) ||
-             imageUrl.toLowerCase().contains('.jpg') ||
-             imageUrl.toLowerCase().contains('.jpeg') ||
-             imageUrl.toLowerCase().contains('.png') ||
-             imageUrl.toLowerCase().contains('.gif') ||
-             imageUrl.toLowerCase().contains('firebasestorage'));
-
-        debugPrint('   hasImageMedia: $hasImageMedia');
-
-        if (hasImageMedia) {
-          debugPrint('   ✅ 이미지 표시 시도: $imageUrl');
-          return SizedBox(
-            width: double.infinity,
-            height: double.infinity,
-            child: buildNetworkImage(imageUrl),
-          );
-        } else {
-          debugPrint('   ❌ 이미지 타입이 아님, 그라데이션 표시');
-        }
+        // URL이 있으면 무조건 이미지로 표시 (타입 체크 제거)
+        debugPrint('   ✅ 이미지 표시 시도: $imageUrl');
+        return SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: buildNetworkImage(imageUrl),
+        );
       }
     } catch (e) {
       debugPrint('❌ 이미지 위젯 빌드 에러: $e');
