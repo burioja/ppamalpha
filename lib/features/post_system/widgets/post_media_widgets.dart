@@ -4,6 +4,7 @@ class PostMediaWidgets {
   // 미디어 섹션 (1줄 배치, 자동 단가 계산)
   static Widget buildMediaSectionInline({
     required String priceText,
+    required int imageCount,
     required VoidCallback onImageTap,
     required VoidCallback onTextTap,
     required VoidCallback onSoundTap,
@@ -72,18 +73,18 @@ class PostMediaWidgets {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.purple[700],
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                     decoration: InputDecoration(
                       hintText: '${priceText}P',
                       hintStyle: TextStyle(
                         color: Colors.purple[700],
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     ),
                     onChanged: onPriceChanged,
                   ),
@@ -97,10 +98,11 @@ class PostMediaWidgets {
             child: Row(
               children: [
                 Expanded(
-                  child: _buildMediaTypeButton(
+                  child: _buildMediaTypeButtonWithCount(
                     '이미지',
                     Icons.image,
                     Colors.blue,
+                    imageCount,
                     onImageTap,
                   ),
                 ),
@@ -139,8 +141,8 @@ class PostMediaWidgets {
     );
   }
 
-  // 미디어 타입 버튼
-  static Widget _buildMediaTypeButton(String label, IconData icon, Color color, VoidCallback onTap) {
+  // 미디어 타입 버튼 (개수 표시 포함)
+  static Widget _buildMediaTypeButtonWithCount(String label, IconData icon, Color color, int count, VoidCallback onTap) {
     return Container(
       height: 80,
       decoration: BoxDecoration(
@@ -156,7 +158,36 @@ class PostMediaWidgets {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 24),
+              Stack(
+                children: [
+                  Icon(icon, color: color, size: 24),
+                  if (count > 0)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 label,

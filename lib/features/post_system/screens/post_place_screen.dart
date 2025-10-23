@@ -393,6 +393,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                       // 미디어 섹션 (1줄 배치, 자동 단가 계산)
                       PostMediaWidgets.buildMediaSectionInline(
                         priceText: _calculateAutoPrice(),
+                        imageCount: _selectedImages.length,
                         onImageTap: _pickImages,
                         onTextTap: _showTextInput,
                         onSoundTap: _pickSound,
