@@ -52,7 +52,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
         return;
       }
 
-      final places = await _placeService.getUserPlaces(currentUser.uid);
+      final places = await _placeService.getPlacesByUser(currentUser.uid);
       setState(() {
         _userPlaces = places;
         _isLoading = false;
@@ -79,16 +79,26 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       );
     }
 
-    double minLat = places.first.latitude;
-    double maxLat = places.first.latitude;
-    double minLng = places.first.longitude;
-    double maxLng = places.first.longitude;
+    // 위치 정보가 있는 플레이스만 필터링
+    final placesWithLocation = places.where((place) => place.location != null).toList();
+    
+    if (placesWithLocation.isEmpty) {
+      return LatLngBounds(
+        LatLng(37.5665, 126.9780), // 서울 기본 위치
+        LatLng(37.5665, 126.9780),
+      );
+    }
 
-    for (final place in places) {
-      minLat = math.min(minLat, place.latitude);
-      maxLat = math.max(maxLat, place.latitude);
-      minLng = math.min(minLng, place.longitude);
-      maxLng = math.max(maxLng, place.longitude);
+    double minLat = placesWithLocation.first.location!.latitude;
+    double maxLat = placesWithLocation.first.location!.latitude;
+    double minLng = placesWithLocation.first.location!.longitude;
+    double maxLng = placesWithLocation.first.location!.longitude;
+
+    for (final place in placesWithLocation) {
+      minLat = math.min(minLat, place.location!.latitude);
+      maxLat = math.max(maxLat, place.location!.latitude);
+      minLng = math.min(minLng, place.location!.longitude);
+      maxLng = math.max(maxLng, place.location!.longitude);
     }
 
     return LatLngBounds(
@@ -371,10 +381,10 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
               userAgentPackageName: 'com.example.ppamalpha',
             ),
             MarkerLayer(
-              markers: _userPlaces.map((place) {
+              markers: _userPlaces.where((place) => place.location != null).map((place) {
                 final isSelected = _selectedPlaceId == place.id;
                 return Marker(
-                  point: LatLng(place.latitude, place.longitude),
+                  point: LatLng(place.location!.latitude, place.location!.longitude),
                   width: 40,
                   height: 40,
                   child: GestureDetector(
