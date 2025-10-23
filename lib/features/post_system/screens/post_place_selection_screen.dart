@@ -61,7 +61,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       // 지도 bounds 설정
       if (places.isNotEmpty) {
         _initialBounds = _calculateBounds(places);
-        _fitMapToBounds();
+        // 지도가 렌더링된 후에 bounds를 적용하므로 여기서는 설정만 함
       }
     } catch (e) {
       setState(() {
@@ -109,13 +109,18 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
 
   void _fitMapToBounds() {
     if (_mapController != null && _initialBounds != null) {
-      _mapController!.fitCamera(
-        CameraFit.bounds(
-          bounds: _initialBounds!,
-          padding: const EdgeInsets.all(50),
-          maxZoom: 17.0,
-        ),
-      );
+      // FlutterMap이 렌더링된 후에 실행되도록 지연
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_mapController != null && _initialBounds != null) {
+          _mapController!.fitCamera(
+            CameraFit.bounds(
+              bounds: _initialBounds!,
+              padding: const EdgeInsets.all(50),
+              maxZoom: 17.0,
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -374,6 +379,12 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
             ),
+            onMapReady: () {
+              // 지도가 준비되면 bounds 적용
+              if (_initialBounds != null) {
+                _fitMapToBounds();
+              }
+            },
           ),
           children: [
             TileLayer(
