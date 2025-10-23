@@ -184,7 +184,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     
     // 사운드 크기 계산
     if (_selectedSound != null) {
-      totalSize += _selectedSound!.length;
+      totalSize += _selectedSound!.length.toInt();
     }
     
     // 단가 계산
