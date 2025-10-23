@@ -186,12 +186,10 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     
     // 사운드 크기 계산
     if (_selectedSound != null) {
-      if (_selectedSound is List<int>) {
-        totalSize += _selectedSound.length.toInt();
-      } else if (_selectedSound is Uint8List) {
-        totalSize += _selectedSound.length.toInt();
-      } else if (_selectedSound is List) {
-        totalSize += _selectedSound.length.toInt();
+      try {
+        totalSize += (_selectedSound as dynamic).length.toInt();
+      } catch (e) {
+        // 타입 변환 실패 시 무시
       }
     }
     
