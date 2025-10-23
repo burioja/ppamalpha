@@ -175,6 +175,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
+<<<<<<< HEAD
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -453,6 +454,137 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                 ),
               ],
             ),
+=======
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: isSelected
+            ? Border.all(color: Colors.purple[600]!, width: 2)
+            : Border.all(color: Colors.grey[200]!, width: 1),
+      ),
+      child: InkWell(
+        onTap: () => _onPlaceTap(place),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Place Image
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.work, size: 40, color: Colors.grey),
+              ),
+              const SizedBox(width: 16),
+              // Place Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          place.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        if (place.isVerified) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '인증',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, size: 16, color: Colors.red[400]),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            place.address ?? '주소 없음',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 16, color: Colors.green[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '활성',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.green[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (place.isVerified) ...[
+                          const SizedBox(width: 16),
+                          Icon(Icons.verified, size: 16, color: Colors.blue[600]),
+                          const SizedBox(width: 4),
+                          Text(
+                            '인증',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Action Buttons
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _deletePlace(place),
+                    icon: Icon(Icons.delete, color: Colors.red[400], size: 20),
+                  ),
+                  IconButton(
+                    onPressed: () => _onPlaceTap(place),
+                    icon: Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                  ),
+                ],
+              ),
+            ],
+>>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
           ),
         ),
       ),
@@ -645,10 +777,26 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('배포자 선택'),
+<<<<<<< HEAD
         backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+=======
+        backgroundColor: Colors.purple[600],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              onPressed: _loadUserPlaces,
+              icon: const Icon(Icons.refresh, color: Colors.white),
+            ),
+          ),
+        ],
+>>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -773,7 +921,11 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
               onPressed: _navigateToCreatePlace,
               icon: const Icon(Icons.add),
               label: const Text('배포자 추가'),
+<<<<<<< HEAD
               backgroundColor: Colors.blue[600],
+=======
+              backgroundColor: Colors.purple[600],
+>>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
               foregroundColor: Colors.white,
               elevation: 6,
             )
@@ -812,3 +964,4 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     }
   }
 }
+
