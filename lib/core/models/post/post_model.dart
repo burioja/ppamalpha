@@ -249,6 +249,12 @@ class PostModel {
             ? (data['defaultExpiresAt'] as Timestamp).toDate()
             : DateTime.now().add(const Duration(days: 30));
 
+    // 디버그: 실제 저장된 이미지 데이터 확인
+    debugPrint('🔍 PostModel.fromFirestore - postId: $postId');
+    debugPrint('   mediaType: ${data['mediaType']}');
+    debugPrint('   mediaUrl: ${data['mediaUrl']}');
+    debugPrint('   thumbnailUrl: ${data['thumbnailUrl']}');
+
     return PostModel(
       postId: postId, // 이제 항상 유효한 ID 보장
       creatorId: data['creatorId'] ?? '',
