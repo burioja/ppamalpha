@@ -13,6 +13,7 @@ import '../providers/map_filter_provider.dart';
 import '../providers/tile_provider.dart' as fog_tile;
 import '../providers/mock_location_provider.dart';
 import '../providers/marker_provider.dart';
+import '../../user_dashboard/providers/inbox_provider.dart';
 import '../../../core/models/marker/marker_model.dart';
 import '../../../core/models/post/post_model.dart';
 import '../widgets/map_marker_detail_widget.dart';
