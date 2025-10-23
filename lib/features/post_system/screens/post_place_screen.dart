@@ -179,6 +179,8 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     for (var image in _selectedImages) {
       if (image is List<int>) {
         totalSize += image.length;
+      } else if (image is Uint8List) {
+        totalSize += image.length;
       }
     }
     
