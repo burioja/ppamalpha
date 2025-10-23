@@ -97,51 +97,56 @@ class PostMediaWidgets {
           // 컨텐츠 (1줄 배치)
           Padding(
             padding: const EdgeInsets.all(20),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: _buildMediaTypeButtonWithCount(
-                    '이미지',
-                    Icons.image,
-                    Colors.blue,
-                    imageCount,
-                    onImageTap,
-                  ),
+                // 미디어 타입 버튼들
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMediaTypeButtonWithCount(
+                        '이미지',
+                        Icons.image,
+                        Colors.blue,
+                        imageCount,
+                        onImageTap,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '텍스트',
+                        Icons.text_fields,
+                        Colors.green,
+                        onTextTap,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '사운드',
+                        Icons.audiotrack,
+                        Colors.orange,
+                        onSoundTap,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '영상',
+                        Icons.videocam,
+                        Colors.red,
+                        onVideoTap,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMediaTypeButton(
-                    '텍스트',
-                    Icons.text_fields,
-                    Colors.green,
-                    onTextTap,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMediaTypeButton(
-                    '사운드',
-                    Icons.audiotrack,
-                    Colors.orange,
-                    onSoundTap,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMediaTypeButton(
-                    '영상',
-                    Icons.videocam,
-                    Colors.red,
-                    onVideoTap,
-                  ),
-                ),
+                // 이미지 미리보기 섹션
+                if (selectedImages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildImagePreview(selectedImages, onRemoveImage),
+                ],
               ],
             ),
-            // 이미지 미리보기 섹션
-            if (selectedImages.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildImagePreview(selectedImages, onRemoveImage),
-            ],
           ),
         ],
       ),
@@ -195,6 +200,40 @@ class PostMediaWidgets {
                     ),
                 ],
               ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 미디어 타입 버튼
+  static Widget _buildMediaTypeButton(String label, IconData icon, Color color, VoidCallback onTap) {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 24),
               const SizedBox(height: 4),
               Text(
                 label,
