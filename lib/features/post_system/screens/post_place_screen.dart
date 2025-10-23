@@ -178,9 +178,9 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 이미지 크기 계산
     for (var image in _selectedImages) {
       if (image is List<int>) {
-        totalSize += image.length;
+        totalSize += image.length.toInt();
       } else if (image is Uint8List) {
-        totalSize += image.length;
+        totalSize += image.length.toInt();
       }
     }
     
