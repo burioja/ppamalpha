@@ -843,31 +843,43 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
       ),
       child: Column(
         children: [
           // 헤더 (단가 포함)
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.purple.withOpacity(0.1),
+              gradient: LinearGradient(
+                colors: [Colors.purple[100]!, Colors.purple[50]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
             child: Row(
               children: [
-                Icon(Icons.image, color: Colors.purple, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.image, color: Colors.purple, size: 20),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   '미디어',
                   style: TextStyle(
@@ -898,18 +910,54 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           ),
           // 컨텐츠
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // 이미지 섹션
-                _buildImageSection(),
-                const SizedBox(height: 16),
-                // 사운드 섹션
-                _buildSoundSection(),
-                const SizedBox(height: 16),
-                // YouTube URL 섹션
-                _buildYouTubeSection(),
-                const SizedBox(height: 16),
+                // 미디어 타입 선택 버튼들
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '이미지',
+                        Icons.image,
+                        Colors.blue,
+                        () => _pickImages(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '텍스트',
+                        Icons.text_fields,
+                        Colors.green,
+                        () => _showTextInput(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '사운드',
+                        Icons.audiotrack,
+                        Colors.orange,
+                        () => _pickSound(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMediaTypeButton(
+                        '영상',
+                        Icons.videocam,
+                        Colors.red,
+                        () => _pickVideo(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
                 // 가격 계산기
                 PriceCalculator(
                   key: _priceCalculatorKey,
@@ -925,6 +973,73 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMediaTypeButton(String label, IconData icon, Color color, VoidCallback onTap) {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTextInput() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('텍스트 입력'),
+        content: TextField(
+          controller: _contentController,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: '텍스트를 입력하세요',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _pickVideo() {
+    // 비디오 선택 기능 (추후 구현)
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('비디오 선택 기능은 추후 구현 예정입니다')),
     );
   }
 
@@ -1167,28 +1282,136 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   Widget _buildTargetingInline() {
     return Column(
       children: [
-        // 나이 범위
+        // 성별과 나이를 한 줄에 배치
         Row(
           children: [
+            // 성별 선택
             Expanded(
-              child: RangeSliderWithInput(
-                label: '나이',
-                initialValues: _selectedAgeRange,
-                min: 18,
-                max: 65,
-                onChanged: (value) => setState(() => _selectedAgeRange = value),
-                labelBuilder: (value) => value.round().toString(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 6),
+                      Text(
+                        '성별',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGenderButton('남', 'male', Colors.blue),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildGenderButton('여', 'female', Colors.pink),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            // 나이 선택
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.cake, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 6),
+                      Text(
+                        '나이',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: RangeSlider(
+                      values: _selectedAgeRange,
+                      min: 18,
+                      max: 65,
+                      divisions: 47,
+                      activeColor: Colors.orange,
+                      inactiveColor: Colors.grey[300],
+                      onChanged: (value) => setState(() => _selectedAgeRange = value),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_selectedAgeRange.start.round()} - ${_selectedAgeRange.end.round()}세',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        // 성별
-        GenderCheckboxGroup(
-          selectedGenders: _selectedGenders,
-          onChanged: (genders) => setState(() => _selectedGenders = genders),
-        ),
       ],
+    );
+  }
+
+  Widget _buildGenderButton(String label, String value, Color color) {
+    final isSelected = _selectedGenders.contains(value);
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: isSelected ? color : color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected ? color : color.withOpacity(0.3),
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              if (isSelected) {
+                _selectedGenders.remove(value);
+              } else {
+                _selectedGenders.add(value);
+              }
+            });
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : color,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
