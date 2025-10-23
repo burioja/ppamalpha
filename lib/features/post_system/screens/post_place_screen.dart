@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import 'dart:typed_data';
 
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
@@ -13,6 +9,8 @@ import '../../../core/services/location/location_service.dart';
 import '../widgets/range_slider_with_input.dart';
 import '../widgets/gender_checkbox_group.dart';
 import '../widgets/price_calculator.dart';
+import '../widgets/post_media_widgets.dart';
+import '../services/post_file_service.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
@@ -119,34 +117,20 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   Future<void> _pickImages() async {
-    try {
-      if (kIsWeb) {
-        await _pickImageWeb();
-      } else {
-        await _pickImageMobile();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('이미지 선택 실패: $e')),
-        );
-      }
+    final images = await PostFileService.pickImages(context);
+    if (images.isNotEmpty) {
+      setState(() {
+        _selectedImages.addAll(images);
+      });
     }
   }
 
   Future<void> _pickImage() async {
-    try {
-      if (kIsWeb) {
-        await _pickImageWeb();
-      } else {
-        await _pickImageMobile();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('이미지 선택 실패: $e')),
-        );
-      }
+    final images = await PostFileService.pickImage(context);
+    if (images.isNotEmpty) {
+      setState(() {
+        _selectedImages.addAll(images);
+      });
     }
   }
 
@@ -214,18 +198,12 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   Future<void> _pickSound() async {
-    try {
-      if (kIsWeb) {
-        await _pickSoundWeb();
-      } else {
-        await _pickSoundMobile();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('사운드 선택 실패: $e')),
-        );
-      }
+    final soundData = await PostFileService.pickSound(context);
+    if (soundData != null) {
+      setState(() {
+        _selectedSound = soundData['bytes'];
+        _soundFileName = soundData['name'];
+      });
     }
   }
 
@@ -489,7 +467,22 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                       const SizedBox(height: 16),
 
                       // 미디어 섹션 (헤더에 단가 포함)
-                      _buildMediaSectionWithPrice(),
+                      PostMediaWidgets.buildMediaSectionWithPrice(
+                        priceText: _priceController.text.isEmpty ? '0' : _priceController.text,
+                        onImageTap: _pickImages,
+                        onTextTap: _showTextInput,
+                        onSoundTap: _pickSound,
+                        onVideoTap: _pickVideo,
+                        priceCalculator: PriceCalculator(
+                          key: _priceCalculatorKey,
+                          images: _selectedImages,
+                          sound: _selectedSound,
+                          priceController: _priceController,
+                          onPriceCalculated: () {
+                            // 가격 계산 완료 시 호출
+                          },
+                        ),
+                      ),
                       const SizedBox(height: 16),
 
                       // 타겟팅 (일렬로 컴팩트하게)
