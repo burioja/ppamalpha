@@ -242,6 +242,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         if (imageUrl != null) {
           imageUrls.add(imageUrl);
           thumbnailUrls.add(thumbnailUrl!);
+          debugPrint('✅ 이미지 업로드 완료: $imageUrl');
         }
       }
 
@@ -256,6 +257,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       }
 
       // 포스트 생성
+      debugPrint('🚀 포스트 생성 시작:');
+      debugPrint('   imageUrls: $imageUrls');
+      debugPrint('   thumbnailUrls: $thumbnailUrls');
+      debugPrint('   mediaType: ${imageUrls.map((url) => 'image').toList()}');
+      
       await _postService.createPost(
         creatorId: user.uid,
         creatorName: user.displayName ?? '익명',

@@ -442,10 +442,19 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
 
   Widget _buildImageWidget() {
     try {
+      // 디버그: 포스트 이미지 정보 로깅
+      debugPrint('🔍 PostTileCard 이미지 정보:');
+      debugPrint('   postId: ${widget.post.postId}');
+      debugPrint('   mediaType: ${widget.post.mediaType}');
+      debugPrint('   mediaUrl: ${widget.post.mediaUrl}');
+      debugPrint('   thumbnailUrl: ${widget.post.thumbnailUrl}');
+      
       // 썸네일 우선 사용
       final imageUrl = widget.post.thumbnailUrl.isNotEmpty
           ? widget.post.thumbnailUrl.first
           : (widget.post.mediaUrl.isNotEmpty ? widget.post.mediaUrl.first : '');
+
+      debugPrint('   선택된 imageUrl: $imageUrl');
 
       if (imageUrl.isNotEmpty) {
         // 이미지 타입 체크를 더 관대하게 변경
@@ -457,12 +466,17 @@ class _PostTileCardState extends State<PostTileCard> with SingleTickerProviderSt
              imageUrl.toLowerCase().contains('.gif') ||
              imageUrl.toLowerCase().contains('firebasestorage'));
 
+        debugPrint('   hasImageMedia: $hasImageMedia');
+
         if (hasImageMedia) {
+          debugPrint('   ✅ 이미지 표시 시도: $imageUrl');
           return SizedBox(
             width: double.infinity,
             height: double.infinity,
             child: buildNetworkImage(imageUrl),
           );
+        } else {
+          debugPrint('   ❌ 이미지 타입이 아님, 그라데이션 표시');
         }
       }
     } catch (e) {

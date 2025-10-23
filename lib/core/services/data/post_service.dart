@@ -76,6 +76,11 @@ class PostService {
       debugPrint('🔍 [POST_CREATE] 최종 isVerified 값: $isVerified');
 
       // Firestore에 먼저 저장하여 문서 ID 생성
+      debugPrint('📝 포스트 데이터 저장:');
+      debugPrint('   mediaType: $mediaType');
+      debugPrint('   mediaUrl: $mediaUrl');
+      debugPrint('   thumbnailUrl: ${thumbnailUrl ?? []}');
+      
       final docRef = await _firestore.collection('posts').add({
         'postId': '', // 임시로 빈 문자열, 문서 ID 생성 후 업데이트
         'creatorId': creatorId,
