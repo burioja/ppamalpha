@@ -48,56 +48,57 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       if (currentUser == null) {
         setState(() {
           _error = '로그인이 필요합니다';
-          _isLoading = false;
         });
         return;
       }
 
-      final places = await _placeService.getPlacesByUser(currentUser.uid);
+      final places = await _placeService.getUserPlaces(currentUser.uid);
+      setState(() {
+        _userPlaces = places;
+        _isLoading = false;
+      });
 
-      if (mounted) {
-        setState(() {
-          _userPlaces = places;
-          _isLoading = false;
-        });
+      // 지도 bounds 설정
+      if (places.isNotEmpty) {
+        _initialBounds = _calculateBounds(places);
+        _fitMapToBounds();
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '배포자를 불러오는데 실패했습니다: $e';
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _error = '배포자 목록을 불러오는데 실패했습니다: $e';
+        _isLoading = false;
+      });
     }
   }
 
-  void _zoomToPlace(PlaceModel place) {
-    if (_mapController != null && place.location != null) {
-      _mapController!.move(
-        LatLng(place.location!.latitude, place.location!.longitude),
-        16.0, // 줌 레벨 16 (건물 수준에서 주변 맥락 확인 가능)
+  LatLngBounds _calculateBounds(List<PlaceModel> places) {
+    if (places.isEmpty) {
+      return LatLngBounds(
+        LatLng(37.5665, 126.9780), // 서울 기본 위치
+        LatLng(37.5665, 126.9780),
       );
     }
-  }
 
-  void _onPlaceTap(PlaceModel place) {
-    if (_selectedPlaceId == place.id) {
-      // 두번째 클릭 - 포스트 생성 화면으로 이동
-      _continueToPostCreation(place);
-    } else {
-      // 첫번째 클릭 - 선택 + 지도 줌인
-      setState(() {
-        _selectedPlaceId = place.id;
-      });
-      _zoomToPlace(place);
+    double minLat = places.first.latitude;
+    double maxLat = places.first.latitude;
+    double minLng = places.first.longitude;
+    double maxLng = places.first.longitude;
+
+    for (final place in places) {
+      minLat = math.min(minLat, place.latitude);
+      maxLat = math.max(maxLat, place.latitude);
+      minLng = math.min(minLng, place.longitude);
+      maxLng = math.max(maxLng, place.longitude);
     }
+
+    return LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+    );
   }
 
-  void _resetMapToInitial() {
+  void _fitMapToBounds() {
     if (_mapController != null && _initialBounds != null) {
-      setState(() {
-        _selectedPlaceId = null; // 선택 해제
-      });
       _mapController!.fitCamera(
         CameraFit.bounds(
           bounds: _initialBounds!,
@@ -175,286 +176,6 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-<<<<<<< HEAD
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: isSelected 
-                ? Colors.blue.withOpacity(0.3)
-                : Colors.black.withOpacity(0.1),
-            blurRadius: isSelected ? 12 : 6,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: isSelected
-              ? BorderSide(color: Colors.blue[600]!, width: 3)
-              : BorderSide.none,
-        ),
-        child: InkWell(
-          onTap: () => _onPlaceTap(place),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: isSelected
-                  ? LinearGradient(
-                      colors: [Colors.blue[50]!, Colors.white],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-            ),
-            child: Row(
-              children: [
-                // Place Image with enhanced styling
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: place.imageUrls.isNotEmpty
-                          ? buildNetworkImage(
-                              place.thumbnailUrls.isNotEmpty
-                                  ? place.thumbnailUrls.first
-                                  : place.imageUrls.first,
-                            )
-                          : Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.blue[100]!, Colors.blue[200]!],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: const Icon(Icons.work, size: 40, color: Colors.blue),
-                            ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Place Info with enhanced styling
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          // Category Icon with background
-                          if (place.category != null && place.category!.isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[100],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                _getCategoryIcon(place.category),
-                                size: 16,
-                                color: Colors.blue[700],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          // Place Name with enhanced styling
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    place.name,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? Colors.blue[800] : Colors.black87,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                // 인증 뱃지 with enhanced styling
-                                if (place.isVerified) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [Colors.blue[400]!, Colors.blue[600]!],
-                                      ),
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.blue.withOpacity(0.3),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Icon(Icons.verified, size: 12, color: Colors.white),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          '인증',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          // 삭제 버튼 with enhanced styling
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.red[50],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: IconButton(
-                              icon: Icon(Icons.delete_outline, size: 20),
-                              color: Colors.red[400],
-                              onPressed: () => _deletePlace(place),
-                              tooltip: '배포자 삭제',
-                              padding: const EdgeInsets.all(8),
-                              constraints: const BoxConstraints(),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Address with enhanced styling
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                place.address ?? '주소 없음',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Status indicators with enhanced styling
-                      Row(
-                        children: [
-                          // 활성 상태
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: place.isActive ? Colors.green[50] : Colors.red[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: place.isActive ? Colors.green[300]! : Colors.red[300]!,
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  place.isActive ? Icons.check_circle : Icons.cancel,
-                                  size: 14,
-                                  color: place.isActive ? Colors.green[600] : Colors.red[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  place.isActive ? '활성' : '비활성',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: place.isActive ? Colors.green[700] : Colors.red[700],
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // 인증 상태 (중복이지만 더 눈에 띄게)
-                          if (place.isVerified)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.blue[400]!, Colors.blue[600]!],
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Icon(Icons.verified, size: 12, color: Colors.white),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    '인증됨',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Arrow Icon with enhanced styling
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue[100] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: isSelected ? Colors.blue[600] : Colors.grey[400],
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-=======
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -584,189 +305,108 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                 ],
               ),
             ],
->>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMapWidget() {
-    // Get places with valid locations
-    final placesWithLocations = _userPlaces
-        .where((place) => place.location != null)
-        .toList();
+  void _onPlaceTap(PlaceModel place) {
+    setState(() {
+      _selectedPlaceId = place.id;
+    });
+    
+    // 포스트 생성 화면으로 이동
+    _continueToPostCreation(place);
+  }
 
-    // 화면 높이의 40% (2/5)
-    final mapHeight = MediaQuery.of(context).size.height * 0.4;
-
-    if (placesWithLocations.isEmpty) {
+  Widget _buildMapSection() {
+    if (_userPlaces.isEmpty) {
       return Container(
-        height: mapHeight,
-        color: Colors.grey[200],
-        child: Center(
+        height: 200,
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
           child: Text(
-            '위치 정보가 있는 배포자가 없습니다',
-            style: TextStyle(color: Colors.grey[600]),
+            '등록된 배포자가 없습니다',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+            ),
           ),
         ),
       );
     }
 
-    // Calculate bounds to fit all places
-    double minLat = placesWithLocations
-        .map((p) => p.location!.latitude)
-        .reduce((a, b) => math.min(a, b));
-    double maxLat = placesWithLocations
-        .map((p) => p.location!.latitude)
-        .reduce((a, b) => math.max(a, b));
-    double minLng = placesWithLocations
-        .map((p) => p.location!.longitude)
-        .reduce((a, b) => math.min(a, b));
-    double maxLng = placesWithLocations
-        .map((p) => p.location!.longitude)
-        .reduce((a, b) => math.max(a, b));
-
-    final bounds = LatLngBounds(
-      LatLng(minLat, minLng),
-      LatLng(maxLat, maxLng),
-    );
-
-    final center = LatLng(
-      (minLat + maxLat) / 2,
-      (minLng + maxLng) / 2,
-    );
-
-    // 초기 상태 저장 (처음 한번만)
-    _initialBounds ??= bounds;
-
-    return SizedBox(
-      height: mapHeight, // 화면 높이의 40%
-      child: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: center,
-              initialZoom: 10.0,
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.all & ~InteractiveFlag.rotate, // 회전만 비활성화
-              ),
-              onMapReady: () {
-                // Auto-fit to bounds when map is ready - 모든 배포자가 한눈에 보이도록
-                if (_mapController != null) {
-                  _mapController!.fitCamera(
-                    CameraFit.bounds(
-                      bounds: bounds,
-                      padding: const EdgeInsets.all(50), // 적절한 패딩
-                      maxZoom: 17.0, // 최대 줌 레벨 확대
-                    ),
-                  );
-                }
-              },
-            ),
-            children: [
-              // OSM 기반 CartoDB Voyager 타일 (라벨 없음)
-              TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.ppamalpha.app',
-              ),
-              MarkerLayer(
-                markers: placesWithLocations.map((place) {
-                  return Marker(
-                    point: LatLng(
-                      place.location!.latitude,
-                      place.location!.longitude,
-                    ),
-                    width: 50,
-                    height: 50,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // 중앙: 마커 아이콘 (GPS 좌표의 정확한 위치)
-                        Center(
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.blue[700]!,
-                                width: 3,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              _getCategoryIcon(place.category),
-                              color: Colors.blue[700],
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                        // 오른쪽: 플레이스 이름 레이블
-                        Positioned(
-                          left: 58,
-                          top: 0,
-                          bottom: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: Colors.blue[700]!,
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    blurRadius: 3,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Text(
-                                place.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue[900],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.visible,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-          // 초기 화면으로 버튼 (우측 상단)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: FloatingActionButton.small(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blue[700],
-              elevation: 4,
-              onPressed: _resetMapToInitial,
-              child: const Icon(Icons.refresh, size: 20),
-            ),
+    return Container(
+      height: 200,
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _initialBounds?.center ?? const LatLng(37.5665, 126.9780),
+            initialZoom: 13.0,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+            ),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.ppamalpha',
+            ),
+            MarkerLayer(
+              markers: _userPlaces.map((place) {
+                final isSelected = _selectedPlaceId == place.id;
+                return Marker(
+                  point: LatLng(place.latitude, place.longitude),
+                  width: 40,
+                  height: 40,
+                  child: GestureDetector(
+                    onTap: () => _onPlaceTap(place),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.purple[600] : Colors.blue[600],
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.work,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -777,12 +417,6 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('배포자 선택'),
-<<<<<<< HEAD
-        backgroundColor: Colors.blue[600],
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-=======
         backgroundColor: Colors.purple[600],
         foregroundColor: Colors.white,
         elevation: 0,
@@ -796,7 +430,6 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
             ),
           ),
         ],
->>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -826,52 +459,27 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(32),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.work_outline, 
-                              size: 64, 
-                              color: Colors.blue[400],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
+                          Icon(Icons.work_outline, size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
                           Text(
                             '등록된 배포자가 없습니다',
                             style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '새로운 배포자를 만들어 포스트를 배포해보세요',
-                            style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 16,
                               color: Colors.grey[600],
                             ),
-                            textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 24),
                           ElevatedButton.icon(
                             onPressed: _navigateToCreatePlace,
                             icon: const Icon(Icons.add),
-                            label: const Text('배포자 만들기'),
+                            label: const Text('새 배포자 만들기'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[600],
+                              backgroundColor: Colors.purple[600],
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 16,
+                                horizontal: 24,
+                                vertical: 12,
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 4,
                             ),
                           ),
                         ],
@@ -879,39 +487,38 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
                     )
                   : Column(
                       children: [
-                        // Top Map Widget - Fixed (does not scroll)
-                        _buildMapWidget(),
-                        const SizedBox(height: 8),
-                        // Place List - Scrollable
-                        Expanded(
-                          child: RefreshIndicator(
-                            onRefresh: _loadUserPlaces,
-                            child: ListView(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        '총 ${_userPlaces.length}개의 배포자',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      TextButton.icon(
-                                        onPressed: _navigateToCreatePlace,
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('새 배포자'),
-                                      ),
-                                    ],
-                                  ),
+                        // 지도 섹션
+                        _buildMapSection(),
+                        
+                        // 배포자 목록 헤더
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '총 ${_userPlaces.length}개의 배포자',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
                                 ),
-                                ..._userPlaces.map((place) => _buildPlaceCard(place)),
-                                const SizedBox(height: 80),
-                              ],
-                            ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _navigateToCreatePlace,
+                                icon: const Icon(Icons.add),
+                                label: const Text('새 배포자'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        // 배포자 목록
+                        Expanded(
+                          child: ListView(
+                            children: [
+                              ..._userPlaces.map((place) => _buildPlaceCard(place)),
+                              const SizedBox(height: 80),
+                            ],
                           ),
                         ),
                       ],
@@ -921,13 +528,8 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
               onPressed: _navigateToCreatePlace,
               icon: const Icon(Icons.add),
               label: const Text('배포자 추가'),
-<<<<<<< HEAD
-              backgroundColor: Colors.blue[600],
-=======
               backgroundColor: Colors.purple[600],
->>>>>>> 8df3eab (배포자 선택 화면 디자인 개선 - 이미지 디자인에 맞게 수정)
               foregroundColor: Colors.white,
-              elevation: 6,
             )
           : null,
     );
@@ -953,7 +555,7 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
         Navigator.pop(context, true);
       }
     } else {
-      Navigator.pushReplacementNamed(
+      final result = await Navigator.pushNamed(
         context,
         '/post-place',
         arguments: {
@@ -961,7 +563,10 @@ class _PostPlaceSelectionScreenState extends State<PostPlaceSelectionScreen> {
           'fromSelection': true,
         },
       );
+
+      if (result == true && mounted) {
+        Navigator.pop(context, true);
+      }
     }
   }
 }
-
