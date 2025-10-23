@@ -211,8 +211,14 @@ class PostTargetingWidgets {
           ],
         ),
         const SizedBox(height: 16),
-        // 체크박스 옵션들
-        Column(
+        // 체크박스 옵션들 (2x2 그리드)
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 3,
           children: [
             _buildCheckboxOption(
               '만료일 설정',
@@ -295,17 +301,24 @@ class PostTargetingWidgets {
     );
   }
 
-  // 체크박스 옵션
+  // 체크박스 옵션 (토글로 변경)
   static Widget _buildCheckboxOption(
     String label,
     bool value,
     Function(bool?) onChanged,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: value ? Colors.blue[50] : Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: value ? Colors.blue[300]! : Colors.grey[300]!,
+        ),
+      ),
       child: Row(
         children: [
-          Checkbox(
+          Switch(
             value: value,
             onChanged: onChanged,
             activeColor: Colors.blue[600],
@@ -314,7 +327,11 @@ class PostTargetingWidgets {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: value ? Colors.blue[700] : Colors.grey[700],
+                fontWeight: value ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ),
         ],

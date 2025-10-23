@@ -38,7 +38,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   // 선택된 값들
   String _selectedFunction = 'Using';
   List<String> _selectedGenders = ['male', 'female'];
-  RangeValues _selectedAgeRange = const RangeValues(20, 30);
+  RangeValues _selectedAgeRange = const RangeValues(20, 60); // 기본값 20-60
 
   String _selectedPostType = '일반';
   bool _hasExpiration = false;
@@ -80,7 +80,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
   }
 
   void _initializeForm() {
-    _titleController.text = '새 포스트';
+    _titleController.text = '미미믹'; // 배포자명을 기본값으로 설정
     _getCurrentLocation();
   }
 
@@ -169,6 +169,33 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('비디오 선택 기능은 추후 구현될 예정입니다.')),
     );
+  }
+
+  // 자동 단가 계산 (1M까지 30원, 그 이상 300KB당 10원)
+  String _calculateAutoPrice() {
+    int totalSize = 0;
+    
+    // 이미지 크기 계산
+    for (var image in _selectedImages) {
+      if (image is List<int>) {
+        totalSize += image.length;
+      }
+    }
+    
+    // 사운드 크기 계산
+    if (_selectedSound != null) {
+      totalSize += _selectedSound!.length;
+    }
+    
+    // 단가 계산
+    int price = 0;
+    if (totalSize <= 1024 * 1024) { // 1MB 이하
+      price = 30;
+    } else {
+      price = 30 + ((totalSize - 1024 * 1024) ~/ (300 * 1024)) * 10; // 300KB당 10원 추가
+    }
+    
+    return price.toString();
   }
 
 
@@ -356,22 +383,16 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 미디어 섹션 (헤더에 단가 포함)
-                      PostMediaWidgets.buildMediaSectionWithPrice(
-                        priceText: _priceController.text.isEmpty ? '0' : _priceController.text,
+                      // 미디어 섹션 (1줄 배치, 자동 단가 계산)
+                      PostMediaWidgets.buildMediaSectionInline(
+                        priceText: _calculateAutoPrice(),
                         onImageTap: _pickImages,
                         onTextTap: _showTextInput,
                         onSoundTap: _pickSound,
                         onVideoTap: _pickVideo,
-                        priceCalculator: PriceCalculator(
-                          key: _priceCalculatorKey,
-                          images: _selectedImages,
-                          sound: _selectedSound,
-                          priceController: _priceController,
-                          onPriceCalculated: () {
-                            // 가격 계산 완료 시 호출
-                          },
-                        ),
+                        onPriceChanged: (price) {
+                          _priceController.text = price;
+                        },
                       ),
                       const SizedBox(height: 16),
 
@@ -484,14 +505,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue[700]!, Colors.blue[500]!],
+          colors: [Colors.purple[300]!, Colors.purple[200]!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.blue.withOpacity(0.3),
@@ -522,24 +540,20 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '포스트 작성',
+                    Text(
+                      '미미믹', // 배포자명
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _isLocationLoading 
-                          ? '위치 정보 로딩 중...'
-                          : _usedRefLocation 
-                              ? '기본 위치 사용 중'
-                              : '현재 위치에서 작성',
+                      '종각, 지하55, 종로, 종로1가, 종로1·2·3·4가동, 종로구, 서울특별시, 031...', // 배포자 주소
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
+                        fontSize: 12,
                       ),
                     ),
                   ],

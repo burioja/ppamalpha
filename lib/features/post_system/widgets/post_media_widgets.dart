@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 class PostMediaWidgets {
-  // 미디어 섹션 (헤더에 단가 포함)
-  static Widget buildMediaSectionWithPrice({
+  // 미디어 섹션 (1줄 배치, 자동 단가 계산)
+  static Widget buildMediaSectionInline({
     required String priceText,
     required VoidCallback onImageTap,
     required VoidCallback onTextTap,
     required VoidCallback onSoundTap,
     required VoidCallback onVideoTap,
-    required Widget priceCalculator,
+    required Function(String) onPriceChanged,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -67,7 +67,7 @@ class PostMediaWidgets {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '단가: $priceText',
+                    '단가: ${priceText}P',
                     style: TextStyle(
                       color: Colors.purple[700],
                       fontSize: 12,
@@ -78,58 +78,46 @@ class PostMediaWidgets {
               ],
             ),
           ),
-          // 컨텐츠
+          // 컨텐츠 (1줄 배치)
           Padding(
             padding: const EdgeInsets.all(20),
-            child: Column(
+            child: Row(
               children: [
-                // 미디어 타입 선택 버튼들
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMediaTypeButton(
-                        '이미지',
-                        Icons.image,
-                        Colors.blue,
-                        onImageTap,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMediaTypeButton(
-                        '텍스트',
-                        Icons.text_fields,
-                        Colors.green,
-                        onTextTap,
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: _buildMediaTypeButton(
+                    '이미지',
+                    Icons.image,
+                    Colors.blue,
+                    onImageTap,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMediaTypeButton(
-                        '사운드',
-                        Icons.audiotrack,
-                        Colors.orange,
-                        onSoundTap,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMediaTypeButton(
-                        '영상',
-                        Icons.videocam,
-                        Colors.red,
-                        onVideoTap,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMediaTypeButton(
+                    '텍스트',
+                    Icons.text_fields,
+                    Colors.green,
+                    onTextTap,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                // 가격 계산기
-                priceCalculator,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMediaTypeButton(
+                    '사운드',
+                    Icons.audiotrack,
+                    Colors.orange,
+                    onSoundTap,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMediaTypeButton(
+                    '영상',
+                    Icons.videocam,
+                    Colors.red,
+                    onVideoTap,
+                  ),
+                ),
               ],
             ),
           ),
