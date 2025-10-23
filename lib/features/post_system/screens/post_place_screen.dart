@@ -13,6 +13,7 @@ import '../widgets/price_calculator.dart';
 import '../widgets/post_media_widgets.dart';
 import '../widgets/post_targeting_widgets.dart';
 import '../services/post_file_service.dart';
+import '../../user_dashboard/providers/inbox_provider.dart';
 
 class PostPlaceScreen extends StatefulWidget {
   const PostPlaceScreen({super.key});
@@ -281,6 +282,11 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('포스트가 성공적으로 생성되었습니다!')),
         );
+        
+        // 인박스 프로바이더 새로고침
+        final inboxProvider = Provider.of<InboxProvider>(context, listen: false);
+        await inboxProvider.refreshMyPosts();
+        
         Navigator.pop(context);
       }
     } catch (e) {

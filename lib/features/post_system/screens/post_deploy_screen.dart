@@ -8,6 +8,8 @@ import '../../../core/services/data/post_service.dart';
 import '../../../core/services/data/points_service.dart';
 import '../../../core/services/data/marker_domain_service.dart';
 import '../../map_system/services/fog_of_war/visit_tile_service.dart';
+import '../../user_dashboard/providers/inbox_provider.dart';
+import 'package:provider/provider.dart';
 import '../../../utils/tile_utils.dart';
 import '../widgets/building_unit_selector.dart';
 
@@ -1087,6 +1089,11 @@ class _PostDeployScreenState extends State<PostDeployScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        
+        // 인박스 프로바이더 새로고침
+        final inboxProvider = Provider.of<InboxProvider>(context, listen: false);
+        await inboxProvider.refreshMyPosts();
+        
         Navigator.pop(context);
       }
     } catch (e) {
