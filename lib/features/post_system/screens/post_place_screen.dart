@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
 
 import '../../../core/services/data/post_service.dart';
 import '../../../core/services/auth/firebase_service.dart';
@@ -133,6 +134,41 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
         _selectedImages.addAll(images);
       });
     }
+  }
+
+  void _showTextInput() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('텍스트 입력'),
+          content: const Text('텍스트 입력 기능은 추후 구현될 예정입니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _pickSound() async {
+    final soundData = await PostFileService.pickSound(context);
+    if (soundData != null) {
+      setState(() {
+        _selectedSound = soundData['bytes'];
+        _soundFileName = soundData['name'];
+      });
+    }
+  }
+
+  void _pickVideo() {
+    // 비디오 선택 기능 (추후 구현)
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('비디오 선택 기능은 추후 구현될 예정입니다.')),
+    );
   }
 
 
