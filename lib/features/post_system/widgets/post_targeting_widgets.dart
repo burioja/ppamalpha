@@ -81,29 +81,65 @@ class PostTargetingWidgets {
                   ),
                   const SizedBox(height: 8),
                   Container(
+                    height: 40, // 성별 버튼과 동일한 높이
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.orange.withOpacity(0.3)),
                     ),
-                    child: RangeSlider(
-                      values: selectedAgeRange,
-                      min: 18,
-                      max: 65,
-                      divisions: 47,
-                      activeColor: Colors.orange,
-                      inactiveColor: Colors.grey[300],
-                      onChanged: onAgeRangeChanged,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${selectedAgeRange.start.round()} - ${selectedAgeRange.end.round()}세',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange[700],
-                      fontWeight: FontWeight.w600,
+                    child: Stack(
+                      children: [
+                        RangeSlider(
+                          values: selectedAgeRange,
+                          min: 18,
+                          max: 65,
+                          divisions: 47,
+                          activeColor: Colors.orange,
+                          inactiveColor: Colors.grey[300],
+                          onChanged: onAgeRangeChanged,
+                        ),
+                        // 슬라이더 위에 숫자 표시
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[600],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${selectedAgeRange.start.round()}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[600],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${selectedAgeRange.end.round()}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

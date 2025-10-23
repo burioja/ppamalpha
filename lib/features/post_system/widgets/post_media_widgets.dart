@@ -59,20 +59,33 @@ class PostMediaWidgets {
                   ),
                 ),
                 const Spacer(),
-                // 단가 표시
+                // 단가 입력 필드
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  width: 120,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.purple.withOpacity(0.3)),
                   ),
-                  child: Text(
-                    '단가: ${priceText}P',
+                  child: TextField(
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.purple[700],
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
+                    decoration: InputDecoration(
+                      hintText: '${priceText}P',
+                      hintStyle: TextStyle(
+                        color: Colors.purple[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    onChanged: onPriceChanged,
                   ),
                 ),
               ],

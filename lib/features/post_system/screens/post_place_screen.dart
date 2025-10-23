@@ -81,6 +81,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
 
   void _initializeForm() {
     _titleController.text = '미미믹'; // 배포자명을 기본값으로 설정
+    _priceController.text = _calculateAutoPrice(); // 최소 단가 자동 설정
     _getCurrentLocation();
   }
 
@@ -605,7 +606,7 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: color.withOpacity(0.1), width: 1),
+        border: Border.all(color: color.withOpacity(0.1), width: 0.5),
       ),
       child: Column(
         children: [
