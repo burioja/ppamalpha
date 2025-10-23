@@ -10,6 +10,7 @@ import '../widgets/range_slider_with_input.dart';
 import '../widgets/gender_checkbox_group.dart';
 import '../widgets/price_calculator.dart';
 import '../widgets/post_media_widgets.dart';
+import '../widgets/post_targeting_widgets.dart';
 import '../services/post_file_service.dart';
 
 class PostPlaceScreen extends StatefulWidget {
@@ -491,7 +492,12 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                         icon: Icons.people_rounded,
                         color: Colors.orange,
                         children: [
-                          _buildTargetingInline(),
+                          PostTargetingWidgets.buildTargetingInline(
+                            selectedGenders: _selectedGenders,
+                            selectedAgeRange: _selectedAgeRange,
+                            onGenderChanged: (genders) => setState(() => _selectedGenders = genders),
+                            onAgeRangeChanged: (range) => setState(() => _selectedAgeRange = range),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -502,7 +508,22 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                         icon: Icons.tune_rounded,
                         color: Colors.teal,
                         children: [
-                          _buildAdditionalOptions(),
+                          PostTargetingWidgets.buildAdditionalOptions(
+                            selectedFunction: _selectedFunction,
+                            selectedTargeting: _selectedTargeting,
+                            hasExpiration: _hasExpiration,
+                            canTransfer: _canTransfer,
+                            canForward: _canForward,
+                            canRespond: _canRespond,
+                            functions: _functions,
+                            targetingOptions: _targetingOptions,
+                            onFunctionChanged: (value) => setState(() => _selectedFunction = value!),
+                            onTargetingChanged: (value) => setState(() => _selectedTargeting = value!),
+                            onExpirationChanged: (value) => setState(() => _hasExpiration = value!),
+                            onTransferChanged: (value) => setState(() => _canTransfer = value!),
+                            onForwardChanged: (value) => setState(() => _canForward = value!),
+                            onRespondChanged: (value) => setState(() => _canRespond = value!),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -1288,218 +1309,4 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     );
   }
 
-  Widget _buildTargetingInline() {
-    return Column(
-      children: [
-        // 성별과 나이를 한 줄에 배치
-        Row(
-          children: [
-            // 성별 선택
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.people, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 6),
-                      Text(
-                        '성별',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildGenderButton('남', 'male', Colors.blue),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildGenderButton('여', 'female', Colors.pink),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            // 나이 선택
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.cake, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 6),
-                      Text(
-                        '나이',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                    ),
-                    child: RangeSlider(
-                      values: _selectedAgeRange,
-                      min: 18,
-                      max: 65,
-                      divisions: 47,
-                      activeColor: Colors.orange,
-                      inactiveColor: Colors.grey[300],
-                      onChanged: (value) => setState(() => _selectedAgeRange = value),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_selectedAgeRange.start.round()} - ${_selectedAgeRange.end.round()}세',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange[700],
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGenderButton(String label, String value, Color color) {
-    final isSelected = _selectedGenders.contains(value);
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: isSelected ? color : color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSelected ? color : color.withOpacity(0.3),
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            setState(() {
-              if (isSelected) {
-                _selectedGenders.remove(value);
-              } else {
-                _selectedGenders.add(value);
-              }
-            });
-          },
-          borderRadius: BorderRadius.circular(8),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : color,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdditionalOptions() {
-    return Column(
-      children: [
-        // 기능 선택
-        Row(
-          children: [
-            Expanded(
-              child: _buildCompactDropdown(
-                label: '기능',
-                value: _selectedFunction,
-                items: _functions,
-                icon: Icons.settings,
-                onChanged: (value) => setState(() => _selectedFunction = value!),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildCompactDropdown(
-                label: '타겟팅',
-                value: _selectedTargeting,
-                items: _targetingOptions,
-                icon: Icons.tune,
-                onChanged: (value) => setState(() => _selectedTargeting = value!),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        // 체크박스 옵션들
-        Column(
-          children: [
-            _buildCheckboxOption(
-              '만료일 설정',
-              _hasExpiration,
-              (value) => setState(() => _hasExpiration = value!),
-            ),
-            _buildCheckboxOption(
-              '전달 가능',
-              _canTransfer,
-              (value) => setState(() => _canTransfer = value!),
-            ),
-            _buildCheckboxOption(
-              '전달 가능',
-              _canForward,
-              (value) => setState(() => _canForward = value!),
-            ),
-            _buildCheckboxOption(
-              '응답 가능',
-              _canRespond,
-              (value) => setState(() => _canRespond = value!),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCheckboxOption(String label, bool value, Function(bool?) onChanged) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Checkbox(
-            value: value,
-            onChanged: onChanged,
-            activeColor: Colors.blue[600],
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[700],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
