@@ -178,16 +178,16 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     // 이미지 크기 계산
     for (var image in _selectedImages) {
       if (image is List<int>) {
-        totalSize += image.length.toInt();
+        totalSize += (image.length as num).toInt();
       } else if (image is Uint8List) {
-        totalSize += image.length.toInt();
+        totalSize += (image.length as num).toInt();
       }
     }
     
     // 사운드 크기 계산
     if (_selectedSound != null) {
       try {
-        totalSize += (_selectedSound as dynamic).length.toInt();
+        totalSize += ((_selectedSound as dynamic).length as num).toInt();
       } catch (e) {
         // 타입 변환 실패 시 무시
       }
