@@ -394,12 +394,18 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
                       PostMediaWidgets.buildMediaSectionInline(
                         priceText: _calculateAutoPrice(),
                         imageCount: _selectedImages.length,
+                        selectedImages: _selectedImages,
                         onImageTap: _pickImages,
                         onTextTap: _showTextInput,
                         onSoundTap: _pickSound,
                         onVideoTap: _pickVideo,
                         onPriceChanged: (price) {
                           _priceController.text = price;
+                        },
+                        onRemoveImage: (index) {
+                          setState(() {
+                            _selectedImages.removeAt(index);
+                          });
                         },
                       ),
                       const SizedBox(height: 16),

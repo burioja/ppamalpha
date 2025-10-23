@@ -5,11 +5,13 @@ class PostMediaWidgets {
   static Widget buildMediaSectionInline({
     required String priceText,
     required int imageCount,
+    required List<dynamic> selectedImages,
     required VoidCallback onImageTap,
     required VoidCallback onTextTap,
     required VoidCallback onSoundTap,
     required VoidCallback onVideoTap,
     required Function(String) onPriceChanged,
+    required Function(int) onRemoveImage,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -135,6 +137,11 @@ class PostMediaWidgets {
                 ),
               ],
             ),
+            // 이미지 미리보기 섹션
+            if (selectedImages.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildImagePreview(selectedImages, onRemoveImage),
+            ],
           ),
         ],
       ),
@@ -448,6 +455,94 @@ class PostMediaWidgets {
               borderRadius: BorderRadius.circular(8),
             ),
             prefixIcon: Icon(Icons.link, color: Colors.grey[400]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 이미지 미리보기
+  static Widget _buildImagePreview(List<dynamic> selectedImages, Function(int) onRemoveImage) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.photo_library, size: 16, color: Colors.grey[600]),
+            const SizedBox(width: 6),
+            Text(
+              '선택된 이미지 (${selectedImages.length}개)',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 80,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: selectedImages.length,
+            itemBuilder: (context, index) {
+              return Container(
+                width: 80,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: selectedImages[index] is String
+                          ? Image.network(
+                              selectedImages[index],
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 80,
+                                  height: 80,
+                                  color: Colors.grey[200],
+                                  child: Icon(Icons.error, color: Colors.grey[400]),
+                                );
+                              },
+                            )
+                          : Image.memory(
+                              selectedImages[index],
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () => onRemoveImage(index),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
