@@ -1104,6 +1104,7 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => UnconfirmedPostsSheet(
         userId: userId,
+        inboxProvider: Provider.of<InboxProvider>(context, listen: false),
         onConfirmComplete: () {
           // 확인 완료 후 마커 새로고침
           _updateMarkers();

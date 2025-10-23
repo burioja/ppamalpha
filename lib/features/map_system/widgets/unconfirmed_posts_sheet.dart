@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/services/data/post_collection_service.dart';
 import '../../../core/models/post/post_model.dart';
+import '../../user_dashboard/providers/inbox_provider.dart';
 
 /// 미확인 포스트 목록 바텀시트
 class UnconfirmedPostsSheet extends StatefulWidget {
   final String userId;
   final VoidCallback onConfirmComplete;
+  final InboxProvider? inboxProvider;
 
   const UnconfirmedPostsSheet({
     super.key,
     required this.userId,
     required this.onConfirmComplete,
+    this.inboxProvider,
   });
 
   @override
@@ -60,7 +63,7 @@ class _UnconfirmedPostsSheetState extends State<UnconfirmedPostsSheet> {
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
-                const Text('포스트를 확인했습니다!'),
+                const Text('포스트를 수령했습니다!'),
               ],
             ),
             backgroundColor: Colors.green[600],
@@ -74,6 +77,12 @@ class _UnconfirmedPostsSheetState extends State<UnconfirmedPostsSheet> {
         
         // 목록 새로고침
         await _loadUnconfirmedPosts();
+        
+        // 받은 포스트함 새로고침
+        if (widget.inboxProvider != null) {
+          await widget.inboxProvider!.refreshCollectedPosts();
+        }
+        
         widget.onConfirmComplete();
       }
     } catch (e) {
@@ -414,46 +423,32 @@ class _UnconfirmedPostsSheetState extends State<UnconfirmedPostsSheet> {
                   ),
                 ),
                 
-                // 확인 버튼 with enhanced styling
+                // 터치 안내 텍스트
                 Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.orange[400]!, Colors.orange[600]!],
-                    ),
+                    color: Colors.orange[100],
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.orange.withOpacity(0.3),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.touch_app,
+                        color: Colors.orange[600],
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '터치하여 수령',
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () => _confirmPost(collection),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.check_circle, color: Colors.white, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          '확인하기',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
