@@ -118,6 +118,22 @@ class _PostPlaceScreenState extends State<PostPlaceScreen> {
     super.dispose();
   }
 
+  Future<void> _pickImages() async {
+    try {
+      if (kIsWeb) {
+        await _pickImageWeb();
+      } else {
+        await _pickImageMobile();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지 선택 실패: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _pickImage() async {
     try {
       if (kIsWeb) {
